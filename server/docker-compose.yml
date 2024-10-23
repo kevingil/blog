@@ -1,0 +1,35 @@
+# WARNING: this file is not suitable for production, please use with caution
+version: '3'
+
+services:
+  web:
+    image: blogbackend
+    build: .
+    command: gunicorn -b 0.0.0.0:5000 blogbackend.wsgi:app
+    env_file:
+      - ./.flaskenv
+    environment:
+      - DATABASE_URI=sqlite:////db/blogbackend.db
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq
+      - CELERY_RESULT_BACKEND_URL=redis://redis
+    volumes:
+      - ./blogbackend:/code/blogbackend
+      - ./db/:/db/
+    ports:
+      - "5000:5000"
+  rabbitmq:
+    image: rabbitmq
+  redis:
+    image: redis
+  celery:
+    image: blogbackend
+    command: "celery worker -A blogbackend.celery_app:app"
+    env_file:
+      - ./.flaskenv
+    volumes:
+      - .:/code
+    depends_on:
+      - rabbitmq
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq
+      - CELERY_RESULT_BACKEND_URL=redis://redis
