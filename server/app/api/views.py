@@ -6,7 +6,7 @@ from blog.api.resources import UserResource, UserList
 from blog.api.schemas import UserSchema
 
 
-blueprint = Blueprint("api", __name__, url_prefix="/api/v1")
+blueprint = Blueprint("api", __name__, url_prefix="/api")
 api = Api(blueprint)
 
 
