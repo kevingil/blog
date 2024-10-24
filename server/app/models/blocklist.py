@@ -14,7 +14,7 @@ like a redis or a memcached server.
 This example is heavily inspired by
 https://github.com/vimalloc/flask-jwt-extended/blob/master/examples/blocklist_database.py
 """
-from blogbackend.extensions import db
+from blog.extensions import db
 
 
 class TokenBlocklist(db.Model):

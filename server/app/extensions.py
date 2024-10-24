@@ -10,7 +10,7 @@ from flask_marshmallow import Marshmallow
 from flask_migrate import Migrate
 from celery import Celery
 
-from blogbackend.commons.apispec import APISpecExt
+from blog.commons.apispec import APISpecExt
 
 
 db = SQLAlchemy()

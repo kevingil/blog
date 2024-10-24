@@ -1,5 +1,5 @@
 import factory
-from blogbackend.models import User
+from blog.models import User
 
 
 class UserFactory(factory.Factory):

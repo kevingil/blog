@@ -6,8 +6,8 @@ from flask.cli import with_appcontext
 @with_appcontext
 def init():
     """Create a new admin user"""
-    from blogbackend.extensions import db
-    from blogbackend.models import User
+    from blog.extensions import db
+    from blog.models import User
 
     click.echo("create user")
     user = User(username="admin", email="admin@admin.com", password="admin123", active=True)

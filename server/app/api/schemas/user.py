@@ -1,5 +1,5 @@
-from blogbackend.models import User
-from blogbackend.extensions import ma, db
+from blog.models import User
+from blog.extensions import ma, db
 
 
 class UserSchema(ma.SQLAlchemyAutoSchema):

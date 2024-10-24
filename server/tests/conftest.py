@@ -2,9 +2,9 @@ import json
 import pytest
 from dotenv import load_dotenv
 
-from blogbackend.models import User
-from blogbackend.app import create_app
-from blogbackend.extensions import db as _db
+from blog.models import User
+from blog.app import create_app
+from blog.extensions import db as _db
 from pytest_factoryboy import register
 from tests.factories import UserFactory
 

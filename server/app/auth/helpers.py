@@ -8,8 +8,8 @@ from datetime import datetime
 from flask_jwt_extended import decode_token
 from sqlalchemy.orm.exc import NoResultFound
 
-from blogbackend.extensions import db
-from blogbackend.models import TokenBlocklist
+from blog.extensions import db
+from blog.models import TokenBlocklist
 
 
 def add_token_to_database(encoded_token, identity_claim):

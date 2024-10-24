@@ -11,5 +11,5 @@ passlib
 apispec[yaml]
 apispec-webframeworks
 tox
-celery[redis]>=5.0.0
+celery[redis]>=5.4.0
 gunicorn

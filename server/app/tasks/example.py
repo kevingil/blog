@@ -1,4 +1,4 @@
-from blogbackend.extensions import celery
+from blog.extensions import celery
 
 
 @celery.task

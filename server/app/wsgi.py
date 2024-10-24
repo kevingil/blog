@@ -1,3 +1,3 @@
-from blogbackend.app import create_app
+from blog.app import create_app
 
 app = create_app()

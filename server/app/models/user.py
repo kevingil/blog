@@ -1,6 +1,6 @@
 from sqlalchemy.ext.hybrid import hybrid_property
 
-from blogbackend.extensions import db, pwd_context
+from blog.extensions import db, pwd_context
 
 
 class User(db.Model):

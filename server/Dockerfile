@@ -16,7 +16,7 @@ RUN pip install -U pip
 RUN pip install -r requirements.txt
 RUN pip install -e .
 
-COPY blogbackend blogbackend/
+COPY app app/
 COPY migrations migrations/
 
 EXPOSE 5000

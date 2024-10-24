@@ -3,33 +3,27 @@ version: '3'
 
 services:
   web:
-    image: blogbackend
+    image: blog
     build: .
-    command: gunicorn -b 0.0.0.0:5000 blogbackend.wsgi:app
+    command: gunicorn -b 0.0.0.0:5000 blog.wsgi:app
     env_file:
-      - ./.flaskenv
+      - ./.env
     environment:
-      - DATABASE_URI=sqlite:////db/blogbackend.db
-      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq
-      - CELERY_RESULT_BACKEND_URL=redis://redis
+      - DATABASE_URI=${DATABASE_URI:-postgresql://postgres:postgrespass@postgres:5432/myapp}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://:redispass@redis:6379/0}
+      - CELERY_RESULT_BACKEND_URL=${CELERY_RESULT_BACKEND_URL:-redis://:redispass@redis:6379/1}
     volumes:
-      - ./blogbackend:/code/blogbackend
+      - ./app:/code/app
       - ./db/:/db/
     ports:
       - "5000:5000"
-  rabbitmq:
-    image: rabbitmq
-  redis:
-    image: redis
   celery:
-    image: blogbackend
-    command: "celery worker -A blogbackend.celery_app:app"
+    image: blog-celery
+    command: "celery worker -A blog.celery_app:app"
     env_file:
-      - ./.flaskenv
+      - ./.env
     volumes:
       - .:/code
-    depends_on:
-      - rabbitmq
     environment:
-      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq
-      - CELERY_RESULT_BACKEND_URL=redis://redis
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://:redispass@redis:6379/0}
+      - CELERY_RESULT__URL=${CELERY_RESULT_BACKEND_URL:-redis://:redispass@redis:6379/1}
