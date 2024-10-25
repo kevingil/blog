@@ -1,3 +1,3 @@
-from blog.auth import views
+from app.auth import views
 
 __all__ = ["views"]

@@ -1,17 +1,17 @@
 from flask import Flask
-from blog import api
-from blog import auth
-from blog import manage
-from blog.extensions import apispec
-from blog.extensions import db
-from blog.extensions import jwt
-from blog.extensions import migrate, celery
+from app import api
+from app import auth
+from app import manage
+from app.extensions import apispec
+from app.extensions import db
+from app.extensions import jwt
+from app.extensions import migrate, celery
 
 
 def create_app(testing=False):
     """Application factory, used to create application"""
-    app = Flask("blog")
-    app.config.from_object("blog.config")
+    app = Flask("app")
+    app.config.from_object("app.config")
 
     if testing is True:
         app.config["TESTING"] = True

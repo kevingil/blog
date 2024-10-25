@@ -1,5 +1,5 @@
 import factory
-from blog.models import User
+from app.models import User
 
 
 class UserFactory(factory.Factory):

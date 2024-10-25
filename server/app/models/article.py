@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Text, Boolean, ForeignKey, DateTime, Float, ARRAY, UniqueConstraint
 from sqlalchemy.sql import func
-from blog.extensions import db
+from app.extensions import db
 
 class Article(db.Model):
     """Articles model for storing articles with vector embeddings."""

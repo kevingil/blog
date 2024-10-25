@@ -5,7 +5,7 @@ services:
   web:
     image: blog
     build: .
-    command: gunicorn -b 0.0.0.0:5000 blog.wsgi:app
+    command: gunicorn -b 0.0.0.0:5000 app.wsgi:app
     env_file:
       - ./.env
     environment:
@@ -19,7 +19,7 @@ services:
       - "5000:5000"
   celery:
     image: blog-celery
-    command: "celery worker -A blog.celery_app:app"
+    command: "celery worker -A app.celery_app:app"
     env_file:
       - ./.env
     volumes:

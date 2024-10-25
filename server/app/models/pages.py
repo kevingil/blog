@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, JSON
 from sqlalchemy.sql import func
-from blog.extensions import db
+from app.extensions import db
 
 class AboutPage(db.Model):
     """About Page model for storing information about the q'About' section."""

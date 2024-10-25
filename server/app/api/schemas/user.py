@@ -1,5 +1,5 @@
-from blog.models import User
-from blog.extensions import ma, db
+from app.models import User
+from app.extensions import ma, db
 
 
 class UserSchema(ma.SQLAlchemyAutoSchema):

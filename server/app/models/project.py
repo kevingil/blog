@@ -1,5 +1,5 @@
 from sqlalchemy.sql import func
-from blog.extensions import db
+from app.extensions import db
 
 class Project(db.Model):
     """Project model for storing project information."""

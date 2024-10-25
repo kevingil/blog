@@ -7,9 +7,9 @@ from flask_jwt_extended import (
     get_jwt,
 )
 
-from blog.models import User
-from blog.extensions import pwd_context, jwt, apispec
-from blog.auth.helpers import revoke_token, is_token_revoked, add_token_to_database
+from app.models import User
+from app.extensions import pwd_context, jwt, apispec
+from app.auth.helpers import revoke_token, is_token_revoked, add_token_to_database
 
 
 blueprint = Blueprint("auth", __name__, url_prefix="/auth")

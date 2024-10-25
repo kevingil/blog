@@ -1,7 +1,7 @@
 from flask import url_for
 
-from blog.extensions import pwd_context
-from blog.models import User
+from app.extensions import pwd_context
+from app.models import User
 
 
 def test_get_user(client, db, user, admin_headers):

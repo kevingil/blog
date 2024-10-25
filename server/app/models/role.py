@@ -1,6 +1,6 @@
 from sqlalchemy.orm import validates
 from sqlalchemy.sql import func
-from blog.extensions import db
+from app.extensions import db
 
 class Role(db.Model):
     """Role model for managing user permissions."""

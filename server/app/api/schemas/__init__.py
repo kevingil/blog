@@ -1,4 +1,4 @@
-from blog.api.schemas.user import UserSchema
+from app.api.schemas.user import UserSchema
 
 
 __all__ = ["UserSchema"]

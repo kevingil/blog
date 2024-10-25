@@ -1,7 +1,7 @@
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import validates
 from sqlalchemy.sql import func
-from blog.extensions import db, pwd_context
+from app.extensions import db, pwd_context
 import re
 
 class User(db.Model):
