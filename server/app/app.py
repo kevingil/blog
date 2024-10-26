@@ -6,6 +6,7 @@ from app.extensions import apispec
 from app.extensions import db
 from app.extensions import jwt
 from app.extensions import migrate, celery
+from app.api.views import register_views
 
 
 def create_app(testing=False):
@@ -16,6 +17,7 @@ def create_app(testing=False):
     if testing is True:
         app.config["TESTING"] = True
 
+    register_views
     configure_extensions(app)
     configure_cli(app)
     configure_apispec(app)

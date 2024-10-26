@@ -11,7 +11,7 @@ class Article(db.Model):
     slug = Column(String(255), unique=True, nullable=False)
     title = Column(String(255), nullable=False)
     content = Column(Text, nullable=False)
-    author = Column(Integer, ForeignKey('users.id'), nullable=False)
+    author_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     created_at = Column(DateTime, nullable=False, default=func.now()) 
     is_draft = Column(Boolean, nullable=False, default=True)
     embedding = Column(ARRAY(Float), nullable=True) 
@@ -53,7 +53,7 @@ class Tag(db.Model):
 class ArticleTag(db.Model):
     """ArticleTags junction model to link articles and tags."""
     __tablename__ = 'article_tags'
-
+    id = Column(Integer, primary_key=True, autoincrement=True)
     article_id = Column(Integer, ForeignKey('articles.id'), nullable=False)
     tag_id = Column(Integer, ForeignKey('tags.id'), nullable=False)
 
