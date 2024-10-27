@@ -3,8 +3,8 @@ import { format } from 'date-fns';
 import { Card, Text, Group, Button, Loader, TextInput, Badge } from '@mantine/core';
 import { useDispatch, useSelector } from 'react-redux';
 import axios from 'axios';
-import { useLocation, useNavigate } from 'react-router-dom'; // Change here
-import { ArticleListItem, ITEMS_PER_PAGE } from './index';
+import { useLocation, useNavigate } from 'react-router-dom'; 
+import { ArticleListItem, ITEMS_PER_PAGE } from '../../features/blog/types';
 
 // Debounce delay in ms
 const SEARCH_DELAY = 500;
@@ -48,7 +48,7 @@ export function ArticlesSkeleton() {
 
 export default function ArticlesList({ pagination }: ArticleListProps) {
   const location = useLocation();
-  const navigate = useNavigate(); // Change here
+  const navigate = useNavigate();
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
   const dispatch = useDispatch();
 
@@ -83,7 +83,7 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
       }
     }
 
-    navigate({ search: params.toString() }); // Change here
+    navigate({ search: params.toString() }); 
   }, [location.search, navigate]);
 
   const fetchArticles = useCallback(async (searchValue: string = searchTerm, pageNum: number = page) => {

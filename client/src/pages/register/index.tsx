@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import { loginAsync, registerAsync, selectAuth } from './authSlice';
-import styles from './auth.module.css';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { loginAsync, registerAsync, selectAuth } from '@/features/auth/authSlice';
+import styles from '@/features/auth/auth.module.css';
 
 export function Register() {
   const dispatch = useAppDispatch();
