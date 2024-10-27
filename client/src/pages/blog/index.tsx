@@ -1,25 +1,60 @@
 import React, { useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { Container, Title, Loader } from '@mantine/core';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { Container, Title, Loader, Pagination, Group } from '@mantine/core';
 import ArticlesList from '@/components/blog/ArticleList';
-import { fetchArticles } from '@/features/blog/articlesSlice';
-import { RootState } from '@/features/blog/store'; // Make sure to create a store
+import { fetchArticles, setPage, setItemsPerPage } from '@/features/blog/blogSlice';
+import { RootState } from '@/store/store';
 
 const ArticlesPage: React.FC = () => {
-  const dispatch = useDispatch();
-  const { articles, loading } = useSelector((state: RootState) => state.articles);
+  const dispatch = useAppDispatch();
+  const { 
+    articles, 
+    loading,
+    currentPage,
+    totalPages,
+    itemsPerPage,
+    totalItems 
+  } = useAppSelector((state: RootState) => state.blog);
 
   useEffect(() => {
-    dispatch(fetchArticles());
-  }, [dispatch]);
+    dispatch(fetchArticles({ page: currentPage, limit: itemsPerPage }));
+  }, [dispatch, currentPage, itemsPerPage]);
+
+  const handlePageChange = (newPage: number) => {
+    dispatch(setPage(newPage));
+  };
+
+  const handleItemsPerPageChange = (value: string) => {
+    dispatch(setItemsPerPage(Number(value)));
+    dispatch(setPage(1)); // Reset to first page when changing items per page
+  };
 
   return (
-    <Container>
+    <Container size="lg">
       <Title order={1} mb="md">Blog</Title>
+      
       {loading ? (
         <Loader />
       ) : (
-        <ArticlesList articles={articles} pagination={true} />
+        <>
+          <ArticlesList articles={articles} />
+          
+          <Group mt="xl">
+            
+            <Pagination
+              total={totalPages}
+              value={currentPage}
+              onChange={handlePageChange}
+              withEdges
+            />
+          </Group>
+          
+          <Group mt="sm">
+            <p>
+              Showing {articles.length} of {totalItems} articles
+            </p>
+          </Group>
+        </>
       )}
     </Container>
   );

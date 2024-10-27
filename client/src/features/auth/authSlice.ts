@@ -3,7 +3,7 @@ import { RootState } from '../../store/store';
 import authService from '../../services/auth.service';
 import tokenService from '../../services/token.service';
 import axios, { AxiosError } from 'axios';
-import { AuthState, User, UserCredentials, UserRegister } from 'MyModels';
+import { AuthState, User, UserCredentials, UserRegister } from 'AuthModels';
 
 const user: User = tokenService.getUser();
 const initialState: AuthState = user.accessToken
