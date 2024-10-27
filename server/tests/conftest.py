@@ -3,7 +3,7 @@ import pytest
 from dotenv import load_dotenv
 
 from app.models import User
-from app.app import create_app
+from app import create_app
 from app.extensions import db as _db
 from pytest_factoryboy import register
 from tests.factories import UserFactory
@@ -37,7 +37,7 @@ def admin_user(db):
     user = User(
         username='admin',
         email='admin@admin.com',
-        password='admin'
+        password='admin123'
     )
 
     db.session.add(user)

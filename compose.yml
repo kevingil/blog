@@ -17,6 +17,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - shared_network
 
   redis:
     image: redis:7.4.1
@@ -31,3 +33,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - shared_network
+
+networks:
+  shared_network:
+    external: true

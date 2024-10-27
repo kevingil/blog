@@ -6,6 +6,7 @@
 # for celery: docker run --env-file=.flaskenv image celery worker -A myapi.celery_app:app
 #
 # note that celery will require a running broker and result backend
+
 FROM python:3.11.9
 
 RUN mkdir /code

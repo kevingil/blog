@@ -1,6 +1,6 @@
 import pytest
 
-from app.app import init_celery
+from app import init_celery
 from app.tasks.example import dummy_task
 
 

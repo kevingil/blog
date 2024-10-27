@@ -1,15 +1,17 @@
 from flask import Flask
-from app import api
-from app import auth
+from app.api import views as api_views
+from app.auth import views as auth_views
 from app import manage
 from app.extensions import apispec
 from app.extensions import db
 from app.extensions import jwt
 from app.extensions import migrate, celery
+from dotenv import load_dotenv
 
 
 def create_app(testing=False):
     """Application factory, used to create application"""
+    load_dotenv('.env')
     app = Flask("app")
     app.config.from_object("app.config")
 
@@ -23,8 +25,8 @@ def create_app(testing=False):
     register_blueprints(app)
     init_celery(app)
     with app.app_context():
-        api.views.register_views()
-        auth.views.register_views()
+        api_views.register_views()
+        auth_views.register_views()
     return app
 
 
@@ -61,8 +63,8 @@ def configure_apispec(app):
 
 def register_blueprints(app):
     """Register all blueprints for application"""
-    app.register_blueprint(auth.views.blueprint)
-    app.register_blueprint(api.views.blueprint)
+    app.register_blueprint(auth_views.blueprint)
+    app.register_blueprint(api_views.blueprint)
 
 
 def init_celery(app=None):
