@@ -59,12 +59,12 @@ def login():
     if not request.is_json:
         return jsonify({"msg": "Missing JSON in request"}), 400
 
-    name = request.json.get("Name", None)
+    email = request.json.get("email", None)
     password = request.json.get("password", None)
-    if not name or not password:
-        return jsonify({"msg": "Missing Email or password"}), 400
+    if not email or not password:
+        return jsonify({"msg": "Missing email or password"}), 400
 
-    user = User.query.filter_by(name=name).first()
+    user = User.query.filter_by(email=email).first()
     if user is None or not pwd_context.verify(password, user.password):
         return jsonify({"msg": "Bad credentials"}), 400
 

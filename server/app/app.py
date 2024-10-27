@@ -1,4 +1,5 @@
 from flask import Flask
+from flask_cors import CORS
 from app.api import views as api_views
 from app.auth import views as auth_views
 from app import manage
@@ -14,6 +15,7 @@ def create_app(testing=False):
     load_dotenv('.env')
     app = Flask("app")
     app.config.from_object("app.config")
+    CORS(app)
 
     if testing is True:
         app.config["TESTING"] = True
