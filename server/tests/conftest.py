@@ -35,7 +35,7 @@ def db(app):
 @pytest.fixture
 def admin_user(db):
     user = User(
-        username='admin',
+        name='admin',
         email='admin@admin.com',
         password='admin123'
     )
@@ -49,7 +49,7 @@ def admin_user(db):
 @pytest.fixture
 def admin_headers(admin_user, client):
     data = {
-        'username': admin_user.username,
+        'email': admin_user.email,
         'password': 'admin'
     }
     rep = client.post(
@@ -68,7 +68,7 @@ def admin_headers(admin_user, client):
 @pytest.fixture
 def admin_refresh_headers(admin_user, client):
     data = {
-        'username': admin_user.username,
+        'email': admin_user.email,
         'password': 'admin'
     }
     rep = client.post(

@@ -19,7 +19,7 @@ def test_get_user(client, db, user, admin_headers):
     assert rep.status_code == 200
 
     data = rep.get_json()["user"]
-    assert data["username"] == user.username
+    assert data["name"] == user.name
     assert data["email"] == user.email
     assert data["active"] == user.active
 
@@ -33,7 +33,7 @@ def test_put_user(client, db, user, admin_headers):
     db.session.add(user)
     db.session.commit()
 
-    data = {"username": "updated", "password": "new_password"}
+    data = {"name": "updated", "password": "new_password"}
 
     user_url = url_for('api.user_by_id', user_id=user.id)
     # test update user
@@ -41,7 +41,7 @@ def test_put_user(client, db, user, admin_headers):
     assert rep.status_code == 200
 
     data = rep.get_json()["user"]
-    assert data["username"] == "updated"
+    assert data["name"] == "updated"
     assert data["email"] == user.email
     assert data["active"] == user.active
 
@@ -69,7 +69,7 @@ def test_delete_user(client, db, user, admin_headers):
 def test_create_user(client, db, admin_headers):
     # test bad data
     users_url = url_for('api.users')
-    data = {"username": "created"}
+    data = {"name": "created"}
     rep = client.post(users_url, json=data, headers=admin_headers)
     assert rep.status_code == 400
 
@@ -82,7 +82,7 @@ def test_create_user(client, db, admin_headers):
     data = rep.get_json()
     user = db.session.query(User).filter_by(id=data["user"]["id"]).first()
 
-    assert user.username == "created"
+    assert user.name == "created"
     assert user.email == "create@mail.com"
 
 

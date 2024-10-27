@@ -13,6 +13,7 @@ class Article(db.Model):
     content = Column(Text, nullable=False)
     author_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     created_at = Column(DateTime, nullable=False, default=func.now()) 
+    updated_at = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now())
     is_draft = Column(Boolean, nullable=False, default=True)
     embedding = Column(ARRAY(Float), nullable=True) 
 
@@ -28,6 +29,7 @@ class Article(db.Model):
             'content': self.content,
             'author': self.author,
             'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
             'is_draft': self.is_draft,
             'embedding': self.embedding
         }

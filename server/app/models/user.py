@@ -73,17 +73,6 @@ class User(db.Model):
         """Hash password on set."""
         self._password = pwd_context.hash(value)
 
-    @validates('name')
-    def validate_name(self, key, name):
-        """Validate username format."""
-        if not name:
-            raise ValueError('Name is required')
-        if not re.match('^[a-zA-Z0-9_.-]+$', name):
-            raise ValueError('Name can only contain letters, numbers, dots, dashes, and underscores')
-        if len(name) < 3:
-            raise ValueError('Name must be at least 3 characters long')
-        return name
-
     @validates('email')
     def validate_email(self, key, email):
         """Validate email format."""
@@ -99,7 +88,7 @@ class User(db.Model):
 
     def __repr__(self):
         """String representation of the user."""
-        return f"<User {self.name}>"
+        return f"<User {self.email}>"
 
     def to_dict(self):
         """Convert user object to dictionary."""

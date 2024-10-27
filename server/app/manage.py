@@ -10,7 +10,7 @@ def init():
     from app.models import User
 
     click.echo("create user")
-    user = User(username="admin", email="admin@admin.com", password="admin123", active=True)
+    user = User(name="admin", email="admin@admin.com", password="admin123", active=True)
     db.session.add(user)
     db.session.commit()
     click.echo("created user admin")
