@@ -4,7 +4,7 @@ import TokenService from './token.service';
 class AuthService {
   async login(email: string, password: string) {
     return http
-      .post('/auth/signin', {
+      .post('/auth/login', {
         email,
         password
       })
