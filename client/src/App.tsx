@@ -1,5 +1,5 @@
 import '@mantine/core/styles.css';
-import { Counter } from './features/counter/Counter';
+import HomePage from '.';
 import Register from '@/pages/register';
 import Login from '@/pages/login';
 import AboutPage from '@/pages/about';
@@ -8,10 +8,10 @@ import Blog from '@/pages/blog';
 import BlogPost from '@/pages/blog/post';
 import DashboardLayout from '@/pages/dashboard/layout';
 import Dashboard from '@/pages/dashboard';
-import DashboardSettings from '@/pages/dashboard/settings';
 import DashboardUploads from '@/pages/dashboard/uploads';
 import DashboardBlog from '@/pages/dashboard/blog';
 import DashboardBlogEdit from '@/pages/dashboard/blog/edit/post';
+import DashboardProfile from '@/pages/dashboard/profile';
 import './App.css';
 import Layout from './components/Layout';
 import { Route, Routes } from 'react-router-dom';
@@ -25,7 +25,7 @@ function App() {
           <Route
             path="/"
             element={
-              <Counter />
+              <HomePage />
             }
           />
           <Route path="/about" element={<AboutPage />} />
@@ -37,8 +37,8 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<Dashboard />} />
-            <Route path="settings" element={<DashboardSettings />} />
-            <Route path="/blog" element={<DashboardBlog />}>
+            <Route path="profile" element={<DashboardProfile />} />
+            <Route path="blog" element={<DashboardBlog />}>
               <Route path="edit/:slug" element={<DashboardBlogEdit/>} />
             </Route>
             <Route path="uploads" element={<DashboardUploads />} />

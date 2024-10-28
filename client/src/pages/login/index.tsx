@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { loginAsync, selectAuth } from '@/features/auth/authSlice';
-import styles from "@/features/auth/auth.module.css";
 
-export function Login() {
+export default function Login() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -33,29 +32,29 @@ export function Login() {
 
   return (
     <>
-      <main className={styles.body}>
-        <div className={styles.loginBox}>
-          <div className={styles.title}>Login</div>
-          <div className={styles.error}>{error}</div>
+      <main className="body">
+        <div className="loginBox">
+          <div className="title">Login</div>
+          <div className="error">{error}</div>
           <form onSubmit={handleSubmit}>
             <input
-              className={styles.loginInput}
+              className="loginInput"
               type="text"
               name="email"
               placeholder="email"
               required
             ></input>
             <input
-              className={styles.loginInput}
+              className="loginInput"
               type="password"
               name="password"
               placeholder="Password"
               required
             ></input>
-            <button className={styles.loginButton}>Log in</button>
-            <div className={styles.linkText}>
+            <button className="loginButton">Log in</button>
+            <div className="linkText">
               Don’t have an account yet?{' '}
-              <Link className={styles.link} to="/register">
+              <Link className="link" to="/register">
                 Sign up
               </Link>
             </div>

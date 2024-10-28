@@ -20,21 +20,23 @@ export type Article = {
   content: string;
 };
 
-export type Tag = {
-  tagId: number;
+
+export type TagData = {
+  articleId: number;
+  tagId: number | undefined;
   tagName: string;
-};
+}
 
 export type ArticleData = {
   article: Article;
   author_name: string;
-  tags: Tag[] | null;
+  tags: TagData[] | null;
 };
 
 export type RecommendedArticle = {
   id: number;
   title: string;
-  createdAt: string; 
+  createdAt: string;
   image: string | null;
 };
 

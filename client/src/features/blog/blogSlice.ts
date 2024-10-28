@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { TagData } from './types';
 import http from '@/services/http';
 
 interface PaginationData {
@@ -14,12 +15,6 @@ interface BlogState extends PaginationData {
   articles: ArticleData[];
   loading: boolean;
   error: string | null;
-}
-
-interface TagData {
-  articleId: number;
-  tagId: number;
-  tagName: string;
 }
 
 interface ArticleData {

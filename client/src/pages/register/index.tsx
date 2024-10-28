@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { loginAsync, registerAsync, selectAuth } from '@/features/auth/authSlice';
-import styles from '@/features/auth/auth.module.css';
 
-export function Register() {
+export default function Register() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -14,7 +13,7 @@ export function Register() {
     event: React.FormEvent<HTMLFormElement>
   ): Promise<void> => {
     event.preventDefault();
-    const name = event.currentTarget.name.value;
+    const name = event.currentTarget.name.valueOf();
     const email = event.currentTarget.email.value;
     const password = event.currentTarget.password.value;
     const passwordConf = event.currentTarget.passwordConf.value;
@@ -42,43 +41,43 @@ export function Register() {
 
   return (
     <>
-      <main className={styles.body}>
-        <div className={styles.loginBox}>
-          <div className={styles.title}>Register</div>
-          <div className={styles.error}>{error}</div>
+      <main className="body">
+        <div className="loginBox">
+          <div className="title">Register</div>
+          <div className="error">{error}</div>
           <form onSubmit={handleSubmit}>
             <input
-              className={styles.loginInput}
-              type="text"
+              className="loginInput"
+              type="name"
               name="name"
               placeholder="Name"
               required
             ></input>
             <input
-              className={styles.loginInput}
+              className="loginInput"
               type="email"
               name="email"
               placeholder="Email"
               required
             ></input>
             <input
-              className={styles.loginInput}
+              className="loginInput"
               type="password"
               name="password"
               placeholder="Password"
               required
             ></input>
             <input
-              className={styles.loginInput}
+              className="loginInput"
               type="password"
               name="passwordConf"
               placeholder="Repeat Password"
               required
             ></input>
-            <button className={styles.loginButton}>Sign up</button>
-            <div className={styles.linkText}>
+            <button className="loginButton">Sign up</button>
+            <div className="linkText">
               Already have an account?{' '}
-              <Link className={styles.link} to="/login">
+              <Link className="link" to="/login">
                 Sign in
               </Link>
             </div>

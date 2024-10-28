@@ -1,7 +1,7 @@
 
 import { HeroSection } from "@/components/home/hero";
 import { Suspense } from 'react';
-import ArticlesList, { ArticlesSkeleton } from '@/components/blog/ArticleList';
+import ArticlesList from '@/components/blog/ArticleList';
 
 export const metadata = {
   title: "Kevin Gil",
@@ -27,10 +27,9 @@ export default function HomePage() {
   return (
     <div>
       <HeroSection />
-      <Suspense fallback={<ArticlesSkeleton />}>
       <ArticlesList
+        articles={[]}
         pagination={false} />
-      </Suspense>
     </div>
   );
 }
