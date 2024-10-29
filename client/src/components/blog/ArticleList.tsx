@@ -100,7 +100,7 @@ const ArticlesList: React.FC<ArticlesListProps> = ({
   };
 
   return (
-    <Grid>
+    <Grid >
       {loading ? renderSkeleton() : renderArticles()}
     </Grid>
   );

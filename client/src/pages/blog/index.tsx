@@ -30,8 +30,8 @@ const ArticlesPage: React.FC = () => {
   };
 
   return (
-    <Container size="lg">
-      <Title order={1} mb="md">Blog</Title>
+    <Container size="lg" className="page">
+      <Title order={1} mb="md" ta={'left'}>Blog</Title>
       
       {loading ? (
         <Loader />

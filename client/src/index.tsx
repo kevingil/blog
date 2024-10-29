@@ -1,7 +1,7 @@
 
-import { HeroSection } from "@/components/home/hero";
-import { Suspense } from 'react';
+import { HeroSection } from "@/components/home/Hero";
 import ArticlesList from '@/components/blog/ArticleList';
+import { Container } from "@mantine/core";
 
 export const metadata = {
   title: "Kevin Gil",
@@ -25,11 +25,11 @@ export const metadata = {
 
 export default function HomePage() {
   return (
-    <div>
+    <Container size="lg" className="page">
       <HeroSection />
       <ArticlesList
         articles={[]}
         pagination={false} />
-    </div>
+    </Container>
   );
 }

@@ -8,23 +8,14 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-
   return (
     <MantineProvider theme={theme}>
-      <html
-        lang="en"
-        className={`bg-white dark:bg-gray-950 text-black dark:text-white `}
-      >
-        <body className="min-h-[100dvh]">
-
+      <html lang="en">
+        <body>
           <Navbar />
-
-          <main className="max-w-6xl mx-auto px-2 sm:px-6">
-
+          <main>
             {children}
-
           </main>
-
           <FooterSection />
         </body>
       </html>

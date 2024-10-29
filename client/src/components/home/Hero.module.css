@@ -1,0 +1,36 @@
+/* Hero.module.css */
+.hero {
+    padding: 8rem 0;
+    padding-bottom: 12rem;
+    text-align: left;
+  }
+  
+  .content {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  
+  .title {
+    font-size: 1.5rem;
+    letter-spacing: -0.025em;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .description {
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+    letter-spacing: -0.025em;
+  }
+  
+  /* Media Queries */
+  @media (min-width: 640px) {
+    .title {
+      font-size:2rem;
+    }
+    
+    .description {
+      font-size: 1rem;
+    }
+  }
