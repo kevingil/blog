@@ -1,10 +1,8 @@
 from flask import Blueprint, current_app, jsonify
 from flask_restful import Api
-from marshmallow import ValidationError
+from pydantic import ValidationError
 from app.extensions import apispec
 from app.api.resources import UserResource, UserList
-from app.api.schemas import UserSchema
-
 
 blueprint = Blueprint("api", __name__, url_prefix="/api/v1")
 api = Api(blueprint)
@@ -13,16 +11,15 @@ api.add_resource(UserResource, "/users/<int:user_id>", endpoint="user_by_id")
 api.add_resource(UserList, "/users", endpoint="users")
 
 def register_views():
-    apispec.spec.components.schema("UserSchema", schema=UserSchema)
+    # Register the paths
     apispec.spec.path(view=UserResource, app=current_app)
     apispec.spec.path(view=UserList, app=current_app)
 
-
 @blueprint.errorhandler(ValidationError)
-def handle_marshmallow_error(e):
-    """Return json error for marshmallow validation errors.
-
+def handle_pydantic_error(e):
+    """Return json error for pydantic validation errors.
+    
     This will avoid having to try/catch ValidationErrors in all endpoints, returning
     correct JSON response with associated HTTP 400 Status (https://tools.ietf.org/html/rfc7231#section-6.5.1)
     """
-    return jsonify(e.messages), 400
+    return jsonify({"errors": e.errors()}), 400

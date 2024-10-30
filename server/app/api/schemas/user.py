@@ -1,14 +1,14 @@
-from app.models import User
-from app.extensions import ma, db
 
+from typing import Optional
+from pydantic import BaseModel, Field, ConfigDict
+from apispec_pydantic_plugin import Registry 
 
-class UserSchema(ma.SQLAlchemyAutoSchema):
+class UserSchema(BaseModel):
+    id: Optional[int] = Field(default=None, exclude=True)
+    password: str = Field(default=None, exclude=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        exclude={"_password"},
+    )
 
-    id = ma.Int(dump_only=True)
-    password = ma.String(load_only=True, required=True)
-
-    class Meta:
-        model = User
-        sqla_session = db.session
-        load_instance = True
-        exclude = ("_password",)
+Registry.register(UserSchema)
