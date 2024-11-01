@@ -2,18 +2,22 @@ from flask import Blueprint, current_app, jsonify
 from flask_restful import Api
 from pydantic import ValidationError
 from app.extensions import apispec
-from app.api.resources import UserResource, UserList
+from app.api.resources import UserResource, UserList, ArticleResource, ArticleList
 
 blueprint = Blueprint("api", __name__, url_prefix="/api/v1")
 api = Api(blueprint)
 
 api.add_resource(UserResource, "/users/<int:user_id>", endpoint="user_by_id")
 api.add_resource(UserList, "/users", endpoint="users")
+api.add_resource(ArticleResource, '/api/articles/<int:article_id>')
+api.add_resource(ArticleList, '/api/articles')
 
 def register_views():
     # Register the paths
     apispec.spec.path(view=UserResource, app=current_app)
     apispec.spec.path(view=UserList, app=current_app)
+    apispec.spec.path(view=ArticleResource, app=current_app)
+    apispec.spec.path(view=ArticleList, app=current_app)
 
 @blueprint.errorhandler(ValidationError)
 def handle_pydantic_error(e):
