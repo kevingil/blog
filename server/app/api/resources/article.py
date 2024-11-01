@@ -6,6 +6,7 @@ from app.extensions import db
 from app.commons.pagination import paginate
 from app.api.schemas import ArticleSchema
 from app.models import Article, Tag, ArticleTag
+from app.tasks.article_embeddings import generate_article_embedding
 
 
 class ArticleResource(Resource):
@@ -113,6 +114,9 @@ class ArticleResource(Resource):
                 db.session.add(article_tag)
 
         db.session.commit()
+        
+        # Generate embedding task
+        generate_article_embedding.delay(article.id)
 
         return {"msg": "article updated", "article": schema.dump(article)}
 
@@ -193,5 +197,8 @@ class ArticleList(Resource):
 
         db.session.add(article)
         db.session.commit()
+        
+        # Generate embedding task
+        generate_article_embedding.delay(article.id)
 
         return {"msg": "article created", "article": schema.dump(article)}, 201
