@@ -10,6 +10,7 @@ from flask_migrate import Migrate
 from celery import Celery
 
 from app.commons.apispec import APISpecExt
+from app.services.embedding import EmbeddingService
 
 
 db = SQLAlchemy()
@@ -18,3 +19,4 @@ migrate = Migrate()
 apispec = APISpecExt()
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 celery = Celery()
+embeddings = EmbeddingService()
