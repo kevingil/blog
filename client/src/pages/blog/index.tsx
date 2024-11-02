@@ -1,32 +1,41 @@
-import React, { useEffect } from 'react';
-import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import React, { useEffect, useState } from 'react';
 import { Container, Title, Loader, Pagination, Group } from '@mantine/core';
 import ArticlesList from '@/components/blog/ArticleList';
-import { fetchArticles, setPage, setItemsPerPage } from '@/features/blog/blogSlice';
-import { RootState } from '@/store/store';
+import { fetchArticlesApi } from '@/api/articles'; 
 
 const ArticlesPage: React.FC = () => {
-  const dispatch = useAppDispatch();
-  const { 
-    articles, 
-    loading,
-    currentPage,
-    totalPages,
-    itemsPerPage,
-    totalItems 
-  } = useAppSelector((state: RootState) => state.blog);
+  const [articles, setArticles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
 
   useEffect(() => {
-    dispatch(fetchArticles({ page: currentPage, limit: itemsPerPage }));
-  }, [dispatch, currentPage, itemsPerPage]);
+    const fetchArticles = async () => {
+      setLoading(true);
+      try {
+        const { articles, totalItems } = await fetchArticlesApi(currentPage, itemsPerPage);
+        setArticles(articles);
+        setTotalItems(totalItems);
+      } catch (error) {
+        console.error('Error fetching articles:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchArticles();
+  }, [currentPage, itemsPerPage]);
 
   const handlePageChange = (newPage: number) => {
-    dispatch(setPage(newPage));
+    setCurrentPage(newPage);
   };
 
   const handleItemsPerPageChange = (value: string) => {
-    dispatch(setItemsPerPage(Number(value)));
-    dispatch(setPage(1)); // Reset to first page when changing items per page
+    setItemsPerPage(Number(value));
+    setCurrentPage(1); // Reset to first page when changing items per page
   };
 
   return (
@@ -40,7 +49,6 @@ const ArticlesPage: React.FC = () => {
           <ArticlesList articles={articles} />
           
           <Group mt="xl">
-            
             <Pagination
               total={totalPages}
               value={currentPage}
