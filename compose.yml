@@ -1,24 +1,24 @@
-# dataabases
-
 services:
   postgres:
-    image: postgres:16.4
+    build: 
+      context: .
+      dockerfile: pg.dockerfile
     container_name: ${POSTGRES_CONTAINER_NAME:-postgres}
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-myapp}
+      POSTGRES_DB: ${POSTGRES_DB:-blogapp}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgrespass}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - ${POSTGRES_DATA_DIR:-/var/lib/docker/postgresql/data}:/var/lib/postgresql/data
+      - blog_app_postgres_data:${POSTGRES_DATA_DIR:-/var/lib/postgresql/data}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - shared_network
+      - blog_app_shared_network
 
   redis:
     image: redis:7.4.1
@@ -27,15 +27,19 @@ services:
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
-      - ${REDIS_DATA_DIR:-/var/lib/docker/redis/data}:/data
+      - blog_app_redis_data:${REDIS_DATA_DIR:-/data}
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - shared_network
+      - blog_app_shared_network
 
 networks:
-  shared_network:
-    external: true
+  blog_app_shared_network:
+    name: BlogAppSharedNetwork
+    
+volumes:
+  blog_app_postgres_data:
+  blog_app_redis_data:

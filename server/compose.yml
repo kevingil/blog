@@ -4,29 +4,29 @@ services:
   # Flask Application Service
   app:
     build:
-      context: .  # Current directory
-      dockerfile: Dockerfile  # Specify the Dockerfile
-    container_name: blog-flask-server  # Give your container a name
-    env_file: .env  # Load environment variables from .env file
+      context: . 
+      dockerfile: Dockerfile  
+    container_name: blog-flask-server  
+    env_file: .env  
     ports:
-      - "5000:5000"  # Map port 5000 to host
+      - "5000:5000" 
     volumes:
-      - ./app:/code/app  # Optional: mount your app directory for development
-    command: gunicorn -w 4 -b 0.0.0.0:5000 app.wsgi:app # Command to run the app
+      - ./app:/code/app
+    command: gunicorn -w 4 -b 0.0.0.0:5000 app.wsgi:app 
     networks:
-      - shared_network
+      - blog_app_shared_network
 
-  # Celery Worker Service (if needed)
+  # Celery Workers Service
   celery:
     build:
-      context: .  # Current directory
+      context: .  
       dockerfile: Dockerfile
     container_name: blog-celery-worker
-    env_file: .env  # Load environment variables from .env file
+    env_file: .env  
     command: celery -A app.app.celery worker --loglevel=info
     networks:
-      - shared_network
+      - blog_app_shared_network
     
 networks:
-  shared_network:
-    external: true
+  blog_app_shared_network:
+    name: BlogAppSharedNetwork
