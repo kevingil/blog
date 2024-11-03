@@ -1,5 +1,5 @@
 import TokenService from './token.service';
-import { refreshToken } from '../features/auth/authSlice';
+import { refreshToken } from '@/features/auth/authSlice';
 import http from './http';
 import httpPublic from './httpPublic';
 
