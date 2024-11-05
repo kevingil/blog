@@ -2,7 +2,7 @@ from app.models.user import User
 from app.models.blocklist import TokenBlocklist
 from app.models.article import Article, Tag, ArticleTag
 from app.models.project import Project
-from app.models.pages import AboutPage, ContactPage
+from app.models.pages import Page, PageContent
 
 
 __all__ = [
@@ -12,6 +12,6 @@ __all__ = [
     "Tag",
     "ArticleTag",
     "Project",
-    "AboutPage",
-    "ContactPage"
+    "Page",
+    "PageContent"
     ]
