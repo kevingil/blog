@@ -20,4 +20,4 @@ RUN pip install -e .
 COPY app app/
 COPY migrations migrations/
 
-EXPOSE 5000
+EXPOSE 5001

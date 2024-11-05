@@ -14,7 +14,7 @@ docker compose up -d
 # From (env) server/
 pip install -r requirements.txt
  # start flask server
-gunicorn -w 4 -b 0.0.0.0:5000 app.wsgi:app
+gunicorn -w 4 -b 0.0.0.0:5001 app.wsgi:app
  # start celery workers
 celery -A app.app.celery worker --loglevel=info
 
