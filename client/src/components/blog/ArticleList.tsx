@@ -1,7 +1,7 @@
 import React from 'react';
 import { Grid, Card, Image, Text, Group, Button, Badge, Skeleton } from '@mantine/core';
 import { Link } from 'react-router-dom';
-import { ArticleData } from '@/features/blog/types';
+import { ArticleData } from '@/services/blog/types';
 
 interface ArticlesListProps {
   articles: ArticleData[];
