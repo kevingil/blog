@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
     const model = new ChatGroq({
       modelName: "llama-3.1-8b-instant",
       temperature: 0.7,
-      apiKey: process.env.GROQ_KEY,
+      apiKey: process.env.GROQ_API_KEY,
     });
 
     // Get writing context from recent articles
@@ -66,22 +66,34 @@ export async function GET(req: NextRequest) {
 
     // Get latest news/trends from Tavily
     console.log('Searching for latest news/trends');
-    const searchResults = await tavilyClient.search("Search for news and articles from ycombinator, techcrunch, and venturebeat. Focus on latest technology and engineering news and trends.", {
-      searchDepth: "advanced"
-    });
+    const searchResults = await tavilyClient.search(
+      `Search the latest on software engineering, AI news, agents, machine learning, langchain, technical papers, and trends. 
+      Good sources include hacker news (news.ycombinator.com), linkedin, or technical blogs from tech leaders. `, 
+      {
+        searchDepth: "advanced"
+      }
+    );
 
     console.log('Search results:', searchResults);
 
     const structuredResponse = await model.withStructuredOutput(articleIdeaSchema)
 
+    console.log(`Based on the following context and search results, suggest an engaging article title about technology or AI:
+      These are prvious writings from the author: ${writingContext}
+      And these latest trends and news: ${JSON.stringify(searchResults.results.slice(0, 3))}
+      Don't suggest the same ideas as previous articles, suggest something new and engaging.
+      Make the article informative and engaging.`);
+
+
     const articleIdea = await structuredResponse.invoke([
       new SystemMessage(`Based on the following context and search results, suggest an engaging article title about technology or AI:
         These are prvious writings from the author: ${writingContext}
-        Latest trends that might be relevant: ${JSON.stringify(searchResults.results.slice(0, 3))}".
         And these latest trends and news: ${JSON.stringify(searchResults.results.slice(0, 3))}
         Don't suggest the same ideas as previous articles, suggest something new and engaging.
         Make the article informative and engaging.`)
     ]);
+
+    
 
 
     console.log('Suggested prompt:', articleIdea.prompt);

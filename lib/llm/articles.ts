@@ -14,7 +14,7 @@ const StateAnnotation = Annotation.Root({
   }),
 });
 
-const GROQ_KEY = process.env.GROQ_KEY;
+const GROQ_KEY = process.env.GROQ_API_KEY;
 const model = new ChatGroq({
   modelName: "llama-3.1-8b-instant",
   temperature: 0.7,
@@ -85,7 +85,23 @@ export async function generateArticle(prompt: string, title: string, authorId: n
 
   // Messages for the editor
   const editorSystem = new SystemMessage(
-    `You are the Editor. Improve and refine the previously drafted content. 
+    `You are the Editor. Improve and refine the previously drafted content.
+    The blog should be formatted in markdown as follows: 
+
+    [article intro - always start with this]
+    ### Subheader
+    [article body - there can be multiple subheaders and body sections depending on the article]
+    ### Conclusion
+    [article conclusion - always end with this]
+
+    If there's code snippets, make sure to format in markdown.
+    Link references can be added at the end of the article in markdown format.
+    For listis, use unordered lists with -. 
+    - Bullet point
+    - Bullet point
+    - Bullet point
+
+    Writing style:
     Make it more concise, clear, and engaging but that it's following the author's voice and style
     Make sure the article makes sense and is coherent for a human and that it's not stating the obvious.
     Preserve the main idea and style, but ensure it's polished for publication.`

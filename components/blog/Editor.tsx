@@ -30,12 +30,8 @@ import { SparklesIcon } from 'lucide-react';
 import { Dialog, DialogTitle, DialogContent, DialogTrigger, DialogDescription, DialogFooter, DialogHeader, DialogClose } from '@/components/ui/dialog';
 import { DEFAULT_IMAGE_PROMPT } from '@/lib/images/const';
 import { generateArticleImage, getImageGeneration, getImageGenerationStatus } from '@/lib/images/generation';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
+import { CopilotKit } from '@copilotkit/react-core';
+import AITextArea from './AITextArea';
 
 
 const articleSchema = z.object({
@@ -108,8 +104,6 @@ export function ImageLoader({ article, newImageGenerationRequestId, stagedImageU
 
 }
 
-
-
 export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const { toast } = useToast()
   const router = useRouter();
@@ -120,6 +114,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [newImageGenerationRequestId, setNewImageGenerationRequestId] = useState<string | null>(null);
   const [stagedImageUrl, setStagedImageUrl] = useState<string | null | undefined>(undefined);
   const [generateImageOpen, setGenerateImageOpen] = useState(false);
+  
 
   const { register, handleSubmit, setValue, getValues, formState: { errors } } = useForm<ArticleFormData>({
     resolver: zodResolver(articleSchema),
@@ -208,6 +203,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
   return (
     <section className="flex-1 p-0 md:p-4">
+      <CopilotKit runtimeUrl="/api/copilotkit">
       <h1 className="text-lg lg:text-2xl font-medium text-gray-900 dark:text-white mb-6">
         Edit Article
       </h1>
@@ -385,6 +381,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           </CardFooter>
         </form>
       </Card>
+      </CopilotKit>
     </section>
   );
 }

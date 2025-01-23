@@ -8,7 +8,7 @@ import { Navbar } from "@/components/navbar";
 import { ThemeProvider } from "@/components/home/theme-provider";
 import Aurora from "@/components/home/aurora";
 import 'highlight.js/styles/base16/snazzy.css';
-
+import { CopilotKit } from '@copilotkit/react-core';
 
 
 export const metadata: Metadata = {
@@ -46,9 +46,11 @@ export default async function RootLayout({
             <Navbar />
 
             <Aurora />
-            <main className="w-full max-w-6xl mx-auto px-2 sm:px-6 z-[1]" data-vaul-drawer-wrapper="">
-              {children}
-            </main>
+            <CopilotKit runtimeUrl="/api/copilotkit">
+              <main className="w-full max-w-6xl mx-auto px-2 sm:px-6 z-[1]" data-vaul-drawer-wrapper="">
+                {children}
+              </main>
+            </CopilotKit>
 
             <FooterSection />
           </ThemeProvider>
