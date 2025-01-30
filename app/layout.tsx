@@ -1,5 +1,4 @@
 import './globals.css';
-import type { Metadata, Viewport } from 'next';
 import { Manrope } from 'next/font/google';
 import { UserProvider } from '@/lib/auth';
 import { getUser } from '@/db/queries';
@@ -11,14 +10,11 @@ import 'highlight.js/styles/base16/snazzy.css';
 import { CopilotKit } from '@copilotkit/react-core';
 
 
-export const metadata: Metadata = {
+export const siteData = {
   title: 'Kevin Gil',
   description: 'Software Engineer in San Francisco.',
 };
 
-export const viewport: Viewport = {
-  maximumScale: 1,
-};
 
 const manrope = Manrope({ subsets: ['latin'] });
 
@@ -36,6 +32,7 @@ export default async function RootLayout({
       className={`text-black dark:text-white ${manrope.className}`}
     >
       <body className="min-h-[100dvh] flex flex-col relative">
+        
         <UserProvider userPromise={userPromise}>
           <ThemeProvider
             attribute="class"
@@ -55,7 +52,6 @@ export default async function RootLayout({
             <FooterSection />
           </ThemeProvider>
         </UserProvider>
-
       </body>
     </html>
   );

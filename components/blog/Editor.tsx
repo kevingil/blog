@@ -30,8 +30,8 @@ import { SparklesIcon } from 'lucide-react';
 import { Dialog, DialogTitle, DialogContent, DialogTrigger, DialogDescription, DialogFooter, DialogHeader, DialogClose } from '@/components/ui/dialog';
 import { DEFAULT_IMAGE_PROMPT } from '@/lib/images/const';
 import { generateArticleImage, getImageGeneration, getImageGenerationStatus } from '@/lib/images/generation';
-import { CopilotKit } from '@copilotkit/react-core';
-import AITextArea from './AITextArea';
+import "@copilotkit/react-textarea/styles.css";
+import { CopilotTextarea } from '@copilotkit/react-textarea';
 
 
 const articleSchema = z.object({
@@ -203,7 +203,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
   return (
     <section className="flex-1 p-0 md:p-4">
-      <CopilotKit runtimeUrl="/api/copilotkit">
       <h1 className="text-lg lg:text-2xl font-medium text-gray-900 dark:text-white mb-6">
         Edit Article
       </h1>
@@ -310,11 +309,16 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             </div>
             <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Content</label>
             <div>
-              <Textarea
-                {...register('content')}
-                placeholder="Article Content"
-                rows={10}
-                className='h-[400px]'
+              <CopilotTextarea
+                className="w-full p-4 border border-gray-300 rounded-md"
+                value={article?.content || ''}
+                onValueChange={(value) => {
+                  setValue('content', value);
+                }}
+                autosuggestionsConfig={{
+                  textareaPurpose: "the body of a blog post",
+                  chatApiConfigs: {},
+                }}
               />
               {errors.content && <p className="text-red-500">{errors.content.message}</p>}
             </div>
@@ -381,7 +385,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           </CardFooter>
         </form>
       </Card>
-      </CopilotKit>
     </section>
   );
 }
