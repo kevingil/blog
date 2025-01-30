@@ -309,15 +309,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             </div>
             <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Content</label>
             <div>
-              <CopilotTextarea
+              <Textarea
                 className="w-full p-4 border border-gray-300 rounded-md"
-                value={article?.content || ''}
-                onValueChange={(value) => {
-                  setValue('content', value);
-                }}
-                autosuggestionsConfig={{
-                  textareaPurpose: "the body of a blog post",
-                  chatApiConfigs: {},
+                {...register('content')}
+                onChange={(e) => {
+                  if (article) {
+                    setArticle({ ...article, content: e.target.value });
+                  }
                 }}
               />
               {errors.content && <p className="text-red-500">{errors.content.message}</p>}
