@@ -7,6 +7,28 @@ import { createArticle } from "@/components/blog/actions";
 import { generateArticleImage } from "../images/generation";
 import { DEFAULT_IMAGE_PROMPT } from "../images/const";
 import { getArticle } from "@/components/blog/search";
+
+
+import { eq, sql, or, like, and, inArray, desc } from 'drizzle-orm';
+import { db } from '@/db/drizzle';
+import { articles, users, articleTags, tags } from '@/db/schema';
+import { ArticleListItem, ITEMS_PER_PAGE } from '@/components/blog/index';
+import { log } from 'console';
+
+
+export interface ArticleChatHistoryMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+  created_at: number;
+  metadata: any;
+}
+
+export interface ArticleChatHistory {
+  messages: ArticleChatHistoryMessage[];
+  metadata: any;
+}
+
+
 // Store an array of messages in state
 const StateAnnotation = Annotation.Root({
   messages: Annotation<BaseMessage[]>({
@@ -173,13 +195,53 @@ One of the great things about Perl is that it ships with Linux out of the box. I
 }
 
 
+export async function getArticleChatHistory(articleId: number): Promise<ArticleChatHistory | null> {
+
+  // Fetch chat history stored as string and asssign a type
+
+  const [row] = await db
+    .select({ chatHistory: articles.chatHistory })
+    .from(articles)
+    .where(eq(articles.id, articleId))
+    .limit(1);
+  
+  if (row && row.chatHistory) {
+    return JSON.parse(row.chatHistory) as ArticleChatHistory;
+  }
+  return null;
+}
+
 
 export async function updateWithContext(articleId: number) {
 
   const article = await getArticle(articleId);
 
+  if (!article) {
+    return null;
+  }
+
+  const articleChatHistory = await getArticleChatHistory(articleId);
+
+  // Editor prompt 
+  const editorPrompt = new SystemMessage(
+    `You are the Editor. Improve and refine the previously drafted content.
+    Use the chat history to understahd what the user wants and what the writer has written.
+    `
+  );
+
+  const userPrompt = new HumanMessage(
+    `Title: "${article.title}"\nPrompt: ${article.content}`
+  );
+
+  const messages = [
+    editorPrompt,
+    userPrompt,
+  ];
+
+  const response = await model.invoke(messages);
 
 
+  console.log(response)
 
   return true;
 
