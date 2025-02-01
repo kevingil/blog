@@ -230,7 +230,10 @@ export async function updateWithContext(articleId: number) {
   );
 
   const userPrompt = new HumanMessage(
-    `Title: "${article.title}"\nPrompt: ${article.content}`
+    `Title: "${article.title}"\nPrompt: ${article.content}
+    Chat history: ${articleChatHistory}
+    Improve the article based on user needs.
+    `
   );
 
   const messages = [

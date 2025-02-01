@@ -13,6 +13,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Users, Settings, Shield, PenLine, EllipsisVertical, ImageUp } from 'lucide-react';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+import { Box } from '@mui/material';
 
 export default function DashboardLayout({
   children,
@@ -20,7 +25,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const [isOpen, setIsOpen] = useState(false);
+  const router = useRouter();
 
   const navItems = [
     { href: '/dashboard', icon: Users, label: 'Profile' },
@@ -29,65 +34,77 @@ export default function DashboardLayout({
     { href: '/dashboard/general', icon: Settings, label: 'General' },
     { href: '/dashboard/security', icon: Shield, label: 'Security' },
   ];
+
+  
+  // Map current route to the index of that route in our navItems
+  const getCurrentIndex = () => {
+    return Math.max(
+      navItems.findIndex((item) => item.href === pathname),
+      0
+    );
+  };
+
+  const [value, setValue] = useState<number>(getCurrentIndex());
+
+  useEffect(() => {
+    setValue(getCurrentIndex());
+  }, [pathname]);
+
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setValue(newValue);
+    // Push selected tab's route
+    router.push(navItems[newValue].href);
+  };
   
 
-  const NavContent = ({ mobile = false }) => (
-    <nav className={mobile ? '' : ' flex flex-col gap-1'}>
-      {navItems.map((item) => (
-        <Link key={item.href} href={item.href} passHref>
-          {mobile ? (
-            <DropdownMenuItem asChild>
-              <Button
-                variant="ghost"
-                className="w-full justify-start"
-                onClick={() => setIsOpen(false)}
-              >
-                <item.icon className="mr-2 h-4 w-4" />
-                {item.label}
-              </Button>
-            </DropdownMenuItem>
-          ) : (
-            <Button
-              variant={pathname === item.href ? 'secondary' : 'ghost'}
-              className={`w-full justify-start py-8 rounded-xl ${pathname === item.href ? 'bg-zinc-100 dark:bg-zinc-800' : ''}`}
-              onClick={() => setIsOpen(false)}
-            >
-              <item.icon className="mr-2 h-4 w-4" />
-              {item.label}
-            </Button>
-          )}
-        </Link>
-      ))}
-    </nav>
+  // Updated NavContent using MUI Tabs with scrollable behavior
+  const NavContent = () => (
+    <Box sx={{ width: '100%', overflowX: 'auto' }}>
+      <div className="flex justify-between items-center">
+        <div className="text-2xl font-bold ml-4 text-semibold text-sm ">Dashboard</div>
+      </div>
+      <Tabs
+        value={value}
+        onChange={handleTabChange}
+        variant="scrollable"
+        aria-label="dashboard navigation tabs"
+        textColor="secondary"
+        indicatorColor="secondary"
+        TabIndicatorProps={{
+          style: {
+            transition: 'all 0.3s ease-out',
+          },
+        }}
+        sx={{
+          minHeight: 48, 
+          '& .MuiTab-root': {
+            textTransform: 'none',
+            fontSize: '0.875rem', 
+            padding: '6px 16px',  
+            minHeight: 48, 
+          },
+        }}
+      >
+        {navItems.map((item, idx) => (
+          <Tab
+            key={item.href}
+            
+            icon={<item.icon className="mr-1 h-4 w-4" />}
+            label={item.label}
+            iconPosition="start"
+            disableRipple={false}
+          />
+        ))}
+      </Tabs>
+    </Box>
   );
 
   return (
     <div className="flex flex-col min-h-[80dvh] max-w-7xl mx-auto w-full z-[1]">
-      {/* Mobile header */}
-      <div className="lg:hidden bg-transparent flex justify-between items-center gap-2 bg-card mb-12 rounded-xl p-4">
-        <div className="flex items-center">
-          <span className="font-medium">Dashboard</span>
-        </div>
-        <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="-ml-3">
-              <EllipsisVertical className="h-6 w-6" />
-              <span className="sr-only">Toggle menu</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <NavContent mobile />
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
 
-      <div className="flex flex-1 overflow-hidden h-full">
-        {/* Desktop Sidebar */}
-        <aside className="hidden lg:block w-64 rounded-xl pt-6">
-          <div className="h-full overflow-y-auto p-4">
+      <div className="flex flex-1 flex-col overflow-hidden h-full">
+        {/* Dashboard Tabs */}
             <NavContent />
-          </div>
-        </aside>
 
         {/* Main content */}
         <main className="flex-1 overflow-y-auto p-0">
