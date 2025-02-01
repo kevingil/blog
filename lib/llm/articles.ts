@@ -6,7 +6,7 @@ import { MemorySaver, Annotation, messagesStateReducer } from "@langchain/langgr
 import { createArticle } from "@/components/blog/actions";
 import { generateArticleImage } from "../images/generation";
 import { DEFAULT_IMAGE_PROMPT } from "../images/const";
-import { getArticles } from "@/components/blog/search";
+import { getArticle } from "@/components/blog/search";
 // Store an array of messages in state
 const StateAnnotation = Annotation.Root({
   messages: Annotation<BaseMessage[]>({
@@ -57,14 +57,17 @@ const app = workflow.compile({ checkpointer });
 export async function generateArticle(prompt: string, title: string, authorId: number, draft?: boolean) {
 
 
-  // Get writing context from the database
-  const articles = await getArticles(1, null);
-  const writingContext = articles.articles.map(article => 
-    article?.content?.substring(0, 300).replace(/[#*`_]/g, '')
-  ).join("\n\n");
-
-  console.log("Writing Context:")
-  console.log(writingContext)
+  // Get writing context, handpicked
+  const writingContext = `
+### How JavaScript Runs in MySQL
+Oracle uses PL/SQL as the interface to run JavaScript on MySQL. You can define and save functions that you can later call in your queries. Although some versions of Oracle database already support JavaScript as stored procedures and inline with your query, MySQL only supports JavaScript as saved procedures for the time being. The code runs on the GraalVM runtime, which optimizes your code, converts it to machine code, then runs on the Graal JIT compiler.
+### HTMX Frontend
+Back on the homepage, we replace the template that was loading the articles with the code below. Using HTMX we easily implement lazy loading by displaying a placeholder as the initial state and calling the /chunks/feed endpoint that uses our new controller to load articles. Once we get a response, HTMX will handle the application state with hx-swap, in this case to replace the placeholder.
+### First Day Hike
+The hike on the first day did not take long, I started around noon, and finished at 4pm with several water, picture, and food breaks. The first lake is Carr Lake, where most day glampers go, I'm pretty sure I saw a TV setup. Next was, Feely Lake, and Milk Lake, where I stopped for Lunch.
+### Running a Perl Script in a Dockerfile
+One of the great things about Perl is that it ships with Linux out of the box. It's so well integrated with Unix, it can serve as a wrapper around system tools. Its strong support for text manipulation and data processing makes it very valuable when building distributed systems. When deploying complex Docker applications, there might be some pre-processing during the build process that can take advantage of Perl's many strong suits.
+    `;
 
 
   // Construct two calls:
@@ -77,6 +80,16 @@ export async function generateArticle(prompt: string, title: string, authorId: n
 
     Please write a complete blog article with clear sections, engaging language, and relevant details.
     The author is not amazed, the author is just trying to stay informative, please consider the author's voice and style, don't use verbs or phrases or sayings too over the top.
+
+    Here are some text snippets from previous articles that the author has written:
+    ${writingContext}
+    Use this as a reference for the author's writing style and tone.
+
+    These are words and phrases to avoid, try not using these words:
+
+
+
+
     `
   );
   const userPrompt = new HumanMessage(
@@ -109,7 +122,16 @@ export async function generateArticle(prompt: string, title: string, authorId: n
     Preserve the main idea and style, but ensure it's polished for publication.
     There's no top players, there's no greatness, there's no revolution, there's just things and information.
     If a brand, thing, or company is mentioned, don't explain it, the author assumes the readers know this information, we are just doing a technical writeup.
-    Review and remove uneccessary subheaders or titles as instructed.`
+    Review and remove uneccessary subheaders or titles as instructed.
+
+    Here are some text snippets from previous articles that the author has written:
+    ${writingContext}
+    Use this as a reference for the author's writing style and tone.
+    
+    IMPORTANT: 
+    the article should not start with a title or subheader, the title is saved somewhere else, we just want the content, start with the first paragraph of the article.
+    The voice is the most important, make sure you don't use worlds like ripples or remarkable, just use the words that the author would use.
+    `
   );
   // Run the workflow
   const finalState = await app.invoke(
@@ -148,4 +170,17 @@ export async function generateArticle(prompt: string, title: string, authorId: n
   }
 
   return newArticle;
+}
+
+
+
+export async function updateWithContext(articleId: number) {
+
+  const article = await getArticle(articleId);
+
+
+
+
+  return true;
+
 }
