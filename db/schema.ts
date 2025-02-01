@@ -36,6 +36,7 @@ export const users = sqliteTable('users', {
   email: text('email').notNull().unique(),
   passwordHash: text('passwordHash').notNull(),
   role: text('role').notNull().default(Role.USER),
+  memory: text('memory'),
 });
 
 // Projects table
@@ -82,6 +83,7 @@ export const articles = sqliteTable('articles', {
   isDraft: integer('is_draft', { mode: 'boolean' }).notNull().default(false),
   embedding: float32Array('embedding', { dimensions: 1536 }),
   imageGenerationRequestId: text('image_generation_request_id'),
+  chatHistory: text('chat_history'),
 });
 
 // Tags table

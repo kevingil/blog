@@ -45,20 +45,34 @@ export async function GET(req: NextRequest) {
    
     console.log('Initializing Groq model');
     const model = new ChatGroq({
-      modelName: "llama-3.1-8b-instant",
+      modelName: "deepseek-r1-distill-llama-70b",
       temperature: 0.7,
       apiKey: process.env.GROQ_API_KEY,
     });
 
-    // Get writing context from recent articles
-    const recentArticleTitles = await db.select({ title: articles.title })
-      .from(articles)
-      .where(eq(articles.isDraft, false))
-      .orderBy(desc(articles.createdAt))
-      .limit(5)
-      .execute();
+    // // Get writing context from recent articles
+    // const recentArticleTitles = await db.select({ title: articles.title })
+    //   .from(articles)
+    //   .where(eq(articles.isDraft, false))
+    //   .orderBy(desc(articles.createdAt))
+    //   .limit(5)
+    //   .execute();
 
-    const writingContext = recentArticleTitles.map(article => article.title).join("\n");
+    // const writingContext = recentArticleTitles.map(article => article.title).join("\n");
+    const writingContext = `
+Here are some text snippets from previous articles that the author has written:
+
+### How JavaScript Runs in MySQL
+Oracle uses PL/SQL as the interface to run JavaScript on MySQL. You can define and save functions that you can later call in your queries. Although some versions of Oracle database already support JavaScript as stored procedures and inline with your query, MySQL only supports JavaScript as saved procedures for the time being. The code runs on the GraalVM runtime, which optimizes your code, converts it to machine code, then runs on the Graal JIT compiler.
+### HTMX Frontend
+Back on the homepage, we replace the template that was loading the articles with the code below. Using HTMX we easily implement lazy loading by displaying a placeholder as the initial state and calling the /chunks/feed endpoint that uses our new controller to load articles. Once we get a response, HTMX will handle the application state with hx-swap, in this case to replace the placeholder.
+### First Day Hike
+The hike on the first day did not take long, I started around noon, and finished at 4pm with several water, picture, and food breaks. The first lake is Carr Lake, where most day glampers go, I'm pretty sure I saw a TV setup. Next was, Feely Lake, and Milk Lake, where I stopped for Lunch.
+### Running a Perl Script in a Dockerfile
+One of the great things about Perl is that it ships with Linux out of the box. It's so well integrated with Unix, it can serve as a wrapper around system tools. Its strong support for text manipulation and data processing makes it very valuable when building distributed systems. When deploying complex Docker applications, there might be some pre-processing during the build process that can take advantage of Perl's many strong suits.
+
+Use this as a reference for the author's writing style and tone.
+    `;
 
      // Initialize clients
      console.log('Initializing Tavily client');
@@ -79,7 +93,6 @@ export async function GET(req: NextRequest) {
     const structuredResponse = await model.withStructuredOutput(articleIdeaSchema)
 
     console.log(`Based on the following context and search results, suggest an engaging article title about technology or AI:
-      These are prvious writings from the author: ${writingContext}
       And these latest trends and news: ${JSON.stringify(searchResults.results.slice(0, 3))}
       Don't suggest the same ideas as previous articles, suggest something new and engaging.
       Make the article informative and engaging.`);
@@ -87,7 +100,6 @@ export async function GET(req: NextRequest) {
 
     const articleIdea = await structuredResponse.invoke([
       new SystemMessage(`Based on the following context and search results, suggest an engaging article title about technology or AI:
-        These are prvious writings from the author: ${writingContext}
         And these latest trends and news: ${JSON.stringify(searchResults.results.slice(0, 3))}
         Don't suggest the same ideas as previous articles, suggest something new and engaging.
         Make the article informative and engaging.`)

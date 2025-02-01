@@ -6,6 +6,42 @@ import { articles, users, articleTags, tags } from '@/db/schema';
 import { ArticleListItem, ITEMS_PER_PAGE } from './index';
 import { log } from 'console';
 
+
+export async function getArticle(id: number): Promise<ArticleListItem> {
+  const article = await db
+    .select({
+      id: articles.id,
+      title: articles.title,
+      slug: articles.slug,
+      image: articles.image,
+      content: articles.content,
+      createdAt: articles.createdAt,
+      publishedAt: articles.publishedAt,
+      author: users.name,
+    })
+    .from(articles)
+    .innerJoin(users, eq(articles.author, users.id))
+    .where(eq(articles.id, id))
+    .limit(1);
+
+    const rawTagResults = await db
+    .select({ name: tags.name })
+    .from(articleTags)
+    .where(eq(articleTags.articleId, id))
+    .innerJoin(tags, eq(articleTags.tagId, tags.id));
+
+  // Map tag results as strings
+  const tagResults: { name: string }[] = rawTagResults.map(tag => ({
+    name: tag.name || '' 
+  }));
+
+  return { 
+    ...article[0], 
+    tags: tagResults.map(tag => tag.name)
+  };
+}
+
+
 export async function getArticles(page: number, tag: string | null = null): Promise<{ articles: ArticleListItem[], totalPages: number }> {
   const offset = (page - 1) * ITEMS_PER_PAGE;
 
