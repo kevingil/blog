@@ -7,6 +7,7 @@ import { eq, not, and, sql, desc, notInArray, inArray } from 'drizzle-orm'
 export type ArticleRow = {
   id: number
   title: string | null
+  content: string | null
   createdAt: number
   publishedAt: number | null
   isDraft: boolean  
@@ -105,6 +106,7 @@ export async function getArticles(): Promise<ArticleRow[]> {
     .select({
       id: articles.id,
       title: articles.title,
+      content: articles.content,
       createdAt: articles.createdAt,
       publishedAt: articles.publishedAt,
       isDraft: articles.isDraft,

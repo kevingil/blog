@@ -100,6 +100,7 @@ export default function ArticlesPage() {
                     <div className="flex flex-wrap gap-2">{article.tags.map(tag => <Badge key={tag}
                   className="text-[0.6rem]" variant="outline"
                   >{tag}</Badge>)}</div>
+                  <p className="text-gray-500 text-xs">{article.content ? article.content.slice(0, 150) + '...' : ''}</p>
                   </div>  
                 </div>
               </TableCell>
