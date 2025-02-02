@@ -92,12 +92,16 @@ export default function ArticlesPage() {
 
             <TableRow key={article.id}>
               <TableCell className="w-full flex flex-col gap-1">
-                <Link href={`/dashboard/blog/edit/${article.slug}`} className="text-gray-900 text-md hover:underline">{article.title}</Link>
-                <p className="text-gray-500 text-xs">Published: {article.publishedAt ? new Date(article.publishedAt).toLocaleDateString() : 'Unknown'}</p>
-                <div className="flex flex-wrap gap-2">{article.tags.map(tag => <Badge key={tag}
-              className="text-[0.6rem]" variant="outline"
-              >{tag}</Badge>)}</div>
-                
+                <div className="flex items-start gap-2">
+                  <div className="flex items-start flex-wrap">{article.image && <img src={article.image} width={50} height={50} className="rounded-md mt-1" />}</div>
+                  <div className="flex flex-col">
+                    <Link href={`/dashboard/blog/edit/${article.slug}`} className="text-gray-900 text-md hover:underline">{article.title}</Link>
+                    <p className="text-gray-500 text-xs">Published: {article.publishedAt ? new Date(article.publishedAt).toLocaleDateString() : 'Not published'}</p>
+                    <div className="flex flex-wrap gap-2">{article.tags.map(tag => <Badge key={tag}
+                  className="text-[0.6rem]" variant="outline"
+                  >{tag}</Badge>)}</div>
+                  </div>  
+                </div>
               </TableCell>
               <TableCell className=""><p className="text-gray-500 text-xs">Created: {new Date(article.createdAt).toLocaleDateString()}</p></TableCell>
               <TableCell><Badge className={`text-[0.6rem] ${article.isDraft ? "bg-indigo-50" : "bg-orange-50"}`} variant="outline">{article.isDraft ? 'Draft' : 'Published'}</Badge></TableCell>
@@ -210,9 +214,13 @@ export default function ArticlesPage() {
         <CardContent>
         <Tabs defaultValue="published">
           <TabsList className="mt-4">
+            <TabsTrigger value="all">All</TabsTrigger>
             <TabsTrigger value="published">Published</TabsTrigger>
             <TabsTrigger value="drafts">Drafts</TabsTrigger>
           </TabsList>
+          <TabsContent value="all" className="p-0 w-full">
+            {renderArticles(articles?.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()) || [])}
+          </TabsContent>
           <TabsContent value="published" className="p-0 w-full">
             {renderArticles(articles?.filter(article => article.isDraft === false) || [])}
           </TabsContent>

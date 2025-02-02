@@ -11,7 +11,8 @@ export type ArticleRow = {
   publishedAt: number | null
   isDraft: boolean  
   slug: string | null
-  tags: string[]  
+  tags: string[]
+  image: string | null
 }
 
 export type TagData = { 
@@ -108,6 +109,7 @@ export async function getArticles(): Promise<ArticleRow[]> {
       publishedAt: articles.publishedAt,
       isDraft: articles.isDraft,
       slug: articles.slug,
+      image: articles.image,
       tags: sql<string>`group_concat(${tags.name}, ',')`
     })
     .from(articles)
