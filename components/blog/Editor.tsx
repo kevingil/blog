@@ -229,8 +229,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               {errors.title && <p className="text-red-500">{errors.title.message}</p>}
             </div>
 
-            <div className='flex items-center justify-center flex-row'>
-              <div className='flex items-center justify-center flex-col w-1/2 gap-2 mb-auto'>
+            <div className='flex items-center justify-center flex-col sm:flex-row'>
+              <div className='flex items-center justify-center flex-col w-full sm:w-1/2 gap-2 mb-auto'>
                 <ImageLoader
                   article={article}
                   newImageGenerationRequestId={newImageGenerationRequestId}
@@ -238,7 +238,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   setStagedImageUrl={setStagedImageUrl}
                 />
               </div>
-              <div className='flex items-center justify-between flex-col w-1/2 gap-2 h-full min-h-[250px]'>
+              <div className='flex items-center justify-between flex-col w-full sm:w-1/2 gap-2 h-full min-h-[250px]'>
               <div className='flex flex-col items-start mr-auto w-full ml-2 gap-2'>
                 <div className='flex flex-col items-start mr-auto w-full ml-2 gap-2'>
                   <label className="block text-md font-medium leading-6 text-gray-900 dark:text-white mr-auto mr-2">Image</label>
