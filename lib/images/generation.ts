@@ -27,9 +27,12 @@ export async function generateArticleImage(
   }
 
   let finalPrompt = prompt;
+  
 
   if (generatePrompt) {
-    const promptGenPrompt = PROMPT_GENERATION_PROMPT + "\n\n" + prompt;
+    const article = await db.select().from(articles).where(eq(articles.id, articleId)).limit(1);
+    // If generatePrompt is true, prompt is usually the title, so we just add the content to the prompt
+    const promptGenPrompt = PROMPT_GENERATION_PROMPT + "\n\n" + prompt + "\n\n" + article[0].content;
     
     const GROQ_KEY = process.env.GROQ_API_KEY;
     const model = new ChatGroq({
@@ -44,7 +47,7 @@ export async function generateArticleImage(
 
     const response = await model.invoke(messages);
     console.log(response.content);
-    const reasoningOutput = response.content as string;
+    const reasoningOutput = response.content.toString();
     finalPrompt = reasoningOutput.replace(/<think>[\s\S]*?<\/think>/g, '');
   }
 

@@ -195,6 +195,26 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         });
         if (returnToDashboard) {
           router.push(`/dashboard/blog`);
+        } else {
+           // If we are *not* navigating away, refresh local state:
+          setArticle((prev) => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              title: data.title,
+              content: data.content,
+              image: data.image || '',
+              tags: data.tags.split(',').map(tag => tag.trim()),
+              isDraft: data.isDraft,
+            };
+          });
+
+          // Also ensure the react-hook-form fields match
+          setValue('title', data.title);
+          setValue('content', data.content);
+          setValue('image', data.image || '');
+          setValue('tags', data.tags.split(',').map(tag => tag.trim()).join(', '));
+          setValue('isDraft', data.isDraft);
         }
       }
 
