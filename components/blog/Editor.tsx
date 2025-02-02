@@ -110,7 +110,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const { user } = useUser();
   const { slug } = useParams();
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [article, setArticle] = useState<Article | null>(null);
+  const [generatingImage, setGeneratingImage] = useState(false);
   const [newImageGenerationRequestId, setNewImageGenerationRequestId] = useState<string | null>(null);
   const [stagedImageUrl, setStagedImageUrl] = useState<string | null | undefined>(undefined);
   const [generateImageOpen, setGenerateImageOpen] = useState(false);
@@ -156,13 +158,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     fetchArticle();
   }, [slug, setValue, isNew]);
 
-  const onSubmit = async (data: ArticleFormData) => {
+  const [returnToDashboard, setReturnToDashboard] = useState(true);
+  const onSubmit = async (data: ArticleFormData, returnToDashboard: boolean = true) => {
     if (!user) {
       toast({ title: "Error", description: "You must be logged in to edit an article." });
       return;
     }
 
-    setIsLoading(true);
     try {
       if (isNew) {
         const newArticle: Article = await createArticle({
@@ -174,7 +176,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           authorId: user.id,
         });
         toast({ title: "Success", description: "Article created successfully." });
-        router.push(`/dashboard/blog`);
+        if (returnToDashboard) {
+          router.push(`/dashboard/blog`);
+        }
       } else {
         await updateArticle({
           slug: slug as string,
@@ -185,8 +189,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           isDraft: data.isDraft,
           publishedAt: article?.publishedAt || new Date().getTime(),
         });
-        toast({ title: "Success", description: "Article updated successfully." });
-        router.push(`/dashboard/blog`);
+        if (returnToDashboard) {
+          router.push(`/dashboard/blog`);
+        }
       }
 
     } catch (error) {
@@ -194,6 +199,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       toast({ title: "Error", description: "Failed to update article. Please try again." });
     } finally {
       setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
@@ -207,7 +213,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         Edit Article
       </h1>
       <Card>
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-6">
+        <form onSubmit={handleSubmit((data) => onSubmit(data, true))} className="mt-6">
           <CardContent className="space-y-4">
             <div>
               <div className='flex items-center justify-between gap-2 my-4'>
@@ -222,113 +228,107 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               />
               {errors.title && <p className="text-red-500">{errors.title.message}</p>}
             </div>
-            <ImageLoader
-              article={article}
-              newImageGenerationRequestId={newImageGenerationRequestId}
-              stagedImageUrl={stagedImageUrl}
-              setStagedImageUrl={setStagedImageUrl}
-            />
-            <div className='flex items-center justify-between'>
-              <label className="block text-md font-medium leading-6 text-gray-900 dark:text-white">Image</label>
-              <div className='flex items-center gap-2'>
-                <Button variant="outline" size="icon" disabled>
-                  <UploadIcon className="w-4 h-4" />
-                </Button>
-                <Dialog open={generateImageOpen} onOpenChange={setGenerateImageOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline">
-                      <PencilIcon className="w-4 h-4 text-indigo-500" /> Edit Prompt
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[600px]">
-                    <DialogHeader>
-                      <DialogTitle>Generate New Image</DialogTitle>
-                      <DialogDescription>
-                        Generate a new image for your article header.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="flex flex-col items-start gap-4 w-full">
-                      <Textarea
-                        value={imagePrompt || ''}
-                        onChange={(e) => setImagePrompt(e.target.value)}
-                        placeholder="Prompt"
-                        className='h-[300px] w-full'
-                      />
-                    </div>
-                    <DialogFooter>
-                      <div className="flex items-center gap-2 w-full">
-                        <DialogClose asChild>
-                          <Button variant="outline" className="w-full">Cancel</Button>
-                        </DialogClose>
-                        <Button type="submit" className="w-full"
-                          onClick={async () => {
-                            console.log("image prompt", imagePrompt);
-                            const result = await generateArticleImage(imagePrompt || "", article?.id);
 
-                            if (result.success) {
-                              setNewImageGenerationRequestId(result.generationRequestId);
-                              toast({ title: "Success", description: "Image generated successfully." });
-                              setGenerateImageOpen(false);
-                            } else {
-                              toast({ title: "Error", description: "Failed to generate image. Please try again." });
-                            }
-                          }}>Generate</Button>
-                      </div>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-                <div>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={async (e) => {
-                      e.preventDefault();
-                      console.log("image prompt", imagePrompt);
-                      const result = await generateArticleImage(article?.title || "", article?.id, true);
-
-                      if (result.success) {
-                        setNewImageGenerationRequestId(result.generationRequestId);
-                        toast({ title: "Success", description: "Image generated successfully." });
-                      } else {
-                        toast({ title: "Error", description: "Failed to generate image. Please try again." });
-                      }
-                    }}>
-                    <SparklesIcon className="w-4 h-4 text-indigo-500" />
-                  </Button>
-                </div>
-                
+            <div className='flex items-center justify-center flex-row'>
+              <div className='flex items-center justify-center flex-col w-1/2 gap-2 mb-auto'>
+                <ImageLoader
+                  article={article}
+                  newImageGenerationRequestId={newImageGenerationRequestId}
+                  stagedImageUrl={stagedImageUrl}
+                  setStagedImageUrl={setStagedImageUrl}
+                />
               </div>
-            </div>
-            <div>
-              <Input
-                {...register('image')}
-                onChange={(e) => setStagedImageUrl(e.target.value)}
-                placeholder="Optional, for header"
-              />
-              {errors.image && <p className="text-red-500">{errors.image.message}</p>}
-            </div>
-            <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Content</label>
-            <div>
-              <Textarea
-                className="w-full p-4 border border-gray-300 rounded-md"
-                {...register('content')}
-                onChange={(e) => {
-                  if (article) {
-                    setArticle({ ...article, content: e.target.value });
-                  }
-                }}
-              />
-              {errors.content && <p className="text-red-500">{errors.content.message}</p>}
-            </div>
-            <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Tags</label>
-            <div>
-              <Input
-                {...register('tags')}
-                placeholder="Tags (comma-separated)"
-              />
-              {errors.tags && <p className="text-red-500">{errors.tags.message}</p>}
-            </div>
-            <div className='flex items-center gap-2 py-2'>
+              <div className='flex items-center justify-between flex-col w-1/2 gap-2 h-full min-h-[250px]'>
+              <div className='flex flex-col items-start mr-auto w-full ml-2 gap-2'>
+                <div className='flex flex-col items-start mr-auto w-full ml-2 gap-2'>
+                  <label className="block text-md font-medium leading-6 text-gray-900 dark:text-white mr-auto mr-2">Image</label>
+                  <div className='flex items-center justify-center w-full'>
+                  <Input
+                    className='w-full'
+                    {...register('image')}
+                    onChange={(e) => setStagedImageUrl(e.target.value)}
+                    placeholder="Optional, for header"
+                  />
+                  {errors.image && <p className="text-red-500">{errors.image.message}</p>}
+                </div>
+                </div>              
+                <div className='flex items-center justify-between w-full ml-2'>
+                  <div className='flex gap-2 w-full'>
+                    <Button variant="outline" size="icon" disabled>
+                      <UploadIcon className="w-4 h-4" />
+                    </Button>
+                    <div className='flex justify-end gap-2 w-full'>
+                    <Dialog open={generateImageOpen} onOpenChange={setGenerateImageOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" className=''>
+                          <PencilIcon className="w-4 h-4 text-indigo-500" /> Edit Prompt
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-[600px]">
+                        <DialogHeader>
+                          <DialogTitle>Generate New Image</DialogTitle>
+                          <DialogDescription>
+                            Generate a new image for your article header.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="flex flex-col items-start gap-4 w-full">
+                          <Textarea
+                            value={imagePrompt || ''}
+                            onChange={(e) => setImagePrompt(e.target.value)}
+                            placeholder="Prompt"
+                            className='h-[300px] w-full'
+                          />
+                        </div>
+                        <DialogFooter>
+                          <div className="flex items-center gap-2 w-full">
+                            <DialogClose asChild>
+                              <Button variant="outline" className="w-full">Cancel</Button>
+                            </DialogClose>
+                            <Button 
+                              type="submit" 
+                              className="w-full"
+                              onClick={async () => {
+                                console.log("image prompt", imagePrompt);
+                                const result = await generateArticleImage(imagePrompt || "", article?.id);
+
+                                if (result.success) {
+                                  setNewImageGenerationRequestId(result.generationRequestId);
+                                  toast({ title: "Success", description: "Image generated successfully." });
+                                  setGenerateImageOpen(false);
+                                } else {
+                                  toast({ title: "Error", description: "Failed to generate image. Please try again." });
+                                }
+                              }}>Generate</Button>
+                          </div>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        disabled={generatingImage}
+                        onClick={async (e) => {
+                          setGeneratingImage(true);
+                          e.preventDefault();
+                          console.log("image prompt", imagePrompt);
+                          const result = await generateArticleImage(article?.title || "", article?.id, true);
+
+                          if (result.success) {
+                            setNewImageGenerationRequestId(result.generationRequestId);
+                            toast({ title: "Success", description: "Image generated successfully." });
+                          } else {
+                            toast({ title: "Error", description: "Failed to generate image. Please try again." });
+                          }
+                          setGeneratingImage(false);
+                        }}>
+                        <SparklesIcon className={cn("w-4 h-4 text-indigo-500", generatingImage && "animate-spin")} />
+                      </Button>
+                    </div>
+                    
+                  </div>
+                </div>
+              </div>
+                <div className='flex items-center gap-2 mt-auto'>
               <div>
               <label htmlFor="isDraft">Published </label>
               <Switch {...register('isDraft')} checked={!article?.isDraft} onCheckedChange={(checked) => {
@@ -337,11 +337,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 }
                 setValue('isDraft', !checked);
               }} />
-            </div>
-            <div>
-              <div>
-                <label htmlFor="publishedAt">Published Date</label>
               </div>
+            <div>
+                <div>
+                  <label htmlFor="publishedAt">Published Date</label>
+                </div>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -367,19 +367,60 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   initialFocus
                 />
               </PopoverContent>
-            </Popover>
+                </Popover>
             </div>
+            </div>
+              </div>
+            </div>
+
+            <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Content</label>
+            <div>
+              <Textarea
+                className="w-full p-4 border border-gray-300 rounded-md h-[60vh]"
+                {...register('content')}
+                onChange={(e) => {
+                  if (article) {
+                    setArticle({ ...article, content: e.target.value });
+                  }
+                }}
+              />
+              {errors.content && <p className="text-red-500">{errors.content.message}</p>}
+            </div>
+            <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Tags</label>
+            <div>
+              <Input
+                {...register('tags')}
+                placeholder="Tags (comma-separated)"
+              />
+              {errors.tags && <p className="text-red-500">{errors.tags.message}</p>}
             </div>
           </CardContent>
           <CardFooter className="flex justify-between">
             <Button variant="secondary">
               <Link href="/dashboard/blog">
-                Cancel
+                {isNew ? 'Cancel' : 'Go Back'}
               </Link>
             </Button>
-            <Button type='submit' disabled={isLoading}>
-              {isLoading ? 'Updating...' : isNew ? 'Create Article' : 'Update Article'}
+            <div className='flex items-center justify-center gap-2'>
+              {!isNew && 
+                <Button
+                  variant="outline"
+                type="submit"
+                onClick={() => {
+                  setIsSaving(true);
+                  handleSubmit((data) => onSubmit(data, false))();
+                }}
+                disabled={isSaving}>
+                 {isSaving ? 'Saving...' : 'Save'}
+                </Button>
+              }
+            <Button type='submit' disabled={isLoading} onClick={() => {
+              setIsLoading(true);
+              handleSubmit((data) => onSubmit(data, true))();
+            }}>
+              {isLoading ? 'Updating...' : isNew ? 'Create Article' : 'Save & Return'}
             </Button>
+            </div>
           </CardFooter>
         </form>
       </Card>
