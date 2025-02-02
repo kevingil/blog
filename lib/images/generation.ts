@@ -6,7 +6,7 @@ import { fal } from "@fal-ai/client";
 import { eq } from "drizzle-orm";
 import { uploadFile } from "@/lib/storage";
 import { PROMPT_GENERATION_PROMPT } from "./const";
-import { ChatOpenAI } from "@langchain/openai";
+import { ChatGroq } from "@langchain/groq";
 import { HumanMessage } from "@langchain/core/messages";
 
 fal.config({
@@ -30,11 +30,12 @@ export async function generateArticleImage(
 
   if (generatePrompt) {
     const promptGenPrompt = PROMPT_GENERATION_PROMPT + "\n\n" + prompt;
-    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-    const model = new ChatOpenAI({
-      modelName: "gpt-4o",
+    
+    const GROQ_KEY = process.env.GROQ_API_KEY;
+    const model = new ChatGroq({
+      modelName: "deepseek-r1-distill-llama-70b",
       temperature: 0.7,
-      openAIApiKey: OPENAI_API_KEY,
+      apiKey: GROQ_KEY,
     });
 
     const messages = [
@@ -43,7 +44,8 @@ export async function generateArticleImage(
 
     const response = await model.invoke(messages);
     console.log(response.content);
-    finalPrompt = response.content as string;
+    const reasoningOutput = response.content as string;
+    finalPrompt = reasoningOutput.replace(/<think>[\s\S]*?<\/think>/g, '');
   }
 
   try {

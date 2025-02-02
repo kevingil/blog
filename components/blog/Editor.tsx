@@ -229,8 +229,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               {errors.title && <p className="text-red-500">{errors.title.message}</p>}
             </div>
 
-            <div className='flex items-center justify-center flex-col sm:flex-row'>
-              <div className='flex items-center justify-center flex-col w-full sm:w-1/2 gap-2 mb-auto'>
+            <div className='flex items-center justify-center flex-col sm:flex-row '>
+              <div className='flex items-center justify-center flex-col w-full sm:w-1/2 gap-2 mb-auto h-full min-h-[250px]'>
                 <ImageLoader
                   article={article}
                   newImageGenerationRequestId={newImageGenerationRequestId}
@@ -238,7 +238,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   setStagedImageUrl={setStagedImageUrl}
                 />
               </div>
-              <div className='flex items-center justify-between flex-col w-full sm:w-1/2 gap-2 h-full min-h-[250px]'>
+              <div className='flex items-center justify-between flex-col w-full sm:w-1/2 gap-2 h-full min-h-[250px] '>
               <div className='flex flex-col items-start mr-auto w-full ml-2 gap-2'>
                 <div className='flex flex-col items-start mr-auto w-full ml-2 gap-2'>
                   <label className="block text-md font-medium leading-6 text-gray-900 dark:text-white mr-auto mr-2">Image</label>
@@ -328,9 +328,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   </div>
                 </div>
               </div>
-                <div className='flex items-center gap-2 mt-auto'>
-              <div>
-              <label htmlFor="isDraft">Published </label>
+                <div style={{marginLeft: '2rem'}} className='flex w-full items-center flex-col gap-2 mt-auto'>
+              <div className='mr-auto flex flex-row'>
+              <label htmlFor="isDraft" className='text-sm font-medium flex flex-row mr-2'>Published </label>
               <Switch {...register('isDraft')} checked={!article?.isDraft} onCheckedChange={(checked) => {
                 if (article) {
                   setArticle({ ...article, isDraft: !checked });
@@ -338,16 +338,16 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 setValue('isDraft', !checked);
               }} />
               </div>
-            <div>
+            <div className='flex w-full flex-col'>
                 <div>
-                  <label htmlFor="publishedAt">Published Date</label>
+                  <label htmlFor="publishedAt" className='text-sm font-medium'>Published Date</label>
                 </div>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                   variant={"outline"}
                   className={cn(
-                    "w-[280px] justify-start text-left font-normal",
+                    "w-full justify-start text-left font-normal",
                     !article?.publishedAt && "text-muted-foreground"
                   )}
                 >
