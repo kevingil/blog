@@ -212,15 +212,16 @@ export async function getArticleChatHistory(articleId: number): Promise<ArticleC
 }
 
 
-export async function updateWithContext(articleId: number) {
+export async function updateWithContext(articleId: number): Promise<{ content: string, success: boolean } | null> {
 
   const article = await getArticle(articleId);
 
   if (!article) {
+    console.error("Article not found");
     return null;
   }
 
-  const articleChatHistory = await getArticleChatHistory(articleId);
+  //const articleChatHistory = await getArticleChatHistory(articleId);
 
   // Editor prompt 
   const editorPrompt = new SystemMessage(
@@ -231,8 +232,7 @@ export async function updateWithContext(articleId: number) {
 
   const userPrompt = new HumanMessage(
     `Title: "${article.title}"\nPrompt: ${article.content}
-    Chat history: ${articleChatHistory}
-    Improve the article based on user needs.
+    Improve the article based on user needs, see notes left by the writer in [notes: ... ].
     `
   );
 
@@ -244,8 +244,11 @@ export async function updateWithContext(articleId: number) {
   const response = await model.invoke(messages);
 
 
-  console.log(response)
+  console.log(response.content)
 
-  return true;
+  return {
+    content: response.content.toString().replace(/<think>[\s\S]*?<\/think>/g, '').trim(),
+    success: true,
+  };
 
 }

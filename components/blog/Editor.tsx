@@ -24,9 +24,10 @@ import { cn } from '@/lib/utils';
 import { updateArticle, getArticle, createArticle } from './actions';
 import Link from 'next/link';
 import { Article, ImageGeneration } from '@/db/schema';
+import { updateWithContext } from '@/lib/llm/articles';
 import { Switch } from '@/components/ui/switch';
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
-import { SparklesIcon } from 'lucide-react';
+import { SparklesIcon, RefreshCw } from 'lucide-react';
 import { Dialog, DialogTitle, DialogContent, DialogTrigger, DialogDescription, DialogFooter, DialogHeader, DialogClose } from '@/components/ui/dialog';
 import { DEFAULT_IMAGE_PROMPT } from '@/lib/images/const';
 import { generateArticleImage, getImageGeneration, getImageGenerationStatus } from '@/lib/images/generation';
@@ -116,13 +117,17 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [newImageGenerationRequestId, setNewImageGenerationRequestId] = useState<string | null>(null);
   const [stagedImageUrl, setStagedImageUrl] = useState<string | null | undefined>(undefined);
   const [generateImageOpen, setGenerateImageOpen] = useState(false);
-  
+  const [generatingRewrite, setGeneratingRewrite] = useState(false);
 
   const { register, handleSubmit, setValue, getValues, formState: { errors } } = useForm<ArticleFormData>({
     resolver: zodResolver(articleSchema),
   });
 
   const [imagePrompt, setImagePrompt] = useState<string | null>(DEFAULT_IMAGE_PROMPT[Math.floor(Math.random() * DEFAULT_IMAGE_PROMPT.length)]);
+
+  if (!user) {
+    return <div>Please log in to edit articles.</div>;
+  }
 
   // Consume from ImageLoader
   useEffect(() => {
@@ -156,9 +161,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       }
     }
     fetchArticle();
-  }, [slug, setValue, isNew]);
+  }, []);
 
-  const [returnToDashboard, setReturnToDashboard] = useState(true);
   const onSubmit = async (data: ArticleFormData, returnToDashboard: boolean = true) => {
     if (!user) {
       toast({ title: "Error", description: "You must be logged in to edit an article." });
@@ -203,9 +207,21 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   };
 
-  if (!user) {
-    return <div>Please log in to edit articles.</div>;
+  const rewriteArticle = async () => {
+    setGeneratingRewrite(true);
+    if (!article) {
+      return;
+    }
+
+    const result = await updateWithContext(article.id);
+    if (result) {
+      setArticle({ ...article, content: result.content });
+      setValue('content', result.content);
+    }
+    setGeneratingRewrite(false);
   }
+
+
 
   return (
     <section className="flex-1 p-0 md:p-4">
@@ -213,7 +229,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         Edit Article
       </h1>
       <Card>
-        <form onSubmit={handleSubmit((data) => onSubmit(data, true))} className="mt-6">
+        <form className="mt-6">
           <CardContent className="space-y-4">
             <div>
               <div className='flex items-center justify-between gap-2 my-4'>
@@ -373,7 +389,21 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               </div>
             </div>
 
-            <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Content</label>
+            <div className='flex flex-row w-full justify-between'>
+
+            <label className="block my-auto text-md font-medium leading-6 text-gray-900 dark:text-white ">Content</label>
+            
+              <Button
+                type="button"
+                variant="outline"
+                className='text-sm font-medium text-gray-900 dark:text-white flex flex-row gap-2'
+                onClick={async () => {
+                  rewriteArticle()
+                }}>
+                <RefreshCw className={cn("w-4 h-4 text-indigo-500", generatingRewrite && "animate-spin")} /> Regenerate
+              </Button>
+            
+            </div>
             <div>
               <Textarea
                 className="w-full p-4 border border-gray-300 rounded-md h-[60vh]"
