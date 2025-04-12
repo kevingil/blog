@@ -4,6 +4,11 @@ import (
 	"context"
 	"time"
 
+	"bytes"
+	"strconv"
+	"strings"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -39,27 +44,132 @@ func NewStorageService(s3Client *s3.Client, bucket string, urlPrefix string) *St
 }
 
 func (s *StorageService) ListFiles(ctx context.Context, prefix string) ([]FileData, []FolderData, error) {
-	// TODO: Implement S3 list objects
-	return nil, nil, nil
+	input := &s3.ListObjectsV2Input{
+		Bucket:    &s.bucket,
+		Prefix:    &prefix,
+		Delimiter: aws.String("/"),
+	}
+
+	result, err := s.s3Client.ListObjectsV2(ctx, input)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	files := make([]FileData, 0, len(result.Contents))
+	for _, item := range result.Contents {
+		size := int64(0)
+		if item.Size != nil {
+			size = *item.Size
+		}
+		files = append(files, FileData{
+			Key:          *item.Key,
+			LastModified: *item.LastModified,
+			Size:         formatByteSize(size),
+			SizeRaw:      size,
+			URL:          s.urlPrefix + "/" + *item.Key,
+			IsImage:      isImageFile(*item.Key),
+		})
+	}
+
+	folders := make([]FolderData, 0, len(result.CommonPrefixes))
+	for _, prefix := range result.CommonPrefixes {
+		path := *prefix.Prefix
+		name := path
+		if len(path) > 0 && path[len(path)-1] == '/' {
+			name = path[:len(path)-1]
+		}
+		if lastSlash := strings.LastIndex(name, "/"); lastSlash != -1 {
+			name = name[lastSlash+1:]
+		}
+
+		folders = append(folders, FolderData{
+			Name:         name,
+			Path:         path,
+			IsHidden:     folderIsHidden(name),
+			LastModified: time.Now(),
+			FileCount:    0,
+		})
+	}
+
+	return files, folders, nil
 }
 
 func (s *StorageService) UploadFile(ctx context.Context, key string, data []byte) error {
-	// TODO: Implement S3 upload
-	return nil
+	input := &s3.PutObjectInput{
+		Bucket: &s.bucket,
+		Key:    &key,
+		Body:   bytes.NewReader(data),
+	}
+
+	_, err := s.s3Client.PutObject(ctx, input)
+	return err
 }
 
 func (s *StorageService) DeleteFile(ctx context.Context, key string) error {
-	// TODO: Implement S3 delete
-	return nil
+	input := &s3.DeleteObjectInput{
+		Bucket: &s.bucket,
+		Key:    &key,
+	}
+
+	_, err := s.s3Client.DeleteObject(ctx, input)
+	return err
 }
 
 func (s *StorageService) CreateFolder(ctx context.Context, folderPath string) error {
-	// TODO: Implement S3 folder creation
-	return nil
+	if !strings.HasSuffix(folderPath, "/") {
+		folderPath += "/"
+	}
+
+	input := &s3.PutObjectInput{
+		Bucket: &s.bucket,
+		Key:    &folderPath,
+		Body:   bytes.NewReader([]byte{}),
+	}
+
+	_, err := s.s3Client.PutObject(ctx, input)
+	return err
 }
 
 func (s *StorageService) UpdateFolder(ctx context.Context, oldPath string, newPath string) error {
-	// TODO: Implement S3 folder update
+	// List all objects in the old path
+	listInput := &s3.ListObjectsV2Input{
+		Bucket: &s.bucket,
+		Prefix: &oldPath,
+	}
+
+	result, err := s.s3Client.ListObjectsV2(ctx, listInput)
+	if err != nil {
+		return err
+	}
+
+	// Copy each object to the new path and delete the old one
+	for _, item := range result.Contents {
+		newKey := strings.Replace(*item.Key, oldPath, newPath, 1)
+
+		// Copy object
+		copyInput := &s3.CopyObjectInput{
+			Bucket:     &s.bucket,
+			CopySource: aws.String(s.bucket + "/" + *item.Key),
+			Key:        &newKey,
+		}
+
+		_, err := s.s3Client.CopyObject(ctx, copyInput)
+		if err != nil {
+			return err
+		}
+
+		// Delete old object
+		deleteInput := &s3.DeleteObjectInput{
+			Bucket: &s.bucket,
+			Key:    item.Key,
+		}
+
+		_, err = s.s3Client.DeleteObject(ctx, deleteInput)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -78,8 +188,7 @@ func formatFloat(f float64) string {
 }
 
 func formatFloat64(f float64, prec int) string {
-	// TODO: Implement float formatting
-	return ""
+	return strconv.FormatFloat(f, 'f', prec, 64)
 }
 
 func isImageFile(key string) bool {

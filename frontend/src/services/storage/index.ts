@@ -1,7 +1,5 @@
 'use server'
 
-import { S3Client, ListObjectsV2Command, PutObjectCommand, DeleteObjectCommand, CopyObjectCommand } from "@aws-sdk/client-s3";
-
 export type FileData = {
     key: string;
     lastModified: Date;
@@ -19,133 +17,77 @@ export type FolderData = {
     fileCount: number;
 };
 
-const bucket = process.env.S3_BUCKET;
+declare const process: {
+    env: {
+        NEXT_PUBLIC_API_URL?: string;
+    };
+};
 
-
-const s3Client = new S3Client({
-    region: "auto",
-    endpoint: process.env.S3_ENDPOINT,
-    credentials: {
-        accessKeyId: process.env.S3_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.S3_ACCESS_KEY_SECRET!,
-    },
-});
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 export async function listFiles(prefix: string | null): Promise<{ files: FileData[], folders: FolderData[] }> {
-    let response;
-    try {
-        const command = new ListObjectsV2Command({
-            Prefix: prefix || "",
-            Bucket: bucket,
-        });
-
-        response = await s3Client.send(command);
-
-    } catch (error) {
-        throw error as Error;
+    const response = await fetch(`${API_BASE_URL}/api/storage/list?prefix=${encodeURIComponent(prefix || '')}`);
+    if (!response.ok) {
+        throw new Error('Failed to list files');
     }
-
-
-    const files: FileData[] = response?.Contents?.map(item => ({
-        key: item.Key!,
-        lastModified: item.LastModified!,
-        size: formatByteSize(item.Size!),
-        sizeRaw: item.Size!,
-        url: `${process.env.NEXT_PUBLIC_S3_URL_PREFIX}/${item.Key}`,
-        isImage: isImageFile(item.Key!),
-    })) || [];
-    files.sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime());
-
-    const folders: FolderData[] = response?.CommonPrefixes?.map(prefix => ({
-        name: prefix.Prefix!.split("/").slice(-2)[0],
-        path: prefix.Prefix!,
-        isHidden: folderIsHidden(prefix.Prefix!.split("/").slice(-2)[0]),
-        lastModified: new Date(),
-        fileCount: 0,
-    })) || [];
-
-    return { files, folders };
+    return response.json();
 }
 
 export async function uploadFile(key: string, file: File) {
-    const body = Buffer.from( await file.arrayBuffer());
-    const command = new PutObjectCommand({
-        Bucket: bucket,
-        Key: key,
-        Body: body
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('key', key);
+
+    const response = await fetch(`${API_BASE_URL}/api/storage/upload`, {
+        method: 'POST',
+        body: formData,
     });
-    try {
-        const response = await s3Client.send(command);
-        console.log("uploadFile response", response);
-        return response;
-    } catch (error) {
-        throw error as Error;
+
+    if (!response.ok) {
+        throw new Error('Failed to upload file');
     }
+    return response.json();
 }
 
 export async function deleteFile(key: string) {
-    const command = new DeleteObjectCommand({
-        Bucket: bucket,
-        Key: key,
+    const response = await fetch(`${API_BASE_URL}/api/storage/delete`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ key }),
     });
 
-    await s3Client.send(command);
+    if (!response.ok) {
+        throw new Error('Failed to delete file');
+    }
 }
 
 export async function createFolder(folderPath: string) {
-    const command = new PutObjectCommand({
-        Bucket: bucket,
-        Key: folderPath.endsWith("/") ? folderPath : `${folderPath}/`,
-        Body: Buffer.from(""),
+    const response = await fetch(`${API_BASE_URL}/api/storage/folder`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ path: folderPath }),
     });
 
-    await s3Client.send(command);
+    if (!response.ok) {
+        throw new Error('Failed to create folder');
+    }
 }
 
 export async function updateFolder(oldPath: string, newPath: string) {
-    const listCommand = new ListObjectsV2Command({
-        Bucket: bucket,
-        Prefix: oldPath,
+    const response = await fetch(`${API_BASE_URL}/api/storage/folder`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ oldPath, newPath }),
     });
 
-    const listResponse = await s3Client.send(listCommand);
-
-    for (const object of listResponse.Contents || []) {
-        const newKey = object.Key!.replace(oldPath, newPath);
-
-        const copyCommand = new CopyObjectCommand({
-            Bucket: bucket,
-            CopySource: `${bucket}/${object.Key}`,
-            Key: newKey,
-        });
-
-        await s3Client.send(copyCommand);
-
-        const deleteCommand = new DeleteObjectCommand({
-            Bucket: bucket,
-            Key: object.Key!,
-        });
-
-        await s3Client.send(deleteCommand);
+    if (!response.ok) {
+        throw new Error('Failed to update folder');
     }
 }
 
-function formatByteSize(size: number): string {
-    const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'];
-    let i = 0;
-    while (size >= 1024 && i < units.length - 1) {
-        size /= 1024;
-        i++;
-    }
-    return `${size.toFixed(2)} ${units[i]}`;
-}
-
-function isImageFile(key: string): boolean {
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
-    const ext = key.split('.').pop()?.toLowerCase();
-    return imageExtensions.includes(`.${ext}`);
-}
-
-function folderIsHidden(folderName: string): boolean {
-    return folderName.startsWith('.');
-}
