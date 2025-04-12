@@ -1,24 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { getContactPage } from '@/db/queries';
+import { Card, CardContent } from '../components/ui/card';
+import { Skeleton } from '../components/ui/skeleton';
+import { getContactPage } from '../services/user';
 import { useRef } from 'react';
+import { ContactPageData } from '../services/user';
 
-interface ContactPage {
-  id: number;
-  title: string;
-  content: string;
-  emailAddress: string;
-  socialLinks?: string;
-  metaDescription?: string;
-  lastUpdated: string;
-}
 
 
 export default function ContactPage() {
-  const [pageData, setPageData] = useState<ContactPage | null>(null);
+  const [pageData, setPageData] = useState<ContactPageData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [socialLinks, setSocialLinks] = useState<Record<string, string>>({});
 
@@ -29,7 +21,7 @@ export default function ContactPage() {
         if (!data) {
           return;
         }
-        setPageData(data as ContactPage);
+        setPageData(data as ContactPageData);
         if (data?.socialLinks) {
           setSocialLinks(JSON.parse(data.socialLinks));
         }
@@ -94,7 +86,7 @@ export default function ContactPage() {
                 <Card>
                   <CardContent className="p-6">
                     <div className="prose max-w-none">
-                      {pageData.content.split('\n').map((paragraph, index) => (
+                      {pageData.content.split('\n').map((paragraph: string, index: number) => (
                         <p key={index} className="mb-4">{paragraph}</p>
                       ))}
                     </div>

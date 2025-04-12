@@ -1,6 +1,6 @@
 import './globals.css';
-import { UserProvider } from '../lib/auth';
-import { getUser } from '../db/queries';
+import { UserProvider } from '../services/auth/auth';
+import { getUser } from '../services/user';
 import { FooterSection } from "../components/footer";
 import { Navbar } from "../components/navbar";
 import { ThemeProvider } from "../components/home/theme-provider";

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { User } from '../../db/schema';
-import { getUser } from '../../db/queries';
+import { getUser } from '../user';
 import { redirect } from 'next/navigation';
 
 export type ActionState = {

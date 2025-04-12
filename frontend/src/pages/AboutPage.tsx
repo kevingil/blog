@@ -1,23 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { getAboutPage } from '@/db/queries';
+import { Card, CardContent } from '../components/ui/card';
+import { Skeleton } from '../components/ui/skeleton';
+import { getAboutPage } from '../services/user';
 import { useRef } from 'react';
-
-interface AboutPage {
-  id: number;
-  title: string;
-  content: string;
-  profileImage?: string;
-  metaDescription?: string;
-  lastUpdated: string;
-}
+import { AboutPageData } from '../services/user';
 
 
 export default function AboutPage() {
-  const [pageData, setPageData] = useState<AboutPage | null>(null);
+  const [pageData, setPageData] = useState<AboutPageData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -27,7 +19,7 @@ export default function AboutPage() {
         if (!data) {
           return;
         }
-        setPageData(data as AboutPage);
+        setPageData(data as AboutPageData);
       } catch (error) {
         console.error('Failed to load about page:', error);
       } finally {
