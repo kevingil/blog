@@ -14,6 +14,7 @@ type Article struct {
 	ImageGenerationRequestID string `gorm:"type:varchar(255)" json:"image_generation_request_id"`
 	PublishedAt              *int64 `gorm:"index" json:"published_at,omitempty"`
 	Tags                     []Tag  `gorm:"many2many:article_tags;" json:"-"`
+	ChatHistory              []byte `gorm:"type:jsonb" json:"chat_history"`
 }
 
 type Tag struct {

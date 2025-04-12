@@ -6,17 +6,17 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 
-	"blog-agent/internal/database"
-	"blog-agent/internal/models"
+	"blog-agent-go/internal/models"
 )
 
 type AuthService struct {
-	db        database.Service
+	db        *gorm.DB
 	secretKey []byte
 }
 
-func NewAuthService(db database.Service, secretKey string) *AuthService {
+func NewAuthService(db *gorm.DB, secretKey string) *AuthService {
 	return &AuthService{
 		db:        db,
 		secretKey: []byte(secretKey),
@@ -39,11 +39,8 @@ type RegisterRequest struct {
 }
 
 func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
-	user, err := s.db.GetUserByEmail(req.Email)
-	if err != nil {
-		return nil, err
-	}
-	if user == nil {
+	var user models.User
+	if err := s.db.Where("email = ?", req.Email).First(&user).Error; err != nil {
 		return nil, errors.New("invalid credentials")
 	}
 
@@ -52,7 +49,7 @@ func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": user.ID,
+		"sub": user.Model.ID,
 		"exp": time.Now().Add(time.Hour * 24).Unix(),
 	})
 
@@ -77,7 +74,7 @@ func (s *AuthService) Register(req RegisterRequest) error {
 		Role:         "user",
 	}
 
-	return s.db.CreateUser(&user)
+	return s.db.Create(&user).Error
 }
 
 func (s *AuthService) ValidateToken(tokenString string) (*jwt.Token, error) {

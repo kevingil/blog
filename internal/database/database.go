@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"blog-agent/internal/models"
+	"blog-agent-go/internal/models"
 
 	_ "github.com/joho/godotenv/autoload"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"

@@ -1,17 +1,24 @@
 package main
 
 import (
-	"blog-agent/internal/server"
+	"blog-agent-go/internal/server"
+	"blog-agent-go/internal/services/auth"
+	"blog-agent-go/internal/services/blog"
+	"blog-agent-go/internal/services/images"
+	"blog-agent-go/internal/services/storage"
+	"blog-agent-go/internal/services/user"
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	_ "github.com/joho/godotenv/autoload"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 func gracefulShutdown(fiberServer *server.FiberServer, done chan bool) {
@@ -28,7 +35,7 @@ func gracefulShutdown(fiberServer *server.FiberServer, done chan bool) {
 	// the request it is currently handling
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := fiberServer.ShutdownWithContext(ctx); err != nil {
+	if err := fiberServer.App.Shutdown(); err != nil {
 		log.Printf("Server forced to shutdown with error: %v", err)
 	}
 
@@ -39,26 +46,64 @@ func gracefulShutdown(fiberServer *server.FiberServer, done chan bool) {
 }
 
 func main() {
+	// Load environment variables
+	secretKey := os.Getenv("AUTH_SECRET")
+	if secretKey == "" {
+		log.Fatal("AUTH_SECRET environment variable is required")
+	}
 
-	server := server.New(os.Getenv("SECRET_KEY"))
+	// Initialize database
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		log.Fatal("DATABASE_URL environment variable is required")
+	}
 
-	server.RegisterFiberRoutes()
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
 
-	// Create a done channel to signal when the shutdown is complete
-	done := make(chan bool, 1)
+	// Initialize AWS S3 client
+	cfg, err := config.LoadDefaultConfig(context.Background())
+	if err != nil {
+		log.Fatalf("Failed to load AWS config: %v", err)
+	}
 
-	go func() {
-		port, _ := strconv.Atoi(os.Getenv("PORT"))
-		err := server.Listen(fmt.Sprintf(":%d", port))
-		if err != nil {
-			panic(fmt.Sprintf("http server error: %s", err))
-		}
-	}()
+	s3Client := s3.NewFromConfig(cfg)
+	bucket := os.Getenv("S3_BUCKET")
+	if bucket == "" {
+		log.Fatal("S3_BUCKET environment variable is required")
+	}
 
-	// Run graceful shutdown in a separate goroutine
-	go gracefulShutdown(server, done)
+	urlPrefix := os.Getenv("S3_URL_PREFIX")
+	if urlPrefix == "" {
+		log.Fatal("S3_URL_PREFIX environment variable is required")
+	}
 
-	// Wait for the graceful shutdown to complete
-	<-done
-	log.Println("Graceful shutdown complete.")
+	// Initialize services
+	authService := auth.NewAuthService(secretKey)
+	userService := user.NewAuthService(db, secretKey)
+	blogService := blog.NewArticleService(db)
+	imageService := images.NewImageGenerationService(db)
+	storageService := storage.NewStorageService(s3Client, bucket, urlPrefix)
+
+	// Initialize and start server
+	srv := server.NewFiberServer(
+		db,
+		authService,
+		userService,
+		blogService,
+		imageService,
+		storageService,
+	)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	log.Printf("Server starting on port %s", port)
+	if err := srv.App.Listen(":" + port); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }
