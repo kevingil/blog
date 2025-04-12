@@ -2,6 +2,7 @@ package main
 
 import (
 	"blog-agent-go/internal/server"
+	"blog-agent-go/internal/services/agents"
 	"blog-agent-go/internal/services/auth"
 	"blog-agent-go/internal/services/blog"
 	"blog-agent-go/internal/services/images"
@@ -83,7 +84,8 @@ func main() {
 	// Initialize services
 	authService := auth.NewAuthService(secretKey)
 	userService := user.NewAuthService(db, secretKey)
-	blogService := blog.NewArticleService(db)
+	writerAgent := agents.NewWriterAgent(os.Getenv("ANTHROPIC_API_KEY"))
+	blogService := blog.NewArticleService(db, writerAgent)
 	imageService := images.NewImageGenerationService(db)
 	storageService := storage.NewStorageService(s3Client, bucket, urlPrefix)
 

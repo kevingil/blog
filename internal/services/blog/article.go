@@ -3,19 +3,25 @@ package blog
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"blog-agent-go/internal/models"
+	"blog-agent-go/internal/services/agents"
 
 	"gorm.io/gorm"
 )
 
 type ArticleService struct {
-	db *gorm.DB
+	db          *gorm.DB
+	writerAgent *agents.WriterAgent
 }
 
-func NewArticleService(db *gorm.DB) *ArticleService {
-	return &ArticleService{db: db}
+func NewArticleService(db *gorm.DB, writerAgent *agents.WriterAgent) *ArticleService {
+	return &ArticleService{
+		db:          db,
+		writerAgent: writerAgent,
+	}
 }
 
 type ArticleChatHistoryMessage struct {
@@ -31,15 +37,14 @@ type ArticleChatHistory struct {
 }
 
 func (s *ArticleService) GenerateArticle(ctx context.Context, prompt string, title string, authorID int64, draft bool) (*models.Article, error) {
-	// TODO: Implement LLM integration for article generation
-	article := &models.Article{
-		Title:     title,
-		Content:   prompt, // This will be replaced with generated content
-		Author:    authorID,
-		IsDraft:   draft,
-		CreatedAt: time.Now().Unix(),
-		UpdatedAt: time.Now().Unix(),
+	article, err := s.writerAgent.GenerateArticle(ctx, prompt, title, authorID)
+	if err != nil {
+		return nil, fmt.Errorf("error generating article: %w", err)
 	}
+
+	article.IsDraft = draft
+	article.CreatedAt = time.Now().Unix()
+	article.UpdatedAt = time.Now().Unix()
 
 	if err := s.db.Create(article).Error; err != nil {
 		return nil, err
@@ -72,7 +77,12 @@ func (s *ArticleService) UpdateArticleWithContext(ctx context.Context, articleID
 		return nil, err
 	}
 
-	// TODO: Implement LLM integration for article update
+	updatedContent, err := s.writerAgent.UpdateWithContext(ctx, &article)
+	if err != nil {
+		return nil, fmt.Errorf("error updating article content: %w", err)
+	}
+
+	article.Content = updatedContent
 	article.UpdatedAt = time.Now().Unix()
 
 	if err := s.db.Save(&article).Error; err != nil {
