@@ -1,6 +1,7 @@
 package server
 
 import (
+	user "blog-agent/internal/services/user/services"
 	"context"
 	"fmt"
 	"log"
@@ -21,6 +22,12 @@ func (s *FiberServer) RegisterFiberRoutes() {
 		AllowCredentials: false, // credentials require explicit origins
 		MaxAge:           300,
 	}))
+
+	// Auth routes
+	auth := s.App.Group("/auth")
+	auth.Post("/login", s.LoginHandler)
+	auth.Post("/register", s.RegisterHandler)
+	auth.Post("/logout", s.LogoutHandler)
 
 	s.App.Get("/", s.HelloWorldHandler)
 
@@ -69,4 +76,49 @@ func (s *FiberServer) websocketHandler(con *websocket.Conn) {
 			time.Sleep(time.Second * 2)
 		}
 	}
+}
+
+func (s *FiberServer) LoginHandler(c *fiber.Ctx) error {
+	var req user.LoginRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	resp, err := s.authService.Login(req)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(resp)
+}
+
+func (s *FiberServer) RegisterHandler(c *fiber.Ctx) error {
+	var req user.RegisterRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	if err := s.authService.Register(req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"message": "User registered successfully",
+	})
+}
+
+func (s *FiberServer) LogoutHandler(c *fiber.Ctx) error {
+	// Since we're using JWT tokens, we don't need to do anything on the server side
+	// The client should remove the token from their storage
+	return c.JSON(fiber.Map{
+		"message": "Logged out successfully",
+	})
 }

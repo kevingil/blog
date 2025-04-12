@@ -40,7 +40,7 @@ func gracefulShutdown(fiberServer *server.FiberServer, done chan bool) {
 
 func main() {
 
-	server := server.New()
+	server := server.New(os.Getenv("SECRET_KEY"))
 
 	server.RegisterFiberRoutes()
 

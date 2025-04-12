@@ -9,8 +9,10 @@ import (
 	"strconv"
 	"time"
 
+	"blog-agent/internal/models"
+
 	_ "github.com/joho/godotenv/autoload"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/tursodatabase/libsql-client-go/libsql"
 )
 
 // Service represents a service that interacts with a database.
@@ -22,6 +24,10 @@ type Service interface {
 	// Close terminates the database connection.
 	// It returns an error if the connection cannot be closed.
 	Close() error
+
+	// User operations
+	GetUserByEmail(email string) (*models.User, error)
+	CreateUser(user *models.User) error
 }
 
 type service struct {
@@ -29,7 +35,7 @@ type service struct {
 }
 
 var (
-	dburl      = os.Getenv("BLUEPRINT_DB_URL")
+	dburl      = os.Getenv("DB_URL")
 	dbInstance *service
 )
 
@@ -39,7 +45,7 @@ func New() Service {
 		return dbInstance
 	}
 
-	db, err := sql.Open("sqlite3", dburl)
+	db, err := sql.Open("libsql", dburl)
 	if err != nil {
 		// This will not be a connection error, but a DSN parse error or
 		// another initialization error.
@@ -110,4 +116,26 @@ func (s *service) Health() map[string]string {
 func (s *service) Close() error {
 	log.Printf("Disconnected from database: %s", dburl)
 	return s.db.Close()
+}
+
+func (s *service) GetUserByEmail(email string) (*models.User, error) {
+	var user models.User
+	err := s.db.QueryRow("SELECT id, name, email, password_hash, role FROM users WHERE email = ?", email).Scan(
+		&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.Role,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (s *service) CreateUser(user *models.User) error {
+	_, err := s.db.Exec(
+		"INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)",
+		user.Name, user.Email, user.PasswordHash, user.Role,
+	)
+	return err
 }
