@@ -24,7 +24,7 @@ export default function UploadsPage() {
   const [currentPath, setCurrentPath] = useState('');
   const [fileUpload, setFileUpload] = useState<File | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
-  const urlPrefix = process.env.NEXT_PUBLIC_S3_URL_PREFIX!;
+  const urlPrefix = process.env.PUBLIC_S3_URL_PREFIX!;
 
   // if (!user) {
   //   redirect('/login');

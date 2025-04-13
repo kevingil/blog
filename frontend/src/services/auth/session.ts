@@ -1,6 +1,5 @@
 import { User } from '../types';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+import { API_BASE_URL } from '../constants';
 
 export interface SessionData {
   user: User;

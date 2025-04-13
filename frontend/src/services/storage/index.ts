@@ -1,4 +1,4 @@
-'use server'
+import { API_BASE_URL } from "../constants";
 
 export type FileData = {
     key: string;
@@ -23,7 +23,6 @@ declare const process: {
     };
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 export async function listFiles(prefix: string | null): Promise<{ files: FileData[], folders: FolderData[] }> {
     const response = await fetch(`${API_BASE_URL}/api/storage/list?prefix=${encodeURIComponent(prefix || '')}`);

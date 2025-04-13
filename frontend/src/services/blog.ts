@@ -1,6 +1,5 @@
 import { ArticleListItem, ArticleData, RecommendedArticle, ArticleRow } from '@/services/types';
-
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8080';
+import { API_BASE_URL } from '@/services/constants';
 
 // Article listing and search
 export async function getArticles(page: number, tag: string | null = null): Promise<{ articles: ArticleListItem[], totalPages: number }> {

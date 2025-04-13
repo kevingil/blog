@@ -1,8 +1,7 @@
 'use server'
 
 import { ImageGeneration, ImageGenerationStatus } from '../types';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+import { API_BASE_URL } from '../constants';
 
 export async function generateArticleImage(
   prompt: string | undefined, 

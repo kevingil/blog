@@ -1,8 +1,6 @@
 'use server'
 import { Article, ArticleChatHistory } from '../types';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-
+import { API_BASE_URL } from '../constants';
 export async function generateArticle(prompt: string, title: string, authorId: number, draft?: boolean) {
   const response = await fetch(`${API_BASE_URL}/blog/generate`, {
     method: 'POST',

@@ -1,14 +1,13 @@
 import { atom, useAtom } from 'jotai';
 import { User } from '../types';
 import React from 'react';
+import { API_BASE_URL } from '../constants';
 
 // Auth state atoms
 export const userAtom = atom<User | null>(null);
 export const tokenAtom = atom<string | null>(null);
 export const isAuthenticatedAtom = atom((get) => get(userAtom) !== null && get(tokenAtom) !== null);
 
-// Auth service functions
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
 
 export async function login(email: string, password: string): Promise<{ user: User; token: string }> {
   const response = await fetch(`${API_BASE_URL}/auth/login`, {
