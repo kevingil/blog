@@ -10,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/golang-jwt/jwt/v5"
+	"gorm.io/gorm"
 
 	"github.com/gofiber/contrib/websocket"
 )
@@ -38,6 +39,11 @@ func (s *FiberServer) RegisterFiberRoutes() {
 	blog.Post("/generate", s.GenerateArticleHandler)
 	blog.Get("/:id/chat-history", s.GetArticleChatHistoryHandler)
 	blog.Put("/:id/update", s.UpdateArticleWithContextHandler)
+	blog.Get("/articles/:slug/metadata", s.GetArticleMetadataHandler)
+	blog.Get("/articles/:slug/data", s.GetArticleDataHandler)
+	blog.Get("/articles/:id/recommended", s.GetRecommendedArticlesHandler)
+	blog.Get("/articles/dashboard", s.GetDashboardArticlesHandler)
+	blog.Delete("/articles/:id", s.DeleteArticleHandler)
 
 	// Add new blog routes
 	blog.Get("/articles", s.GetArticlesHandler)
@@ -566,5 +572,94 @@ func (s *FiberServer) GetPopularTagsHandler(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"tags": tags,
+	})
+}
+
+func (s *FiberServer) GetArticleMetadataHandler(c *fiber.Ctx) error {
+	slug := c.Params("slug")
+	if slug == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Slug is required",
+		})
+	}
+
+	metadata, err := s.blogService.GetArticleMetadata(slug)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(metadata)
+}
+
+func (s *FiberServer) GetArticleDataHandler(c *fiber.Ctx) error {
+	slug := c.Params("slug")
+	if slug == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Slug is required",
+		})
+	}
+
+	data, err := s.blogService.GetArticleData(slug)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Article not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(data)
+}
+
+func (s *FiberServer) GetRecommendedArticlesHandler(c *fiber.Ctx) error {
+	id, err := c.ParamsInt("id")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid article ID",
+		})
+	}
+
+	articles, err := s.blogService.GetRecommendedArticles(int64(id))
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(articles)
+}
+
+func (s *FiberServer) GetDashboardArticlesHandler(c *fiber.Ctx) error {
+	articles, err := s.blogService.GetDashboardArticles()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(articles)
+}
+
+func (s *FiberServer) DeleteArticleHandler(c *fiber.Ctx) error {
+	id, err := c.ParamsInt("id")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid article ID",
+		})
+	}
+
+	if err := s.blogService.DeleteArticle(int64(id)); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
 	})
 }

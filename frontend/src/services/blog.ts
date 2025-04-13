@@ -1,4 +1,4 @@
-import { ArticleListItem } from '@/services/types';
+import { ArticleListItem, ArticleData, RecommendedArticle, ArticleRow } from '@/services/types';
 
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8080';
 
@@ -132,4 +132,49 @@ export async function updateArticleWithContext(articleId: number): Promise<{ con
     throw new Error('Failed to update article with context');
   }
   return response.json();
-} 
+}
+
+export async function getArticleMetadata(slug: string): Promise<{ title: string; description: string }> {
+  const response = await fetch(`${API_BASE_URL}/api/blog/articles/${slug}/metadata`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch article metadata');
+  }
+  return response.json();
+}
+
+export async function getArticleData(slug: string): Promise<ArticleData | null> {
+  const response = await fetch(`${API_BASE_URL}/api/blog/articles/${slug}/data`);
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error('Failed to fetch article data');
+  }
+  return response.json();
+}
+
+export async function getRecommendedArticles(currentArticleId: number): Promise<RecommendedArticle[] | null> {
+  const response = await fetch(`${API_BASE_URL}/api/blog/articles/${currentArticleId}/recommended`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch recommended articles');
+  }
+  return response.json();
+}
+
+export async function getDashboardArticles(): Promise<ArticleRow[]> {
+  const response = await fetch(`${API_BASE_URL}/api/blog/articles/dashboard`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch dashboard articles');
+  }
+  return response.json();
+}
+
+export async function deleteArticle(id: number): Promise<{ success: boolean }> {
+  const response = await fetch(`${API_BASE_URL}/api/blog/articles/${id}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to delete article');
+  }
+  return response.json();
+}

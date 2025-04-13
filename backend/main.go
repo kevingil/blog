@@ -54,9 +54,9 @@ func main() {
 	}
 
 	// Initialize database
-	dsn := os.Getenv("DATABASE_URL")
+	dsn := os.Getenv("DB_URL")
 	if dsn == "" {
-		log.Fatal("DATABASE_URL environment variable is required")
+		log.Fatal("DB_URL environment variable is required")
 	}
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})

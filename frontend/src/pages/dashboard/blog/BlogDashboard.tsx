@@ -9,7 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { MoreHorizontal, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useEffect, useState } from 'react';
-import { getArticles, deleteArticle, ArticleRow } from './actions';
+import { getArticles, deleteArticle } from '@/services/blog';
+import { ArticleRow } from '@/services/types';
 import { generateArticle } from '@/services/llm/articles';
 import { useNavigate } from '@tanstack/react-router';
 import { Badge } from "@/components/ui/badge"
@@ -36,8 +37,8 @@ export default function ArticlesPage() {
 
   useEffect(() => {
     const fetchArticles = async () => {
-      const fetchedArticles = await getArticles();
-      setArticles(fetchedArticles);
+      const fetchedArticles = await getArticles(1);
+      setArticles(fetchedArticles.articles);
     };
     fetchArticles();
   }, []);
@@ -86,7 +87,7 @@ export default function ArticlesPage() {
                 <div className="flex items-start gap-2">
                   <div className="flex items-start flex-wrap">{article.image && <img src={article.image} width={50} height={50} className="rounded-md mt-1" />}</div>
                   <div className="flex flex-col">
-                    <Link to={`/dashboard/blog/edit/${article.slug}`} params={{ slug: article.slug }} className="text-gray-900 text-md hover:underline">{article.title}</Link>
+                    <Link to={`/dashboard/blog/edit/${article.slug}`} params={{ slug: article.slug || '' }} className="text-gray-900 text-md hover:underline">{article.title}</Link>
                     <p className="text-gray-500 text-xs">Published: {article.publishedAt ? new Date(article.publishedAt).toLocaleDateString() : 'Not published'}</p>
                     <div className="flex flex-wrap gap-2">{article.tags.map(tag => <Badge key={tag}
                   className="text-[0.6rem]" variant="outline"
@@ -107,7 +108,7 @@ export default function ArticlesPage() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem asChild>
-                      <Link to={`/dashboard/blog/edit/${article.slug}`}>
+                      <Link to={`/dashboard/blog/edit/${article.slug}`} params={{ slug: article.slug || '' }}>
                         <Pencil className="mr-2 h-4 w-4" />
                         Edit
                       </Link>

@@ -115,3 +115,38 @@ export type ArticleListItem = {
   isDraft: boolean;
   imageGenerationRequestId?: string | null;
 };
+
+
+export type ArticleData = {
+  article: Article;
+  tags: TagData[] | null;
+  author_name: string;
+}
+
+export type TagData = {
+  articleId: number;
+  tagId: number;
+  tagName: string | null;
+}
+
+export type RecommendedArticle = {
+  id: number;
+  title: string;
+  slug: string;
+  image: string | null;
+  publishedAt: number | null;
+  createdAt: number;
+  author: string | null;
+}
+
+export type ArticleRow = {
+  id: number;
+  title: string | null;
+  content: string | null;
+  createdAt: number;
+  publishedAt: number | null;
+  isDraft: boolean;
+  slug: string | null;
+  tags: string[];
+  image: string | null;
+} 
