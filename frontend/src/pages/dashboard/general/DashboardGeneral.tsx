@@ -1,6 +1,6 @@
 'use client'
 
-import { startTransition, useActionState } from 'react';
+import { startTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,8 +8,6 @@ import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
 import { useUser } from '@/lib/auth';
 import { updateAccount } from '@/actions/auth';
-import { getUser } from '@/db/queries';
-import { redirect } from 'next/navigation';
 
 type ActionState = {
   error?: string;
@@ -18,27 +16,22 @@ type ActionState = {
 
 export default function GeneralPage() {
   const { user } = useUser();
-  if (!user) {
-    redirect('/login');
-  }
+  const [state, setState] = useState<ActionState>({ error: '', success: '' });
+  const [isPending, setIsPending] = useState(false);
 
-  const [state, formAction, isPending] = useActionState<ActionState, FormData>(
-    updateAccount,
-    { error: '', success: '' }
-  );
-
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    // If you call the Server Action directly, it will automatically
-    // reset the form. We don't want that here, because we want to keep the
-    // client-side values in the inputs. So instead, we use an event handler
-    // which calls the action. You must wrap direct calls with startTranstion.
-    // When you use the `action` prop it automatically handles that for you.
-    // Another option here is to persist the values to local storage. I might
-    // explore alternative options.
-    startTransition(() => {
-      formAction(new FormData(event.currentTarget));
-    });
+    setIsPending(true);
+    const formData = new FormData(event.currentTarget);
+    
+    try {
+      await updateAccount(formData);
+      setState({ success: 'Account updated successfully' });
+    } catch (error) {
+      setState({ error: 'Failed to update account' });
+    } finally {
+      setIsPending(false);
+    }
   };
 
   return (

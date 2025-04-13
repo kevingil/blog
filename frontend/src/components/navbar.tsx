@@ -32,13 +32,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link, useNavigate } from '@tanstack/react-router';
 import { ToggleTheme } from "./home/toogle-theme";
 import { Poppins } from 'next/font/google';
 
 const poppins = Poppins({ weight: '400', subsets: ['latin'] });
-
 
 interface RouteProps {
   href: string;
@@ -71,18 +69,18 @@ export const Navbar = () => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { user, setUser } = useUser();
-  const router = useRouter();
-
+  const navigate = useNavigate();
 
   async function handleSignOut() {
     setUser(null);
     await signOut();
-    router.push('/');
+    navigate({ to: '/' });
   }
+
   return (
     <header className="transition-all duration-300 shadow-nav border backdrop-blur-xl w-full sm:w-[95%] max-w-6xl top-0 sm:top-2 mx-auto
       sticky border border-indigo-600/10 dark:border-indigo-600/10 z-10 rounded-b-xl sm:rounded-2xl flex justify-between items-center p-4 bg-card/50 dark:bg-stone-800/40 mb-6">
-      <Link href="/" className="flex items-center">
+      <Link to="/" className="flex items-center">
         <span className={poppins.className + ' text-xl'}>{title}</span>
       </Link>
       {/* <!-- Mobile --> */}
@@ -102,7 +100,7 @@ export const Navbar = () => {
             <div>
               <SheetHeader className="mb-4 ml-4">
                 <SheetTitle className="flex items-center">
-                  <Link href="/" className="flex items-center">
+                  <Link to="/" className="flex items-center">
                     Kevin Gil
                   </Link>
                 </SheetTitle>
@@ -117,7 +115,7 @@ export const Navbar = () => {
                     variant="ghost"
                     className="justify-start text-base"
                   >
-                    <Link href={href}>{label}</Link>
+                    <Link to={href}>{label}</Link>
                   </Button>
                 ))}
               </div>
@@ -138,7 +136,7 @@ export const Navbar = () => {
           <NavigationMenuItem>
             {routeList.map(({ href, label }) => (
               <NavigationMenuLink key={href} asChild>
-                <Link href={href} className="text-base px-4 font-semibold hover:text-indigo-500 dark:hover:text-indigo-400 transition">
+                <Link to={href} className="text-base px-4 font-semibold hover:text-indigo-500 dark:hover:text-indigo-400 transition">
                   {label}
                 </Link>
               </NavigationMenuLink>
@@ -165,7 +163,7 @@ export const Navbar = () => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="flex flex-col gap-1">
                 <DropdownMenuItem className="cursor-pointer" onClick={() => setIsMenuOpen(false)}>
-                  <Link href="/dashboard" className="flex w-full items-center">
+                  <Link to="/dashboard" className="flex w-full items-center">
                     <Home className="mr-2 h-4 w-4" />
                     <span>Dashboard</span>
                   </Link>

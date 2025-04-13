@@ -5,10 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Lock, Trash2, Loader2 } from 'lucide-react';
-import { startTransition, useActionState, useEffect } from 'react';
+import { useState } from 'react';
 import { updatePassword, deleteAccount } from '@/actions/auth';
-import { getUser } from '@/db/queries';
-import { redirect } from 'next/navigation';
+import { useNavigate } from '@tanstack/react-router';
 import { useUser } from '@/lib/auth';
 
 type ActionState = {
@@ -18,43 +17,41 @@ type ActionState = {
 
 export default function SecurityPage() {
   const { user } = useUser();
-  if (!user) {
-    redirect('/login');
-  }
+  const navigate = useNavigate();
+  const [passwordState, setPasswordState] = useState<ActionState>({ error: '', success: '' });
+  const [deleteState, setDeleteState] = useState<ActionState>({ error: '', success: '' });
+  const [isPasswordPending, setIsPasswordPending] = useState(false);
+  const [isDeletePending, setIsDeletePending] = useState(false);
 
-  const [passwordState, passwordAction, isPasswordPending] = useActionState<
-    ActionState,
-    FormData
-  >(updatePassword, { error: '', success: '' });
-
-  const [deleteState, deleteAction, isDeletePending] = useActionState<
-    ActionState,
-    FormData
-  >(deleteAccount, { error: '', success: '' });
-
-  const handlePasswordSubmit = async (
-    event: React.FormEvent<HTMLFormElement>
-  ) => {
+  const handlePasswordSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    // If you call the Server Action directly, it will automatically
-    // reset the form. We don't want that here, because we want to keep the
-    // client-side values in the inputs. So instead, we use an event handler
-    // which calls the action. You must wrap direct calls with startTranstion.
-    // When you use the `action` prop it automatically handles that for you.
-    // Another option here is to persist the values to local storage. I might
-    // explore alternative options.
-    startTransition(() => {
-      passwordAction(new FormData(event.currentTarget));
-    });
+    setIsPasswordPending(true);
+    const formData = new FormData(event.currentTarget);
+    
+    try {
+      await updatePassword(formData);
+      setPasswordState({ success: 'Password updated successfully' });
+    } catch (error) {
+      setPasswordState({ error: 'Failed to update password' });
+    } finally {
+      setIsPasswordPending(false);
+    }
   };
 
-  const handleDeleteSubmit = async (
-    event: React.FormEvent<HTMLFormElement>
-  ) => {
+  const handleDeleteSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    startTransition(() => {
-      deleteAction(new FormData(event.currentTarget));
-    });
+    setIsDeletePending(true);
+    const formData = new FormData(event.currentTarget);
+    
+    try {
+      await deleteAccount(formData);
+      setDeleteState({ success: 'Account deleted successfully' });
+      navigate({ to: '/' });
+    } catch (error) {
+      setDeleteState({ error: 'Failed to delete account' });
+    } finally {
+      setIsDeletePending(false);
+    }
   };
 
   return (

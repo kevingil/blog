@@ -1,21 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Analytics } from '@vercel/analytics/react';
-import type { BeforeSendEvent } from '@vercel/analytics/react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Users, Settings, Shield, PenLine, EllipsisVertical, ImageUp } from 'lucide-react';
-import Tabs from '@mui/material/Tabs';
-import Tab from '@mui/material/Tab';
-import { useRouter } from 'next/navigation';
+import { parsePathname } from '@tanstack/react-router';
+import { Users, Settings, Shield, PenLine, ImageUp } from 'lucide-react';
+import { Tabs, Tab } from '@mui/material';
+import { useRouter } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { Box } from '@mui/material';
 
@@ -24,7 +13,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
+  const pathname = parsePathname().join('/');
   const router = useRouter();
 
   const navItems = [
@@ -53,7 +42,7 @@ export default function DashboardLayout({
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setValue(newValue);
     // Push selected tab's route
-    router.push(navItems[newValue].href);
+    router.navigate({ to: navItems[newValue].href });
   };
   
 
@@ -85,7 +74,7 @@ export default function DashboardLayout({
           },
         }}
       >
-        {navItems.map((item, idx) => (
+        {navItems.map((item) => (
           <Tab
             key={item.href}
             
@@ -109,14 +98,6 @@ export default function DashboardLayout({
         {/* Main content */}
         <main className="flex-1 overflow-y-auto p-0">
           {children}
-          <Analytics
-            beforeSend={(event: BeforeSendEvent) => {
-              if (event.url.includes('/dashboard')) {
-                return null;
-              }
-              return event;
-            }}
-          />
           </main>
       </div>
     </div>

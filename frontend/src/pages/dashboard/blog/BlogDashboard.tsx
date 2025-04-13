@@ -11,11 +11,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useEffect, useState } from 'react';
 import { getArticles, deleteArticle, ArticleRow } from './actions';
 import { generateArticle } from '@/lib/llm/articles';
-import { redirect, useRouter } from 'next/navigation';
+import { useNavigate } from '@tanstack/react-router';
 import { Badge } from "@/components/ui/badge"
 import { Article } from '@/db/schema';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import Link from 'next/link';
+import { Link } from '@tanstack/react-router';
 import {
   Drawer,
   DrawerClose,
@@ -27,14 +27,9 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer"
 
-
 export default function ArticlesPage() {
   const { user } = useUser();
-  if (!user) {
-    redirect('/login');
-  }
-
-  const router = useRouter();
+  const navigate = useNavigate();
   const [articles, setArticles] = useState<ArticleRow[] | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiArticleTitle, setAiArticleTitle] = useState<string>('');
@@ -66,7 +61,7 @@ export default function ArticlesPage() {
         throw new Error("User not found");
       }
       const newGeneratedArticle: Article = await generateArticle(aiArticlePrompt, aiArticleTitle, user.id);
-      router.push(`/dashboard/blog/edit/${newGeneratedArticle.slug}`);
+      navigate({ to: `/dashboard/blog/edit/${newGeneratedArticle.slug}` });
     } catch (err) {
       console.error("Generation failed:", err);
     } finally {
@@ -86,16 +81,13 @@ export default function ArticlesPage() {
           </TableRow>
         </TableHeader>
         <TableBody>
-
-
           {articles ? articles.map((article) => (
-
             <TableRow key={article.id}>
               <TableCell className="w-full flex flex-col gap-1">
                 <div className="flex items-start gap-2">
                   <div className="flex items-start flex-wrap">{article.image && <img src={article.image} width={50} height={50} className="rounded-md mt-1" />}</div>
                   <div className="flex flex-col">
-                    <Link href={`/dashboard/blog/edit/${article.slug}`} className="text-gray-900 text-md hover:underline">{article.title}</Link>
+                    <Link to={`/dashboard/blog/edit/${article.slug}`} className="text-gray-900 text-md hover:underline">{article.title}</Link>
                     <p className="text-gray-500 text-xs">Published: {article.publishedAt ? new Date(article.publishedAt).toLocaleDateString() : 'Not published'}</p>
                     <div className="flex flex-wrap gap-2">{article.tags.map(tag => <Badge key={tag}
                   className="text-[0.6rem]" variant="outline"
@@ -116,7 +108,7 @@ export default function ArticlesPage() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem asChild>
-                      <Link href={`/dashboard/blog/edit/${article.slug}`}>
+                      <Link to={`/dashboard/blog/edit/${article.slug}`}>
                         <Pencil className="mr-2 h-4 w-4" />
                         Edit
                       </Link>
@@ -134,9 +126,6 @@ export default function ArticlesPage() {
       </Table>
     )
   }
-
-
-
 
   return (
     <Drawer>
@@ -202,7 +191,7 @@ export default function ArticlesPage() {
                 </DrawerFooter>
               </form>
             </DrawerContent>
-            <Link href="/dashboard/blog/new">
+            <Link to="/dashboard/blog/new">
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
                 New Article

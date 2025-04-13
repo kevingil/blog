@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useNavigate } from '@tanstack/react-router';
 import { useUser } from '@/lib/auth';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,7 +22,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { updateArticle, getArticle, createArticle } from './actions';
-import Link from 'next/link';
+import { Link } from '@tanstack/react-router';
 import { Article, ImageGeneration } from '@/db/schema';
 import { updateWithContext } from '@/lib/llm/articles';
 import { Switch } from '@/components/ui/switch';
@@ -34,7 +34,6 @@ import { generateArticleImage, getImageGeneration, getImageGenerationStatus } fr
 import "@copilotkit/react-textarea/styles.css";
 import { CopilotTextarea } from '@copilotkit/react-textarea';
 
-
 const articleSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   content: z.string().min(1, 'Content is required'),
@@ -45,7 +44,6 @@ const articleSchema = z.object({
 
 type ArticleFormData = z.infer<typeof articleSchema>;
 
-
 export function ImageLoader({ article, newImageGenerationRequestId, stagedImageUrl, setStagedImageUrl }: {
   article: Article | null | undefined,
   newImageGenerationRequestId: string | null | undefined,
@@ -53,7 +51,6 @@ export function ImageLoader({ article, newImageGenerationRequestId, stagedImageU
   setStagedImageUrl: (url: string | null | undefined) => void
 }) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-
 
   useEffect(() => {
     const requestToFetch = newImageGenerationRequestId || article?.imageGenerationRequestId || null;
@@ -102,14 +99,13 @@ export function ImageLoader({ article, newImageGenerationRequestId, stagedImageU
   }
 
   return null;
-
 }
 
 export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const { toast } = useToast()
-  const router = useRouter();
+  const navigate = useNavigate();
   const { user } = useUser();
-  const { slug } = useParams();
+  const { slug } = useParams({ from: '/dashboard/blog/edit/$slug' });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [article, setArticle] = useState<Article | null>(null);
@@ -181,7 +177,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         });
         toast({ title: "Success", description: "Article created successfully." });
         if (returnToDashboard) {
-          router.push(`/dashboard/blog`);
+          navigate({ to: '/dashboard/blog' });
         }
       } else {
         await updateArticle({
@@ -194,7 +190,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           publishedAt: article?.publishedAt || new Date().getTime(),
         });
         if (returnToDashboard) {
-          router.push(`/dashboard/blog`);
+          navigate({ to: '/dashboard/blog' });
         } else {
            // If we are *not* navigating away, refresh local state:
           setArticle((prev) => {
@@ -241,8 +237,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     setGeneratingRewrite(false);
   }
 
-
-
   return (
     <section className="flex-1 p-0 md:p-4">
       <h1 className="text-lg lg:text-2xl font-medium text-gray-900 dark:text-white mb-6">
@@ -254,7 +248,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             <div>
               <div className='flex items-center justify-between gap-2 my-4'>
                 <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Title</label>
-                <Link href={`/blog/${slug}${article?.isDraft ? '?previewDraft=true' : ''}`} target="_blank" className="flex items-center gap-2 text-sm text-gray-900 dark:text-white">
+                <Link to={`/blog/${slug}${article?.isDraft ? '?previewDraft=true' : ''}`} target="_blank" className="flex items-center gap-2 text-sm text-gray-900 dark:text-white">
                   See Article <ExternalLinkIcon className="w-4 h-4" />
                 </Link>
               </div>
@@ -447,7 +441,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           </CardContent>
           <CardFooter className="flex justify-between">
             <Button variant="secondary">
-              <Link href="/dashboard/blog">
+              <Link to="/dashboard/blog">
                 {isNew ? 'Cancel' : 'Go Back'}
               </Link>
             </Button>

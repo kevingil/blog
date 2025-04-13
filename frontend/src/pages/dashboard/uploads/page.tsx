@@ -1,23 +1,20 @@
-'use client';
-
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useUser } from '@/lib/auth';
-import { listFiles, uploadFile, deleteFile, createFolder, FileData, FolderData } from '@/lib/storage';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
+import { Button } from '../../../components/ui/button';
+import { Input } from '../../../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/table';
+import { listFiles, uploadFile, deleteFile, createFolder, FileData, FolderData } from '../../../services/storage';
 import { Folder, File, Trash2 } from 'lucide-react';
-import { redirect } from 'next/navigation';
+
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
   DialogClose
-} from "@/components/ui/dialog"
+} from "../../../components/ui/dialog"
+
 
 
 
@@ -27,22 +24,22 @@ export default function UploadsPage() {
   const [currentPath, setCurrentPath] = useState('');
   const [fileUpload, setFileUpload] = useState<File | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
-  const { user } = useUser();
   const urlPrefix = process.env.NEXT_PUBLIC_S3_URL_PREFIX!;
 
-  if (!user) {
-    redirect('/login');
-  }
-
-  useEffect(() => {
-    fetchFiles();
-  }, [currentPath]);
+  // if (!user) {
+  //   redirect('/login');
+  // }
 
   const fetchFiles = async () => {
     const { files, folders } = await listFiles(currentPath);
     setFiles(files);
     setFolders(folders);
   };
+
+  useEffect(() => {
+    fetchFiles();
+  }, [currentPath]); 
+
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -87,7 +84,7 @@ export default function UploadsPage() {
       return '';
     } else {
 
-      let markdownLink = file?.isImage
+      const markdownLink = file?.isImage
         ? `![${file.key}](${file.url})`
         : `[${file.key}](${file.url})`;
       return markdownLink
@@ -124,7 +121,7 @@ export default function UploadsPage() {
                 type="text"
                 placeholder="New folder name"
                 value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewFolderName(e.target.value)}
               />
               <Button onClick={handleCreateFolder}>Create Folder</Button>
             </div>
@@ -155,7 +152,7 @@ export default function UploadsPage() {
               {folders.map((folder) => (
                 <TableRow key={folder.path}>
                   <TableCell>
-                    <Button variant="ghost" onClick={() => navigateToFolder(folder.path)}>
+                    <Button onClick={() => navigateToFolder(folder.path)}>
                       <Folder className="mr-2" />
                       {folder.name}
                     </Button>
@@ -218,7 +215,6 @@ export default function UploadsPage() {
                                 </a>
 
                                 <Button
-                                  variant="outline"
                                   className="px-3 rounded-l-none"
                                   onClick={() => copyToClipboard(file.url)}
                                 >
@@ -234,7 +230,6 @@ export default function UploadsPage() {
                                   {formatMarkdownLink(file)}
                                 </p>
                                 <Button
-                                  variant="outline"
                                   className="px-3 rounded-l-none"
                                   onClick={() => copyToClipboard(formatMarkdownLink(file))}
                                 >
@@ -259,14 +254,13 @@ export default function UploadsPage() {
 
                         <div className="mt-4 flex justify-between w-full gap-2">
                           <Button
-                            variant="destructive"
                             onClick={() => handleDeleteFile(file.key)}
                             className="w-full sm:w-auto"
                           >
                             Delete
                           </Button>
                           <DialogClose asChild>
-                            <Button type="button" variant="secondary">
+                            <Button type="button">
                               Close
                             </Button>
                           </DialogClose>
@@ -279,7 +273,7 @@ export default function UploadsPage() {
                   <TableCell>{file.size}</TableCell>
                   <TableCell>{file.lastModified.toLocaleString()}</TableCell>
                   <TableCell>
-                    <Button variant="ghost" onClick={() => handleDeleteFile(file.key)}>
+                    <Button onClick={() => handleDeleteFile(file.key)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </TableCell>

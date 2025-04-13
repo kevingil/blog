@@ -4,6 +4,10 @@ import AboutPage from './pages/AboutPage'
 import Contact from './pages/Contact'
 import Articles from './pages/blog/Articles'
 import NotFound from './pages/not-found'
+import BlogDashboard from './pages/dashboard/blog/BlogDashboard'
+import DashboardGeneral from './pages/dashboard/general/DashboardGeneral'
+import DashboardSecurity from './pages/dashboard/security/DashboardSecurity'
+import ArticleEditor from './components/blog/Editor'
 
 const rootRoute = createRootRoute({
   component: App,
@@ -33,6 +37,42 @@ const blogRoute = createRoute({
   component: Articles,
 })
 
+const dashboardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/dashboard',
+  component: () => <div>Dashboard</div>,
+})
+
+const dashboardBlogRoute = createRoute({
+  getParentRoute: () => dashboardRoute,
+  path: '/blog',
+  component: BlogDashboard,
+})
+
+const dashboardBlogNewRoute = createRoute({
+  getParentRoute: () => dashboardRoute,
+  path: '/blog/new',
+  component: () => <ArticleEditor isNew={true} />,
+})
+
+const dashboardBlogEditRoute = createRoute({
+  getParentRoute: () => dashboardRoute,
+  path: '/blog/edit/$slug',
+  component: () => <ArticleEditor />,
+})
+
+const dashboardGeneralRoute = createRoute({
+  getParentRoute: () => dashboardRoute,
+  path: '/general',
+  component: DashboardGeneral,
+})
+
+const dashboardSecurityRoute = createRoute({
+  getParentRoute: () => dashboardRoute,
+  path: '/security',
+  component: DashboardSecurity,
+})
+
 const notFoundRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '*',
@@ -44,6 +84,13 @@ const routeTree = rootRoute.addChildren([
   aboutRoute,
   contactRoute,
   blogRoute,
+  dashboardRoute.addChildren([
+    dashboardBlogRoute,
+    dashboardBlogNewRoute,
+    dashboardBlogEditRoute,
+    dashboardGeneralRoute,
+    dashboardSecurityRoute,
+  ]),
   notFoundRoute,
 ])
 
