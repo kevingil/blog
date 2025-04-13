@@ -35,6 +35,11 @@ func (s *FiberServer) RegisterFiberRoutes() {
 	blog.Get("/:id/chat-history", s.GetArticleChatHistoryHandler)
 	blog.Put("/:id/update", s.UpdateArticleWithContextHandler)
 
+	// Add new blog routes
+	blog.Get("/articles", s.GetArticlesHandler)
+	blog.Get("/articles/search", s.SearchArticlesHandler)
+	blog.Get("/tags/popular", s.GetPopularTagsHandler)
+
 	// Image generation routes
 	images := s.App.Group("/images")
 	images.Post("/generate", s.GenerateArticleImageHandler)
@@ -387,5 +392,53 @@ func (s *FiberServer) UpdateFolderHandler(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"message": "Folder updated successfully",
+	})
+}
+
+func (s *FiberServer) GetArticlesHandler(c *fiber.Ctx) error {
+	page := c.QueryInt("page", 1)
+	tag := c.Query("tag", "")
+
+	response, err := s.blogService.GetArticles(page, tag)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(response)
+}
+
+func (s *FiberServer) SearchArticlesHandler(c *fiber.Ctx) error {
+	query := c.Query("query")
+	if query == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Query parameter is required",
+		})
+	}
+
+	page := c.QueryInt("page", 1)
+	tag := c.Query("tag", "")
+
+	response, err := s.blogService.SearchArticles(query, page, tag)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(response)
+}
+
+func (s *FiberServer) GetPopularTagsHandler(c *fiber.Ctx) error {
+	tags, err := s.blogService.GetPopularTags()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"tags": tags,
 	})
 }

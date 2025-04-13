@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect} from 'react';
 import { useParams, useNavigate } from '@tanstack/react-router';
-import { useUser } from '@/lib/auth';
+import { useUser } from '@/services/auth';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, PencilIcon } from "lucide-react"
+import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw } from "lucide-react"
+import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
  
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,18 +22,27 @@ import {
 } from "@/components/ui/popover"
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
-import { updateArticle, getArticle, createArticle } from './actions';
+import { 
+  updateArticle, 
+  getArticle, 
+  createArticle,
+  generateArticleImage,
+  getImageGeneration,
+  getImageGenerationStatus,
+  updateArticleWithContext
+} from '@/services/blog';
 import { Link } from '@tanstack/react-router';
-import { Article, ImageGeneration } from '@/db/schema';
-import { updateWithContext } from '@/lib/llm/articles';
+import { ArticleListItem } from '@/services/types';
 import { Switch } from '@/components/ui/switch';
-import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
-import { SparklesIcon, RefreshCw } from 'lucide-react';
 import { Dialog, DialogTitle, DialogContent, DialogTrigger, DialogDescription, DialogFooter, DialogHeader, DialogClose } from '@/components/ui/dialog';
-import { DEFAULT_IMAGE_PROMPT } from '@/lib/images/const';
-import { generateArticleImage, getImageGeneration, getImageGenerationStatus } from '@/lib/images/generation';
-import "@copilotkit/react-textarea/styles.css";
-import { CopilotTextarea } from '@copilotkit/react-textarea';
+
+const DEFAULT_IMAGE_PROMPT = [
+  "A modern, minimalist illustration",
+  "A vibrant, colorful scene",
+  "A professional business setting",
+  "A natural landscape",
+  "An abstract design"
+];
 
 const articleSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -45,7 +55,7 @@ const articleSchema = z.object({
 type ArticleFormData = z.infer<typeof articleSchema>;
 
 export function ImageLoader({ article, newImageGenerationRequestId, stagedImageUrl, setStagedImageUrl }: {
-  article: Article | null | undefined,
+  article: ArticleListItem | null | undefined,
   newImageGenerationRequestId: string | null | undefined,
   stagedImageUrl: string | null | undefined,
   setStagedImageUrl: (url: string | null | undefined) => void
@@ -54,18 +64,13 @@ export function ImageLoader({ article, newImageGenerationRequestId, stagedImageU
 
   useEffect(() => {
     const requestToFetch = newImageGenerationRequestId || article?.imageGenerationRequestId || null;
-    console.log("imgen requestToFetch", requestToFetch);
     async function fetchImageGeneration() {
-      console.log("imgen requestToFetch", requestToFetch);
       if (requestToFetch) {
-        console.log("imgen requesting fetch", requestToFetch);
         const imgGen = await getImageGeneration(requestToFetch);
-        console.log("imgen imgGen", imgGen);
         if (imgGen) {
           if (imgGen.outputUrl) {
             setImageUrl(imgGen.outputUrl);
           } else {
-            // TODO check Fal subscription status
             const status = await getImageGenerationStatus(requestToFetch);
             if (status.outputUrl) {
               setImageUrl(status.outputUrl);
@@ -78,10 +83,8 @@ export function ImageLoader({ article, newImageGenerationRequestId, stagedImageU
     fetchImageGeneration();
 
     if (stagedImageUrl !== undefined) {
-      console.log("imgen stagedImageUrl", stagedImageUrl);
       setImageUrl(stagedImageUrl);
     } else if (article && article.image) {
-      console.log("imgen article", article);
       setImageUrl(article.image);
     }
   }, [article, stagedImageUrl, newImageGenerationRequestId]);
@@ -93,7 +96,7 @@ export function ImageLoader({ article, newImageGenerationRequestId, stagedImageU
   if (imageUrl) {
     return (
       <div className='flex items-center justify-center'>
-        <img className='rounded-md aspect-video object-cover' src={imageUrl} alt={article.title} width={'100%'} />
+        <img className='rounded-md aspect-video object-cover' src={imageUrl} alt={article.title || ''} width={'100%'} />
       </div>
     )
   }
@@ -108,7 +111,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const { slug } = useParams({ from: '/dashboard/blog/edit/$slug' });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [article, setArticle] = useState<Article | null>(null);
+  const [article, setArticle] = useState<ArticleListItem | null>(null);
   const [generatingImage, setGeneratingImage] = useState(false);
   const [newImageGenerationRequestId, setNewImageGenerationRequestId] = useState<string | null>(null);
   const [stagedImageUrl, setStagedImageUrl] = useState<string | null | undefined>(undefined);
@@ -147,11 +150,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         const article = await getArticle(slug as string);
         if (article) {
           setArticle(article);
-          console.log("is draft", article.isDraft);
-          setValue('title', article.title);
-          setValue('content', article.content);
+          setValue('title', article.title || '');
+          setValue('content', article.content || '');
           setValue('image', article.image || '');
-          setValue('tags', article.tags ? article.tags.map(tag => tag.name).join(', ') : '');
+          setValue('tags', article.tags ? article.tags.join(', ') : '');
           setValue('isDraft', article.isDraft);
         }
       }
@@ -167,7 +169,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
     try {
       if (isNew) {
-        const newArticle: Article = await createArticle({
+        const newArticle = await createArticle({
           title: data.title,
           content: data.content,
           image: data.image,
@@ -180,8 +182,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           navigate({ to: '/dashboard/blog' });
         }
       } else {
-        await updateArticle({
-          slug: slug as string,
+        await updateArticle(slug as string, {
           title: data.title,
           content: data.content,
           image: data.image,
@@ -192,7 +193,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         if (returnToDashboard) {
           navigate({ to: '/dashboard/blog' });
         } else {
-           // If we are *not* navigating away, refresh local state:
+          // If we are *not* navigating away, refresh local state:
           setArticle((prev) => {
             if (!prev) return null;
             return {
@@ -213,29 +214,29 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           setValue('isDraft', data.isDraft);
         }
       }
-
     } catch (error) {
-      console.error('Failed to update article:', error);
-      toast({ title: "Error", description: "Failed to update article. Please try again." });
-    } finally {
-      setIsLoading(false);
-      setIsSaving(false);
+      console.error('Error saving article:', error);
+      toast({ title: "Error", description: "Failed to save article. Please try again." });
     }
   };
 
   const rewriteArticle = async () => {
+    if (!article?.id) return;
+    
     setGeneratingRewrite(true);
-    if (!article) {
-      return;
+    try {
+      const result = await updateArticleWithContext(article.id);
+      if (result.success) {
+        setArticle({ ...article, content: result.content });
+        setValue('content', result.content);
+      }
+    } catch (error) {
+      console.error('Error rewriting article:', error);
+      toast({ title: "Error", description: "Failed to rewrite article. Please try again." });
+    } finally {
+      setGeneratingRewrite(false);
     }
-
-    const result = await updateWithContext(article.id);
-    if (result) {
-      setArticle({ ...article, content: result.content });
-      setValue('content', result.content);
-    }
-    setGeneratingRewrite(false);
-  }
+  };
 
   return (
     <section className="flex-1 p-0 md:p-4">
@@ -248,7 +249,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             <div>
               <div className='flex items-center justify-between gap-2 my-4'>
                 <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Title</label>
-                <Link to={`/blog/${slug}${article?.isDraft ? '?previewDraft=true' : ''}`} target="_blank" className="flex items-center gap-2 text-sm text-gray-900 dark:text-white">
+                <Link to="/blog" params={{ slug: article?.slug || '' }} search={{ page: undefined, tag: undefined, search: undefined }} target="_blank" className="flex items-center gap-2 text-sm text-gray-900 dark:text-white">
                   See Article <ExternalLinkIcon className="w-4 h-4" />
                 </Link>
               </div>
@@ -319,7 +320,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                               className="w-full"
                               onClick={async () => {
                                 console.log("image prompt", imagePrompt);
-                                const result = await generateArticleImage(imagePrompt || "", article?.id);
+                                const result = await generateArticleImage(imagePrompt || "", article?.id || 0);
 
                                 if (result.success) {
                                   setNewImageGenerationRequestId(result.generationRequestId);
@@ -341,7 +342,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                           setGeneratingImage(true);
                           e.preventDefault();
                           console.log("image prompt", imagePrompt);
-                          const result = await generateArticleImage(article?.title || "", article?.id, true);
+                          const result = await generateArticleImage(article?.title || "", article?.id || 0);
 
                           if (result.success) {
                             setNewImageGenerationRequestId(result.generationRequestId);
@@ -389,7 +390,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 <Calendar
                   mode="single"
                   selected={article?.publishedAt ? new Date(article.publishedAt) : undefined}
-                  onSelect={(date) => {
+                  onSelect={(date: Date | undefined) => {
                     if (article) {
                       setArticle({ ...article, publishedAt: date?.getTime() || 0 });
                     }
