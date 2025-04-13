@@ -7,11 +7,11 @@ build:
 	@echo "Building..."
 	
 	
-	@go build -o main cmd/main.go
+	@go build -o main backend/main.go
 
 # Run the application
 run:
-	@go run cmd/main.go
+	@go run backend/main.go
 
 # Test the application
 test:

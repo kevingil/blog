@@ -11,7 +11,6 @@ require (
 	github.com/gofiber/fiber/v2 v2.52.6
 	github.com/golang-jwt/jwt/v5 v5.2.0
 	github.com/joho/godotenv v1.5.1
-	github.com/liushuangls/go-anthropic/v2 v2.15.0
 	github.com/tursodatabase/libsql-client-go v0.0.0-20240902231107-85af5b9d094d
 	golang.org/x/crypto v0.31.0
 	gorm.io/driver/postgres v1.5.4
@@ -20,7 +19,7 @@ require (
 
 require (
 	github.com/andybalholm/brotli v1.1.0 // indirect
-	github.com/anthropics/anthropic-sdk-go v0.2.0-beta.3 // indirect
+	github.com/anthropics/anthropic-sdk-go v0.2.0-beta.3 
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.30.3 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.3 // indirect
