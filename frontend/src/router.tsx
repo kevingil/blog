@@ -1,5 +1,4 @@
 import { createRootRoute, createRoute, createRouter } from '@tanstack/react-router'
-import App from './App'
 import AboutPage from './pages/AboutPage'
 import Contact from './pages/Contact'
 import Articles from './pages/blog/Articles'
@@ -8,15 +7,17 @@ import BlogDashboard from './pages/dashboard/blog/BlogDashboard'
 import DashboardGeneral from './pages/dashboard/general/DashboardGeneral'
 import DashboardSecurity from './pages/dashboard/security/DashboardSecurity'
 import ArticleEditor from './components/blog/Editor'
+import HomePage from './pages/HomePage'
+
 
 const rootRoute = createRootRoute({
-  component: App,
+  component: HomePage,
 })
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: () => <div>Home Page</div>,
+  component: HomePage,
 })
 
 const aboutRoute = createRoute({

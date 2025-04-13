@@ -18,6 +18,7 @@
         "@tanstack/react-router": "^1.115.3",
         "class-variance-authority": "^0.7.1",
         "date-fns": "^4.1.0",
+        "framer-motion": "^12.6.5",
         "jotai": "^2.12.2",
         "lucide-react": "^0.487.0",
         "react": "^18.2.0",
@@ -560,6 +561,8 @@
 
     "flatted": ["flatted@3.3.3", "", {}, "sha512-GX+ysw4PBCz0PzosHDepZGANEuFCMLrnRTiEy9McGjmkCQYwRq4A/X786G/fjM/+OjsWSU1ZrY5qyARZmO/uwg=="],
 
+    "framer-motion": ["framer-motion@12.6.5", "", { "dependencies": { "motion-dom": "^12.6.5", "motion-utils": "^12.6.5", "tslib": "^2.4.0" }, "peerDependencies": { "@emotion/is-prop-valid": "*", "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0" }, "optionalPeers": ["@emotion/is-prop-valid", "react", "react-dom"] }, "sha512-MKvnWov0paNjvRJuIy6x418w23tFqRfS6CXHhZrCiSEpXVlo/F+usr8v4/3G6O0u7CpsaO1qop+v4Ip7PRCBqQ=="],
+
     "fs.realpath": ["fs.realpath@1.0.0", "", {}, "sha512-OO0pH2lK6a0hZnAdau5ItzHPI6pUlvI7jMVnxUQRtw4owF2wk8lOSabtGDCTP4Ggrg2MbGnWO9X8K1t4+fGMDw=="],
 
     "fsevents": ["fsevents@2.3.3", "", { "os": "darwin" }, "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw=="],
@@ -707,6 +710,10 @@
     "micromatch": ["micromatch@4.0.8", "", { "dependencies": { "braces": "^3.0.3", "picomatch": "^2.3.1" } }, "sha512-PXwfBhYu0hBCPw8Dn0E+WDYb7af3dSLVWKi3HGv84IdF4TyFoC0ysxFd0Goxw7nSv4T/PzEJQxsYsEiFCKo2BA=="],
 
     "minimatch": ["minimatch@3.1.2", "", { "dependencies": { "brace-expansion": "^1.1.7" } }, "sha512-J7p63hRiAjw1NDEww1W7i37+ByIrOWO5XQQAzZ3VOcL0PNybwpfmV/N05zFAzwQ9USyEcX6t3UO+K5aqBQOIHw=="],
+
+    "motion-dom": ["motion-dom@12.6.5", "", { "dependencies": { "motion-utils": "^12.6.5" } }, "sha512-jpM9TQLXzYMWMJ7Ec7sAj0iis8oIuu6WvjI3yNKJLdrZyrsI/b2cRInDVL8dCl683zQQq19DpL9cSMP+k8T1NA=="],
+
+    "motion-utils": ["motion-utils@12.6.5", "", {}, "sha512-IsOeKsOF+FWBhxQEDFBO6ZYC8/jlidmVbbLpe9/lXSA9j9kzGIMUuIBx2SZY+0reAS0DjZZ1i7dJp4NHrjocPw=="],
 
     "mri": ["mri@1.2.0", "", {}, "sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA=="],
 
