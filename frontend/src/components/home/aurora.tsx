@@ -1,25 +1,24 @@
 'use client'
 
 import { motion } from "framer-motion";
-import React from "react";
 import { AuroraBackground } from "@/components/ui/aurora-background";
 import { useState } from "react";
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { useLocation } from "@tanstack/react-router";
 
 
 export default function Aurora() {
 
    const [dimmed, setDimmed] = useState<boolean>(true);
-   let pathname = usePathname();
+   const location = useLocation();
    
    useEffect(() => {
-    if (pathname === '/') {
+    if (location.pathname === '/') {
       setDimmed(false);
     } else {
       setDimmed(true);
     }
-   }, [pathname]);
+   }, [location.pathname]);
 
 
     return (

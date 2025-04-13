@@ -8,10 +8,10 @@ import DashboardGeneral from './pages/dashboard/general/DashboardGeneral'
 import DashboardSecurity from './pages/dashboard/security/DashboardSecurity'
 import ArticleEditor from './components/blog/Editor'
 import HomePage from './pages/HomePage'
-
+import RootLayout from './pages/layout'
 
 const rootRoute = createRootRoute({
-  component: HomePage,
+  component: RootLayout,
 })
 
 const indexRoute = createRoute({

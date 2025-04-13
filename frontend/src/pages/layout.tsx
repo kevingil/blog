@@ -1,10 +1,10 @@
 import './globals.css';
-import { UserProvider } from '../services/auth/auth';
-import { getUser } from '../services/user';
-import { FooterSection } from "../components/footer";
-import { Navbar } from "../components/navbar";
-import { ThemeProvider } from "../components/home/theme-provider";
-import Aurora from "../components/home/aurora";
+import { UserProvider } from '@/services/auth';
+import { getUser } from '@/services/user';
+import { FooterSection } from "@/components/footer";
+import { Navbar } from "@/components/navbar";
+import { ThemeProvider } from "@/components/theme-provider";
+import Aurora from "@/components/home/aurora";
 import 'highlight.js/styles/base16/snazzy.css';
 import { CopilotKit } from '@copilotkit/react-core';
 import { Outlet } from '@tanstack/react-router';
@@ -20,12 +20,7 @@ export default function RootLayout() {
   return (
     <div className="min-h-[100dvh] flex flex-col relative">
       <UserProvider userPromise={userPromise}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem={false}
-          disableTransitionOnChange
-        >
+        <ThemeProvider>
           <Navbar />
           <Aurora />
           <CopilotKit runtimeUrl="/api/copilotkit">

@@ -2,11 +2,15 @@ import { RouterProvider } from '@tanstack/react-router'
 import { router } from './router'
 import './App.css'
 import { Suspense } from 'react'
+import { ThemeProvider } from "@/components/theme-provider"
+
 
 function App() {
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <RouterProvider router={router} />
+      <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+        <RouterProvider router={router} />
+      </ThemeProvider>
     </Suspense>
   )
 }
