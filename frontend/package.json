@@ -4,19 +4,22 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "dev": "bun run --bun vite",
+    "build": "vite build",
+    "lint": "bun --bun eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
     "@copilotkit/react-core": "^1.8.5",
     "@mui/material": "^7.0.2",
     "@tanstack/react-router": "^1.115.3",
+    "class-variance-authority": "^0.7.1",
+    "date-fns": "^4.1.0",
     "jotai": "^2.12.2",
     "lucide-react": "^0.487.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "tailwind-merge": "^3.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^8.56.0",

@@ -1,0 +1,16 @@
+[install]
+# Use the latest version of packages
+latest = true
+
+[install.scopes]
+# Use the latest version of packages in these scopes
+"@tanstack" = "latest"
+"@vitejs" = "latest"
+
+[test]
+# Enable React testing
+react = true
+
+[debug]
+# Enable debug mode
+debug = true 

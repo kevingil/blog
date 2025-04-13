@@ -1,12 +1,10 @@
-'use client';
-
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
-import { Label } from '../../components/ui/label';
-import { Orbit as OrbitIcon, Loader2 } from 'lucide-react';
-import { useAuth } from '../../services/auth';
+import { useAuth } from '../services/auth';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Loader2 } from 'lucide-react';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -34,9 +32,6 @@ export function Login() {
   return (
     <div className="flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <OrbitIcon className="h-12 w-12 text-primary" />
-        </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold">
           Sign in to your account
         </h2>
@@ -109,4 +104,4 @@ export function Login() {
       </div>
     </div>
   );
-}
+} 

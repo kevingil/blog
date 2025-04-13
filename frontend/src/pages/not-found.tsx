@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Link } from '@tanstack/react-router';
 import { CircleIcon } from 'lucide-react';
 
 export default function NotFound() {
@@ -16,7 +16,7 @@ export default function NotFound() {
           changed, or is temporarily unavailable.
         </p>
         <Link
-          href="/"
+          to="/"
           className="max-w-48 mx-auto flex justify-center py-2 px-4 border border-gray-300 rounded-full shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
         >
           Back to Home

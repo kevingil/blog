@@ -6,6 +6,7 @@ import {
   useEffect,
 } from 'react';
 import { User } from '../types';
+import { useAuth } from './auth';
 
 type UserContextType = {
   user: User | null;
@@ -41,3 +42,5 @@ export function UserProvider({
     </UserContext.Provider>
   );
 }
+
+export { useAuth };

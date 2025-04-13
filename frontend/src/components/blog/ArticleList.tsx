@@ -1,11 +1,8 @@
-'use client'
-
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, Link } from '@tanstack/react-router';
 import { format } from 'date-fns';
 import { Card, CardContent } from "@/components/ui/card";
 import { Image as ImageIcon } from "lucide-react";
-import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -28,6 +25,11 @@ type ArticleListProps = {
   pagination: boolean;
 }
 
+type SearchParams = {
+  page?: string;
+  tag?: string;
+  search?: string;
+};
 
 function ArticleCardSkeleton() {
   return (
@@ -60,20 +62,21 @@ export function ArticlesSkeleton() {
 }
 
 export default function ArticlesList({ pagination }: ArticleListProps) {
-  const searchParams = useSearchParams();
+  const router = useRouter();
+  const search = new URLSearchParams(router.state.location.search);
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
   
-  const [page, setPage] = useState(Number(searchParams.get('page')) || 1);
-  const [searchTag, setSearchTag] = useState<string | null>(searchParams.get('tag'));
+  const [page, setPage] = useState(Number(search.get('page')) || 1);
+  const [searchTag, setSearchTag] = useState<string | null>(search.get('tag'));
   const [articles, setArticles] = useState<ArticleListItem[]>([]);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState<string>(searchParams.get('search') || '');
+  const [searchTerm, setSearchTerm] = useState<string>(search.get('search') || '');
   const [recentTags, setRecentTags] = useState<string[]>(['All']);
 
   // Update URL without triggering navigation, for tags, pages, and search
   const updateURLQuietly = useCallback((newParams: { page?: number; search?: string; tag?: string | null }) => {
-    const params = new URLSearchParams(searchParams);
+    const params = new URLSearchParams(search);
 
     if (newParams.page) {
       params.set('page', newParams.page.toString());
@@ -98,7 +101,7 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
 
     window.history.replaceState({}, '', `?${params.toString()}`);
 
-  }, [searchParams]);
+  }, [search]);
 
   // On every action, query params are updated first
   // then we fetch articles based on current search params
@@ -238,7 +241,7 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
           <h2 className="font-semibold text-muted-foreground">
             Recent Articles
           </h2>
-          <Link href="/blog"
+          <Link to="/blog" search={{ page: undefined, tag: undefined, search: undefined }} 
             className="flex items-center font-medium text-primary transition-colors duration-200 
             border border-gray-300 dark:border-gray-800 bg-card hover:border-primary dark:hover:border-primary rounded-lg px-4 py-2 shadow-sm">
             <p className="text-md text-muted-foreground">See all</p>
@@ -260,7 +263,7 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
           {articles.map((article) => (
             <Card key={article.id}>
               <CardContent className="p-0">
-                <Link href={`/blog/${article.slug}`}
+                <Link to="/blog" params={{ slug: article.slug }} search={{ page: undefined, tag: undefined, search: undefined }}
                   className='w-full h-full flex flex-row justify-between'>
                   <div className='p-4 w-full'>
                     <h2 className="text-xl font-semibold mb-2">{article.title}</h2>

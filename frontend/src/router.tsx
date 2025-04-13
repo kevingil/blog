@@ -35,7 +35,12 @@ const blogRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/blog',
   component: Articles,
-})
+  validateSearch: (search: Record<string, unknown>) => ({
+    page: search.page as string | undefined,
+    tag: search.tag as string | undefined,
+    search: search.search as string | undefined,
+  }),
+} as const)
 
 const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
