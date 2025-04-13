@@ -32,6 +32,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from '@tanstack/react-router';
 import { ToggleTheme } from "./home/toogle-theme";
+import { siteMetadata } from '@/services/constants';
 
 
 interface RouteProps {
@@ -39,12 +40,7 @@ interface RouteProps {
   label: string;
 }
 
-interface FeatureProps {
-  title: string;
-  description: string;
-}
-
-const title: string = "Kevin Gil";
+const title: string = siteMetadata.title;
 
 const routeList: RouteProps[] = [
   {

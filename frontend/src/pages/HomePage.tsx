@@ -5,26 +5,8 @@ import ArticlesList, { ArticlesSkeleton } from '@/components/blog/ArticleList';
 import { Card } from "@/components/ui/card";
 import GithubIcon from "@/components/icons/github-icon";
 import LinkedInIcon from "@/components/icons/linkedin-icon";
+import '@/pages/globals.css'
 
-
-export const metadata = {
-  title: "Kevin Gil",
-  description: "Software Engineer in San Francisco.",
-  openGraph: {
-    type: "website",
-    url: "https://kevingil.com",
-    title: "Kevin Gil",
-    description: "Software Engineer in San Francisco.",
-    images: [
-      {
-        url: "",
-        width: 1200,
-        height: 630,
-        alt: "Kevin Gil",
-      },
-    ],
-  },
-};
 
 
 export default function HomePage() {

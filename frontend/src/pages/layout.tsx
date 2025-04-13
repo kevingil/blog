@@ -9,10 +9,6 @@ import 'highlight.js/styles/base16/snazzy.css';
 import { CopilotKit } from '@copilotkit/react-core';
 import { Outlet } from '@tanstack/react-router';
 
-export const siteData = {
-  title: 'Kevin Gil',
-  description: 'Software Engineer in San Francisco.',
-};
 
 export default function RootLayout() {
   const userPromise = getUser();
