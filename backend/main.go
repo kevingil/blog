@@ -1,6 +1,7 @@
 package main
 
 import (
+	"blog-agent-go/backend/database"
 	"blog-agent-go/backend/server"
 	"blog-agent-go/backend/services/agents"
 	"blog-agent-go/backend/services/auth"
@@ -11,40 +12,13 @@ import (
 	"context"
 	"log"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	_ "github.com/joho/godotenv/autoload"
-	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
-
-func gracefulShutdown(fiberServer *server.FiberServer, done chan bool) {
-	// Create context that listens for the interrupt signal from the OS.
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	// Listen for the interrupt signal.
-	<-ctx.Done()
-
-	log.Println("shutting down gracefully, press Ctrl+C again to force")
-
-	// The context is used to inform the server it has 5 seconds to finish
-	// the request it is currently handling
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := fiberServer.App.Shutdown(); err != nil {
-		log.Printf("Server forced to shutdown with error: %v", err)
-	}
-
-	log.Println("Server exiting")
-
-	// Notify the main goroutine that the shutdown is complete
-	done <- true
-}
 
 func main() {
 	// Load environment variables
@@ -54,14 +28,14 @@ func main() {
 	}
 
 	// Initialize database
-	dsn := os.Getenv("DB_URL")
-	if dsn == "" {
-		log.Fatal("DB_URL environment variable is required")
-	}
+	dbService := database.New()
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	// Initialize GORM with the database connection
+	db, err := gorm.Open(sqlite.New(sqlite.Config{
+		Conn: dbService.GetDB(),
+	}), &gorm.Config{})
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatalf("Failed to initialize GORM: %v", err)
 	}
 
 	// Initialize AWS S3 client

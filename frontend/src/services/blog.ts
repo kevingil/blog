@@ -8,7 +8,7 @@ export async function getArticles(page: number, tag: string | null = null): Prom
     ...(tag && tag !== 'All' ? { tag } : {})
   });
 
-  const response = await fetch(`${API_BASE_URL}/api/blog/articles?${params}`);
+  const response = await fetch(`${API_BASE_URL}/blog/articles?${params}`);
   if (!response.ok) {
     throw new Error('Failed to fetch articles');
   }

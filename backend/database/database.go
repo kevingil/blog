@@ -25,6 +25,9 @@ type Service interface {
 	// It returns an error if the connection cannot be closed.
 	Close() error
 
+	// GetDB returns the underlying database connection
+	GetDB() *sql.DB
+
 	// User operations
 	GetUserByEmail(email string) (*models.User, error)
 	CreateUser(user *models.User) error
@@ -138,4 +141,8 @@ func (s *service) CreateUser(user *models.User) error {
 		user.Name, user.Email, user.PasswordHash, user.Role,
 	)
 	return err
+}
+
+func (s *service) GetDB() *sql.DB {
+	return s.db
 }
