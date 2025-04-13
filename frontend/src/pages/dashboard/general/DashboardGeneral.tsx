@@ -1,13 +1,13 @@
 'use client'
 
-import { startTransition } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
-import { useUser } from '@/lib/auth';
-import { updateAccount } from '@/actions/auth';
+import { useUser } from '@/services/auth';
+import { updateAccount } from '@/services/auth/auth';
 
 type ActionState = {
   error?: string;

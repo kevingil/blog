@@ -27,7 +27,7 @@ export async function login(email: string, password: string): Promise<{ user: Us
   return data;
 }
 
-export async function logout(): Promise<void> {
+export async function signOut(): Promise<void> {
   // Clear token from storage
   localStorage.removeItem('token');
 }
@@ -68,6 +68,65 @@ export async function refreshToken(token: string): Promise<string | null> {
     return data.token;
   } catch {
     return null;
+  }
+}
+
+export async function updateAccount(formData: FormData): Promise<void> {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(`${API_BASE_URL}/auth/account`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to update account');
+  }
+}
+
+export async function updatePassword(formData: FormData): Promise<void> {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(`${API_BASE_URL}/auth/password`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to update password');
+  }
+}
+
+export async function deleteAccount(formData: FormData): Promise<void> {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(`${API_BASE_URL}/auth/account`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to delete account');
   }
 }
 
@@ -119,8 +178,8 @@ export function useAuth() {
       localStorage.setItem('token', token);
       return user;
     },
-    logout: async () => {
-      await logout();
+    signOut: async () => {
+      await signOut();
       setUser(null);
       setToken(null);
       localStorage.removeItem('token');

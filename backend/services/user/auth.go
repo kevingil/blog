@@ -38,6 +38,16 @@ type RegisterRequest struct {
 	Password string `json:"password" validate:"required,min=8"`
 }
 
+type UpdateAccountRequest struct {
+	Name  string `json:"name" validate:"required"`
+	Email string `json:"email" validate:"required,email"`
+}
+
+type UpdatePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword" validate:"required,min=8"`
+	NewPassword     string `json:"newPassword" validate:"required,min=8"`
+}
+
 func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
 	var user models.User
 	if err := s.db.Where("email = ?", req.Email).First(&user).Error; err != nil {
@@ -94,4 +104,59 @@ func (s *AuthService) ValidateToken(tokenString string) (*jwt.Token, error) {
 	}
 
 	return token, nil
+}
+
+func (s *AuthService) UpdateAccount(userID uint, req UpdateAccountRequest) error {
+	var user models.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return errors.New("user not found")
+	}
+
+	// Check if email is already taken by another user
+	if req.Email != user.Email {
+		var existingUser models.User
+		if err := s.db.Where("email = ?", req.Email).First(&existingUser).Error; err == nil {
+			return errors.New("email already taken")
+		}
+	}
+
+	user.Name = req.Name
+	user.Email = req.Email
+
+	return s.db.Save(&user).Error
+}
+
+func (s *AuthService) UpdatePassword(userID uint, req UpdatePasswordRequest) error {
+	var user models.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return errors.New("user not found")
+	}
+
+	// Verify current password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword)); err != nil {
+		return errors.New("current password is incorrect")
+	}
+
+	// Hash new password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	user.PasswordHash = string(hashedPassword)
+	return s.db.Save(&user).Error
+}
+
+func (s *AuthService) DeleteAccount(userID uint, password string) error {
+	var user models.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return errors.New("user not found")
+	}
+
+	// Verify password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		return errors.New("password is incorrect")
+	}
+
+	return s.db.Delete(&user).Error
 }

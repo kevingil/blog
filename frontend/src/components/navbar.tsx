@@ -13,16 +13,14 @@ import {
 import { Separator } from "./ui/separator";
 import {
   NavigationMenu,
-  NavigationMenuContent,
   NavigationMenuItem,
   NavigationMenuLink,
   NavigationMenuList,
-  NavigationMenuTrigger,
 } from "./ui/navigation-menu";
 
-import { useUser } from '@/lib/auth';
-import { signOut } from '@/actions/auth';
-import { Home, LogOut, Hexagon } from 'lucide-react';
+import { useUser } from '@/services/auth';
+import { signOut } from '@/services/auth/auth';
+import { Home, LogOut } from 'lucide-react';
 
 import {
   DropdownMenu,
@@ -34,9 +32,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from '@tanstack/react-router';
 import { ToggleTheme } from "./home/toogle-theme";
-import { Poppins } from 'next/font/google';
 
-const poppins = Poppins({ weight: '400', subsets: ['latin'] });
 
 interface RouteProps {
   href: string;
@@ -81,7 +77,7 @@ export const Navbar = () => {
     <header className="transition-all duration-300 shadow-nav border backdrop-blur-xl w-full sm:w-[95%] max-w-6xl top-0 sm:top-2 mx-auto
       sticky border border-indigo-600/10 dark:border-indigo-600/10 z-10 rounded-b-xl sm:rounded-2xl flex justify-between items-center p-4 bg-card/50 dark:bg-stone-800/40 mb-6">
       <Link to="/" className="flex items-center">
-        <span className={poppins.className + ' text-xl'}>{title}</span>
+        <span className={'text-xl'}>{title}</span>
       </Link>
       {/* <!-- Mobile --> */}
       <div className="flex items-center lg:hidden">
@@ -168,7 +164,7 @@ export const Navbar = () => {
                     <span>Dashboard</span>
                   </Link>
                 </DropdownMenuItem>
-                <form action={handleSignOut} className="w-full">
+                <form onSubmit={(e) => { e.preventDefault(); handleSignOut(); }} className="w-full">
                   <button type="submit" className="flex w-full">
                     <DropdownMenuItem className="w-full flex-1 cursor-pointer"
                     onClick={() => setIsMenuOpen(false)}>

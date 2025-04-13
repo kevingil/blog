@@ -6,9 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Lock, Trash2, Loader2 } from 'lucide-react';
 import { useState } from 'react';
-import { updatePassword, deleteAccount } from '@/actions/auth';
+import { updatePassword, deleteAccount } from '@/services/auth/auth';
 import { useNavigate } from '@tanstack/react-router';
-import { useUser } from '@/lib/auth';
 
 type ActionState = {
   error?: string;
@@ -16,7 +15,6 @@ type ActionState = {
 };
 
 export default function SecurityPage() {
-  const { user } = useUser();
   const navigate = useNavigate();
   const [passwordState, setPasswordState] = useState<ActionState>({ error: '', success: '' });
   const [deleteState, setDeleteState] = useState<ActionState>({ error: '', success: '' });

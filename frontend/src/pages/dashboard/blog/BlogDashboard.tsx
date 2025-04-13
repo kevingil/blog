@@ -1,26 +1,25 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { useUser } from '@/lib/auth';
+import { useUser } from '@/services/auth';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { MoreHorizontal, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useEffect, useState } from 'react';
 import { getArticles, deleteArticle, ArticleRow } from './actions';
-import { generateArticle } from '@/lib/llm/articles';
+import { generateArticle } from '@/services/llm/articles';
 import { useNavigate } from '@tanstack/react-router';
 import { Badge } from "@/components/ui/badge"
-import { Article } from '@/db/schema';
+import { Article } from '@/services/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Link } from '@tanstack/react-router';
 import {
   Drawer,
   DrawerClose,
   DrawerContent,
-  DrawerDescription,
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
@@ -87,7 +86,7 @@ export default function ArticlesPage() {
                 <div className="flex items-start gap-2">
                   <div className="flex items-start flex-wrap">{article.image && <img src={article.image} width={50} height={50} className="rounded-md mt-1" />}</div>
                   <div className="flex flex-col">
-                    <Link to={`/dashboard/blog/edit/${article.slug}`} className="text-gray-900 text-md hover:underline">{article.title}</Link>
+                    <Link to={`/dashboard/blog/edit/${article.slug}`} params={{ slug: article.slug }} className="text-gray-900 text-md hover:underline">{article.title}</Link>
                     <p className="text-gray-500 text-xs">Published: {article.publishedAt ? new Date(article.publishedAt).toLocaleDateString() : 'Not published'}</p>
                     <div className="flex flex-wrap gap-2">{article.tags.map(tag => <Badge key={tag}
                   className="text-[0.6rem]" variant="outline"
