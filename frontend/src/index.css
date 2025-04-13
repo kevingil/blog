@@ -1,68 +1,470 @@
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+html {
+  scroll-behavior: smooth;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+/* *=========== Orange theme =========== */
+@layer base {
+  :root {
+    --body-background: white !important;
+    --background: 0 0% 100%;
+    --foreground: 20 14.3% 4.1%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 20 14.3% 4.1%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 14.3% 4.1%;
+
+    --primary: 239 83.5% 66.7%;
+    --primary-foreground: 60 9.1% 97.8%;
+
+    --secondary: 60 4.8% 95.9%;
+    --secondary-foreground: 24 9.8% 10%;
+
+    --muted: 60 4.8% 95.9%;
+    --muted-foreground: 25 5.3% 44.7%;
+
+    --accent: 60 4.8% 95.9%;
+    --accent-foreground: 24 9.8% 10%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 60 9.1% 97.8%;
+
+    --border: 20 5.9% 90%;
+    --input: 20 5.9% 90%;
+    --ring: 239 83.5% 66.7%;
+    --radius: 0.5rem;
+
+    --code-background: #ececec;
+    --code-text: #333;
+  }
+
+  .dark {
+    --body-background: #0c0a09 !important;
+    --background: 20 14.3% 4.1%;
+    --foreground: 60 9.1% 97.8%;
+
+    --card: 24 9.8% 8%;
+    --card-foreground: 0 0% 95%;
+
+    --popover: 20 14.3% 4.1%;
+    --popover-foreground: 60 9.1% 97.8%;
+
+    --primary: 239 83.5% 66.7%;
+    --primary-foreground: 60 9.1% 97.8%;
+
+    --secondary: 12 6.5% 15.1%;
+    --secondary-foreground: 60 9.1% 97.8%;
+
+    --muted: 12 6.5% 15.1%;
+    --muted-foreground: 24 5.4% 63.9%;
+
+    --accent: 12 6.5% 15.1%;
+    --accent-foreground: 60 9.1% 97.8%;
+
+    --destructive: 0 72.2% 50.6%;
+    --destructive-foreground: 60 9.1% 97.8%;
+
+    --border: 12 6.5% 15.1%;
+    --input: 12 6.5% 15.1%;
+    --ring: 239 83.5% 66.7%;
+
+    --code-background: #393242ce;
+    --code-text: #e3e3e3;
+  }
 }
-a:hover {
-  color: #535bf2;
+
+.shadow-light {
+  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.085);
+}
+
+.shadow-dark {
+  box-shadow: inset 0 0 5px rgba(255, 255, 255, 0.141);
 }
 
 body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+  background: var(--body-background);
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+.body-background {
+  background: var(--body-background);
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9rem;
+  color: var(--code-text);
+  background: var(--code-background);
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.3rem;
+  border: 1px solid #8a8a8a41;
+  margin: 0rem 0.25rem;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+.hljs {
+  border-radius: 1rem !important;
+  margin: 1rem 0 !important;
+}
+
+
+.blog-post {
+  font-size: 1rem;
+}
+
+.blog-post h1 {
+  font-size: 2rem;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+} 
+
+.blog-post h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+} 
+
+.blog-post h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}   
+
+.blog-post h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.blog-post h5 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.blog-post h6 {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.blog-post img {
+  width: 100%;
+  border-radius: 1rem;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+/*
+Go Blog CSS
+Cool animations, 
+shadows, effects, etc
+*/
+
+
+
+
+@keyframes rotate {
+  0% {
+    transform: rotate(0deg);
   }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
+
+  100% {
+    transform: rotate(360deg);
   }
 }
+
+
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+    animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
+  }
+
+  25% {
+    background-position: 50% 100%;
+    animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
+  }
+
+  50% {
+    background-position: 100% 50%;
+    animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
+  }
+
+  75% {
+    background-position: 50% 0%;
+    animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
+  }
+
+  100% {
+    background-position: 0% 50%;
+    animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
+  }
+}
+
+
+@keyframes blur-in {
+  from {
+    filter: blur(0.5rem);
+  }
+}
+
+@keyframes blur-out {
+  to {
+    filter: blur(0.5rem);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes slide-from-right {
+  from {
+    transform: translateY(2rem) scale(0.99);
+  }
+}
+
+@keyframes slide-to-left {
+  to {
+    transform: translateY(-1rem) scale(0.8);
+  }
+}
+
+
+.slide-it {
+  view-transition-name: slide-it;
+}
+
+::view-transition-old(slide-it) {
+  animation: 200ms ease-out both fade-out,
+    200ms ease both blur-out;
+}
+
+::view-transition-new(slide-it) {
+  animation: 600ms ease both fade-in,
+    500ms ease both slide-from-right; 
+}
+
+.shad {
+  box-shadow: 0 0px 10px 2px rgb(65 65 65 / 2%);
+}
+
+
+.scrollfade {
+  background-color: rgba(255, 255, 255, 0);
+  backdrop-filter: blur(0);
+  transition: background-color 0.5s ease, backdrop-filter 0.5s ease, box-shadow 50ms ease, border-bottom 50ms ease;
+}
+
+
+.scrollfade.scrolled {
+  border-bottom: solid 1px #add9ff19;
+  box-shadow: 0px 0px 20px #7779ff3c;
+  background-color: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(1rem);
+}
+
+
+
+.fade-me-in {
+  opacity: 1;
+  transition: opacity 300ms ease-out;
+}
+
+.fade-me-out.htmx-swapping {
+  opacity: 0;
+  transition: opacity 300ms ease-out;
+}
+
+.fade-me-in.htmx-added {
+  opacity: 0;
+}
+
+
+@media(prefers-reduced-motion) {
+  .hide,
+  .hide-sprite,
+  .hide-card,
+  .hide-card-home {
+    transition: none;
+  }
+}
+
+.delay {
+  transition-delay: 500ms;
+}
+
+.perspective {
+  perspective: 23rem;
+}
+
+.hide {
+  opacity: 0;
+  transform: translateY(-5px);
+  transition: all 0.4s ease;
+}
+
+.animate {
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+  transition: all 0.4s ease !important;
+}
+
+
+.hide-sprite {
+  opacity: 0;
+  transform: translateY(-5px);
+  transition: all 0.6s ease;
+}
+
+.animate-sprite {
+  opacity: 1;
+  transform: translateY(0);
+  transition: all 0.6s ease;
+}
+
+.hide-card-wrap {
+  perspective: 900px;
+}
+
+.hide-card {
+  opacity: 0;
+  transform: rotateX(30deg) scale(0.8);
+  perspective: 900px;
+  transition: all 0.6s ease;
+}
+
+.hide-card-home {
+  opacity: 0;
+  transform: rotateX(5deg) scale(0.9);
+  transition: all 0.8s ease;
+}
+
+.hide-down {
+  opacity: 0;
+  transform: translateY(1rem);
+  transition: all 0.5s ease;
+}
+
+.animate-card-home {
+  opacity: 1;
+  transform-origin: center;
+  transform: rotateX(0deg) scale(1);
+  transition: all 0.8s cubic-bezier(0,.95,.41,.99);
+}
+
+.animate-card {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+  transition: all 0.6s ease;
+}
+
+
+.animate-down {
+  opacity: 1;
+  transform: translateY(0);
+  transition: all 0.5s ease 0.7s;
+}
+
+.fade-c1 {
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  z-index: 1;
+}
+
+.fade-c2 {
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  z-index: 1;
+}
+
+.fade-c1::before {
+  content: "";
+  position: absolute;
+  top: -100%;
+  right: -100%;
+  bottom: -100%;
+  left: -100%;
+  z-index: -1;
+  background:  radial-gradient(at 40% 60%, hsla(240,30%,66%,0.25) 0px, transparent 50%),
+  radial-gradient(at 90% 10%, hsla(205,50%,43%,0.25) 0px, transparent 50%),
+  radial-gradient(at 10% 90%, hsla(286,90%,73%,0.2) 0px, transparent 50%);
+  transition: opacity 1s ease, top 2s ease, bottom 2s ease, right 2s ease, left 2s ease, background 6s ease;
+  opacity: 0;
+}
+
+.fade-c2::before {
+  content: "";
+  position: absolute;
+  top: -100%;
+  right: -100%;
+  bottom: -100%;
+  left: -100%;
+  z-index: -1;
+  background:  radial-gradient(at 60% 15%, hsla(240,90%,66%,0.25) 0px, transparent 50%),
+  radial-gradient(at 100% 40%, hsla(205,30%,43%,0.25) 0px, transparent 50%),
+  radial-gradient(at 15% 0%, hsla(286,60%,73%,0.2) 0px, transparent 50%);
+  transition: opacity 1s ease, top 2s ease, bottom 2s ease, right 2s ease, left 2s ease, background 6s ease;
+  opacity: 0;
+}
+
+.animate-c1.fade-c1::before {
+  top: 0%;
+  right: 0%;
+  bottom: 0%;
+  left: 0%;
+  background: radial-gradient(at 60% 15%, hsla(240,100%,66%,0.25) 0px, transparent 50%),
+              radial-gradient(at 100% 40%, hsla(205,100%,43%,0.25) 0px, transparent 50%),
+              radial-gradient(at 15% 0%, hsla(286,100%,73%,0.2) 0px, transparent 50%);
+  transition: opacity 0.1s ease, top 2s ease, bottom 2s ease, right 2s ease, left 2s ease, background 3s ease;
+  opacity: 0.6;
+}
+
+.animate-c2.fade-c2::before {
+  top: 0%;
+  right: 0%;
+  bottom: 0%;
+  left: 0%;
+  background: radial-gradient(at 61% 14%, hsla(272,100%,66%,0.33) 0px, transparent 50%),
+  radial-gradient(at 96% 5%, hsla(197,100%,53%,0.35) 0px, transparent 50%),
+  radial-gradient(at 11% 7%, hsl(210.27deg 100% 71.35% / 25%) 0px, transparent 50%);
+  transition: opacity 0.1s ease, top 2s ease, bottom 2s ease, right 2s ease, left 2s ease, background 3s ease;
+  opacity: 0.6;
+}
+
+
+.hide-card div {
+  opacity: 0;
+  transform: rotateX(30deg) scale(0.8);
+  perspective: 900px;
+  transition: all 0.6s ease;
+}
+
+.animate-card-stack div {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+  transition: all 0.6s ease;
+}
+

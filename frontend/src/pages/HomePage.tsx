@@ -5,8 +5,6 @@ import ArticlesList, { ArticlesSkeleton } from '@/components/blog/ArticleList';
 import { Card } from "@/components/ui/card";
 import GithubIcon from "@/components/icons/github-icon";
 import LinkedInIcon from "@/components/icons/linkedin-icon";
-import '@/pages/globals.css'
-
 
 
 export default function HomePage() {
