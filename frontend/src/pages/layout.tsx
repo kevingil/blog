@@ -7,7 +7,6 @@ import Aurora from "@/components/home/aurora";
 import 'highlight.js/styles/base16/snazzy.css';
 import { CopilotKit } from '@copilotkit/react-core';
 import { Outlet } from '@tanstack/react-router';
-import '@/index.css';
 
 export default function RootLayout() {
   const userPromise = getUser();

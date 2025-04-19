@@ -2,7 +2,6 @@ import { RouterProvider } from '@tanstack/react-router'
 import { router } from './router'
 import { Suspense } from 'react'
 import { ThemeProvider } from "@/components/theme-provider"
-import '@/index.css'
 
 
 function App() {
