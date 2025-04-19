@@ -125,15 +125,16 @@ export const Navbar = () => {
       {/* <!-- Desktop --> */}
       <NavigationMenu className="hidden lg:block ml-auto">
         <NavigationMenuList>
-          <NavigationMenuItem>
             {routeList.map(({ href, label }) => (
+
+          <NavigationMenuItem>
               <NavigationMenuLink key={href} asChild>
                 <Link to={href} className="text-base px-4 font-semibold hover:text-indigo-500 dark:hover:text-indigo-400 transition">
                   {label}
                 </Link>
               </NavigationMenuLink>
-            ))}
           </NavigationMenuItem>
+            ))}
         </NavigationMenuList>
       </NavigationMenu>
 
