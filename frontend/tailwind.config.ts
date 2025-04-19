@@ -1,7 +1,6 @@
 import type { Config } from 'tailwindcss';
 import flattenColorPalette from "tailwindcss/lib/util/flattenColorPalette";
 import reactAriaComponents from 'tailwindcss-react-aria-components';
-import animate from 'tailwindcss-animate';
 
 const config: Config = {
 	darkMode: ['class', '[data-theme="orange"]'],
@@ -98,7 +97,6 @@ const config: Config = {
 	plugins: [
 		addVariablesForColors,
 		reactAriaComponents,
-		animate,
 	],
 };
 
