@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import 'highlight.js/styles/base16/snazzy.css';
 import { CopilotKit } from '@copilotkit/react-core';
 import { Outlet } from '@tanstack/react-router';
+import Aurora from '@/components/home/aurora';
 
 export default function RootLayout() {
   const userPromise = getUser();
@@ -14,6 +15,7 @@ export default function RootLayout() {
     <div className="min-h-[100dvh] flex flex-col relative">
       <UserProvider userPromise={userPromise}>
         <ThemeProvider>
+          <Aurora />
           <Navbar />
 
           <CopilotKit runtimeUrl="/api/copilotkit">

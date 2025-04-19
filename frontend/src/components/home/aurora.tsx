@@ -4,7 +4,6 @@ import { AuroraBackground } from "@/components/ui/aurora-background";
 
 export default function Aurora() {
   
-
     return (
     <div className={`fixed top-0 left-0 w-full h-full body-background`}>
     <AuroraBackground className={`animate-opacity`}>

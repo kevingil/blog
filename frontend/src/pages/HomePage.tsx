@@ -10,7 +10,7 @@ import LinkedInIcon from "@/components/icons/linkedin-icon";
 export default function HomePage() {
   return (
     <div className="">
-      <HeroSection />
+        <HeroSection />
       <Suspense fallback={<ArticlesSkeleton />}>
       <ArticlesList
         pagination={false} />
