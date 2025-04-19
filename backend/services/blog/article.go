@@ -155,7 +155,7 @@ func (s *ArticleService) GetArticles(page int, tag string) (*ArticleListResponse
 
 	if tag != "" && tag != "All" {
 		query = query.Joins("LEFT JOIN article_tags ON articles.id = article_tags.article_id").
-			Joins("LEFT JOIN tags ON article_tags.tag_id = tags.id").
+			Joins("LEFT JOIN tags ON article_tags.tag_id = tags.tag_id").
 			Where("tags.name = ?", tag)
 	}
 
@@ -218,7 +218,7 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string) (*Ar
 
 	if tag != "" && tag != "All" {
 		searchQuery = searchQuery.Joins("LEFT JOIN article_tags ON articles.id = article_tags.article_id").
-			Joins("LEFT JOIN tags ON article_tags.tag_id = tags.id").
+			Joins("LEFT JOIN tags ON article_tags.tag_id = tags.tag_id").
 			Where("tags.name = ?", tag)
 	}
 
@@ -279,7 +279,7 @@ func (s *ArticleService) GetPopularTags() ([]string, error) {
 
 	if err := s.db.Model(&models.Tag{}).
 		Select("tags.name, COUNT(article_tags.article_id) as count").
-		Joins("LEFT JOIN article_tags ON tags.id = article_tags.tag_id").
+		Joins("LEFT JOIN article_tags ON tags.tag_id = article_tags.tag_id").
 		Joins("LEFT JOIN articles ON article_tags.article_id = articles.id").
 		Where("articles.is_draft = ?", false).
 		Group("tags.name").
@@ -365,7 +365,7 @@ func (s *ArticleService) GetArticleData(slug string) (*ArticleData, error) {
 	var tagData []TagData
 	if err := s.db.Table("article_tags").
 		Select("article_tags.article_id, article_tags.tag_id, tags.name as tag_name").
-		Joins("LEFT JOIN tags ON article_tags.tag_id = tags.id").
+		Joins("LEFT JOIN tags ON article_tags.tag_id = tags.tag_id").
 		Where("article_tags.article_id = ?", article.ID).
 		Scan(&tagData).Error; err != nil {
 		return nil, err
@@ -424,7 +424,7 @@ func (s *ArticleService) GetDashboardArticles() ([]ArticleRow, error) {
 	if err := s.db.Table("articles").
 		Select("articles.*, GROUP_CONCAT(tags.name) as tags").
 		Joins("LEFT JOIN article_tags ON articles.id = article_tags.article_id").
-		Joins("LEFT JOIN tags ON article_tags.tag_id = tags.id").
+		Joins("LEFT JOIN tags ON article_tags.tag_id = tags.tag_id").
 		Group("articles.id").
 		Order("articles.published_at DESC, articles.created_at DESC").
 		Scan(&articles).Error; err != nil {
@@ -470,7 +470,7 @@ func (s *ArticleService) DeleteArticle(id int64) error {
 		DELETE FROM tags
 		WHERE NOT EXISTS (
 			SELECT 1 FROM article_tags
-			WHERE article_tags.tag_id = tags.id
+			WHERE article_tags.tag_id = tags.tag_id
 		)
 	`).Error; err != nil {
 		return err

@@ -18,14 +18,12 @@ type Article struct {
 }
 
 type Tag struct {
-	ID       int64     `gorm:"primaryKey" json:"id"`
-	Name     string    `gorm:"type:varchar(255);uniqueIndex" json:"name"`
+	ID       int64     `gorm:"column:tag_id;primaryKey" json:"tag_id"`
+	Name     string    `gorm:"column:tag_name;type:varchar(255);uniqueIndex" json:"tag_name"`
 	Articles []Article `gorm:"many2many:article_tags;" json:"-"`
 }
 
 type ArticleTag struct {
-	ArticleID int64   `gorm:"primaryKey" json:"article_id"`
-	TagID     int64   `gorm:"primaryKey" json:"tag_id"`
-	Article   Article `gorm:"foreignKey:ArticleID;constraint:OnDelete:CASCADE"`
-	Tag       Tag     `gorm:"foreignKey:TagID;constraint:OnDelete:CASCADE"`
+	ArticleID int64 `gorm:"primaryKey" json:"article_id"`
+	TagID     int64 `gorm:"primaryKey" json:"tag_id"`
 }
