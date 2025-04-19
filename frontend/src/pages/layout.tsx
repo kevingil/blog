@@ -16,7 +16,7 @@ export default function RootLayout() {
       <UserProvider userPromise={userPromise}>
         <ThemeProvider>
           <Navbar />
-          <Aurora />
+
           <CopilotKit runtimeUrl="/api/copilotkit">
             <main className="w-full max-w-6xl mx-auto px-2 sm:px-6 z-[1]" data-vaul-drawer-wrapper="">
               <Outlet />
