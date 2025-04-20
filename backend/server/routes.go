@@ -21,7 +21,7 @@ func (s *FiberServer) RegisterRoutes() {
 		AllowOrigins:     "*",
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS,PATCH",
 		AllowHeaders:     "Accept,Authorization,Content-Type",
-		AllowCredentials: false, // credentials require explicit origins
+		AllowCredentials: false,
 		MaxAge:           300,
 	}))
 

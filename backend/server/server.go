@@ -33,6 +33,7 @@ func NewFiberServer(
 		blogService:    blogService,
 		imageService:   imageService,
 		storageService: storageService,
+		pagesService:   pagesService,
 	}
 
 	server.RegisterRoutes()
