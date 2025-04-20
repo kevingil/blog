@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"time"
+	"fmt"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -59,13 +60,20 @@ type UserData struct {
 
 func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
 	var user models.User
-	if err := s.db.Where("email = ?", req.Email).First(&user).Error; err != nil {
-		return nil, errors.New("invalid credentials")
+	if err := s.db.Select("id", "passwordHash").Where("email = ?", req.Email).First(&user).Error; err != nil {
+		fmt.Println("Error finding user:", err)
+		return nil, errors.New("invalid account credentials")
 	}
 
+	fmt.Println("User found:", user)
+	fmt.Println("Password hash:", user.PasswordHash)
+	fmt.Println("Password:", req.Password)
+
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		return nil, errors.New("invalid credentials")
+		fmt.Println("Error comparing passwords:", err)
+		return nil, errors.New("invalid user credentials")
 	}
+
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub": user.ID,
@@ -74,6 +82,7 @@ func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
 
 	tokenString, err := token.SignedString(s.secretKey)
 	if err != nil {
+		fmt.Println("Error signing token:", err)
 		return nil, err
 	}
 

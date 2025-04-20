@@ -36,6 +36,32 @@ export async function getUser(): Promise<User | null> {
   return null;
 } 
 
+export async function updateContactPage(data: ContactPageData): Promise<ContactPageData | null> {
+  const response = await fetch(`${API_BASE_URL}/pages/contact`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  return await response.json();
+}
+
+export async function updateAboutPage(data: AboutPageData): Promise<AboutPageData | null> {
+  const response = await fetch(`${API_BASE_URL}/pages/about`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+  return await response.json();
+}
+
+
+
+
+
 export async function getContactPage(): Promise<ContactPageData | null> {
   try {
     const response = await fetch(`${API_BASE_URL}/pages/contact`);

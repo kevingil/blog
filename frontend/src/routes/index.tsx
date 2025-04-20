@@ -5,15 +5,20 @@ import { Card } from "@/components/ui/card";
 import GithubIcon from "@/components/icons/github-icon";
 import LinkedInIcon from "@/components/icons/linkedin-icon";
 import { createFileRoute } from '@tanstack/react-router';
+import { useAuth } from '@/services/auth/auth';
 
 export const Route = createFileRoute('/')({
   component: HomePage,
 });
 
 function HomePage() {
+
+  const { token } = useAuth();
+
   return (
     <div className="">
         <HeroSection />
+        {token && <p>Token: {token}</p>}
       <Suspense fallback={<ArticlesSkeleton />}>
       <ArticlesList
         pagination={false} />

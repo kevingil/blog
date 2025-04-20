@@ -127,7 +127,7 @@ export const Navbar = () => {
         <NavigationMenuList>
             {routeList.map(({ href, label }) => (
 
-          <NavigationMenuItem>
+          <NavigationMenuItem key={href}>
               <NavigationMenuLink key={href} asChild>
                 <Link to={href} className="text-base px-4 font-semibold hover:text-indigo-500 dark:hover:text-indigo-400 transition">
                   {label}

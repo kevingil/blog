@@ -1,23 +1,18 @@
-'use client';
-
 import { useState } from 'react';
 import { parsePathname } from '@tanstack/react-router';
 import { Users, Settings, Shield, PenLine, ImageUp } from 'lucide-react';
-import { Tabs, Tab } from '@mui/material';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRouter } from '@tanstack/react-router';
 import { useEffect } from 'react';
-import { Box } from '@mui/material';
 import { createFileRoute } from '@tanstack/react-router';
+import { Outlet } from '@tanstack/react-router';
+
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardLayout,
 });
 
-function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function DashboardLayout() {
   const pathname = parsePathname().join('/');
   const router = useRouter();
 
@@ -44,53 +39,29 @@ function DashboardLayout({
     setValue(getCurrentIndex());
   }, [pathname]);
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    setValue(newValue);
-    // Push selected tab's route
-    router.navigate({ to: navItems[newValue].href });
-  };
-  
 
-  // Updated NavContent using MUI Tabs with scrollable behavior
+  // Updated NavContent using Shadcn Tabs
   const NavContent = () => (
-    <Box sx={{ width: '100%', overflowX: 'auto' }}>
+    <div style={{ width: '100%', overflowX: 'auto' }}>
       <div className="flex justify-between items-center">
         <div className="text-2xl font-bold ml-4 text-semibold text-sm ">Dashboard</div>
       </div>
-      <Tabs
-        value={value}
-        onChange={handleTabChange}
-        variant="scrollable"
-        aria-label="dashboard navigation tabs"
-        textColor="secondary"
-        indicatorColor="secondary"
-        TabIndicatorProps={{
-          style: {
-            transition: 'all 0.3s ease-out',
-          },
-        }}
-        sx={{
-          minHeight: 48, 
-          '& .MuiTab-root': {
-            textTransform: 'none',
-            fontSize: '0.875rem', 
-            padding: '6px 16px',  
-            minHeight: 48, 
-          },
-        }}
-      >
+      <Tabs defaultValue={navItems[0].href} className="w-full">
+        <TabsList>
+          {navItems.map((item) => (
+            <TabsTrigger key={item.href} value={item.href}>
+              <item.icon className="mr-1 h-4 w-4" />
+              {item.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
         {navItems.map((item) => (
-          <Tab
-            key={item.href}
-            
-            icon={<item.icon className="mr-1 h-4 w-4" />}
-            label={item.label}
-            iconPosition="start"
-            disableRipple={false}
-          />
+          <TabsContent key={item.href} value={item.href}>
+            {/* Content for {item.label} */}
+          </TabsContent>
         ))}
       </Tabs>
-    </Box>
+    </div>
   );
 
   return (
@@ -102,8 +73,8 @@ function DashboardLayout({
 
         {/* Main content */}
         <main className="flex-1 overflow-y-auto p-0">
-          {children}
-          </main>
+          <Outlet />
+        </main>
       </div>
     </div>
   );

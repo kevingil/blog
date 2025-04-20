@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getAboutPage, getContactPage } from '@/services/user';
+import { AboutPageData, ContactPageData, getAboutPage, getContactPage, updateAboutPage, updateContactPage } from '@/services/user';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SettingsSkeleton } from '@/components/settingsLoading';
 import { Button } from '@/components/ui/button';
@@ -10,32 +10,14 @@ import { useToast } from '@/hooks/use-toast';
 import { Pencil, X } from 'lucide-react';
 import { createFileRoute } from '@tanstack/react-router';
 
-interface AboutPage {
-  id: number;
-  title: string | null;
-  content: string | null;
-  profileImage?: string | null;
-  metaDescription?: string | null;
-  lastUpdated: string | null;
-}
-
-interface ContactPage {
-  id: number;
-  title: string | null;
-  content: string | null;
-  emailAddress: string | null;
-  socialLinks?: string | null;
-  metaDescription?: string | null;
-  lastUpdated: string | null;
-}
 
 export const Route = createFileRoute('/dashboard/')({
   component: Settings,
 });
 
 function Settings() {
-  const [aboutData, setAboutData] = useState<AboutPage | null>(null);
-  const [contactData, setContactData] = useState<ContactPage | null>(null);
+  const [aboutData, setAboutData] = useState<AboutPageData | null>(null);
+  const [contactData, setContactData] = useState<ContactPageData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [editingAbout, setEditingAbout] = useState(false);
   const [editingContact, setEditingContact] = useState(false);
@@ -47,13 +29,19 @@ function Settings() {
         getAboutPage(),
         getContactPage(),
       ]);
-      setAboutData(about);
-      setContactData(contact);
+      if (about) {
+        setAboutData(about);
+      }
+      if (contact) {
+        setContactData(contact);
+      }
     };
     loadData();
   }, []);
 
-  async function handleAboutSubmit(formData: FormData) {
+  async function handleAboutSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.target as HTMLFormElement);
     setIsLoading(true);
     try {
       if (aboutData) {
@@ -61,9 +49,9 @@ function Settings() {
           id: aboutData.id,
           title: formData.get('title') as string,
           content: formData.get('content') as string,
-          profileImage: formData.get('profileImage') as string,
-          metaDescription: formData.get('metaDescription') as string,
-          lastUpdated: new Date().toISOString(),
+          profile_image: formData.get('profileImage') as string,
+          meta_description: formData.get('metaDescription') as string,
+          last_updated: new Date().toISOString(),
         };
 
       const success = await updateAboutPage(data);
@@ -90,7 +78,9 @@ function Settings() {
     setIsLoading(false);
   }
 
-  async function handleContactSubmit(formData: FormData) {
+  async function handleContactSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.target as HTMLFormElement);
     setIsLoading(true);
     try {
       if (contactData) {
@@ -98,11 +88,11 @@ function Settings() {
           id: contactData.id,
           title: formData.get('title') as string,
           content: formData.get('content') as string,
-          emailAddress: formData.get('emailAddress') as string,
-          socialLinks: formData.get('socialLinks') as string,
-        metaDescription: formData.get('metaDescription') as string,
-        lastUpdated: new Date().toISOString(),
-      };
+          email_address: formData.get('emailAddress') as string,
+          social_links: formData.get('socialLinks') as string,
+          meta_description: formData.get('metaDescription') as string,
+          last_updated: new Date().toISOString(),
+        };
 
       const success = await updateContactPage(data);
       
@@ -149,7 +139,7 @@ function Settings() {
         </CardHeader>
         <CardContent>
           {editingAbout ? (
-            <form action={handleAboutSubmit} className="space-y-4">
+            <form  onSubmit={handleAboutSubmit} className="space-y-4">
               <input className='hidden' id="id" name="id" defaultValue={aboutData.id} />
               <div className="space-y-2">
                 <Label htmlFor="about-title">Title</Label>
@@ -177,7 +167,7 @@ function Settings() {
                 <Input
                   id="about-image"
                   name="profileImage"
-                  defaultValue={aboutData.profileImage || ''}
+                  defaultValue={aboutData.profile_image || ''}
                 />
               </div>
               
@@ -187,7 +177,7 @@ function Settings() {
                   id="about-meta"
                   name="metaDescription"
                   rows={2}
-                  defaultValue={aboutData.metaDescription || ''}
+                  defaultValue={aboutData.meta_description || ''}
                 />
               </div>
               
@@ -209,12 +199,12 @@ function Settings() {
               
               <div className="space-y-2">
                 <Label>Profile Image URL</Label>
-                <p className="text-sm">{aboutData.profileImage}</p>
+                <p className="text-sm">{aboutData.profile_image}</p>
               </div>
               
               <div className="space-y-2">
                 <Label>Meta Description</Label>
-                <p className="text-sm">{aboutData.metaDescription}</p>
+                <p className="text-sm">{aboutData.meta_description}</p>
               </div>
             </div>
           )}
@@ -234,7 +224,7 @@ function Settings() {
         </CardHeader>
         <CardContent>
           {editingContact ? (
-            <form action={handleContactSubmit} className="space-y-4">
+            <form onSubmit={handleContactSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="contact-title">Title</Label>
                 <Input
@@ -262,7 +252,7 @@ function Settings() {
                   id="contact-email"
                   name="emailAddress"
                   type="email"
-                  defaultValue={contactData.emailAddress || ''}
+                  defaultValue={contactData.email_address || ''}
                 />
               </div>
               
@@ -272,7 +262,7 @@ function Settings() {
                   id="contact-social"
                   name="socialLinks"
                   rows={4}
-                  defaultValue={contactData.socialLinks || ''}
+                  defaultValue={contactData.social_links || ''}
                 />
               </div>
               
@@ -282,7 +272,7 @@ function Settings() {
                   id="contact-meta"
                   name="metaDescription"
                   rows={2}
-                  defaultValue={contactData.metaDescription || ''}
+                  defaultValue={contactData.meta_description || ''}
                 />
               </div>
               
@@ -304,17 +294,17 @@ function Settings() {
               
               <div className="space-y-2">
                 <Label>Email Address</Label>
-                <p className="text-sm">{contactData.emailAddress}</p>
+                <p className="text-sm">{contactData.email_address}</p>
               </div>
               
               <div className="space-y-2">
                 <Label>Social Links</Label>
-                <p className="text-sm whitespace-pre-wrap">{contactData.socialLinks}</p>
+                <p className="text-sm whitespace-pre-wrap">{contactData.social_links}</p>
               </div>
               
               <div className="space-y-2">
                 <Label>Meta Description</Label>
-                <p className="text-sm">{contactData.metaDescription}</p>
+                <p className="text-sm">{contactData.meta_description}</p>
               </div>
             </div>
           )}

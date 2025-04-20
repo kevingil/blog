@@ -123,6 +123,7 @@ func (s *FiberServer) websocketHandler(con *websocket.Conn) {
 func (s *FiberServer) LoginHandler(c *fiber.Ctx) error {
 	var req services.LoginRequest
 	if err := c.BodyParser(&req); err != nil {
+		fmt.Println("Error parsing request body:", err)
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid request body",
 		})
@@ -130,11 +131,13 @@ func (s *FiberServer) LoginHandler(c *fiber.Ctx) error {
 
 	resp, err := s.authService.Login(req)
 	if err != nil {
+		fmt.Println("Error logging in:", err)
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
+	fmt.Println("Login response:", resp)
 	return c.JSON(resp)
 }
 

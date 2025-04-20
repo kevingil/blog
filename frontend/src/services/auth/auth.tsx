@@ -135,12 +135,15 @@ export function useAuth() {
   const [token, setToken] = useAtom(tokenAtom);
   const [isAuthenticated] = useAtom(isAuthenticatedAtom);
 
-  // Initialize token from localStorage on mount
+  // Initialize token and user from localStorage on mount
   React.useEffect(() => {
     const storedToken = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('user');
     if (storedToken) {
       setToken(storedToken);
-      getCurrentUser(storedToken).then(setUser);
+    }
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
     }
   }, [setToken, setUser]);
 
@@ -158,11 +161,29 @@ export function useAuth() {
         setToken(null);
         setUser(null);
         localStorage.removeItem('token');
+        localStorage.removeItem('user');
       }
     }, 5 * 60 * 1000); // Refresh every 5 minutes
 
     return () => clearInterval(interval);
   }, [token, setToken, setUser]);
+
+  // Save user and token to localStorage whenever they change
+  React.useEffect(() => {
+    if (user) {
+      localStorage.setItem('user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('user');
+    }
+  }, [user]);
+
+  React.useEffect(() => {
+    if (token) {
+      localStorage.setItem('token', token);
+    } else {
+      localStorage.removeItem('token');
+    }
+  }, [token]);
 
   return {
     user,
@@ -174,7 +195,9 @@ export function useAuth() {
       const { user, token } = await login(email, password);
       setUser(user);
       setToken(token);
+      console.log('login token', token);
       localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
       return user;
     },
     signOut: async () => {
@@ -182,6 +205,7 @@ export function useAuth() {
       setUser(null);
       setToken(null);
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
     },
   };
 } 
