@@ -1,14 +1,16 @@
-'use client';
-
 import { useEffect, useState } from 'react';
 import { Card, CardContent } from '../components/ui/card';
 import { Skeleton } from '../components/ui/skeleton';
 import { getAboutPage } from '../services/user';
 import { useRef } from 'react';
 import { AboutPageData } from '../services/user';
+import { createFileRoute } from '@tanstack/react-router';
 
+export const Route = createFileRoute('/about')({
+  component: AboutPage,
+});
 
-export default function AboutPage() {
+function AboutPage() {
   const [pageData, setPageData] = useState<AboutPageData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 

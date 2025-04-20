@@ -1,0 +1,37 @@
+import { UserProvider } from '@/services/auth';
+import { getUser } from '@/services/user';
+import { FooterSection } from "@/components/footer";
+import { Navbar } from "@/components/navbar";
+import { ThemeProvider } from "@/components/theme-provider";
+import 'highlight.js/styles/base16/snazzy.css';
+import { Outlet } from '@tanstack/react-router';
+import Aurora from '@/components/home/aurora';
+import { createRootRoute } from '@tanstack/react-router';
+import { Suspense } from 'react';
+
+export const Route = createRootRoute({
+  component: RootLayout,
+});
+
+function RootLayout() {
+  const userPromise = getUser();
+
+  return (
+    <div className="min-h-[100dvh] flex flex-col relative">
+      <Suspense fallback={<div>Loading...</div>}>
+        <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+          <UserProvider userPromise={userPromise}>
+            <ThemeProvider>
+              <Aurora />
+              <Navbar />
+              <main className="w-full max-w-6xl mx-auto px-2 sm:px-6 z-[1]" data-vaul-drawer-wrapper="">
+                <Outlet />
+              </main>
+              <FooterSection />
+            </ThemeProvider>
+          </UserProvider>
+        </ThemeProvider>
+      </Suspense>
+    </div>
+  );
+}

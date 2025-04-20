@@ -8,13 +8,18 @@ import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
 import { useUser } from '@/services/auth';
 import { updateAccount } from '@/services/auth/auth';
+import { createFileRoute } from '@tanstack/react-router';
 
 type ActionState = {
   error?: string;
   success?: string;
 };
 
-export default function GeneralPage() {
+export const Route = createFileRoute('/dashboard/general')({
+  component: GeneralPage,
+});
+
+async function GeneralPage() {
   const { user } = useUser();
   const [state, setState] = useState<ActionState>({ error: '', success: '' });
   const [isPending, setIsPending] = useState(false);

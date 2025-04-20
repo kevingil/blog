@@ -7,14 +7,18 @@ import { Label } from '@/components/ui/label';
 import { Lock, Trash2, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { updatePassword, deleteAccount } from '@/services/auth/auth';
-import { useNavigate } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 
 type ActionState = {
   error?: string;
   success?: string;
 };
 
-export default function SecurityPage() {
+export const Route = createFileRoute('/dashboard/security')({
+  component: SecurityPage,
+});
+
+async function SecurityPage() {
   const navigate = useNavigate();
   const [passwordState, setPasswordState] = useState<ActionState>({ error: '', success: '' });
   const [deleteState, setDeleteState] = useState<ActionState>({ error: '', success: '' });

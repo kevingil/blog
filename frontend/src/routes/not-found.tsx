@@ -1,7 +1,12 @@
 import { Link } from '@tanstack/react-router';
 import { CircleIcon } from 'lucide-react';
+import { createFileRoute } from '@tanstack/react-router';
 
-export default function NotFound() {
+export const Route = createFileRoute('/not-found')({
+  component: NotFound,
+});
+
+function NotFound() {
   return (
     <div className="flex items-center justify-center min-h-[100dvh]">
       <div className="max-w-md space-y-8 p-4 text-center">

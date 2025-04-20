@@ -7,8 +7,13 @@ import { Tabs, Tab } from '@mui/material';
 import { useRouter } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { Box } from '@mui/material';
+import { createFileRoute } from '@tanstack/react-router';
 
-export default function DashboardLayout({
+export const Route = createFileRoute('/dashboard')({
+  component: DashboardLayout,
+});
+
+function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;

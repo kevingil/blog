@@ -1,18 +1,21 @@
 'use client'
 
 import { Suspense, useEffect, useRef, useState } from 'react';
-import { redirect, useParams } from 'next/navigation';
+import { redirect, useParams } from '@tanstack/react-router';
 import { format } from 'date-fns';
 import { marked, Token } from 'marked';
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ArticleData, getArticleData, getRecommendedArticles, RecommendedArticle } from '@/app/dashboard/blog/actions';
-import { useSearchParams } from 'next/navigation';
+import { getArticleData, getRecommendedArticles } from '@/services/blog';
 import hljs from 'highlight.js';
-import { Analytics } from '@vercel/analytics/react';
-import type { BeforeSendEvent } from '@vercel/analytics/react';
+import { createFileRoute } from '@tanstack/react-router';
+
+
+export const Route = createFileRoute('/blog/$blogId')({
+  component: Page,
+});
 
 function ArticleSkeleton() {
   return (
@@ -58,7 +61,7 @@ function RecommendedArticlesSkeleton() {
 }
 
 export default function Page() {
-  const { slug } = useParams();
+  const { slug } = useParams({ from: '/blog/$blogId' });
   const [articleData, setArticleData] = useState<ArticleData | null>(null);
   const content = articleData?.article;
   const searchParams = useSearchParams();
@@ -81,11 +84,11 @@ export default function Page() {
       const data = await getArticleData(slug as string);
       setArticleData(data);
       if (!data) {
-        redirect('/404');
+        redirect({ to: '/404' });
       }
       if (data.article.isDraft && (previewDraft !== 'true')) {
         console.log("previewDraft not true, notFound");
-        redirect('/404');
+        redirect({ to: '/404' });
       }
     };
     loadData();
@@ -105,14 +108,6 @@ export default function Page() {
           <RecommendedArticles slug={slug as string} articleData={articleData} />
         </Suspense>
       </section>
-      <Analytics
-        beforeSend={(event: BeforeSendEvent) => {
-          if (event.url.includes('previewDraft')) {
-            return null;
-          }
-          return event;
-        }}
-      />
     </div>
   );
 }

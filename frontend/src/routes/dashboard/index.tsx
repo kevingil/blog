@@ -1,15 +1,14 @@
-'use client';
-
 import { useState, useEffect } from 'react';
-import { getAboutPage, getContactPage, updateAboutPage, updateContactPage } from '@/db/queries';
+import { getAboutPage, getContactPage } from '@/services/user';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { SettingsSkeleton } from './settingsLoading';
+import { SettingsSkeleton } from '@/components/settingsLoading';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Pencil, X } from 'lucide-react';
+import { createFileRoute } from '@tanstack/react-router';
 
 interface AboutPage {
   id: number;
@@ -30,7 +29,11 @@ interface ContactPage {
   lastUpdated: string | null;
 }
 
-export function Settings() {
+export const Route = createFileRoute('/dashboard/')({
+  component: Settings,
+});
+
+function Settings() {
   const [aboutData, setAboutData] = useState<AboutPage | null>(null);
   const [contactData, setContactData] = useState<ContactPage | null>(null);
   const [isLoading, setIsLoading] = useState(false);

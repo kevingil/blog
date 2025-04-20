@@ -14,11 +14,13 @@ import {
   DialogTrigger,
   DialogClose
 } from "../../components/ui/dialog"
+import { createFileRoute } from '@tanstack/react-router';
 
+export const Route = createFileRoute('/dashboard/uploads')({
+  component: UploadsPage,
+});
 
-
-
-export default function UploadsPage() {
+function UploadsPage() {
   const [files, setFiles] = useState<FileData[]>([]);
   const [folders, setFolders] = useState<FolderData[]>([]);
   const [currentPath, setCurrentPath] = useState('');

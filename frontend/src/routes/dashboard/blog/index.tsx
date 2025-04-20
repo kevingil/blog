@@ -26,8 +26,13 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from "@/components/ui/drawer"
+import { createFileRoute } from '@tanstack/react-router';
 
-export default function ArticlesPage() {
+export const Route = createFileRoute('/dashboard/blog/')({
+  component: ArticlesPage,
+});
+
+function ArticlesPage() {
   const { user } = useUser();
   const navigate = useNavigate();
   const [articles, setArticles] = useState<ArticleRow[] | null>(null);

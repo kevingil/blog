@@ -1,13 +1,16 @@
-
 import { HeroSection } from "@/components/home/hero";
 import { Suspense } from 'react';
 import ArticlesList, { ArticlesSkeleton } from '@/components/blog/ArticleList';
 import { Card } from "@/components/ui/card";
 import GithubIcon from "@/components/icons/github-icon";
 import LinkedInIcon from "@/components/icons/linkedin-icon";
+import { createFileRoute } from '@tanstack/react-router';
 
+export const Route = createFileRoute('/')({
+  component: HomePage,
+});
 
-export default function HomePage() {
+function HomePage() {
   return (
     <div className="">
         <HeroSection />

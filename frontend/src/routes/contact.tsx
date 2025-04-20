@@ -1,15 +1,16 @@
-'use client';
-
 import { useEffect, useState } from 'react';
 import { Card, CardContent } from '../components/ui/card';
 import { Skeleton } from '../components/ui/skeleton';
 import { getContactPage } from '../services/user';
 import { useRef } from 'react';
 import { ContactPageData } from '../services/user';
+import { createFileRoute } from '@tanstack/react-router';
 
+export const Route = createFileRoute('/contact')({
+  component: ContactPage,
+});
 
-
-export default function ContactPage() {
+function ContactPage() {
   const [pageData, setPageData] = useState<ContactPageData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [socialLinks, setSocialLinks] = useState<Record<string, string>>({});
