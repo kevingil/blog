@@ -1,4 +1,4 @@
-package blog
+package services
 
 import (
 	"context"
@@ -9,17 +9,16 @@ import (
 	"time"
 
 	"blog-agent-go/backend/models"
-	"blog-agent-go/backend/services/agents"
 
 	"gorm.io/gorm"
 )
 
 type ArticleService struct {
 	db          *gorm.DB
-	writerAgent *agents.WriterAgent
+	writerAgent *WriterAgent
 }
 
-func NewArticleService(db *gorm.DB, writerAgent *agents.WriterAgent) *ArticleService {
+func NewArticleService(db *gorm.DB, writerAgent *WriterAgent) *ArticleService {
 	return &ArticleService{
 		db:          db,
 		writerAgent: writerAgent,
@@ -365,7 +364,7 @@ func (s *ArticleService) GetArticleData(slug string) (*ArticleData, error) {
 
 	var tagData []TagData
 	if err := s.db.Table("article_tags").
-		Select("article_tags.article_id, article_tags.tag_id, tags.name as tag_name").
+		Select("article_tags.article_id, article_tags.tag_id, tags.tag_name as tag_name").
 		Joins("LEFT JOIN tags ON article_tags.tag_id = tags.tag_id").
 		Where("article_tags.article_id = ?", article.ID).
 		Scan(&tagData).Error; err != nil {
@@ -373,7 +372,7 @@ func (s *ArticleService) GetArticleData(slug string) (*ArticleData, error) {
 	}
 
 	var author models.User
-	if err := s.db.Where("id = ?", article.Author).First(&author).Error; err != nil {
+	if err := s.db.Unscoped().Where("id = ?", article.Author).First(&author).Error; err != nil {
 		return nil, err
 	}
 

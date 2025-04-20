@@ -1,21 +1,21 @@
 package server
 
 import (
-	"blog-agent-go/backend/services/user"
+	"blog-agent-go/backend/services"
 	"context"
 	"fmt"
 	"log"
 	"time"
 
+	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/golang-jwt/jwt/v5"
-	"gorm.io/gorm"
 
-	"github.com/gofiber/contrib/websocket"
+	"gorm.io/gorm"
 )
 
-func (s *FiberServer) RegisterFiberRoutes() {
+func (s *FiberServer) RegisterRoutes() {
 	// Apply CORS middleware
 	s.App.Use(cors.New(cors.Config{
 		AllowOrigins:     "*",
@@ -44,8 +44,8 @@ func (s *FiberServer) RegisterFiberRoutes() {
 	blog.Post("/generate", s.GenerateArticleHandler)
 	blog.Get("/:id/chat-history", s.GetArticleChatHistoryHandler)
 	blog.Put("/:id/update", s.UpdateArticleWithContextHandler)
+	blog.Get("/articles/:slug", s.GetArticleDataHandler)
 	blog.Get("/articles/:slug/metadata", s.GetArticleMetadataHandler)
-	blog.Get("/articles/:slug/data", s.GetArticleDataHandler)
 	blog.Get("/articles/:id/recommended", s.GetRecommendedArticlesHandler)
 	blog.Get("/articles/dashboard", s.GetDashboardArticlesHandler)
 	blog.Delete("/articles/:id", s.DeleteArticleHandler)
@@ -121,14 +121,14 @@ func (s *FiberServer) websocketHandler(con *websocket.Conn) {
 }
 
 func (s *FiberServer) LoginHandler(c *fiber.Ctx) error {
-	var req user.LoginRequest
+	var req services.LoginRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid request body",
 		})
 	}
 
-	resp, err := s.userService.Login(req)
+	resp, err := s.authService.Login(req)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": err.Error(),
@@ -139,14 +139,14 @@ func (s *FiberServer) LoginHandler(c *fiber.Ctx) error {
 }
 
 func (s *FiberServer) RegisterHandler(c *fiber.Ctx) error {
-	var req user.RegisterRequest
+	var req services.RegisterRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid request body",
 		})
 	}
 
-	if err := s.userService.Register(req); err != nil {
+	if err := s.authService.Register(req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
@@ -177,7 +177,7 @@ func (s *FiberServer) UpdateAccountHandler(c *fiber.Ctx) error {
 	token = token[7:]
 
 	// Validate token and get user ID
-	validToken, err := s.userService.ValidateToken(token)
+	validToken, err := s.authService.ValidateToken(token)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Invalid token",
@@ -187,14 +187,14 @@ func (s *FiberServer) UpdateAccountHandler(c *fiber.Ctx) error {
 	claims := validToken.Claims.(jwt.MapClaims)
 	userID := uint(claims["sub"].(float64))
 
-	var req user.UpdateAccountRequest
+	var req services.UpdateAccountRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid request body",
 		})
 	}
 
-	if err := s.userService.UpdateAccount(userID, req); err != nil {
+	if err := s.authService.UpdateAccount(userID, req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
@@ -217,7 +217,7 @@ func (s *FiberServer) UpdatePasswordHandler(c *fiber.Ctx) error {
 	token = token[7:]
 
 	// Validate token and get user ID
-	validToken, err := s.userService.ValidateToken(token)
+	validToken, err := s.authService.ValidateToken(token)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Invalid token",
@@ -227,14 +227,14 @@ func (s *FiberServer) UpdatePasswordHandler(c *fiber.Ctx) error {
 	claims := validToken.Claims.(jwt.MapClaims)
 	userID := uint(claims["sub"].(float64))
 
-	var req user.UpdatePasswordRequest
+	var req services.UpdatePasswordRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid request body",
 		})
 	}
 
-	if err := s.userService.UpdatePassword(userID, req); err != nil {
+	if err := s.authService.UpdatePassword(userID, req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
@@ -257,7 +257,7 @@ func (s *FiberServer) DeleteAccountHandler(c *fiber.Ctx) error {
 	token = token[7:]
 
 	// Validate token and get user ID
-	validToken, err := s.userService.ValidateToken(token)
+	validToken, err := s.authService.ValidateToken(token)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Invalid token",
@@ -276,7 +276,7 @@ func (s *FiberServer) DeleteAccountHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	if err := s.userService.DeleteAccount(userID, req.Password); err != nil {
+	if err := s.authService.DeleteAccount(userID, req.Password); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})

@@ -1,4 +1,4 @@
-package pages
+package services
 
 import (
 	"blog-agent-go/backend/models"
@@ -6,15 +6,15 @@ import (
 	"gorm.io/gorm"
 )
 
-type Service struct {
+type PagesService struct {
 	db *gorm.DB
 }
 
-func NewService(db *gorm.DB) *Service {
-	return &Service{db: db}
+func NewPagesService(db *gorm.DB) *PagesService {
+	return &PagesService{db: db}
 }
 
-func (s *Service) GetAboutPage() (*models.AboutPage, error) {
+func (s *PagesService) GetAboutPage() (*models.AboutPage, error) {
 	var page models.AboutPage
 	result := s.db.First(&page)
 	if result.Error != nil {
@@ -26,7 +26,7 @@ func (s *Service) GetAboutPage() (*models.AboutPage, error) {
 	return &page, nil
 }
 
-func (s *Service) GetContactPage() (*models.ContactPage, error) {
+func (s *PagesService) GetContactPage() (*models.ContactPage, error) {
 	var page models.ContactPage
 	result := s.db.First(&page)
 	if result.Error != nil {

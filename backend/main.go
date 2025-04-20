@@ -3,13 +3,7 @@ package main
 import (
 	"blog-agent-go/backend/database"
 	"blog-agent-go/backend/server"
-	"blog-agent-go/backend/services/agents"
-	"blog-agent-go/backend/services/auth"
-	"blog-agent-go/backend/services/blog"
-	"blog-agent-go/backend/services/images"
-	"blog-agent-go/backend/services/pages"
-	"blog-agent-go/backend/services/storage"
-	"blog-agent-go/backend/services/user"
+	"blog-agent-go/backend/services"
 	"context"
 	"log"
 	"os"
@@ -57,19 +51,17 @@ func main() {
 	}
 
 	// Initialize services
-	authService := auth.NewAuthService(secretKey)
-	userService := user.NewAuthService(db, secretKey)
-	writerAgent := agents.NewWriterAgent(os.Getenv("ANTHROPIC_API_KEY"))
-	blogService := blog.NewArticleService(db, writerAgent)
-	imageService := images.NewImageGenerationService(db)
-	storageService := storage.NewStorageService(s3Client, bucket, urlPrefix)
-	pagesService := pages.NewService(db)
+	authService := services.NewAuthService(db, secretKey)
+	writerAgent := services.NewWriterAgent(os.Getenv("ANTHROPIC_API_KEY"))
+	blogService := services.NewArticleService(db, writerAgent)
+	imageService := services.NewImageGenerationService(db)
+	storageService := services.NewStorageService(s3Client, bucket, urlPrefix)
+	pagesService := services.NewPagesService(db)
 
 	// Initialize and start server
 	srv := server.NewFiberServer(
 		db,
 		authService,
-		userService,
 		blogService,
 		imageService,
 		storageService,

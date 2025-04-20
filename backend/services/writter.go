@@ -1,4 +1,4 @@
-package agents
+package services
 
 import (
 	"context"
@@ -13,18 +13,6 @@ import (
 
 type WriterAgent struct {
 	client *anthropic.Client
-}
-
-type ArticleChatHistory struct {
-	Messages []ArticleChatHistoryMessage `json:"messages"`
-	Metadata map[string]interface{}      `json:"metadata"`
-}
-
-type ArticleChatHistoryMessage struct {
-	Role      string                 `json:"role"`
-	Content   string                 `json:"content"`
-	CreatedAt int64                  `json:"created_at"`
-	Metadata  map[string]interface{} `json:"metadata"`
 }
 
 func NewWriterAgent(apiKey string) *WriterAgent {

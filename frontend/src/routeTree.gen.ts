@@ -23,7 +23,7 @@ import { Route as BlogIndexImport } from './routes/blog/index'
 import { Route as DashboardUploadsImport } from './routes/dashboard/uploads'
 import { Route as DashboardSecurityImport } from './routes/dashboard/security'
 import { Route as DashboardGeneralImport } from './routes/dashboard/general'
-import { Route as BlogBlogIdImport } from './routes/blog/$blogId'
+import { Route as BlogBlogSlugImport } from './routes/blog/$blogSlug'
 import { Route as DashboardBlogIndexImport } from './routes/dashboard/blog/index'
 import { Route as DashboardBlogNewImport } from './routes/dashboard/blog/new'
 import { Route as DashboardBlogEditBlogIdImport } from './routes/dashboard/blog/edit.$blogId'
@@ -102,9 +102,9 @@ const DashboardGeneralRoute = DashboardGeneralImport.update({
   getParentRoute: () => DashboardRoute,
 } as any)
 
-const BlogBlogIdRoute = BlogBlogIdImport.update({
-  id: '/blog/$blogId',
-  path: '/blog/$blogId',
+const BlogBlogSlugRoute = BlogBlogSlugImport.update({
+  id: '/blog/$blogSlug',
+  path: '/blog/$blogSlug',
   getParentRoute: () => rootRoute,
 } as any)
 
@@ -179,11 +179,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignupImport
       parentRoute: typeof rootRoute
     }
-    '/blog/$blogId': {
-      id: '/blog/$blogId'
-      path: '/blog/$blogId'
-      fullPath: '/blog/$blogId'
-      preLoaderRoute: typeof BlogBlogIdImport
+    '/blog/$blogSlug': {
+      id: '/blog/$blogSlug'
+      path: '/blog/$blogSlug'
+      fullPath: '/blog/$blogSlug'
+      preLoaderRoute: typeof BlogBlogSlugImport
       parentRoute: typeof rootRoute
     }
     '/dashboard/general': {
@@ -279,7 +279,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/not-found': typeof NotFoundRoute
   '/signup': typeof SignupRoute
-  '/blog/$blogId': typeof BlogBlogIdRoute
+  '/blog/$blogSlug': typeof BlogBlogSlugRoute
   '/dashboard/general': typeof DashboardGeneralRoute
   '/dashboard/security': typeof DashboardSecurityRoute
   '/dashboard/uploads': typeof DashboardUploadsRoute
@@ -297,7 +297,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/not-found': typeof NotFoundRoute
   '/signup': typeof SignupRoute
-  '/blog/$blogId': typeof BlogBlogIdRoute
+  '/blog/$blogSlug': typeof BlogBlogSlugRoute
   '/dashboard/general': typeof DashboardGeneralRoute
   '/dashboard/security': typeof DashboardSecurityRoute
   '/dashboard/uploads': typeof DashboardUploadsRoute
@@ -317,7 +317,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/not-found': typeof NotFoundRoute
   '/signup': typeof SignupRoute
-  '/blog/$blogId': typeof BlogBlogIdRoute
+  '/blog/$blogSlug': typeof BlogBlogSlugRoute
   '/dashboard/general': typeof DashboardGeneralRoute
   '/dashboard/security': typeof DashboardSecurityRoute
   '/dashboard/uploads': typeof DashboardUploadsRoute
@@ -338,7 +338,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/not-found'
     | '/signup'
-    | '/blog/$blogId'
+    | '/blog/$blogSlug'
     | '/dashboard/general'
     | '/dashboard/security'
     | '/dashboard/uploads'
@@ -355,7 +355,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/not-found'
     | '/signup'
-    | '/blog/$blogId'
+    | '/blog/$blogSlug'
     | '/dashboard/general'
     | '/dashboard/security'
     | '/dashboard/uploads'
@@ -373,7 +373,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/not-found'
     | '/signup'
-    | '/blog/$blogId'
+    | '/blog/$blogSlug'
     | '/dashboard/general'
     | '/dashboard/security'
     | '/dashboard/uploads'
@@ -393,7 +393,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   NotFoundRoute: typeof NotFoundRoute
   SignupRoute: typeof SignupRoute
-  BlogBlogIdRoute: typeof BlogBlogIdRoute
+  BlogBlogSlugRoute: typeof BlogBlogSlugRoute
   BlogIndexRoute: typeof BlogIndexRoute
 }
 
@@ -405,7 +405,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   NotFoundRoute: NotFoundRoute,
   SignupRoute: SignupRoute,
-  BlogBlogIdRoute: BlogBlogIdRoute,
+  BlogBlogSlugRoute: BlogBlogSlugRoute,
   BlogIndexRoute: BlogIndexRoute,
 }
 
@@ -426,7 +426,7 @@ export const routeTree = rootRoute
         "/login",
         "/not-found",
         "/signup",
-        "/blog/$blogId",
+        "/blog/$blogSlug",
         "/blog/"
       ]
     },
@@ -460,8 +460,8 @@ export const routeTree = rootRoute
     "/signup": {
       "filePath": "signup.tsx"
     },
-    "/blog/$blogId": {
-      "filePath": "blog/$blogId.tsx"
+    "/blog/$blogSlug": {
+      "filePath": "blog/$blogSlug.tsx"
     },
     "/dashboard/general": {
       "filePath": "dashboard/general.tsx",

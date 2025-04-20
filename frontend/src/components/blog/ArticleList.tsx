@@ -263,7 +263,7 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
           {articles.map((article) => (
             <Card key={article.id}>
               <CardContent className="p-0">
-                <Link to="/blog" params={{ slug: article.slug }} search={{ page: undefined, tag: undefined, search: undefined }}
+                <Link to="/blog/$blogSlug" params={{ blogSlug: article.slug as string }} search={{ page: undefined, tag: undefined, search: undefined }}
                   className='w-full h-full flex flex-row justify-between'>
                   <div className='p-4 w-full'>
                     <h2 className="text-xl font-semibold mb-2">{article.title}</h2>

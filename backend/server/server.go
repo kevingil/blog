@@ -1,12 +1,7 @@
 package server
 
 import (
-	"blog-agent-go/backend/services/auth"
-	"blog-agent-go/backend/services/blog"
-	"blog-agent-go/backend/services/images"
-	"blog-agent-go/backend/services/pages"
-	"blog-agent-go/backend/services/storage"
-	"blog-agent-go/backend/services/user"
+	"blog-agent-go/backend/services"
 
 	"gorm.io/gorm"
 
@@ -16,35 +11,31 @@ import (
 type FiberServer struct {
 	App            *fiber.App
 	db             *gorm.DB
-	authService    *auth.AuthService
-	userService    *user.AuthService
-	blogService    *blog.ArticleService
-	imageService   *images.ImageGenerationService
-	storageService *storage.StorageService
-	pagesService   *pages.Service
+	authService    *services.AuthService
+	blogService    *services.ArticleService
+	imageService   *services.ImageGenerationService
+	storageService *services.StorageService
+	pagesService   *services.PagesService
 }
 
 func NewFiberServer(
 	db *gorm.DB,
-	authService *auth.AuthService,
-	userService *user.AuthService,
-	blogService *blog.ArticleService,
-	imageService *images.ImageGenerationService,
-	storageService *storage.StorageService,
-	pagesService *pages.Service,
+	authService *services.AuthService,
+	blogService *services.ArticleService,
+	imageService *services.ImageGenerationService,
+	storageService *services.StorageService,
+	pagesService *services.PagesService,
 ) *FiberServer {
 	server := &FiberServer{
 		App:            fiber.New(),
 		db:             db,
 		authService:    authService,
-		userService:    userService,
 		blogService:    blogService,
 		imageService:   imageService,
 		storageService: storageService,
-		pagesService:   pagesService,
 	}
 
-	server.RegisterFiberRoutes()
+	server.RegisterRoutes()
 
 	return server
 }

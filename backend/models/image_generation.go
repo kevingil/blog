@@ -1,11 +1,6 @@
 package models
 
-import (
-	"gorm.io/gorm"
-)
-
 type ImageGeneration struct {
-	gorm.Model
 	Prompt     string `json:"prompt" gorm:"type:text;not null"`
 	Provider   string `json:"provider" gorm:"type:varchar(255);not null"`
 	ModelName  string `json:"model" gorm:"type:varchar(255);not null"`

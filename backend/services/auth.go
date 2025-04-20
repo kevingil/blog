@@ -1,4 +1,4 @@
-package auth
+package services
 
 import (
 	"time"
@@ -8,16 +8,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
-
-type AuthService struct {
-	secretKey []byte
-}
-
-func NewAuthService(secretKey string) *AuthService {
-	return &AuthService{
-		secretKey: []byte(secretKey),
-	}
-}
 
 type SessionData struct {
 	User    UserData `json:"user"`

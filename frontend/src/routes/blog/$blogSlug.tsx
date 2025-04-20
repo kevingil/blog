@@ -1,5 +1,3 @@
-'use client'
-
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { redirect, useParams } from '@tanstack/react-router';
 import { format } from 'date-fns';
@@ -11,9 +9,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { getArticleData, getRecommendedArticles } from '@/services/blog';
 import hljs from 'highlight.js';
 import { createFileRoute } from '@tanstack/react-router';
+import { ArticleData, RecommendedArticle } from '@/services/types';
 
 
-export const Route = createFileRoute('/blog/$blogId')({
+export const Route = createFileRoute('/blog/$blogSlug')({
   component: Page,
 });
 
@@ -61,12 +60,10 @@ function RecommendedArticlesSkeleton() {
 }
 
 export default function Page() {
-  const { slug } = useParams({ from: '/blog/$blogId' });
+  const { blogSlug } = useParams({ from: '/blog/$blogSlug' });
   const [articleData, setArticleData] = useState<ArticleData | null>(null);
-  const content = articleData?.article;
-  const searchParams = useSearchParams();
+  const searchParams = new URLSearchParams(window.location.search);
   const previewDraft = searchParams.get('previewDraft');
-
 
   // State to control the animation
   const articleRef = useRef<HTMLDivElement | null>(null);
@@ -81,23 +78,23 @@ export default function Page() {
   useEffect(() => {
     console.log("previewDraft", previewDraft);
     const loadData = async () => {
-      const data = await getArticleData(slug as string);
+      const data = await getArticleData(blogSlug);
       setArticleData(data);
       if (!data) {
-        redirect({ to: '/404' });
+        redirect({ to: '/not-found' });
       }
-      if (data.article.isDraft && (previewDraft !== 'true')) {
+      if (data?.article?.is_draft && (previewDraft !== 'true')) {
         console.log("previewDraft not true, notFound");
-        redirect({ to: '/404' });
+        redirect({ to: '/not-found' });
       }
     };
     loadData();
-  }, [slug]);
+  }, [blogSlug]);
 
   return (
     <div className={`container mx-auto py-8 delay-1000 ${animate ? 'animate' : 'hide-down'}`} ref={articleRef}>
       <Suspense fallback={<ArticleSkeleton />}>
-        <ArticleContent slug={slug as string} articleData={articleData} />
+        <ArticleContent slug={blogSlug} articleData={articleData} />
       </Suspense>
 
       <Separator className="my-12" />
@@ -105,16 +102,15 @@ export default function Page() {
       <section className="max-w-4xl mx-auto">
         <h2 className="text-2xl font-bold mb-6">Other Articles</h2>
         <Suspense fallback={<RecommendedArticlesSkeleton />}>
-          <RecommendedArticles slug={slug as string} articleData={articleData} />
+          <RecommendedArticles slug={blogSlug} articleData={articleData} />
         </Suspense>
       </section>
     </div>
   );
 }
 
- function ArticleContent({ slug, articleData }: { slug: string, articleData: ArticleData | null }) {
+function ArticleContent({ slug, articleData }: { slug: string, articleData: ArticleData | null }) {
   const content = articleData?.article;
-
 
   marked.use({
     renderer: {
@@ -141,7 +137,7 @@ export default function Page() {
         <div>
           <p className="font-semibold">{articleData?.author_name}</p>
           <p className="text-sm text-muted-foreground">
-            { content?.publishedAt ? format(new Date(content?.publishedAt), 'MMMM d, yyyy') : 'Unknown'}
+            { content?.published_at ? format(new Date(content?.published_at), 'MMMM d, yyyy') : 'Unknown'}
           </p>
         </div>
       </div>
@@ -157,13 +153,11 @@ export default function Page() {
 }
 
 function RecommendedArticles({ slug, articleData }: { slug: string, articleData: ArticleData | null }) {
-  
   const [recommendedArticles, setRecommendedArticles] = useState<RecommendedArticle[] | null>(null);
   const content = articleData?.article;
   
   console.log("RecommendedArticles", recommendedArticles);
   console.log("content", content);
-
 
   useEffect(() => {
     const loadData = async () => {
@@ -176,7 +170,6 @@ function RecommendedArticles({ slug, articleData }: { slug: string, articleData:
     loadData();
   }, [slug, content]);
   
-
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
       {recommendedArticles?.map((article: RecommendedArticle) => (

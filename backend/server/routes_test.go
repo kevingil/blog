@@ -1,10 +1,11 @@
 package server
 
 import (
-	"github.com/gofiber/fiber/v2"
 	"io"
 	"net/http"
 	"testing"
+
+	"github.com/gofiber/fiber/v2"
 )
 
 func TestHandler(t *testing.T) {

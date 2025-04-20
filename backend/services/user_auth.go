@@ -1,4 +1,4 @@
-package user
+package services
 
 import (
 	"errors"
@@ -59,7 +59,7 @@ func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": user.Model.ID,
+		"sub": user.ID,
 		"exp": time.Now().Add(time.Hour * 24).Unix(),
 	})
 
