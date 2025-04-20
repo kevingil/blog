@@ -3,49 +3,36 @@ import { Card, CardContent } from '../components/ui/card';
 import { Skeleton } from '../components/ui/skeleton';
 import { getContactPage } from '../services/user';
 import { useRef } from 'react';
-import { ContactPageData } from '../services/user';
 import { createFileRoute } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
 
 export const Route = createFileRoute('/contact')({
   component: ContactPage,
 });
 
 function ContactPage() {
-  const [pageData, setPageData] = useState<ContactPageData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: pageData, isLoading } = useQuery({
+    queryKey: ['contactPage'],
+    queryFn: getContactPage,
+    staleTime: 5000,
+  });
+
   const [socialLinks, setSocialLinks] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const data = await getContactPage();
-        if (!data) {
-          return;
-        }
-        setPageData(data as ContactPageData);
-        if (data?.social_links) {
-          setSocialLinks(JSON.parse(data.social_links));
-        }
-      } catch (error) {
-        console.error('Failed to load contact page:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    loadData();
-  }, []);
+    if (pageData?.social_links) {
+      setSocialLinks(JSON.parse(pageData.social_links));
+    }
+  }, [pageData]);
 
-  
   // State to control the animation
   const contactPageRef = useRef<HTMLDivElement | null>(null);
   const [animate, setAnimate] = useState(false);
-
 
   // Intersection Observer
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
-        console.log("entry.isIntersecting", entry.isIntersecting);
         if (entry.isIntersecting) {
           setAnimate(true);
           observer.unobserve(entry.target); 
@@ -57,14 +44,11 @@ function ContactPage() {
     );
 
     if (contactPageRef.current) {
-      console.log("contactPageRef.current", contactPageRef.current);
       observer.observe(contactPageRef.current);
     }
 
     return () => {
-      // Clean up on unmount
       if (observer && contactPageRef.current) {
-        console.log("observer.unobserve(contactPageRef.current)");
         observer.unobserve(contactPageRef.current);
       }
     };

@@ -3,45 +3,28 @@ import { Card, CardContent } from '../components/ui/card';
 import { Skeleton } from '../components/ui/skeleton';
 import { getAboutPage } from '../services/user';
 import { useRef } from 'react';
-import { AboutPageData } from '../services/user';
 import { createFileRoute } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
 
 export const Route = createFileRoute('/about')({
   component: AboutPage,
 });
 
 function AboutPage() {
-  const [pageData, setPageData] = useState<AboutPageData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: pageData, isLoading } = useQuery({
+    queryKey: ['aboutPage'],
+    queryFn: getAboutPage,
+    staleTime: 5000,
+  });
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const data = await getAboutPage();
-        if (!data) {
-          return;
-        }
-        setPageData(data as AboutPageData);
-      } catch (error) {
-        console.error('Failed to load about page:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    loadData();
-  }, []);
-
-  
   // State to control the animation
   const aboutPageRef = useRef<HTMLDivElement | null>(null);
   const [animate, setAnimate] = useState(false);
 
   // Intersection Observer
   useEffect(() => {
-    console.log("useEffect aboutPageRef.current", aboutPageRef.current);
     const observer = new IntersectionObserver(
       ([entry]) => {
-        console.log("entry.isIntersecting", entry.isIntersecting);
         if (entry.isIntersecting) {
           setAnimate(true);
           observer.unobserve(entry.target); 
@@ -53,19 +36,15 @@ function AboutPage() {
     );
 
     if (aboutPageRef.current) {
-      console.log("aboutPageRef.current", aboutPageRef.current);
       observer.observe(aboutPageRef.current);
     }
 
     return () => {
-      // Clean up on unmount
       if (observer && aboutPageRef.current) {
-        console.log("observer.unobserve(aboutPageRef.current)");
         observer.unobserve(aboutPageRef.current);
       }
     };
   }, []);
-  
 
   return (
     <div className={`container w-full mx-auto py-8 ${animate ? 'animate' : 'hide-down'}`} ref={aboutPageRef}>
