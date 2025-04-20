@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
-import { Button } from '../../../components/ui/button';
-import { Input } from '../../../components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/table';
-import { listFiles, uploadFile, deleteFile, createFolder, FileData, FolderData } from '../../../services/storage';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import { listFiles, uploadFile, deleteFile, createFolder, FileData, FolderData } from '../../services/storage';
 import { Folder, File, Trash2 } from 'lucide-react';
 
 import {
@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogClose
-} from "../../../components/ui/dialog"
+} from "../../components/ui/dialog"
 
 
 

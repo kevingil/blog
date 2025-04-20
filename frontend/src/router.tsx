@@ -1,14 +1,14 @@
 import { createRootRoute, createRoute, createRouter } from '@tanstack/react-router'
-import AboutPage from './pages/AboutPage'
-import Contact from './pages/Contact'
-import Articles from './pages/blog/Articles'
+import AboutPage from './pages/about'
+import Contact from './pages/contact'
+import Articles from './pages/blog'
 import NotFound from './pages/not-found'
 import BlogDashboard from './pages/dashboard/blog/BlogDashboard'
-import DashboardGeneral from './pages/dashboard/general/DashboardGeneral'
-import DashboardSecurity from './pages/dashboard/security/DashboardSecurity'
+import DashboardGeneral from './pages/dashboard/general'
+import DashboardSecurity from './pages/dashboard/security'
 import ArticleEditor from './components/blog/Editor'
-import HomePage from './pages/HomePage'
-import RootLayout from './pages/layout'
+import HomePage from './pages'
+import RootLayout from './pages/_root'
 
 const rootRoute = createRootRoute({
   component: RootLayout,
