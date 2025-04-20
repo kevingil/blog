@@ -273,16 +273,16 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string) (*Ar
 
 func (s *ArticleService) GetPopularTags() ([]string, error) {
 	var tags []struct {
-		Name  string
-		Count int
+		TagName string `gorm:"column:tag_name"`
+		Count   int
 	}
 
 	if err := s.db.Model(&models.Tag{}).
-		Select("tags.name, COUNT(article_tags.article_id) as count").
+		Select("tags.tag_name, COUNT(article_tags.article_id) as count").
 		Joins("LEFT JOIN article_tags ON tags.tag_id = article_tags.tag_id").
 		Joins("LEFT JOIN articles ON article_tags.article_id = articles.id").
 		Where("articles.is_draft = ?", false).
-		Group("tags.name").
+		Group("tags.tag_name").
 		Order("count DESC").
 		Limit(10).
 		Find(&tags).Error; err != nil {
@@ -290,8 +290,14 @@ func (s *ArticleService) GetPopularTags() ([]string, error) {
 	}
 
 	tagNames := make([]string, len(tags))
+
+	fmt.Println("Tags Output")
+	fmt.Println(tags)
+	fmt.Println("TagNames Output")
+	fmt.Println(tagNames)
+
 	for i, tag := range tags {
-		tagNames[i] = tag.Name
+		tagNames[i] = tag.TagName
 	}
 
 	return tagNames, nil

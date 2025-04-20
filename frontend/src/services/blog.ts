@@ -30,7 +30,7 @@ export async function searchArticles(query: string, page: number = 1, tag: strin
 }
 
 export async function getPopularTags(): Promise<{ tags: string[] }> {
-  const response = await fetch(`${API_BASE_URL}/api/blog/tags/popular`);
+  const response = await fetch(`${API_BASE_URL}/blog/tags/popular`);
   if (!response.ok) {
     throw new Error('Failed to fetch popular tags');
   }

@@ -284,7 +284,7 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
                       </div>
                     </div>
                     <p className="text-sm text-muted-foreground mb-4">
-                      {article.publishedAt ? format(new Date(article.publishedAt), 'MMMM d, yyyy') : 'Unknown'}
+                      {article.published_at ? format(new Date(article.published_at), 'MMMM d, yyyy') : 'Unknown'}
                     </p>
                     <div className="flex flex-wrap gap-2 mb-4">
                       {article.tags.map((tag) => (

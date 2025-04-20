@@ -106,14 +106,14 @@ export type ArticleListItem = {
   id: number;
   title: string | null;
   slug: string | null;
-  createdAt: number;
-  publishedAt: number | null;
+  created_at: number;
+  published_at: number | null;
   image: string | null;
   content: string | null;
   author: string | null;
   tags: string[];
-  isDraft: boolean;
-  imageGenerationRequestId?: string | null;
+  is_draft: boolean;
+  image_generation_request_id?: string | null;
 };
 
 
