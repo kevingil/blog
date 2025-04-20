@@ -81,12 +81,12 @@ export default function AboutPage() {
               <h1 className="text-3xl font-bold mb-8">{pageData.title}</h1>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {pageData.profileImage && (
+                {pageData.profile_image && (
                   <div className="md:col-span-1">
                     <Card>
                       <CardContent className="p-4">
                         <img
-                          src={pageData.profileImage}
+                          src={pageData.profile_image}
                           alt="Profile"
                           className="w-full rounded-lg"
                         />
@@ -95,7 +95,7 @@ export default function AboutPage() {
                   </div>
                 )}
 
-                <div className={`${pageData.profileImage ? 'md:col-span-2' : 'md:col-span-3'}`}>
+                <div className={`${pageData.profile_image ? 'md:col-span-2' : 'md:col-span-3'}`}>
                   <Card>
                     <CardContent className="p-6">
                       <div className="prose max-w-none">
@@ -109,7 +109,7 @@ export default function AboutPage() {
               </div>
 
               <div className="text-sm text-gray-500 mt-8 hidden">
-                Last updated: {new Date(pageData.lastUpdated).toLocaleDateString()}
+                Last updated: {new Date(pageData.last_updated).toLocaleDateString()}
               </div>
             </>
           ) : (

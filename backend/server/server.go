@@ -4,6 +4,7 @@ import (
 	"blog-agent-go/backend/services/auth"
 	"blog-agent-go/backend/services/blog"
 	"blog-agent-go/backend/services/images"
+	"blog-agent-go/backend/services/pages"
 	"blog-agent-go/backend/services/storage"
 	"blog-agent-go/backend/services/user"
 
@@ -20,6 +21,7 @@ type FiberServer struct {
 	blogService    *blog.ArticleService
 	imageService   *images.ImageGenerationService
 	storageService *storage.StorageService
+	pagesService   *pages.Service
 }
 
 func NewFiberServer(
@@ -29,6 +31,7 @@ func NewFiberServer(
 	blogService *blog.ArticleService,
 	imageService *images.ImageGenerationService,
 	storageService *storage.StorageService,
+	pagesService *pages.Service,
 ) *FiberServer {
 	server := &FiberServer{
 		App:            fiber.New(),
@@ -38,6 +41,7 @@ func NewFiberServer(
 		blogService:    blogService,
 		imageService:   imageService,
 		storageService: storageService,
+		pagesService:   pagesService,
 	}
 
 	server.RegisterFiberRoutes()

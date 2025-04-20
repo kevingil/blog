@@ -1,11 +1,6 @@
 package models
 
-import (
-	"gorm.io/gorm"
-)
-
 type AboutPage struct {
-	gorm.Model
 	Title           string `json:"title" gorm:"type:varchar(255);not null"`
 	Content         string `json:"content" gorm:"type:text;not null"`
 	ProfileImage    string `json:"profile_image" gorm:"type:varchar(255)"`
@@ -13,8 +8,11 @@ type AboutPage struct {
 	LastUpdated     string `json:"last_updated" gorm:"type:varchar(255)"`
 }
 
+func (AboutPage) TableName() string {
+	return "about_page"
+}
+
 type ContactPage struct {
-	gorm.Model
 	Title           string `json:"title" gorm:"type:varchar(255);not null"`
 	Content         string `json:"content" gorm:"type:text;not null"`
 	EmailAddress    string `json:"email_address" gorm:"type:varchar(255);not null"`
@@ -23,8 +21,11 @@ type ContactPage struct {
 	LastUpdated     string `json:"last_updated" gorm:"type:varchar(255)"`
 }
 
+func (ContactPage) TableName() string {
+	return "contact_page"
+}
+
 type Project struct {
-	gorm.Model
 	Title       string `json:"title" gorm:"type:varchar(255);not null"`
 	Description string `json:"description" gorm:"type:text;not null"`
 	URL         string `json:"url" gorm:"type:varchar(255)"`

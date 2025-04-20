@@ -25,6 +25,11 @@ func (s *FiberServer) RegisterFiberRoutes() {
 		MaxAge:           300,
 	}))
 
+	// Pages routes
+	pages := s.App.Group("/pages")
+	pages.Get("/about", s.GetAboutPageHandler)
+	pages.Get("/contact", s.GetContactPageHandler)
+
 	// Auth routes
 	auth := s.App.Group("/auth")
 	auth.Post("/login", s.LoginHandler)
@@ -662,4 +667,38 @@ func (s *FiberServer) DeleteArticleHandler(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"success": true,
 	})
+}
+
+func (s *FiberServer) GetAboutPageHandler(c *fiber.Ctx) error {
+	page, err := s.pagesService.GetAboutPage()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	if page == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "About page not found",
+		})
+	}
+
+	return c.JSON(page)
+}
+
+func (s *FiberServer) GetContactPageHandler(c *fiber.Ctx) error {
+	page, err := s.pagesService.GetContactPage()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	if page == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Contact page not found",
+		})
+	}
+
+	return c.JSON(page)
 }

@@ -7,6 +7,7 @@ import (
 	"blog-agent-go/backend/services/auth"
 	"blog-agent-go/backend/services/blog"
 	"blog-agent-go/backend/services/images"
+	"blog-agent-go/backend/services/pages"
 	"blog-agent-go/backend/services/storage"
 	"blog-agent-go/backend/services/user"
 	"context"
@@ -62,6 +63,7 @@ func main() {
 	blogService := blog.NewArticleService(db, writerAgent)
 	imageService := images.NewImageGenerationService(db)
 	storageService := storage.NewStorageService(s3Client, bucket, urlPrefix)
+	pagesService := pages.NewService(db)
 
 	// Initialize and start server
 	srv := server.NewFiberServer(
@@ -71,6 +73,7 @@ func main() {
 		blogService,
 		imageService,
 		storageService,
+		pagesService,
 	)
 
 	port := os.Getenv("PORT")

@@ -22,8 +22,8 @@ export default function ContactPage() {
           return;
         }
         setPageData(data as ContactPageData);
-        if (data?.socialLinks) {
-          setSocialLinks(JSON.parse(data.socialLinks));
+        if (data?.social_links) {
+          setSocialLinks(JSON.parse(data.social_links));
         }
       } catch (error) {
         console.error('Failed to load contact page:', error);
@@ -95,14 +95,14 @@ export default function ContactPage() {
 
                 <Card>
                   <CardContent className="p-6 space-y-6">
-                    {pageData.emailAddress && (
+                    {pageData.email_address && (
                     <div>
                       <h2 className="text-xl font-semibold mb-2">Email</h2>
                       <a
-                        href={`mailto:${pageData.emailAddress}`}
+                        href={`mailto:${pageData.email_address}`}
                         className="text-blue-600 hover:text-blue-800"
                       >
-                        {pageData.emailAddress}
+                        {pageData.email_address}
                       </a>
                     </div>
                     )}
@@ -131,7 +131,7 @@ export default function ContactPage() {
               </div>
 
               <div className="text-sm text-gray-500 mt-8 hidden">
-                Last updated: {new Date(pageData.lastUpdated).toLocaleDateString()}
+                Last updated: {new Date(pageData.last_updated).toLocaleDateString()}
               </div>
             </>
           ) : (

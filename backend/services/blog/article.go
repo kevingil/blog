@@ -291,11 +291,6 @@ func (s *ArticleService) GetPopularTags() ([]string, error) {
 
 	tagNames := make([]string, len(tags))
 
-	fmt.Println("Tags Output")
-	fmt.Println(tags)
-	fmt.Println("TagNames Output")
-	fmt.Println(tagNames)
-
 	for i, tag := range tags {
 		tagNames[i] = tag.TagName
 	}
