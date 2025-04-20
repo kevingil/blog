@@ -61,7 +61,7 @@ export function ImageLoader({ article, newImageGenerationRequestId, stagedImageU
   const [imageUrl, setImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    const requestToFetch = newImageGenerationRequestId || article?.imageGenerationRequestId || null;
+    const requestToFetch = newImageGenerationRequestId || article?.image_generation_request_id || null;
     async function fetchImageGeneration() {
       if (requestToFetch) {
         const imgGen = await getImageGeneration(requestToFetch);
@@ -106,7 +106,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const { toast } = useToast()
   const navigate = useNavigate();
   const { user } = useUser();
-  const { slug } = useParams({ from: '/dashboard/blog/edit/$slug' });
+  const { slug } = useParams({ from: '/dashboard/blog/edit/$blogSlug' });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [article, setArticle] = useState<ArticleListItem | null>(null);
@@ -116,7 +116,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [generateImageOpen, setGenerateImageOpen] = useState(false);
   const [generatingRewrite, setGeneratingRewrite] = useState(false);
 
-  const { register, handleSubmit, setValue, getValues, formState: { errors } } = useForm<ArticleFormData>({
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<ArticleFormData>({
     resolver: zodResolver(articleSchema),
   });
 
@@ -152,7 +152,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           setValue('content', article.content || '');
           setValue('image', article.image || '');
           setValue('tags', article.tags ? article.tags.join(', ') : '');
-          setValue('isDraft', article.isDraft);
+          setValue('isDraft', article.is_draft);
         }
       }
     }
@@ -186,7 +186,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           image: data.image,
           tags: data.tags.split(',').map(tag => tag.trim()),
           isDraft: data.isDraft,
-          publishedAt: article?.publishedAt || new Date().getTime(),
+          publishedAt: article?.published_at || new Date().getTime(),
         });
         if (returnToDashboard) {
           navigate({ to: '/dashboard/blog' });
@@ -360,9 +360,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 <div style={{marginLeft: '2rem'}} className='flex w-full items-center flex-col gap-2 mt-auto'>
               <div className='mr-auto flex flex-row'>
               <label htmlFor="isDraft" className='text-sm font-medium flex flex-row mr-2'>Published </label>
-              <Switch {...register('isDraft')} checked={!article?.isDraft} onCheckedChange={(checked) => {
+              <Switch {...register('isDraft')} checked={!article?.is_draft} onCheckedChange={(checked) => {
                 if (article) {
-                  setArticle({ ...article, isDraft: !checked });
+                  setArticle({ ...article, is_draft: !checked });
                 }
                 setValue('isDraft', !checked);
               }} />
@@ -377,20 +377,20 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   variant={"outline"}
                   className={cn(
                     "w-full justify-start text-left font-normal",
-                    !article?.publishedAt && "text-muted-foreground"
+                    !article?.published_at && "text-muted-foreground"
                   )}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {article?.publishedAt ? format(article.publishedAt, "PPP") : <span>Pick a date</span>}
+                  {article?.published_at ? format(article.published_at, "PPP") : <span>Pick a date</span>}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0">
                 <Calendar
                   mode="single"
-                  selected={article?.publishedAt ? new Date(article.publishedAt) : undefined}
+                  selected={article?.published_at ? new Date(article.published_at) : undefined}
                   onSelect={(date: Date | undefined) => {
                     if (article) {
-                      setArticle({ ...article, publishedAt: date?.getTime() || 0 });
+                      setArticle({ ...article, published_at: date?.getTime() || 0 });
                     }
                   }}
                   initialFocus

@@ -5,7 +5,7 @@ import { redirect } from '@tanstack/react-router';
 import { getUser } from '@/services/user';
 import { createFileRoute } from '@tanstack/react-router';
 
-export const Route = createFileRoute('/dashboard/blog/edit/$blogId')({
+export const Route = createFileRoute('/dashboard/blog/edit/$blogSlug')({
   component: EditArticlePage,
 });
 

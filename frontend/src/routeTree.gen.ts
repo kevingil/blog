@@ -26,7 +26,7 @@ import { Route as DashboardGeneralImport } from './routes/dashboard/general'
 import { Route as BlogBlogSlugImport } from './routes/blog/$blogSlug'
 import { Route as DashboardBlogIndexImport } from './routes/dashboard/blog/index'
 import { Route as DashboardBlogNewImport } from './routes/dashboard/blog/new'
-import { Route as DashboardBlogEditBlogIdImport } from './routes/dashboard/blog/edit.$blogId'
+import { Route as DashboardBlogEditBlogSlugImport } from './routes/dashboard/blog/edit.$blogSlug'
 
 // Create/Update Routes
 
@@ -120,9 +120,9 @@ const DashboardBlogNewRoute = DashboardBlogNewImport.update({
   getParentRoute: () => DashboardRoute,
 } as any)
 
-const DashboardBlogEditBlogIdRoute = DashboardBlogEditBlogIdImport.update({
-  id: '/blog/edit/$blogId',
-  path: '/blog/edit/$blogId',
+const DashboardBlogEditBlogSlugRoute = DashboardBlogEditBlogSlugImport.update({
+  id: '/blog/edit/$blogSlug',
+  path: '/blog/edit/$blogSlug',
   getParentRoute: () => DashboardRoute,
 } as any)
 
@@ -235,11 +235,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardBlogIndexImport
       parentRoute: typeof DashboardImport
     }
-    '/dashboard/blog/edit/$blogId': {
-      id: '/dashboard/blog/edit/$blogId'
-      path: '/blog/edit/$blogId'
-      fullPath: '/dashboard/blog/edit/$blogId'
-      preLoaderRoute: typeof DashboardBlogEditBlogIdImport
+    '/dashboard/blog/edit/$blogSlug': {
+      id: '/dashboard/blog/edit/$blogSlug'
+      path: '/blog/edit/$blogSlug'
+      fullPath: '/dashboard/blog/edit/$blogSlug'
+      preLoaderRoute: typeof DashboardBlogEditBlogSlugImport
       parentRoute: typeof DashboardImport
     }
   }
@@ -254,7 +254,7 @@ interface DashboardRouteChildren {
   DashboardIndexRoute: typeof DashboardIndexRoute
   DashboardBlogNewRoute: typeof DashboardBlogNewRoute
   DashboardBlogIndexRoute: typeof DashboardBlogIndexRoute
-  DashboardBlogEditBlogIdRoute: typeof DashboardBlogEditBlogIdRoute
+  DashboardBlogEditBlogSlugRoute: typeof DashboardBlogEditBlogSlugRoute
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
@@ -264,7 +264,7 @@ const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardIndexRoute: DashboardIndexRoute,
   DashboardBlogNewRoute: DashboardBlogNewRoute,
   DashboardBlogIndexRoute: DashboardBlogIndexRoute,
-  DashboardBlogEditBlogIdRoute: DashboardBlogEditBlogIdRoute,
+  DashboardBlogEditBlogSlugRoute: DashboardBlogEditBlogSlugRoute,
 }
 
 const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
@@ -287,7 +287,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/blog/new': typeof DashboardBlogNewRoute
   '/dashboard/blog': typeof DashboardBlogIndexRoute
-  '/dashboard/blog/edit/$blogId': typeof DashboardBlogEditBlogIdRoute
+  '/dashboard/blog/edit/$blogSlug': typeof DashboardBlogEditBlogSlugRoute
 }
 
 export interface FileRoutesByTo {
@@ -305,7 +305,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardIndexRoute
   '/dashboard/blog/new': typeof DashboardBlogNewRoute
   '/dashboard/blog': typeof DashboardBlogIndexRoute
-  '/dashboard/blog/edit/$blogId': typeof DashboardBlogEditBlogIdRoute
+  '/dashboard/blog/edit/$blogSlug': typeof DashboardBlogEditBlogSlugRoute
 }
 
 export interface FileRoutesById {
@@ -325,7 +325,7 @@ export interface FileRoutesById {
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/blog/new': typeof DashboardBlogNewRoute
   '/dashboard/blog/': typeof DashboardBlogIndexRoute
-  '/dashboard/blog/edit/$blogId': typeof DashboardBlogEditBlogIdRoute
+  '/dashboard/blog/edit/$blogSlug': typeof DashboardBlogEditBlogSlugRoute
 }
 
 export interface FileRouteTypes {
@@ -346,7 +346,7 @@ export interface FileRouteTypes {
     | '/dashboard/'
     | '/dashboard/blog/new'
     | '/dashboard/blog'
-    | '/dashboard/blog/edit/$blogId'
+    | '/dashboard/blog/edit/$blogSlug'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -363,7 +363,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/dashboard/blog/new'
     | '/dashboard/blog'
-    | '/dashboard/blog/edit/$blogId'
+    | '/dashboard/blog/edit/$blogSlug'
   id:
     | '__root__'
     | '/'
@@ -381,7 +381,7 @@ export interface FileRouteTypes {
     | '/dashboard/'
     | '/dashboard/blog/new'
     | '/dashboard/blog/'
-    | '/dashboard/blog/edit/$blogId'
+    | '/dashboard/blog/edit/$blogSlug'
   fileRoutesById: FileRoutesById
 }
 
@@ -448,7 +448,7 @@ export const routeTree = rootRoute
         "/dashboard/",
         "/dashboard/blog/new",
         "/dashboard/blog/",
-        "/dashboard/blog/edit/$blogId"
+        "/dashboard/blog/edit/$blogSlug"
       ]
     },
     "/login": {
@@ -490,8 +490,8 @@ export const routeTree = rootRoute
       "filePath": "dashboard/blog/index.tsx",
       "parent": "/dashboard"
     },
-    "/dashboard/blog/edit/$blogId": {
-      "filePath": "dashboard/blog/edit.$blogId.tsx",
+    "/dashboard/blog/edit/$blogSlug": {
+      "filePath": "dashboard/blog/edit.$blogSlug.tsx",
       "parent": "/dashboard"
     }
   }

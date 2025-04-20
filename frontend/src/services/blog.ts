@@ -49,6 +49,17 @@ export async function getArticle(slug: string): Promise<ArticleListItem | null> 
   return response.json();
 }
 
+export async function getArticleById(blogId: string): Promise<ArticleListItem | null> {
+  const response = await fetch(`${API_BASE_URL}/blog/articles/${blogId}`);
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error('Failed to fetch article');
+  }
+  return response.json();
+}
+
 export async function createArticle(article: {
   title: string;
   content: string;
