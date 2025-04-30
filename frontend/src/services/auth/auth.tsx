@@ -26,9 +26,26 @@ export async function login(email: string, password: string): Promise<{ user: Us
   return data;
 }
 
-export async function signOut(): Promise<void> {
-  // Clear token from storage
+export async function logout(): Promise<void> {
+  const token = localStorage.getItem('token');
+  if (token) {
+    try {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  }
   localStorage.removeItem('token');
+  localStorage.removeItem('user');
+}
+
+export async function signOut(): Promise<void> {
+  await logout();
 }
 
 export async function getCurrentUser(token: string): Promise<User | null> {
@@ -201,11 +218,9 @@ export function useAuth() {
       return user;
     },
     signOut: async () => {
-      await signOut();
+      await logout();
       setUser(null);
       setToken(null);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
     },
   };
-} 
+}
