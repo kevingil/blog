@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
-import { useUser } from '@/services/auth';
+import { useAuth } from '@/services/auth/auth';
 import { updateAccount } from '@/services/auth/auth';
 import { createFileRoute } from '@tanstack/react-router';
 
@@ -20,7 +20,7 @@ export const Route = createFileRoute('/dashboard/general')({
 });
 
 async function GeneralPage() {
-  const { user } = useUser();
+  const { user } = useAuth();
   const [state, setState] = useState<ActionState>({ error: '', success: '' });
   const [isPending, setIsPending] = useState(false);
 

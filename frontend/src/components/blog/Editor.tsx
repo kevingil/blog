@@ -1,6 +1,6 @@
 import { useState, useEffect} from 'react';
 import { useParams, useNavigate } from '@tanstack/react-router';
-import { useUser } from '@/services/auth';
+import { useAuth } from '@/services/auth/auth';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -105,8 +105,8 @@ export function ImageLoader({ article, newImageGenerationRequestId, stagedImageU
 export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const { toast } = useToast()
   const navigate = useNavigate();
-  const { user } = useUser();
-  const { slug } = useParams({ from: '/dashboard/blog/edit/$blogSlug' });
+  const { user } = useAuth();
+  const { blogSlug } = useParams({ from: '/dashboard/blog/edit/$blogSlug' });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [article, setArticle] = useState<ArticleListItem | null>(null);
@@ -144,8 +144,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         return;
       }
 
-      if (slug) {
-        const article = await getArticle(slug as string);
+      if (blogSlug) {
+        const article = await getArticle(blogSlug as string);
         if (article) {
           setArticle(article);
           setValue('title', article.title || '');
@@ -180,7 +180,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           navigate({ to: '/dashboard/blog' });
         }
       } else {
-        await updateArticle(slug as string, {
+        await updateArticle(blogSlug as string, {
           title: data.title,
           content: data.content,
           image: data.image,

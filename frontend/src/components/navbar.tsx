@@ -18,8 +18,7 @@ import {
   NavigationMenuList,
 } from "./ui/navigation-menu";
 
-import { useUser } from '@/services/auth';
-import { signOut } from '@/services/auth/auth';
+import { signOut, useAuth } from '@/services/auth/auth';
 import { Home, LogOut } from 'lucide-react';
 
 import {
@@ -60,7 +59,9 @@ const routeList: RouteProps[] = [
 export const Navbar = () => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { user, setUser } = useUser();
+  const { user, setUser, token } = useAuth();
+  console.log("navbar user", user);
+  console.log("navbar token", token); 
   const navigate = useNavigate();
 
   async function handleSignOut() {
@@ -135,19 +136,18 @@ export const Navbar = () => {
               </NavigationMenuLink>
           </NavigationMenuItem>
             ))}
-        </NavigationMenuList>
-      </NavigationMenu>
+            <NavigationMenuItem>
+            <ToggleTheme />
+            </NavigationMenuItem>
 
-      <div className="hidden lg:flex gap-4">
-        <ToggleTheme />
-        {user && (
-          <div className="flex items-center space-x-4">
+            <NavigationMenuItem>
+              <div>
             <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-              <DropdownMenuTrigger asChild>
+              <DropdownMenuTrigger >
                 <Avatar className="cursor-pointer size-9">
-                  <AvatarImage alt={user.name || ''} />
+                  <AvatarImage alt={user?.name || ''} />
                   <AvatarFallback>
-                    {user.email
+                    {user?.email
                       .split(' ')
                       .map((n) => n[0])
                       .join('')}
@@ -172,9 +172,12 @@ export const Navbar = () => {
                 </form>
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
-        )}
-      </div>
+            </div>
+            </NavigationMenuItem>
+
+        </NavigationMenuList>
+      </NavigationMenu>
+
     </header>
   );
 };

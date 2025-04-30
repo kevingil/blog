@@ -1,5 +1,3 @@
-import { UserProvider } from '@/services/auth';
-import { getUser } from '@/services/user';
 import { FooterSection } from "@/components/footer";
 import { Navbar } from "@/components/navbar";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -17,14 +15,12 @@ export const Route = createRootRoute({
 });
 
 function RootLayout() {
-  const userPromise = getUser();
 
   return (
     <QueryClientProvider client={queryClient}>
       <div className="min-h-[100dvh] flex flex-col relative">
         <Suspense fallback={<div>Loading...</div>}>
           <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-            <UserProvider userPromise={userPromise}>
               <ThemeProvider>
                 <Aurora />
                 <Navbar />
@@ -33,7 +29,6 @@ function RootLayout() {
                 </main>
                 <FooterSection />
               </ThemeProvider>
-            </UserProvider>
           </ThemeProvider>
         </Suspense>
       </div>

@@ -3,7 +3,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { useUser } from '@/services/auth';
+import { useAuth } from '@/services/auth/auth';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { MoreHorizontal, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
@@ -33,7 +33,7 @@ export const Route = createFileRoute('/dashboard/blog/')({
 });
 
 function ArticlesPage() {
-  const { user } = useUser();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [articles, setArticles] = useState<ArticleRow[] | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);

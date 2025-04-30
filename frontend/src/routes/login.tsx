@@ -6,7 +6,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Orbit as OrbitIcon, Loader2 } from 'lucide-react';
-import { useAuth } from '../services/auth';
+import { useAuth } from '../services/auth/auth';
 import { createFileRoute } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/login')({
