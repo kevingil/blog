@@ -1,20 +1,28 @@
-import { useState } from 'react';
-import { parsePathname } from '@tanstack/react-router';
+import { useState, useEffect } from 'react';
+import { parsePathname, redirect } from '@tanstack/react-router';
 import { Users, Settings, Shield, PenLine, ImageUp } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useRouter } from '@tanstack/react-router';
-import { useEffect } from 'react';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { Outlet } from '@tanstack/react-router';
-
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardLayout,
+  beforeLoad: ({ context, location }) => {
+    if (!context.auth || !context.auth.isAuthenticated) {
+      console.log("user dashboard beforeLoad", JSON.stringify(context.auth));
+      throw redirect({
+        to: '/login',
+        search: {
+          redirect: location.href,
+        },
+      })
+    }
+  },
 });
 
-function DashboardLayout() {
+function DashboardContent() {
+
   const pathname = parsePathname().join('/');
-  const router = useRouter();
 
   const navItems = [
     { href: '/dashboard', icon: Users, label: 'Profile' },
@@ -24,7 +32,6 @@ function DashboardLayout() {
     { href: '/dashboard/security', icon: Shield, label: 'Security' },
   ];
 
-  
   // Map current route to the index of that route in our navItems
   const getCurrentIndex = () => {
     return Math.max(
@@ -34,11 +41,11 @@ function DashboardLayout() {
   };
 
   const [value, setValue] = useState<number>(getCurrentIndex());
+  console.log("dashboard value", value);
 
   useEffect(() => {
     setValue(getCurrentIndex());
   }, [pathname]);
-
 
   // Updated NavContent using Shadcn Tabs
   const NavContent = () => (
@@ -66,11 +73,9 @@ function DashboardLayout() {
 
   return (
     <div className="flex flex-col min-h-[80dvh] max-w-7xl mx-auto w-full z-[1]">
-
       <div className="flex flex-1 flex-col overflow-hidden h-full">
         {/* Dashboard Tabs */}
-            <NavContent />
-
+        <NavContent />
         {/* Main content */}
         <main className="flex-1 overflow-y-auto p-0">
           <Outlet />
@@ -78,4 +83,8 @@ function DashboardLayout() {
       </div>
     </div>
   );
+}
+
+function DashboardLayout() {
+  return <DashboardContent />;
 }

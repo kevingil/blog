@@ -1,15 +1,55 @@
-import { atom, useAtom } from 'jotai';
+import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { User } from '../types';
-import React from 'react';
+import React, { createContext, useContext, ReactNode } from 'react';
 import { API_BASE_URL } from '../constants';
 
 // Auth state atoms
-export const userAtom = atom<User | null>(null);
-export const tokenAtom = atom<string | null>(null);
-export const isAuthenticatedAtom = atom((get) => get(userAtom) !== null && get(tokenAtom) !== null);
+const initialToken: string | null = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+const initialUser: User | null = typeof window !== 'undefined' && localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user') as string) : null;
 
+export const tokenAtom = atom<string | null>(initialToken);
+export const userAtom = atom<User | null>(initialUser);
+export const isAuthenticatedAtom = atom((get) => get(tokenAtom) !== null);
 
-export async function login(email: string, password: string): Promise<{ user: User; token: string }> {
+// Auth Context type definition
+export interface AuthContext {
+  user: User | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  login: (email: string, password: string) => Promise<User>;
+  logout: () => Promise<void>;
+  signOut: () => Promise<void>;
+}
+
+// Create the Auth Context
+const AuthContext = createContext<AuthContext | null>(null);
+
+// Auth Provider Props
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+// Auth Provider component
+export function AuthProvider({ children }: AuthProviderProps) {
+  const auth = useAuth();
+  
+  return (
+    <AuthContext.Provider value={auth}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+// Hook to use the auth context
+export function useAuthContext(): AuthContext {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuthContext must be used within an AuthProvider');
+  }
+  return context;
+}
+
+export async function performLogin(email: string, password: string): Promise<{ user: User; token: string }> {
   const response = await fetch(`${API_BASE_URL}/auth/login`, {
     method: 'POST',
     headers: {
@@ -26,7 +66,7 @@ export async function login(email: string, password: string): Promise<{ user: Us
   return data;
 }
 
-export async function logout(): Promise<void> {
+export async function performLogout(): Promise<void> {
   const token = localStorage.getItem('token');
   if (token) {
     try {
@@ -45,7 +85,7 @@ export async function logout(): Promise<void> {
 }
 
 export async function signOut(): Promise<void> {
-  await logout();
+  await performLogout();
 }
 
 export async function getCurrentUser(token: string): Promise<User | null> {
@@ -148,9 +188,11 @@ export async function deleteAccount(formData: FormData): Promise<void> {
 
 // Custom hook for auth state
 export function useAuth() {
-  const [user, setUser] = useAtom(userAtom);
-  const [token, setToken] = useAtom(tokenAtom);
-  const [isAuthenticated] = useAtom(isAuthenticatedAtom);
+  const user = useAtomValue(userAtom);
+  const token = useAtomValue(tokenAtom);
+  const setUser = useSetAtom(userAtom);
+  const setToken = useSetAtom(tokenAtom);
+  const isAuthenticated = useAtomValue(isAuthenticatedAtom);
 
   // Initialize token and user from localStorage on mount
   React.useEffect(() => {
@@ -206,10 +248,8 @@ export function useAuth() {
     user,
     token,
     isAuthenticated,
-    setUser,
-    setToken,
     login: async (email: string, password: string) => {
-      const { user, token } = await login(email, password);
+      const { user, token } = await performLogin(email, password);
       setUser(user);
       setToken(token);
       console.log('login token', token);
@@ -217,8 +257,13 @@ export function useAuth() {
       localStorage.setItem('user', JSON.stringify(user));
       return user;
     },
+    logout: async () => {
+      await performLogout();
+      setUser(null);
+      setToken(null);
+    },
     signOut: async () => {
-      await logout();
+      await performLogout();
       setUser(null);
       setToken(null);
     },

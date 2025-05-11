@@ -59,16 +59,10 @@ const routeList: RouteProps[] = [
 export const Navbar = () => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { user, setUser, token, signOut } = useAuth();
+  const { user, token, signOut } = useAuth();
   console.log("navbar user", user);
   console.log("navbar token", token); 
-  const navigate = useNavigate();
 
-  async function handleSignOut() {
-    setUser(null);
-    await signOut();
-    navigate({ to: '/' });
-  }
 
   return (
     <header className="transition-all duration-300 shadow-nav border backdrop-blur-xl w-full sm:w-[95%] max-w-6xl top-0 sm:top-2 mx-auto
@@ -161,12 +155,12 @@ export const Navbar = () => {
                     <span>Dashboard</span>
                   </Link>
                 </DropdownMenuItem>
-                <form onSubmit={(e) => { e.preventDefault(); handleSignOut(); }} className="w-full">
+                <form onSubmit={(e) => { e.preventDefault(); signOut(); }} className="w-full">
                   <button type="submit" className="flex w-full">
                     <DropdownMenuItem className="w-full flex-1 cursor-pointer"
                     onClick={() => {
                       setIsMenuOpen(false);
-                      handleSignOut();
+                      signOut();
                     }}>
                       <LogOut className="mr-2 h-4 w-4" />
                       <span>Sign out</span>
