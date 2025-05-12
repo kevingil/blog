@@ -5,16 +5,16 @@ import { Card } from "@/components/ui/card";
 import GithubIcon from "@/components/icons/github-icon";
 import LinkedInIcon from "@/components/icons/linkedin-icon";
 import { createFileRoute } from '@tanstack/react-router';
-import { useAuth } from '@/services/auth/auth';
+import { useAtomValue } from 'jotai';
+import { tokenAtom, isAuthenticatedAtom } from '@/services/auth/auth';
 
 export const Route = createFileRoute('/')({
   component: HomePage,
 });
 
 function HomePage() {
-
-  const { token, isAuthenticated } = useAuth();
-
+  const token = useAtomValue(tokenAtom);
+  const isAuthenticated = useAtomValue(isAuthenticatedAtom);
   return (
     <div className="">
         <HeroSection />

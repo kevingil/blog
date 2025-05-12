@@ -3,7 +3,6 @@ package services
 import (
 	"errors"
 	"time"
-	"fmt"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -30,7 +29,8 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	Token string `json:"token"`
+	Token string   `json:"token"`
+	User  UserData `json:"user"`
 }
 
 type RegisterRequest struct {
@@ -55,25 +55,21 @@ type SessionData struct {
 }
 
 type UserData struct {
-	ID int64 `json:"id"`
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+	Role  string `json:"role"`
 }
 
 func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
 	var user models.User
-	if err := s.db.Select("id", "passwordHash").Where("email = ?", req.Email).First(&user).Error; err != nil {
-		fmt.Println("Error finding user:", err)
+	if err := s.db.Select("id", "name", "email", "passwordHash").Where("email = ?", req.Email).First(&user).Error; err != nil {
 		return nil, errors.New("invalid account credentials")
 	}
 
-	fmt.Println("User found:", user)
-	fmt.Println("Password hash:", user.PasswordHash)
-	fmt.Println("Password:", req.Password)
-
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		fmt.Println("Error comparing passwords:", err)
 		return nil, errors.New("invalid user credentials")
 	}
-
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub": user.ID,
@@ -82,11 +78,18 @@ func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
 
 	tokenString, err := token.SignedString(s.secretKey)
 	if err != nil {
-		fmt.Println("Error signing token:", err)
 		return nil, err
 	}
 
-	return &LoginResponse{Token: tokenString}, nil
+	return &LoginResponse{
+		Token: tokenString,
+		User: UserData{
+			ID:    int64(user.ID),
+			Name:  user.Name,
+			Email: user.Email,
+			Role:  user.Role,
+		},
+	}, nil
 }
 
 func (s *AuthService) Register(req RegisterRequest) error {

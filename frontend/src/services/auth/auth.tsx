@@ -1,11 +1,22 @@
-import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { atom, useAtomValue, useSetAtom } from 'jotai';
 import { User } from '../types';
-import React, { createContext, useContext, ReactNode } from 'react';
+import { createContext, useContext, ReactNode, useEffect } from 'react';
 import { API_BASE_URL } from '../constants';
 
-// Auth state atoms
 const initialToken: string | null = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-const initialUser: User | null = typeof window !== 'undefined' && localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user') as string) : null;
+const storedUser = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+let initialUser: User | null = null;
+
+if (storedUser) {
+  try {
+    initialUser = JSON.parse(storedUser);
+  } catch (error) {
+    console.error('Error parsing stored user from localStorage:', error);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('user');
+    }
+  }
+}
 
 export const tokenAtom = atom<string | null>(initialToken);
 export const userAtom = atom<User | null>(initialUser);
@@ -194,55 +205,59 @@ export function useAuth() {
   const setToken = useSetAtom(tokenAtom);
   const isAuthenticated = useAtomValue(isAuthenticatedAtom);
 
-  // Initialize token and user from localStorage on mount
-  React.useEffect(() => {
+  // Initialize auth state from localStorage on mount
+  useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
-    if (storedToken) {
+    
+    if (storedToken && !token) {
       setToken(storedToken);
     }
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-  }, [setToken, setUser]);
-
-  // Set up token refresh interval
-  React.useEffect(() => {
-    if (!token) return;
-
-    const interval = setInterval(async () => {
-      const newToken = await refreshToken(token);
-      if (newToken) {
-        setToken(newToken);
-        localStorage.setItem('token', newToken);
-      } else {
-        // Token refresh failed, logout
-        setToken(null);
-        setUser(null);
-        localStorage.removeItem('token');
+    
+    if (storedUser && !user) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (error) {
+        console.error('Error parsing stored user:', error);
         localStorage.removeItem('user');
       }
-    }, 5 * 60 * 1000); // Refresh every 5 minutes
-
-    return () => clearInterval(interval);
-  }, [token, setToken, setUser]);
-
-  // Save user and token to localStorage whenever they change
-  React.useEffect(() => {
-    if (user) {
-      localStorage.setItem('user', JSON.stringify(user));
-    } else {
-      localStorage.removeItem('user');
     }
-  }, [user]);
+  }, []);
 
-  React.useEffect(() => {
-    if (token) {
+  // Update localStorage when auth state changes
+  useEffect(() => {
+    if (user && token) {
+      localStorage.setItem('user', JSON.stringify(user));
       localStorage.setItem('token', token);
-    } else {
+    } else if (!user && !token) {
+      localStorage.removeItem('user');
       localStorage.removeItem('token');
     }
-  }, [token]);
+  }, [user, token]);
+
+  // // Set up token refresh interval
+  // React.useEffect(() => {
+  //   if (!token) return;
+
+  //   console.log('token', token);
+  //   const interval = setInterval(async () => {
+  //     const newToken = await refreshToken(token);
+  //     if (newToken) {
+  //       if (newToken !== token) {
+  //         setToken(newToken);
+  //         localStorage.setItem('token', newToken);
+  //       }
+  //     } else {
+  //       // Token refresh failed, logout
+  //       setToken(null);
+  //       setUser(null);
+  //       localStorage.removeItem('token');
+  //       localStorage.removeItem('user');
+  //     }
+  //   }, 5 * 60 * 1000); // Refresh every 5 minutes
+
+  //   return () => clearInterval(interval);
+  // }, [token, setToken, setUser]);
 
   return {
     user,

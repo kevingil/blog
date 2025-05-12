@@ -32,7 +32,10 @@ import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from '@tanstack/react-router';
 import { ToggleTheme } from "./home/toogle-theme";
 import { siteMetadata } from '@/services/constants';
-
+import { getAboutPage } from '@/services/user';
+import { useQuery } from '@tanstack/react-query';
+import { useAtomValue } from 'jotai';
+import { tokenAtom, isAuthenticatedAtom } from '@/services/auth/auth';
 
 interface RouteProps {
   href: string;
@@ -60,8 +63,15 @@ export const Navbar = () => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { user, token, signOut } = useAuth();
-  console.log("navbar user", user);
-  console.log("navbar token", token); 
+  const isAuthenticated = useAtomValue(isAuthenticatedAtom);
+
+  const { data: pageData, isLoading: aboutPageLoading } = useQuery({
+    queryKey: ['aboutPage'],
+    queryFn: getAboutPage,
+    staleTime: 5000,
+    enabled: !!isAuthenticated && !!token,
+  });
+  console.log("navbar pageData", pageData, aboutPageLoading);
 
 
   return (
@@ -136,8 +146,9 @@ export const Navbar = () => {
 
             <NavigationMenuItem>
               <div>
+                {isAuthenticated && (
             <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-              <DropdownMenuTrigger >
+              <DropdownMenuTrigger > 
                 <Avatar className="cursor-pointer size-9">
                   <AvatarImage alt={user?.name || ''} />
                   <AvatarFallback>
@@ -169,7 +180,8 @@ export const Navbar = () => {
                 </form>
               </DropdownMenuContent>
             </DropdownMenu>
-            </div>
+            )}
+          </div>
             </NavigationMenuItem>
 
         </NavigationMenuList>

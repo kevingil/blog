@@ -137,7 +137,7 @@ func (s *FiberServer) LoginHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	fmt.Println("Login response:", resp)
+	//fmt.Println("Login response:", resp)
 	return c.JSON(resp)
 }
 

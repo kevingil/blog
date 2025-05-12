@@ -86,9 +86,6 @@ export interface Project {
 
 export interface User {
   id: number;
-  created_at: number;
-  updated_at: number;
-  deleted_at?: number;
   name: string;
   email: string;
   role: string;

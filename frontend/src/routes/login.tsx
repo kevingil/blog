@@ -1,5 +1,3 @@
-'use client';
-
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Button } from '../components/ui/button';
@@ -28,7 +26,7 @@ function Login() {
 
     try {
       await login(email, password);
-      navigate({ to: '/' });
+      navigate({ to: '/dashboard' });
     } catch (err) {
       setError('Invalid email or password');
     } finally {
