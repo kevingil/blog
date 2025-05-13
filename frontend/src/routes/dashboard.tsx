@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { parsePathname, redirect } from '@tanstack/react-router';
-import { Users, Settings, Shield, PenLine, ImageUp } from 'lucide-react';
+import { redirect, useLocation } from '@tanstack/react-router';
+import { Users, Settings, Shield, PenLine, ImageUp, Link } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { Outlet } from '@tanstack/react-router';
@@ -22,7 +22,7 @@ export const Route = createFileRoute('/dashboard')({
 
 function DashboardContent() {
 
-  const pathname = parsePathname().join('/');
+  const pathname = useLocation().pathname;
 
   const navItems = [
     { href: '/dashboard', icon: Users, label: 'Profile' },
@@ -47,18 +47,22 @@ function DashboardContent() {
     setValue(getCurrentIndex());
   }, [pathname]);
 
+  console.log("dashboard pathname", pathname);
+
   // Updated NavContent using Shadcn Tabs
   const NavContent = () => (
     <div style={{ width: '100%', overflowX: 'auto' }}>
       <div className="flex justify-between items-center">
-        <div className="text-2xl font-bold ml-4 text-semibold text-sm ">Dashboard</div>
+        <div className="text-2xl font-medium ml-2 text-xl my-2">Dashboard</div>
       </div>
-      <Tabs defaultValue={navItems[0].href} className="w-full">
+      <Tabs defaultValue={navItems.find(item => pathname === item.href)?.href || navItems[0].href} className="w-full">
         <TabsList>
           {navItems.map((item) => (
-            <TabsTrigger key={item.href} value={item.href}>
-              <item.icon className="mr-1 h-4 w-4" />
-              {item.label}
+            <TabsTrigger asChild key={item.href} value={item.href}>
+              <a href={item.href} className="flex items-center">
+                <item.icon className="mr-1 h-4 w-4" />
+                {item.label}
+              </a>
             </TabsTrigger>
           ))}
         </TabsList>
