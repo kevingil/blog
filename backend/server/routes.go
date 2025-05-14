@@ -35,9 +35,12 @@ func (s *FiberServer) RegisterRoutes() {
 	auth.Post("/login", s.LoginHandler)
 	auth.Post("/register", s.RegisterHandler)
 	auth.Post("/logout", s.LogoutHandler)
-	auth.Put("/account", s.UpdateAccountHandler)
-	auth.Put("/password", s.UpdatePasswordHandler)
-	auth.Delete("/account", s.DeleteAccountHandler)
+
+	// Protected routes using auth middleware
+	protected := auth.Group("", s.AuthMiddleware())
+	protected.Put("/account", s.UpdateAccountHandler)
+	protected.Put("/password", s.UpdatePasswordHandler)
+	protected.Delete("/account", s.DeleteAccountHandler)
 
 	// Blog routes
 	blog := s.App.Group("/blog")
@@ -169,125 +172,59 @@ func (s *FiberServer) LogoutHandler(c *fiber.Ctx) error {
 }
 
 func (s *FiberServer) UpdateAccountHandler(c *fiber.Ctx) error {
-	token := c.Get("Authorization")
-	if token == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "Not authenticated",
-		})
+	userID, ok := c.Locals("userID").(int64)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Not authenticated"})
 	}
-
-	// Remove "Bearer " prefix
-	token = token[7:]
-
-	// Validate token and get user ID
-	validToken, err := s.authService.ValidateToken(token)
-	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "Invalid token",
-		})
-	}
-
-	claims := validToken.Claims.(jwt.MapClaims)
-	userID := uint(claims["sub"].(float64))
 
 	var req services.UpdateAccountRequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request body",
-		})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	if err := s.authService.UpdateAccount(userID, req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+	if err := s.authService.UpdateAccount(uint(userID), req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	return c.JSON(fiber.Map{
-		"message": "Account updated successfully",
-	})
+	return c.JSON(fiber.Map{"message": "Account updated successfully"})
 }
 
 func (s *FiberServer) UpdatePasswordHandler(c *fiber.Ctx) error {
-	token := c.Get("Authorization")
-	if token == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "Not authenticated",
-		})
+	userID, ok := c.Locals("userID").(int64)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Not authenticated"})
 	}
-
-	// Remove "Bearer " prefix
-	token = token[7:]
-
-	// Validate token and get user ID
-	validToken, err := s.authService.ValidateToken(token)
-	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "Invalid token",
-		})
-	}
-
-	claims := validToken.Claims.(jwt.MapClaims)
-	userID := uint(claims["sub"].(float64))
 
 	var req services.UpdatePasswordRequest
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request body",
-		})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	if err := s.authService.UpdatePassword(userID, req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+	if err := s.authService.UpdatePassword(uint(userID), req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	return c.JSON(fiber.Map{
-		"message": "Password updated successfully",
-	})
+	return c.JSON(fiber.Map{"message": "Password updated successfully"})
 }
 
 func (s *FiberServer) DeleteAccountHandler(c *fiber.Ctx) error {
-	token := c.Get("Authorization")
-	if token == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "Not authenticated",
-		})
+	userID, ok := c.Locals("userID").(int64)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Not authenticated"})
 	}
-
-	// Remove "Bearer " prefix
-	token = token[7:]
-
-	// Validate token and get user ID
-	validToken, err := s.authService.ValidateToken(token)
-	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "Invalid token",
-		})
-	}
-
-	claims := validToken.Claims.(jwt.MapClaims)
-	userID := uint(claims["sub"].(float64))
 
 	var req struct {
 		Password string `json:"password"`
 	}
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request body",
-		})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	if err := s.authService.DeleteAccount(userID, req.Password); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+	if err := s.authService.DeleteAccount(uint(userID), req.Password); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	return c.JSON(fiber.Map{
-		"message": "Account deleted successfully",
-	})
+	return c.JSON(fiber.Map{"message": "Account deleted successfully"})
 }
 
 // Blog handlers
@@ -704,4 +641,24 @@ func (s *FiberServer) GetContactPageHandler(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(page)
+}
+
+func (s *FiberServer) AuthMiddleware() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		token := c.Get("Authorization")
+		if token == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Not authenticated"})
+		}
+		if len(token) < 7 || token[:7] != "Bearer " {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token format"})
+		}
+		token = token[7:]
+		validToken, err := s.authService.ValidateToken(token)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+		}
+		claims := validToken.Claims.(jwt.MapClaims)
+		c.Locals("userID", int64(claims["sub"].(float64)))
+		return c.Next()
+	}
 }
