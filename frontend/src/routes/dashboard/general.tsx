@@ -1,5 +1,3 @@
-'use client'
-
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +17,7 @@ export const Route = createFileRoute('/dashboard/general')({
   component: GeneralPage,
 });
 
-async function GeneralPage() {
+function GeneralPage() {
   const { user } = useAuth();
   const [state, setState] = useState<ActionState>({ error: '', success: '' });
   const [isPending, setIsPending] = useState(false);

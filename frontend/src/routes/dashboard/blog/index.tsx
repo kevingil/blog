@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { MoreHorizontal, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { getArticles, deleteArticle } from '@/services/blog';
 import { ArticleRow } from '@/services/types';
 import { generateArticle } from '@/services/llm/articles';
@@ -63,8 +63,6 @@ function ArticlesPage() {
     publishedAt: article.published_at,
     isDraft: article.is_draft
   })) || [];
-  if (isLoading) return <div>Loading articles...</div>;
-  if (error) return <div>Error loading articles</div>;
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiArticleTitle, setAiArticleTitle] = useState<string>('');
@@ -116,9 +114,9 @@ function ArticlesPage() {
             <TableRow key={article.id}>
               <TableCell className="w-full flex flex-col gap-1">
                 <div className="flex items-start gap-2">
-                  <div className="flex items-start flex-wrap">{article.image && <img src={article.image} width={50} height={50} className="rounded-md mt-1" />}</div>
+                  <div className="flex items-start flex-wrap">{article.image && <img src={article.image} className="rounded-md mt-1 w-10 h-10 min-w-10 min-h-10 object-cover" />}</div>
                   <div className="flex flex-col">
-                    <Link to={`/dashboard/blog/edit/$blogSlug`} params={{ blogSlug: article.slug || '' }} className="text-gray-900 text-md hover:underline">{article.title}</Link>
+                    <Link to={`/dashboard/blog/edit/$blogSlug`} params={{ blogSlug: article.slug || '' }} className="text-gray-900 text-md hover:underline dark:text-white">{article.title}</Link>
                     <p className="text-gray-500 text-xs">Published: {article.publishedAt ? new Date(article.publishedAt).toLocaleDateString() : 'Not published'}</p>
                     <div className="flex flex-wrap gap-2">{article.tags.map(tag => <Badge key={tag}
                   className="text-[0.6rem]" variant="outline"
@@ -128,7 +126,7 @@ function ArticlesPage() {
                 </div>
               </TableCell>
               <TableCell className=""><p className="text-gray-500 text-xs">Created: {new Date(article.createdAt).toLocaleDateString()}</p></TableCell>
-              <TableCell><Badge className={`text-[0.6rem] ${article.isDraft ? "bg-indigo-50" : "bg-orange-50"}`} variant="outline">{article.isDraft ? 'Draft' : 'Published'}</Badge></TableCell>
+              <TableCell><Badge className={`text-[0.6rem] ${article.isDraft ? "bg-indigo-50 dark:bg-indigo-900" : "bg-orange-50 dark:bg-orange-900"}`} variant="outline">{article.isDraft ? 'Draft' : 'Published'}</Badge></TableCell>
               <TableCell className="text-right">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -158,6 +156,8 @@ function ArticlesPage() {
     )
   }
 
+  if (isLoading) return <div>Loading articles...</div>;
+  if (error) return <div>Error loading articles</div>;
   return (
     <Drawer>
     <section className="flex-1 p-0 md:p-4">

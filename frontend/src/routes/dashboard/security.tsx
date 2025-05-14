@@ -1,5 +1,3 @@
-'use client'
-
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +16,7 @@ export const Route = createFileRoute('/dashboard/security')({
   component: SecurityPage,
 });
 
-async function SecurityPage() {
+function SecurityPage() {
   const navigate = useNavigate();
   const [passwordState, setPasswordState] = useState<ActionState>({ error: '', success: '' });
   const [deleteState, setDeleteState] = useState<ActionState>({ error: '', success: '' });

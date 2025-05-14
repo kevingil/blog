@@ -2,15 +2,15 @@
 
 import ArticleEditor from '@/components/blog/Editor';
 import { redirect } from '@tanstack/react-router';
-import { getUser } from '@/services/user';
+import { useAuth } from '@/services/auth/auth';
 import { createFileRoute } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/dashboard/blog/edit/$blogSlug')({
   component: EditArticlePage,
 });
 
-async function EditArticlePage() {  
-  const user = await getUser();
+function EditArticlePage() {  
+  const { user } = useAuth();
 
   if (!user) {
     redirect({ to: '/login' });
