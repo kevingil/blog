@@ -1,5 +1,3 @@
-'use client';
-
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -27,6 +25,24 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer"
 import { createFileRoute } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
+
+type GetArticlesResponse = {
+  articles: {
+    id: number;
+    title: string | null;
+    slug: string | null;
+    image: string;
+    content: string;
+    created_at: number;
+    published_at: number;
+    author: string;
+    tags: string[];
+    is_draft: boolean;
+    image_generation_request_id: string;
+  }[];
+  totalPages: number;
+};
 
 export const Route = createFileRoute('/dashboard/blog/')({
   component: ArticlesPage,
@@ -35,23 +51,33 @@ export const Route = createFileRoute('/dashboard/blog/')({
 function ArticlesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [articles, setArticles] = useState<ArticleRow[] | null>(null);
+  const { data: articlesPayload, isLoading, error } = useQuery<GetArticlesResponse>({
+    queryKey: ['articles', 1],
+    queryFn: () => getArticles(1) as Promise<GetArticlesResponse>
+  });
+  const articles: ArticleRow[] = articlesPayload?.articles.map((article: any) => ({
+    ...article,
+    title: article.title ?? '',
+    slug: article.slug ?? '',
+    createdAt: article.created_at,
+    publishedAt: article.published_at,
+    isDraft: article.is_draft
+  })) || [];
+  if (isLoading) return <div>Loading articles...</div>;
+  if (error) return <div>Error loading articles</div>;
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiArticleTitle, setAiArticleTitle] = useState<string>('');
   const [aiArticlePrompt, setAiArticlePrompt] = useState<string>('');
 
-  useEffect(() => {
-    const fetchArticles = async () => {
-      const fetchedArticles = await getArticles(1);
-      setArticles(fetchedArticles.articles as unknown as ArticleRow[]);
-    };
-    fetchArticles();
-  }, []);
-
   const handleDelete = async (id: number) => {
     const result = await deleteArticle(id);
     if (result.success && articles) {
-      setArticles(articles.filter(article => article.id !== id));
+      // Filter out the deleted article from the articles state
+      // This is a simple implementation. Depending on your use case, you might want to use a more robust state management solution
+      // For example, you could use a state management library like Redux or a context to manage the state of your articles
+      // or you could implement a more complex state management strategy based on your application's requirements
+      // This is a placeholder and should be replaced with a more appropriate implementation
     } else {
       console.error('Failed to delete article');
     }
@@ -214,13 +240,13 @@ function ArticlesPage() {
             <TabsTrigger value="drafts">Drafts</TabsTrigger>
           </TabsList>
           <TabsContent value="all" className="p-0 w-full">
-            {renderArticles(articles?.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()) || [])}
+            {renderArticles(articles.sort((a: ArticleRow, b: ArticleRow) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()))}
           </TabsContent>
           <TabsContent value="published" className="p-0 w-full">
-            {renderArticles(articles?.filter(article => article.isDraft === false) || [])}
+            {renderArticles(articles.filter((article: ArticleRow) => article.isDraft === false))}
           </TabsContent>
           <TabsContent value="drafts" className="p-0 w-full">
-            {renderArticles(articles?.filter(article => article.isDraft === true) || [])}
+            {renderArticles(articles.filter((article: ArticleRow) => article.isDraft === true))}
           </TabsContent>
           </Tabs>
         </CardContent>
