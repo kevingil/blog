@@ -4,7 +4,8 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { listFiles, uploadFile, deleteFile, createFolder, FileData, FolderData } from '../../services/storage';
-import { Folder, File, Trash2 } from 'lucide-react';
+import { Folder, File, Trash2, Upload } from 'lucide-react';
+import { PUBLIC_S3_URL_PREFIX } from '../../services/constants';
 
 import {
   Dialog,
@@ -26,12 +27,18 @@ function UploadsPage() {
   const [currentPath, setCurrentPath] = useState('');
   const [fileUpload, setFileUpload] = useState<File | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
-  const urlPrefix = process.env.PUBLIC_S3_URL_PREFIX!;
-
+  const [fetchingError, setFetchingError] = useState<string | null>(null);
+  
   const fetchFiles = async () => {
-    const { files, folders } = await listFiles(currentPath);
-    setFiles(files);
-    setFolders(folders);
+    try {
+      const { files, folders } = await listFiles(currentPath);
+      setFiles(files);
+      setFolders(folders);
+      setFetchingError(null);
+    } catch (error: any) {
+      const errorMessage = error?.message ?? 'An unknown error occurred';
+      setFetchingError(errorMessage);
+    }
   };
 
   useEffect(() => {
@@ -92,14 +99,29 @@ function UploadsPage() {
 
   return (
     <section className="flex-1 p-0 md:p-4">
-      <h1 className="text-lg lg:text-2xl font-medium text-gray-900 dark:text-white mb-6">
-        Uploads
-      </h1>
+      <div className='flex items-center gap-2 justify-between h-full'>
+        <h1 className="text-lg lg:text-2xl font-medium text-gray-900 dark:text-white mb-6">
+          Uploads
+        </h1>
+        {fetchingError && (
+          <Card className='border-gray-200 dark:border-stone-700 p-2 text-gray-800 dark:text-white   mb-4'>
+            <CardContent>
+              <p className='text-gray-800 dark:text-white font-medium text-sm'><span className='font-medium text-red-500'>Error:</span> {fetchingError}</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       <div className="grid grid-cols-2 gap-4">
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Upload File</CardTitle>
+            <CardTitle>
+              <div className='flex items-center gap-2 justify-between'>
+                <p className='flex items-center gap-2'>
+                    Upload File
+                </p>
+              </div>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center space-x-4">
@@ -167,7 +189,7 @@ function UploadsPage() {
                       <DialogTrigger className='flex items-center text-left'>
                         {file.isImage ?
                           <img
-                            src={`${urlPrefix}/${file.key}`}
+                            src={`${PUBLIC_S3_URL_PREFIX}/${file.key}`}
                             className="w-6 h-6 mr-2"
                           />
                           :
