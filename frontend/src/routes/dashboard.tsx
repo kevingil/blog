@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { redirect, useLocation } from '@tanstack/react-router';
-import { Users, Settings, Shield, PenLine, ImageUp, Link } from 'lucide-react';
+import { Users, Settings, Shield, PenLine, ImageUp } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createFileRoute, useRouter } from '@tanstack/react-router';
-import { Outlet } from '@tanstack/react-router';
+import { Outlet, Link } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardLayout,
@@ -49,7 +49,6 @@ function DashboardContent() {
 
   console.log("dashboard pathname", pathname);
 
-  // Updated NavContent using Shadcn Tabs
   const NavContent = () => (
     <div style={{ width: '100%', overflowX: 'auto' }}>
       <div className="flex justify-between items-center">
@@ -59,10 +58,13 @@ function DashboardContent() {
         <TabsList>
           {navItems.map((item) => (
             <TabsTrigger asChild key={item.href} value={item.href}>
-              <a href={item.href} className="flex items-center">
+              <Link
+                to={item.href}
+                className="flex items-center"
+              >
                 <item.icon className="mr-1 h-4 w-4" />
                 {item.label}
-              </a>
+              </Link>
             </TabsTrigger>
           ))}
         </TabsList>
