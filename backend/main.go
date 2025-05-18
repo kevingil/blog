@@ -4,12 +4,9 @@ import (
 	"blog-agent-go/backend/database"
 	"blog-agent-go/backend/server"
 	"blog-agent-go/backend/services"
-	"context"
 	"log"
 	"os"
 
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	_ "github.com/joho/godotenv/autoload"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -34,12 +31,7 @@ func main() {
 	}
 
 	// Initialize AWS S3 client
-	cfg, err := config.LoadDefaultConfig(context.Background())
-	if err != nil {
-		log.Fatalf("Failed to load AWS config: %v", err)
-	}
-
-	s3Client := s3.NewFromConfig(cfg)
+	s3Client := services.NewR2S3Client()
 	bucket := os.Getenv("S3_BUCKET")
 	if bucket == "" {
 		log.Fatal("S3_BUCKET environment variable is required")

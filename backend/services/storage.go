@@ -2,13 +2,17 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"bytes"
+	"os"
 	"strconv"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -203,4 +207,24 @@ func isImageFile(key string) bool {
 
 func folderIsHidden(folderName string) bool {
 	return len(folderName) > 0 && folderName[0] == '.'
+}
+
+func NewR2S3Client() *s3.Client {
+	endpoint := os.Getenv("S3_ENDPOINT")
+	accessKey := os.Getenv("S3_ACCESS_KEY_ID")
+	secretKey := os.Getenv("S3_SECRET_ACCESS_KEY")
+
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion("auto"),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
+	)
+	if err != nil {
+		fmt.Println("Error loading config:", err)
+		panic(err)
+	}
+
+	return s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(endpoint)
+		o.UsePathStyle = true // Required for R2
+	})
 }

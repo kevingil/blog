@@ -178,7 +178,7 @@ function UploadsPage() {
                     </Button>
                   </TableCell>
                   <TableCell>-</TableCell>
-                  <TableCell>{folder.lastModified.toLocaleString()}</TableCell>
+                  <TableCell>{folder?.lastModified?.toLocaleString()}</TableCell>
                   <TableCell>-</TableCell>
                 </TableRow>
               ))}
@@ -290,8 +290,8 @@ function UploadsPage() {
                     </Dialog>
 
                   </TableCell>
-                  <TableCell>{file.size}</TableCell>
-                  <TableCell>{file.lastModified.toLocaleString()}</TableCell>
+                  <TableCell>{file?.size}</TableCell>
+                  <TableCell>{file?.lastModified?.toLocaleString()}</TableCell>
                   <TableCell>
                     <Button onClick={() => handleDeleteFile(file.key)}>
                       <Trash2 className="h-4 w-4" />
