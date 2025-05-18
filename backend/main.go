@@ -65,7 +65,7 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("Server starting on port %s", port)
+	log.Printf("listening on %s", port)
 	if err := srv.App.Listen(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
