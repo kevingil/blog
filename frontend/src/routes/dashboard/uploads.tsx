@@ -28,10 +28,6 @@ function UploadsPage() {
   const [newFolderName, setNewFolderName] = useState('');
   const urlPrefix = process.env.PUBLIC_S3_URL_PREFIX!;
 
-  // if (!user) {
-  //   redirect('/login');
-  // }
-
   const fetchFiles = async () => {
     const { files, folders } = await listFiles(currentPath);
     setFiles(files);

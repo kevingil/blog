@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -17,7 +17,7 @@ function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, isAuthenticated } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,13 +26,18 @@ function Login() {
 
     try {
       await login(email, password);
-      navigate({ to: '/dashboard' });
     } catch (err) {
       setError('Invalid email or password');
     } finally {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate({ to: '/dashboard' });
+    }
+  }, [isAuthenticated, navigate]);
 
   return (
     <div className="flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">

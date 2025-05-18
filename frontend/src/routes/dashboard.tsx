@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { redirect, useLocation } from '@tanstack/react-router';
 import { Users, Settings, Shield, PenLine, ImageUp } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { createFileRoute, useRouter } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import { Outlet, Link } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/dashboard')({
@@ -15,7 +15,7 @@ export const Route = createFileRoute('/dashboard')({
         search: {
           redirect: location.href,
         },
-      })
+      });
     }
   },
 });
