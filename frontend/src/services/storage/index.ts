@@ -2,11 +2,11 @@ import { API_BASE_URL } from "../constants";
 
 export type FileData = {
     key: string;
-    lastModified: Date;
+    last_modified: Date;
     size: string;
-    sizeRaw: number;
+    size_raw: number;
     url: string;
-    isImage: boolean;
+    is_image: boolean;
 };
 
 export type FolderData = {

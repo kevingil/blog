@@ -89,7 +89,7 @@ function UploadsPage() {
       return '';
     } else {
 
-      const markdownLink = file?.isImage
+      const markdownLink = file?.is_image
         ? `![${file.key}](${file.url})`
         : `[${file.key}](${file.url})`;
       return markdownLink
@@ -187,7 +187,7 @@ function UploadsPage() {
                   <TableCell>
                     <Dialog>
                       <DialogTrigger className='flex items-center text-left'>
-                        {file.isImage ?
+                          {file.is_image ?
                           <img
                             src={`${PUBLIC_S3_URL_PREFIX}/${file.key}`}
                             className="w-6 h-6 mr-2"
@@ -209,10 +209,10 @@ function UploadsPage() {
                         </DialogHeader>
 
                         <div className="space-y-4">
-                          {file?.isImage ? (
+                          {file?.is_image ? (
                             <div className="flex justify-center">
                               <img
-                                src={file.url}
+                                src={`${PUBLIC_S3_URL_PREFIX}/${file.key}`}
                                 alt={file.key}
                                 className="max-h-[500px] p-4"
                               />
@@ -266,7 +266,7 @@ function UploadsPage() {
                             <div>
                               <p className="text-sm font-medium">Last modified</p>
                               <p className="mt-1">
-                                {file?.lastModified && new Date(file.lastModified).toLocaleString()}
+                                {file?.last_modified && new Date(file.last_modified).toLocaleString()}
                               </p>
                             </div>
                           </div>
@@ -291,7 +291,7 @@ function UploadsPage() {
 
                   </TableCell>
                   <TableCell>{file?.size}</TableCell>
-                  <TableCell>{file?.lastModified?.toLocaleString()}</TableCell>
+                  <TableCell>{file?.last_modified?.toLocaleString()}</TableCell>
                   <TableCell>
                     <Button onClick={() => handleDeleteFile(file.key)}>
                       <Trash2 className="h-4 w-4" />
