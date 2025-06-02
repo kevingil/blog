@@ -1,7 +1,7 @@
 import { atom, useAtomValue, useSetAtom } from 'jotai';
 import { User } from '../types';
 import { createContext, useContext, ReactNode, useEffect } from 'react';
-import { API_BASE_URL } from '../constants';
+import { VITE_API_BASE_URL } from '../constants';
 
 const initialToken: string | null = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 const storedUser = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
@@ -61,7 +61,7 @@ export function useAuthContext(): AuthContext {
 }
 
 export async function performLogin(email: string, password: string): Promise<{ user: User; token: string }> {
-  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+  const response = await fetch(`${VITE_API_BASE_URL}/auth/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -81,7 +81,7 @@ export async function performLogout(): Promise<void> {
   const token = localStorage.getItem('token');
   if (token) {
     try {
-      await fetch(`${API_BASE_URL}/auth/logout`, {
+      await fetch(`${VITE_API_BASE_URL}/auth/logout`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -101,7 +101,7 @@ export async function signOut(): Promise<void> {
 
 export async function getCurrentUser(token: string): Promise<User | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/me`, {
+    const response = await fetch(`${VITE_API_BASE_URL}/auth/me`, {
       headers: {
         'Authorization': `Bearer ${token}`,
       },
@@ -120,7 +120,7 @@ export async function getCurrentUser(token: string): Promise<User | null> {
 
 export async function refreshToken(token: string): Promise<string | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    const response = await fetch(`${VITE_API_BASE_URL}/auth/refresh`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -144,7 +144,7 @@ export async function updateAccount(formData: FormData): Promise<void> {
     throw new Error('Not authenticated');
   }
 
-  const response = await fetch(`${API_BASE_URL}/auth/account`, {
+  const response = await fetch(`${VITE_API_BASE_URL}/auth/account`, {
     method: 'PUT',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -163,7 +163,7 @@ export async function updatePassword(formData: FormData): Promise<void> {
     throw new Error('Not authenticated');
   }
 
-  const response = await fetch(`${API_BASE_URL}/auth/password`, {
+  const response = await fetch(`${VITE_API_BASE_URL}/auth/password`, {
     method: 'PUT',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -183,7 +183,7 @@ export async function deleteAccount(formData: FormData): Promise<void> {
     throw new Error('Not authenticated');
   }
 
-  const response = await fetch(`${API_BASE_URL}/auth/account`, {
+  const response = await fetch(`${VITE_API_BASE_URL}/auth/account`, {
     method: 'DELETE',
     headers: {
       'Authorization': `Bearer ${token}`,

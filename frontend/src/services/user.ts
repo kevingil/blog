@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '@/services/constants';
+import { VITE_API_BASE_URL } from '@/services/constants';
 
 export interface User {
   id: number;
@@ -37,7 +37,7 @@ export async function getUser(): Promise<User | null> {
 } 
 
 export async function updateContactPage(data: ContactPageData): Promise<ContactPageData | null> {
-  const response = await fetch(`${API_BASE_URL}/pages/contact`, {
+  const response = await fetch(`${VITE_API_BASE_URL}/pages/contact`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -48,7 +48,7 @@ export async function updateContactPage(data: ContactPageData): Promise<ContactP
 }
 
 export async function updateAboutPage(data: AboutPageData): Promise<AboutPageData | null> {
-  const response = await fetch(`${API_BASE_URL}/pages/about`, {
+  const response = await fetch(`${VITE_API_BASE_URL}/pages/about`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -64,7 +64,7 @@ export async function updateAboutPage(data: AboutPageData): Promise<AboutPageDat
 
 export async function getContactPage(): Promise<ContactPageData | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/pages/contact`);
+    const response = await fetch(`${VITE_API_BASE_URL}/pages/contact`);
     if (!response.ok) {
       if (response.status === 404) {
         return null;
@@ -80,7 +80,7 @@ export async function getContactPage(): Promise<ContactPageData | null> {
 
 export async function getAboutPage(): Promise<AboutPageData | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/pages/about`);
+    const response = await fetch(`${VITE_API_BASE_URL}/pages/about`);
     if (!response.ok) {
       if (response.status === 404) {
         return null;

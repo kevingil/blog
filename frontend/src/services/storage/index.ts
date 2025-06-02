@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "../constants";
+import { VITE_API_BASE_URL } from "../constants";
 
 export type FileData = {
     key: string;
@@ -25,7 +25,7 @@ declare const process: {
 
 
 export async function listFiles(prefix: string | null): Promise<{ files: FileData[], folders: FolderData[] }> {
-    const url = `${API_BASE_URL}/storage/files${prefix ? `?prefix=${encodeURIComponent(prefix)}` : ''}`;
+    const url = `${VITE_API_BASE_URL}/storage/files${prefix ? `?prefix=${encodeURIComponent(prefix)}` : ''}`;
     const response = await fetch(url);
 
     if (!response.ok) {
@@ -42,7 +42,7 @@ export async function uploadFile(key: string, file: File) {
     formData.append('file', file);
     formData.append('key', key);
 
-    const response = await fetch(`${API_BASE_URL}/storage/upload`, {
+    const response = await fetch(`${VITE_API_BASE_URL}/storage/upload`, {
         method: 'POST',
         body: formData,
     });
@@ -54,7 +54,7 @@ export async function uploadFile(key: string, file: File) {
 }
 
 export async function deleteFile(key: string) {
-    const response = await fetch(`${API_BASE_URL}/storage/${encodeURIComponent(key)}`, {
+    const response = await fetch(`${VITE_API_BASE_URL}/storage/${encodeURIComponent(key)}`, {
         method: 'DELETE',
     });
 
@@ -64,7 +64,7 @@ export async function deleteFile(key: string) {
 }
 
 export async function createFolder(folderPath: string) {
-    const response = await fetch(`${API_BASE_URL}/storage/folders`, {
+    const response = await fetch(`${VITE_API_BASE_URL}/storage/folders`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -78,7 +78,7 @@ export async function createFolder(folderPath: string) {
 }
 
 export async function updateFolder(oldPath: string, newPath: string) {
-    const response = await fetch(`${API_BASE_URL}/storage/folders`, {
+    const response = await fetch(`${VITE_API_BASE_URL}/storage/folders`, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',

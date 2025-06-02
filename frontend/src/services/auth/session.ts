@@ -1,5 +1,5 @@
 import { User } from '../types';
-import { API_BASE_URL } from '../constants';
+import { VITE_API_BASE_URL } from '../constants';
 
 export interface SessionData {
   user: User;
@@ -8,7 +8,7 @@ export interface SessionData {
 
 export async function getSession(): Promise<SessionData | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/session`, {
+    const response = await fetch(`${VITE_API_BASE_URL}/auth/session`, {
       credentials: 'include',
     });
 
@@ -24,7 +24,7 @@ export async function getSession(): Promise<SessionData | null> {
 
 export async function refreshSession(): Promise<SessionData | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    const response = await fetch(`${VITE_API_BASE_URL}/auth/refresh`, {
       method: 'POST',
       credentials: 'include',
     });

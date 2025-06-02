@@ -1,5 +1,5 @@
 import { ArticleListItem, ArticleData, RecommendedArticle, ArticleRow } from '@/services/types';
-import { API_BASE_URL } from '@/services/constants';
+import { VITE_API_BASE_URL } from '@/services/constants';
 
 // Article listing and search
 export async function getArticles(page: number, tag: string | null = null): Promise<{ articles: ArticleListItem[], totalPages: number }> {
@@ -8,7 +8,7 @@ export async function getArticles(page: number, tag: string | null = null): Prom
     ...(tag && tag !== 'All' ? { tag } : {})
   });
 
-  const response = await fetch(`${API_BASE_URL}/blog/articles?${params}`);
+  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles?${params}`);
   if (!response.ok) {
     throw new Error('Failed to fetch articles');
   }
@@ -22,7 +22,7 @@ export async function searchArticles(query: string, page: number = 1, tag: strin
     ...(tag && tag !== 'All' ? { tag } : {})
   });
 
-  const response = await fetch(`${API_BASE_URL}/blog/articles/search?${params}`);
+  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/search?${params}`);
   if (!response.ok) {
     throw new Error('Failed to search articles');
   }
@@ -30,7 +30,7 @@ export async function searchArticles(query: string, page: number = 1, tag: strin
 }
 
 export async function getPopularTags(): Promise<{ tags: string[] }> {
-  const response = await fetch(`${API_BASE_URL}/blog/tags/popular`);
+  const response = await fetch(`${VITE_API_BASE_URL}/blog/tags/popular`);
   if (!response.ok) {
     throw new Error('Failed to fetch popular tags');
   }
@@ -39,7 +39,7 @@ export async function getPopularTags(): Promise<{ tags: string[] }> {
 
 // Article CRUD operations
 export async function getArticle(slug: string): Promise<ArticleListItem | null> {
-  const response = await fetch(`${API_BASE_URL}/blog/articles/${slug}`);
+  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${slug}`);
   if (response.status === 404) {
     return null;
   }
@@ -50,7 +50,7 @@ export async function getArticle(slug: string): Promise<ArticleListItem | null> 
 }
 
 export async function getArticleById(blogId: string): Promise<ArticleListItem | null> {
-  const response = await fetch(`${API_BASE_URL}/blog/articles/${blogId}`);
+  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${blogId}`);
   if (response.status === 404) {
     return null;
   }
@@ -68,7 +68,7 @@ export async function createArticle(article: {
   isDraft: boolean;
   authorId: number;
 }): Promise<ArticleListItem> {
-  const response = await fetch(`${API_BASE_URL}/blog/articles`, {
+  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -89,7 +89,7 @@ export async function updateArticle(slug: string, article: {
   isDraft: boolean;
   publishedAt: number;
 }): Promise<ArticleListItem> {
-  const response = await fetch(`${API_BASE_URL}/blog/articles/${slug}`, {
+  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${slug}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -104,7 +104,7 @@ export async function updateArticle(slug: string, article: {
 
 // Article image operations
 export async function generateArticleImage(prompt: string, articleId: number): Promise<{ success: boolean; generationRequestId: string }> {
-  const response = await fetch(`${API_BASE_URL}/blog/articles/${articleId}/image`, {
+  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${articleId}/image`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -118,7 +118,7 @@ export async function generateArticleImage(prompt: string, articleId: number): P
 }
 
 export async function getImageGeneration(requestId: string): Promise<{ outputUrl: string | null }> {
-  const response = await fetch(`${API_BASE_URL}/blog/images/${requestId}`);
+  const response = await fetch(`${VITE_API_BASE_URL}/blog/images/${requestId}`);
   if (!response.ok) {
     throw new Error('Failed to get image generation status');
   }
@@ -126,7 +126,7 @@ export async function getImageGeneration(requestId: string): Promise<{ outputUrl
 }
 
 export async function getImageGenerationStatus(requestId: string): Promise<{ outputUrl: string | null }> {
-  const response = await fetch(`${API_BASE_URL}/blog/images/${requestId}/status`);
+  const response = await fetch(`${VITE_API_BASE_URL}/blog/images/${requestId}/status`);
   if (!response.ok) {
     throw new Error('Failed to get image generation status');
   }
@@ -135,7 +135,7 @@ export async function getImageGenerationStatus(requestId: string): Promise<{ out
 
 // Article context operations
 export async function updateArticleWithContext(articleId: number): Promise<{ content: string; success: boolean }> {
-  const response = await fetch(`${API_BASE_URL}/blog/articles/${articleId}/context`, {
+  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${articleId}/context`, {
     method: 'PUT',
   });
   if (!response.ok) {
@@ -145,7 +145,7 @@ export async function updateArticleWithContext(articleId: number): Promise<{ con
 }
 
 export async function getArticleMetadata(slug: string): Promise<{ title: string; description: string }> {
-  const response = await fetch(`${API_BASE_URL}/blog/articles/${slug}/metadata`);
+  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${slug}/metadata`);
   if (!response.ok) {
     throw new Error('Failed to fetch article metadata');
   }
@@ -153,7 +153,7 @@ export async function getArticleMetadata(slug: string): Promise<{ title: string;
 }
 
 export async function getArticleData(slug: string): Promise<ArticleData | null> {
-  const response = await fetch(`${API_BASE_URL}/blog/articles/${slug}`);
+  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${slug}`);
   if (response.status === 404) {
     return null;
   }
@@ -164,7 +164,7 @@ export async function getArticleData(slug: string): Promise<ArticleData | null> 
 }
 
 export async function getRecommendedArticles(currentArticleId: number): Promise<RecommendedArticle[] | null> {
-  const response = await fetch(`${API_BASE_URL}/blog/articles/${currentArticleId}/recommended`);
+  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${currentArticleId}/recommended`);
   if (!response.ok) {
     throw new Error('Failed to fetch recommended articles');
   }
@@ -172,7 +172,7 @@ export async function getRecommendedArticles(currentArticleId: number): Promise<
 }
 
 export async function getDashboardArticles(): Promise<ArticleRow[]> {
-  const response = await fetch(`${API_BASE_URL}/blog/articles/dashboard`);
+  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/dashboard`);
   if (!response.ok) {
     throw new Error('Failed to fetch dashboard articles');
   }
@@ -180,7 +180,7 @@ export async function getDashboardArticles(): Promise<ArticleRow[]> {
 }
 
 export async function deleteArticle(id: number): Promise<{ success: boolean }> {
-  const response = await fetch(`${API_BASE_URL}/blog/articles/${id}`, {
+  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${id}`, {
     method: 'DELETE',
   });
   if (!response.ok) {

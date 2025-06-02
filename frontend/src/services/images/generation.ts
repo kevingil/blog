@@ -1,7 +1,7 @@
 'use server'
 
 import { ImageGeneration, ImageGenerationStatus } from '../types';
-import { API_BASE_URL } from '../constants';
+import { VITE_API_BASE_URL } from '../constants';
 
 export async function generateArticleImage(
   prompt: string | undefined, 
@@ -16,7 +16,7 @@ export async function generateArticleImage(
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/images/generate`, {
+    const response = await fetch(`${VITE_API_BASE_URL}/api/images/generate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -45,7 +45,7 @@ export async function generateArticleImage(
 
 export async function getImageGeneration(requestId: string): Promise<ImageGeneration | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/images/${requestId}`, {
+    const response = await fetch(`${VITE_API_BASE_URL}/api/images/${requestId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -68,7 +68,7 @@ export async function getImageGeneration(requestId: string): Promise<ImageGenera
 
 export async function getImageGenerationStatus(requestId: string): Promise<ImageGenerationStatus> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/images/${requestId}/status`, {
+    const response = await fetch(`${VITE_API_BASE_URL}/api/images/${requestId}/status`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
