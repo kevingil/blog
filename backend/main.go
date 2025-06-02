@@ -8,8 +8,6 @@ import (
 	"os"
 
 	_ "github.com/joho/godotenv/autoload"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 func main() {
@@ -19,16 +17,8 @@ func main() {
 		log.Fatal("AUTH_SECRET environment variable is required")
 	}
 
-	// Initialize database
+	// Initialize database service
 	dbService := database.New()
-
-	// Initialize GORM with the database connection
-	db, err := gorm.Open(sqlite.New(sqlite.Config{
-		Conn: dbService.GetDB(),
-	}), &gorm.Config{})
-	if err != nil {
-		log.Fatalf("Failed to initialize GORM: %v", err)
-	}
 
 	// Initialize AWS S3 client
 	s3Client := services.NewR2S3Client()
@@ -43,16 +33,16 @@ func main() {
 	}
 
 	// Initialize services
-	authService := services.NewAuthService(db, secretKey)
+	authService := services.NewAuthService(dbService, secretKey)
 	writerAgent := services.NewWriterAgent(os.Getenv("ANTHROPIC_API_KEY"))
-	blogService := services.NewArticleService(db, writerAgent)
-	imageService := services.NewImageGenerationService(db)
+	blogService := services.NewArticleService(dbService, writerAgent)
+	imageService := services.NewImageGenerationService(dbService)
 	storageService := services.NewStorageService(s3Client, bucket, urlPrefix)
-	pagesService := services.NewPagesService(db)
+	pagesService := services.NewPagesService(dbService)
 
 	// Initialize and start server
 	srv := server.NewFiberServer(
-		db,
+		dbService,
 		authService,
 		blogService,
 		imageService,

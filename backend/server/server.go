@@ -1,16 +1,15 @@
 package server
 
 import (
+	"blog-agent-go/backend/database"
 	"blog-agent-go/backend/services"
-
-	"gorm.io/gorm"
 
 	"github.com/gofiber/fiber/v2"
 )
 
 type FiberServer struct {
 	App            *fiber.App
-	db             *gorm.DB
+	db             database.Service
 	authService    *services.AuthService
 	blogService    *services.ArticleService
 	imageService   *services.ImageGenerationService
@@ -19,7 +18,7 @@ type FiberServer struct {
 }
 
 func NewFiberServer(
-	db *gorm.DB,
+	db database.Service,
 	authService *services.AuthService,
 	blogService *services.ArticleService,
 	imageService *services.ImageGenerationService,

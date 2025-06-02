@@ -1,22 +1,23 @@
 package services
 
 import (
+	"database/sql"
 	"errors"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 
+	"blog-agent-go/backend/database"
 	"blog-agent-go/backend/models"
 )
 
 type AuthService struct {
-	db        *gorm.DB
+	db        database.Service
 	secretKey []byte
 }
 
-func NewAuthService(db *gorm.DB, secretKey string) *AuthService {
+func NewAuthService(db database.Service, secretKey string) *AuthService {
 	return &AuthService{
 		db:        db,
 		secretKey: []byte(secretKey),
@@ -62,8 +63,11 @@ type UserData struct {
 }
 
 func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
-	var user models.User
-	if err := s.db.Select("id", "name", "email", "passwordHash").Where("email = ?", req.Email).First(&user).Error; err != nil {
+	user, err := s.db.GetUserByEmail(req.Email)
+	if err != nil {
+		return nil, errors.New("invalid account credentials")
+	}
+	if user == nil {
 		return nil, errors.New("invalid account credentials")
 	}
 
@@ -105,7 +109,7 @@ func (s *AuthService) Register(req RegisterRequest) error {
 		Role:         "user",
 	}
 
-	return s.db.Create(&user).Error
+	return s.db.CreateUser(&user)
 }
 
 func (s *AuthService) ValidateToken(tokenString string) (*jwt.Token, error) {
@@ -128,29 +132,50 @@ func (s *AuthService) ValidateToken(tokenString string) (*jwt.Token, error) {
 }
 
 func (s *AuthService) UpdateAccount(userID uint, req UpdateAccountRequest) error {
+	db := s.db.GetDB()
+
+	// Check if user exists
 	var user models.User
-	if err := s.db.First(&user, userID).Error; err != nil {
-		return errors.New("user not found")
+	err := db.QueryRow("SELECT id, name, email, password_hash, role FROM users WHERE id = ?", userID).Scan(
+		&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.Role,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return errors.New("user not found")
+		}
+		return err
 	}
 
 	// Check if email is already taken by another user
 	if req.Email != user.Email {
-		var existingUser models.User
-		if err := s.db.Where("email = ?", req.Email).First(&existingUser).Error; err == nil {
+		var count int
+		err := db.QueryRow("SELECT COUNT(*) FROM users WHERE email = ? AND id != ?", req.Email, userID).Scan(&count)
+		if err != nil {
+			return err
+		}
+		if count > 0 {
 			return errors.New("email already taken")
 		}
 	}
 
-	user.Name = req.Name
-	user.Email = req.Email
-
-	return s.db.Save(&user).Error
+	// Update user
+	_, err = db.Exec("UPDATE users SET name = ?, email = ? WHERE id = ?", req.Name, req.Email, userID)
+	return err
 }
 
 func (s *AuthService) UpdatePassword(userID uint, req UpdatePasswordRequest) error {
+	db := s.db.GetDB()
+
+	// Get user
 	var user models.User
-	if err := s.db.First(&user, userID).Error; err != nil {
-		return errors.New("user not found")
+	err := db.QueryRow("SELECT id, name, email, password_hash, role FROM users WHERE id = ?", userID).Scan(
+		&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.Role,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return errors.New("user not found")
+		}
+		return err
 	}
 
 	// Verify current password
@@ -164,14 +189,24 @@ func (s *AuthService) UpdatePassword(userID uint, req UpdatePasswordRequest) err
 		return err
 	}
 
-	user.PasswordHash = string(hashedPassword)
-	return s.db.Save(&user).Error
+	// Update password
+	_, err = db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", string(hashedPassword), userID)
+	return err
 }
 
 func (s *AuthService) DeleteAccount(userID uint, password string) error {
+	db := s.db.GetDB()
+
+	// Get user to verify password
 	var user models.User
-	if err := s.db.First(&user, userID).Error; err != nil {
-		return errors.New("user not found")
+	err := db.QueryRow("SELECT id, name, email, password_hash, role FROM users WHERE id = ?", userID).Scan(
+		&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.Role,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return errors.New("user not found")
+		}
+		return err
 	}
 
 	// Verify password
@@ -179,7 +214,9 @@ func (s *AuthService) DeleteAccount(userID uint, password string) error {
 		return errors.New("password is incorrect")
 	}
 
-	return s.db.Delete(&user).Error
+	// Delete user
+	_, err = db.Exec("DELETE FROM users WHERE id = ?", userID)
+	return err
 }
 
 func (s *AuthService) HashPassword(password string) (string, error) {

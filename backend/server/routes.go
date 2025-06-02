@@ -3,6 +3,7 @@ package server
 import (
 	"blog-agent-go/backend/services"
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"time"
@@ -11,8 +12,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/golang-jwt/jwt/v5"
-
-	"gorm.io/gorm"
 )
 
 func (s *FiberServer) RegisterRoutes() {
@@ -548,7 +547,7 @@ func (s *FiberServer) GetArticleDataHandler(c *fiber.Ctx) error {
 
 	data, err := s.blogService.GetArticleData(slug)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if err == sql.ErrNoRows {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error": "Article not found",
 			})

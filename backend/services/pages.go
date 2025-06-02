@@ -1,39 +1,48 @@
 package services
 
 import (
-	"blog-agent-go/backend/models"
+	"database/sql"
 
-	"gorm.io/gorm"
+	"blog-agent-go/backend/database"
+	"blog-agent-go/backend/models"
 )
 
 type PagesService struct {
-	db *gorm.DB
+	db database.Service
 }
 
-func NewPagesService(db *gorm.DB) *PagesService {
+func NewPagesService(db database.Service) *PagesService {
 	return &PagesService{db: db}
 }
 
 func (s *PagesService) GetAboutPage() (*models.AboutPage, error) {
+	db := s.db.GetDB()
 	var page models.AboutPage
-	result := s.db.First(&page)
-	if result.Error != nil {
-		if result.Error == gorm.ErrRecordNotFound {
+
+	err := db.QueryRow("SELECT title, content, profile_image, meta_description, last_updated FROM about_page LIMIT 1").Scan(
+		&page.Title, &page.Content, &page.ProfileImage, &page.MetaDescription, &page.LastUpdated,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, result.Error
+		return nil, err
 	}
 	return &page, nil
 }
 
 func (s *PagesService) GetContactPage() (*models.ContactPage, error) {
+	db := s.db.GetDB()
 	var page models.ContactPage
-	result := s.db.First(&page)
-	if result.Error != nil {
-		if result.Error == gorm.ErrRecordNotFound {
+
+	err := db.QueryRow("SELECT title, content, email_address, social_links, meta_description, last_updated FROM contact_page LIMIT 1").Scan(
+		&page.Title, &page.Content, &page.EmailAddress, &page.SocialLinks, &page.MetaDescription, &page.LastUpdated,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, result.Error
+		return nil, err
 	}
 	return &page, nil
 }
