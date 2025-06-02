@@ -56,7 +56,7 @@ func main() {
 	}
 
 	log.Printf("listening on %s", port)
-	if err := srv.App.Listen(":" + port); err != nil {
+	if err := srv.App.Listen("0.0.0.0:" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
