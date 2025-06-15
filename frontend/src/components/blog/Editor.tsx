@@ -157,7 +157,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     if (article && !isNew) {
       console.log("Populating form with article data:", article);
       // Extract tag names from the server response format
-      const tagNames = article.tags ? article.tags.map((tag: any) => tag.tag_name || tag) : [];
+      const tagNames = article.tags ? article.tags.map((tag: any) => tag?.tag_name?.toUpperCase() || tag) : [];
       reset({
         title: article.article.title || '',
         content: article.article.content || '',
@@ -208,8 +208,21 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           content: data.content,
           image: data.image,
           tags: data.tags,
-          isDraft: data.isDraft,
-          publishedAt: article?.article.published_at || new Date().getTime(),
+          is_draft: data.isDraft,
+          published_at: (() => {
+            // If it's a draft, don't set a published date
+            if (data.isDraft) {
+              return null;
+            }
+            
+            // If article has a valid published_at date (not 0, null, undefined), use it
+            if (article?.article.published_at && article.article.published_at > 0) {
+              return article.article.published_at;
+            }
+            
+            // Otherwise, use current time for newly published articles
+            return new Date().getTime();
+          })(),
         });
         if (returnToDashboard) {
           navigate({ to: '/dashboard/blog' });
@@ -468,7 +481,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             <div>
               <ChipInput
                 value={watchedValues.tags}
-                onChange={(tags) => setValue('tags', tags)}
+                onChange={(tags) => setValue('tags', tags.map((tag: string) => tag.toUpperCase()))}
                 placeholder="Type and press Enter to add tags..."
               />
               {errors.tags && <p className="text-red-500">{errors.tags.message}</p>}

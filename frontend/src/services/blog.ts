@@ -86,8 +86,8 @@ export async function updateArticle(slug: string, article: {
   content: string;
   image?: string;
   tags: string[];
-  isDraft: boolean;
-  publishedAt: number;
+  is_draft: boolean;
+  published_at: number | null;
 }): Promise<ArticleListItem> {
   const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${slug}/update`, {
     method: 'POST',

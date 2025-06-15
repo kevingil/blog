@@ -180,7 +180,7 @@ func (s *ArticleService) UpdateArticle(ctx context.Context, articleID int64, req
 		}
 
 		// Create article-tag relationship (avoid duplicates)
-		_, err = tx.Exec(`INSERT IGNORE INTO article_tags (article_id, tag_id) VALUES (?, ?)`,
+		_, err = tx.Exec(`INSERT OR IGNORE INTO article_tags (article_id, tag_id) VALUES (?, ?)`,
 			articleID, tagID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create article-tag relationship: %w", err)
