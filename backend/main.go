@@ -4,6 +4,7 @@ import (
 	"blog-agent-go/backend/database"
 	"blog-agent-go/backend/server"
 	"blog-agent-go/backend/services"
+	"fmt"
 	"log"
 	"os"
 
@@ -55,8 +56,9 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("listening on %s", port)
-	if err := srv.App.Listen("0.0.0.0:" + port); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+	address := fmt.Sprintf(":%s", port)
+	log.Printf("Attempting to start server on address: %s", address)
+	if err := srv.App.Listen(address); err != nil {
+		log.Fatalf("Failed to bind to %s: %v", address, err)
 	}
 }

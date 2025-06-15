@@ -1,4 +1,4 @@
-# fly.toml app configuration file generated for blog-agent-go-billowing-flower-1721 on 2025-05-17T22:48:59-07:00
+# fly.toml app configuration file generated for blog-agent-go-billowing-flower-1721 on 2025-06-15T12:19:07-07:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
@@ -7,8 +7,6 @@ app = 'blog-agent-go-billowing-flower-1721'
 primary_region = 'sjc'
 
 [build]
-  [build.args]
-    GO_VERSION = '1.23.0'
 
 [env]
   PORT = '8080'
@@ -16,10 +14,20 @@ primary_region = 'sjc'
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = true
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
   processes = ['app']
+
+[[services]]
+  protocol = 'tcp'
+  internal_port = 8080
+
+  [[services.ports]]
+    port = 80
+
+  [[services.ports]]
+    port = 443
 
 [[vm]]
   memory = '1gb'
