@@ -47,6 +47,8 @@ func (s *FiberServer) RegisterRoutes() {
 	blog.Get("/:id/chat-history", s.GetArticleChatHistoryHandler)
 	blog.Put("/:id/update", s.UpdateArticleWithContextHandler)
 	blog.Get("/articles/:slug", s.GetArticleDataHandler)
+	blog.Post("/articles/:slug/update", s.UpdateArticleHandler)
+	blog.Post("/articles", s.CreateArticleHandler)
 	blog.Get("/articles/:slug/metadata", s.GetArticleMetadataHandler)
 	blog.Get("/articles/:id/recommended", s.GetRecommendedArticlesHandler)
 	blog.Get("/articles/dashboard", s.GetDashboardArticlesHandler)
@@ -269,6 +271,62 @@ func (s *FiberServer) GetArticleChatHistoryHandler(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(history)
+}
+
+func (s *FiberServer) UpdateArticleHandler(c *fiber.Ctx) error {
+	slug := c.Params("slug")
+	if slug == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Article slug is required",
+		})
+	}
+
+	// Get article ID from slug
+	articleID, err := s.blogService.GetArticleIDBySlug(slug)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Article not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to find article",
+		})
+	}
+
+	var req services.ArticleUpdateRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	article, err := s.blogService.UpdateArticle(c.Context(), articleID, req)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(article)
+}
+
+func (s *FiberServer) CreateArticleHandler(c *fiber.Ctx) error {
+	var req services.ArticleCreateRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	article, err := s.blogService.CreateArticle(c.Context(), req)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(article)
 }
 
 func (s *FiberServer) UpdateArticleWithContextHandler(c *fiber.Ctx) error {

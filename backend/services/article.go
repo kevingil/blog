@@ -51,6 +51,15 @@ type ArticleListItem struct {
 	ImageGenerationRequestID *string  `json:"image_generation_request_id"`
 }
 
+type ArticleUpdateRequest struct {
+	Title       string   `json:"title"`
+	Content     string   `json:"content"`
+	Image       string   `json:"image"`
+	Tags        []string `json:"tags"`
+	IsDraft     bool     `json:"is_draft"`
+	PublishedAt int64    `json:"published_at"`
+}
+
 type ArticleListResponse struct {
 	Articles   []ArticleListItem `json:"articles"`
 	TotalPages int               `json:"total_pages"`
@@ -101,6 +110,97 @@ func (s *ArticleService) GetArticleChatHistory(ctx context.Context, articleID in
 	return &history, nil
 }
 
+func (s *ArticleService) UpdateArticle(ctx context.Context, articleID int64, req ArticleUpdateRequest) (*ArticleListItem, error) {
+	db := s.db.GetDB()
+
+	// Start transaction
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Update article fields
+	_, err = tx.Exec(`UPDATE articles SET 
+		title = ?, content = ?, image = ?, is_draft = ?, published_at = ?, updated_at = ? 
+		WHERE id = ?`,
+		req.Title, req.Content, req.Image, req.IsDraft, req.PublishedAt, time.Now().Unix(), articleID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update article: %w", err)
+	}
+
+	// Remove existing tag relationships for this article
+	_, err = tx.Exec("DELETE FROM article_tags WHERE article_id = ?", articleID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete existing article tags: %w", err)
+	}
+
+	// Process tags
+	var processedTags []string
+	for _, tagName := range req.Tags {
+		if tagName == "" {
+			continue
+		}
+
+		// Normalize tag name to lowercase and trim whitespace
+		normalizedTag := strings.ToLower(strings.TrimSpace(tagName))
+		if normalizedTag == "" {
+			continue
+		}
+
+		// Avoid duplicate tags in the same request
+		isDuplicate := false
+		for _, existing := range processedTags {
+			if existing == normalizedTag {
+				isDuplicate = true
+				break
+			}
+		}
+		if isDuplicate {
+			continue
+		}
+		processedTags = append(processedTags, normalizedTag)
+
+		// Check if tag exists (case-insensitive lookup)
+		var tagID int64
+		err = tx.QueryRow("SELECT tag_id FROM tags WHERE LOWER(tag_name) = ?", normalizedTag).Scan(&tagID)
+
+		if err == sql.ErrNoRows {
+			// Tag doesn't exist, create it
+			result, err := tx.Exec("INSERT INTO tags (tag_name) VALUES (?)", normalizedTag)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create tag '%s': %w", normalizedTag, err)
+			}
+			tagID, err = result.LastInsertId()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get new tag ID: %w", err)
+			}
+		} else if err != nil {
+			return nil, fmt.Errorf("failed to check tag existence: %w", err)
+		}
+
+		// Create article-tag relationship (avoid duplicates)
+		_, err = tx.Exec(`INSERT IGNORE INTO article_tags (article_id, tag_id) VALUES (?, ?)`,
+			articleID, tagID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create article-tag relationship: %w", err)
+		}
+	}
+
+	// Commit transaction
+	if err = tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// Get updated article with tags
+	article, err := s.GetArticle(articleID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve updated article: %w", err)
+	}
+
+	return article, nil
+}
+
 func (s *ArticleService) UpdateArticleWithContext(ctx context.Context, articleID int64) (*models.Article, error) {
 	db := s.db.GetDB()
 	var article models.Article
@@ -134,6 +234,18 @@ func (s *ArticleService) UpdateArticleWithContext(ctx context.Context, articleID
 	}
 
 	return &article, nil
+}
+
+func (s *ArticleService) GetArticleIDBySlug(slug string) (int64, error) {
+	db := s.db.GetDB()
+	var articleID int64
+
+	err := db.QueryRow("SELECT id FROM articles WHERE slug = ?", slug).Scan(&articleID)
+	if err != nil {
+		return 0, err
+	}
+
+	return articleID, nil
 }
 
 func (s *ArticleService) GetArticle(id int64) (*ArticleListItem, error) {
@@ -448,9 +560,14 @@ type ArticleMetadata struct {
 }
 
 type ArticleData struct {
-	Article    models.Article `json:"article"`
-	Tags       []TagData      `json:"tags"`
-	AuthorName string         `json:"author_name"`
+	Article models.Article `json:"article"`
+	Tags    []TagData      `json:"tags"`
+	Author  AuthorData     `json:"author"`
+}
+
+type AuthorData struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 type TagData struct {
@@ -546,16 +663,16 @@ func (s *ArticleService) GetArticleData(slug string) (*ArticleData, error) {
 	}
 
 	// Get author
-	var authorName string
-	err = db.QueryRow("SELECT name FROM users WHERE id = ?", article.Author).Scan(&authorName)
+	var author AuthorData
+	err = db.QueryRow("SELECT id, name FROM users WHERE id = ?", article.Author).Scan(&author.ID, &author.Name)
 	if err != nil {
 		return nil, err
 	}
 
 	return &ArticleData{
-		Article:    article,
-		Tags:       tagData,
-		AuthorName: authorName,
+		Article: article,
+		Tags:    tagData,
+		Author:  author,
 	}, nil
 }
 
@@ -660,4 +777,117 @@ func (s *ArticleService) DeleteArticle(id int64) error {
 	}
 
 	return nil
+}
+
+type ArticleCreateRequest struct {
+	Title    string   `json:"title"`
+	Content  string   `json:"content"`
+	Image    string   `json:"image"`
+	Tags     []string `json:"tags"`
+	IsDraft  bool     `json:"isDraft"`
+	AuthorID int64    `json:"authorId"`
+}
+
+func (s *ArticleService) CreateArticle(ctx context.Context, req ArticleCreateRequest) (*ArticleListItem, error) {
+	db := s.db.GetDB()
+
+	// Start transaction
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Generate slug from title
+	slug := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(req.Title), " ", "-"))
+	// Remove special characters and ensure it's URL-safe
+	slug = strings.ReplaceAll(slug, ",", "")
+	slug = strings.ReplaceAll(slug, ".", "")
+	slug = strings.ReplaceAll(slug, "!", "")
+	slug = strings.ReplaceAll(slug, "?", "")
+
+	now := time.Now().Unix()
+	var publishedAt *int64
+	if !req.IsDraft {
+		publishedAt = &now
+	}
+
+	// Insert article
+	result, err := tx.Exec(`INSERT INTO articles 
+		(title, content, image, slug, author, created_at, updated_at, is_draft, published_at) 
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		req.Title, req.Content, req.Image, slug, req.AuthorID, now, now, req.IsDraft, publishedAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create article: %w", err)
+	}
+
+	articleID, err := result.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get new article ID: %w", err)
+	}
+
+	// Process tags (same logic as UpdateArticle)
+	var processedTags []string
+	for _, tagName := range req.Tags {
+		if tagName == "" {
+			continue
+		}
+
+		// Normalize tag name to lowercase and trim whitespace
+		normalizedTag := strings.ToLower(strings.TrimSpace(tagName))
+		if normalizedTag == "" {
+			continue
+		}
+
+		// Avoid duplicate tags in the same request
+		isDuplicate := false
+		for _, existing := range processedTags {
+			if existing == normalizedTag {
+				isDuplicate = true
+				break
+			}
+		}
+		if isDuplicate {
+			continue
+		}
+		processedTags = append(processedTags, normalizedTag)
+
+		// Check if tag exists (case-insensitive lookup)
+		var tagID int64
+		err = tx.QueryRow("SELECT tag_id FROM tags WHERE LOWER(tag_name) = ?", normalizedTag).Scan(&tagID)
+
+		if err == sql.ErrNoRows {
+			// Tag doesn't exist, create it
+			tagResult, err := tx.Exec("INSERT INTO tags (tag_name) VALUES (?)", normalizedTag)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create tag '%s': %w", normalizedTag, err)
+			}
+			tagID, err = tagResult.LastInsertId()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get new tag ID: %w", err)
+			}
+		} else if err != nil {
+			return nil, fmt.Errorf("failed to check tag existence: %w", err)
+		}
+
+		// Create article-tag relationship
+		_, err = tx.Exec(`INSERT INTO article_tags (article_id, tag_id) VALUES (?, ?)`,
+			articleID, tagID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create article-tag relationship: %w", err)
+		}
+	}
+
+	// Commit transaction
+	if err = tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// Get created article with tags
+	article, err := s.GetArticle(articleID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve created article: %w", err)
+	}
+
+	return article, nil
 }
