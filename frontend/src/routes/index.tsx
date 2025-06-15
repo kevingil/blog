@@ -18,12 +18,12 @@ function HomePage() {
   return (
     <div className="">
         <HeroSection />
-        {token && (
+        {/* {token && (
           <div className="my-4 p-4 bg-gray-100 dark:bg-gray-800 rounded">
             <p>Token: {token}</p>
             <p>isAuthenticated: {isAuthenticated ? 'true' : 'false'}</p>
           </div>
-        )}
+        )} */}
       <Suspense fallback={<ArticlesSkeleton />}>
       <ArticlesList
         pagination={false} />
