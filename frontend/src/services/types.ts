@@ -100,24 +100,39 @@ export interface ImageGenerationStatus {
 export const ITEMS_PER_PAGE = 6;
 
 export type ArticleListItem = {
-  id: number;
-  title: string | null;
-  slug: string | null;
-  created_at: number;
-  published_at: number | null;
-  image: string | null;
-  content: string | null;
-  author: string | null;
-  tags: string[];
-  is_draft: boolean;
-  image_generation_request_id?: string | null;
+  article: {
+    id: number;
+    title: string;
+    slug: string;
+    content: string;
+    image: string;
+    created_at: number;
+    updated_at: number;
+    published_at: number | null;
+    is_draft: boolean;
+    image_generation_request_id?: string | null;
+    author: number | null;
+    chat_history?: any | null;
+  };
+  author: {
+    id: number;
+    name: string;
+  };
+  tags: {
+    article_id: number;
+    tag_id: number;
+    tag_name: string;
+  }[];
 };
 
 
 export type ArticleData = {
   article: Article;
   tags: TagData[] | null;
-  author_name: string;
+  author: {
+    id: number;
+    name: string;
+  };
 }
 
 export type TagData = {

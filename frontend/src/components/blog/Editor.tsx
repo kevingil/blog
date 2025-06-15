@@ -7,11 +7,13 @@ import * as z from 'zod';
 import { format } from "date-fns"
 import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
+import { useQuery } from '@tanstack/react-query';
  
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { ChipInput } from "@/components/ui/chip-input";
 import { Calendar } from "@/components/ui/calendar"
 import {
   Popover,
@@ -46,7 +48,7 @@ const articleSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   content: z.string().min(1, 'Content is required'),
   image: z.union([z.string().url(), z.literal('')]).optional(),
-  tags: z.string(),
+  tags: z.array(z.string()),
   isDraft: z.boolean(),
 });
 
@@ -61,7 +63,7 @@ export function ImageLoader({ article, newImageGenerationRequestId, stagedImageU
   const [imageUrl, setImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    const requestToFetch = newImageGenerationRequestId || article?.image_generation_request_id || null;
+    const requestToFetch = newImageGenerationRequestId || article?.article.image_generation_request_id || null;
     async function fetchImageGeneration() {
       if (requestToFetch) {
         const imgGen = await getImageGeneration(requestToFetch);
@@ -82,8 +84,8 @@ export function ImageLoader({ article, newImageGenerationRequestId, stagedImageU
 
     if (stagedImageUrl !== undefined) {
       setImageUrl(stagedImageUrl);
-    } else if (article && article.image) {
-      setImageUrl(article.image);
+    } else if (article && article.article.image) {
+      setImageUrl(article.article.image);
     }
   }, [article, stagedImageUrl, newImageGenerationRequestId]);
 
@@ -94,7 +96,7 @@ export function ImageLoader({ article, newImageGenerationRequestId, stagedImageU
   if (imageUrl) {
     return (
       <div className='flex items-center justify-center'>
-        <img className='rounded-md aspect-video object-cover' src={imageUrl} alt={article.title || ''} width={'100%'} />
+        <img className='rounded-md aspect-video object-cover' src={imageUrl} alt={article.article.title || ''} width={'100%'} />
       </div>
     )
   }
@@ -109,16 +111,33 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const { blogSlug } = useParams({ from: '/dashboard/blog/edit/$blogSlug' });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [article, setArticle] = useState<ArticleListItem | null>(null);
   const [generatingImage, setGeneratingImage] = useState(false);
   const [newImageGenerationRequestId, setNewImageGenerationRequestId] = useState<string | null>(null);
   const [stagedImageUrl, setStagedImageUrl] = useState<string | null | undefined>(undefined);
   const [generateImageOpen, setGenerateImageOpen] = useState(false);
   const [generatingRewrite, setGeneratingRewrite] = useState(false);
 
-  const { register, handleSubmit, setValue, formState: { errors } } = useForm<ArticleFormData>({
-    resolver: zodResolver(articleSchema),
+  // Use React Query to fetch article data
+  const { data: article, isLoading: articleLoading, error } = useQuery({
+    queryKey: ['article', blogSlug],
+    queryFn: () => getArticle(blogSlug as string),
+    enabled: !isNew && !!blogSlug,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
+
+  const { register, handleSubmit, setValue, formState: { errors }, watch, reset } = useForm<ArticleFormData>({
+    resolver: zodResolver(articleSchema),
+    defaultValues: {
+      title: '',
+      content: '',
+      image: '',
+      tags: [],
+      isDraft: false,
+    }
+  });
+
+  // Watch form values to ensure UI reflects current state
+  const watchedValues = watch();
 
   const [imagePrompt, setImagePrompt] = useState<string | null>(DEFAULT_IMAGE_PROMPT[Math.floor(Math.random() * DEFAULT_IMAGE_PROMPT.length)]);
 
@@ -133,31 +152,35 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   }, [stagedImageUrl, setValue]);
 
+  // Populate form when article data is loaded
   useEffect(() => {
-    async function fetchArticle() {
-      if (isNew) {
-        setValue('title', '');
-        setValue('content', '');
-        setValue('image', '');
-        setValue('tags', '');
-        setValue('isDraft', false);
-        return;
-      }
-
-      if (blogSlug) {
-        const article = await getArticle(blogSlug as string);
-        if (article) {
-          setArticle(article);
-          setValue('title', article.title || '');
-          setValue('content', article.content || '');
-          setValue('image', article.image || '');
-          setValue('tags', article.tags ? article.tags.join(', ') : '');
-          setValue('isDraft', article.is_draft);
-        }
-      }
+    if (article && !isNew) {
+      console.log("Populating form with article data:", article);
+      // Extract tag names from the server response format
+      const tagNames = article.tags ? article.tags.map((tag: any) => tag.tag_name || tag) : [];
+      reset({
+        title: article.article.title || '',
+        content: article.article.content || '',
+        image: article.article.image || '',
+        tags: tagNames,
+        isDraft: article.article.is_draft,
+      });
+    } else if (isNew) {
+      console.log("Resetting form for new article");
+      reset({
+        title: '',
+        content: '',
+        image: '',
+        tags: [],
+        isDraft: false,
+      });
     }
-    fetchArticle();
-  }, []);
+  }, [article, isNew, reset]);
+
+  // Debug: Log current form values
+  useEffect(() => {
+    console.log("Current form values:", watchedValues);
+  }, [watchedValues]);
 
   const onSubmit = async (data: ArticleFormData, returnToDashboard: boolean = true) => {
     if (!user) {
@@ -171,7 +194,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           title: data.title,
           content: data.content,
           image: data.image,
-          tags: data.tags.split(',').map(tag => tag.trim()),
+          tags: data.tags,
           isDraft: data.isDraft,
           authorId: user.id,
         });
@@ -184,31 +207,18 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           title: data.title,
           content: data.content,
           image: data.image,
-          tags: data.tags.split(',').map(tag => tag.trim()),
+          tags: data.tags,
           isDraft: data.isDraft,
-          publishedAt: article?.published_at || new Date().getTime(),
+          publishedAt: article?.article.published_at || new Date().getTime(),
         });
         if (returnToDashboard) {
           navigate({ to: '/dashboard/blog' });
         } else {
           // If we are *not* navigating away, refresh local state:
-          setArticle((prev) => {
-            if (!prev) return null;
-            return {
-              ...prev,
-              title: data.title,
-              content: data.content,
-              image: data.image || '',
-              tags: data.tags.split(',').map(tag => tag.trim()),
-              isDraft: data.isDraft,
-            };
-          });
-
-          // Also ensure the react-hook-form fields match
           setValue('title', data.title);
           setValue('content', data.content);
           setValue('image', data.image || '');
-          setValue('tags', data.tags.split(',').map(tag => tag.trim()).join(', '));
+          setValue('tags', data.tags);
           setValue('isDraft', data.isDraft);
         }
       }
@@ -219,14 +229,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   };
 
   const rewriteArticle = async () => {
-    if (!article?.id) return;
+    if (!article?.article.id) return;
     
     setGeneratingRewrite(true);
     try {
-      const result = await updateArticleWithContext(article.id);
+      const result = await updateArticleWithContext(article.article.id);
       if (result.success) {
-        setArticle({ ...article, content: result.content });
         setValue('content', result.content);
+        console.log("Updated content via rewrite:", result.content);
       }
     } catch (error) {
       console.error('Error rewriting article:', error);
@@ -236,10 +246,32 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   };
 
+  // Show loading state while fetching article
+  if (articleLoading && !isNew) {
+    return (
+      <section className="flex-1 p-0 md:p-4">
+        <div className="flex items-center justify-center h-64">
+          <div>Loading article...</div>
+        </div>
+      </section>
+    );
+  }
+
+  // Show error state if fetch failed
+  if (error && !isNew) {
+    return (
+      <section className="flex-1 p-0 md:p-4">
+        <div className="flex items-center justify-center h-64">
+          <div>Error loading article. Please try again.</div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="flex-1 p-0 md:p-4">
       <h1 className="text-lg lg:text-2xl font-medium text-gray-900 dark:text-white mb-6">
-        Edit Article
+        Edit Article 
       </h1>
       <Card>
         <form className="mt-6">
@@ -247,12 +279,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             <div>
               <div className='flex items-center justify-between gap-2 my-4'>
                 <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Title</label>
-                <Link to="/blog" params={{ slug: article?.slug || '' }} search={{ page: undefined, tag: undefined, search: undefined }} target="_blank" className="flex items-center gap-2 text-sm text-gray-900 dark:text-white">
+                <Link to="/blog" params={{ slug: article?.article.slug || '' }} search={{ page: undefined, tag: undefined, search: undefined }} target="_blank" className="flex items-center gap-2 text-sm text-gray-900 dark:text-white">
                   See Article <ExternalLinkIcon className="w-4 h-4" />
                 </Link>
               </div>
               <Input
                 {...register('title')}
+                value={watchedValues.title}
                 placeholder="Article Title"
               />
               {errors.title && <p className="text-red-500">{errors.title.message}</p>}
@@ -275,7 +308,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   <Input
                     className='w-full'
                     {...register('image')}
-                    onChange={(e) => setStagedImageUrl(e.target.value)}
+                    value={watchedValues.image}
+                    onChange={(e) => {
+                      setValue('image', e.target.value);
+                      setStagedImageUrl(e.target.value);
+                    }}
                     placeholder="Optional, for header"
                   />
                   {errors.image && <p className="text-red-500">{errors.image.message}</p>}
@@ -318,7 +355,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                               className="w-full"
                               onClick={async () => {
                                 console.log("image prompt", imagePrompt);
-                                const result = await generateArticleImage(imagePrompt || "", article?.id || 0);
+                                const result = await generateArticleImage(imagePrompt || "", article?.article.id || 0);
 
                                 if (result.success) {
                                   setNewImageGenerationRequestId(result.generationRequestId);
@@ -340,7 +377,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                           setGeneratingImage(true);
                           e.preventDefault();
                           console.log("image prompt", imagePrompt);
-                          const result = await generateArticleImage(article?.title || "", article?.id || 0);
+                          const result = await generateArticleImage(article?.article.title || "", article?.article.id || 0);
 
                           if (result.success) {
                             setNewImageGenerationRequestId(result.generationRequestId);
@@ -360,12 +397,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 <div style={{marginLeft: '2rem'}} className='flex w-full items-center flex-col gap-2 mt-auto'>
               <div className='mr-auto flex flex-row'>
               <label htmlFor="isDraft" className='text-sm font-medium flex flex-row mr-2'>Published </label>
-              <Switch {...register('isDraft')} checked={!article?.is_draft} onCheckedChange={(checked) => {
-                if (article) {
-                  setArticle({ ...article, is_draft: !checked });
-                }
-                setValue('isDraft', !checked);
-              }} />
+              <Switch 
+                id="isDraft"
+                checked={!watchedValues.isDraft} 
+                onCheckedChange={(checked) => {
+                  setValue('isDraft', !checked);
+                }} 
+              />
               </div>
             <div className='flex w-full flex-col'>
                 <div>
@@ -377,21 +415,20 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   variant={"outline"}
                   className={cn(
                     "w-full justify-start text-left font-normal",
-                    !article?.published_at && "text-muted-foreground"
+                    !article?.article.published_at && "text-muted-foreground"
                   )}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {article?.published_at ? format(article.published_at, "PPP") : <span>Pick a date</span>}
+                  {article?.article.published_at ? format(article.article.published_at, "PPP") : <span>Pick a date</span>}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0">
                 <Calendar
                   mode="single"
-                  selected={article?.published_at ? new Date(article.published_at) : undefined}
+                  selected={article?.article.published_at ? new Date(article.article.published_at) : undefined}
                   onSelect={(date: Date | undefined) => {
-                    if (article) {
-                      setArticle({ ...article, published_at: date?.getTime() || 0 });
-                    }
+                    // Date selection handled by the calendar component
+                    // Published date is not part of the form schema
                   }}
                   initialFocus
                 />
@@ -419,21 +456,20 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             </div>
             <div>
               <Textarea
+                defaultValue={article?.article.content || ''}
                 className="w-full p-4 border border-gray-300 rounded-md h-[60vh]"
                 {...register('content')}
-                onChange={(e) => {
-                  if (article) {
-                    setArticle({ ...article, content: e.target.value });
-                  }
-                }}
+                value={watchedValues.content}
+                onChange={(e) => setValue('content', e.target.value)}
               />
               {errors.content && <p className="text-red-500">{errors.content.message}</p>}
             </div>
             <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Tags</label>
             <div>
-              <Input
-                {...register('tags')}
-                placeholder="Tags (comma-separated)"
+              <ChipInput
+                value={watchedValues.tags}
+                onChange={(tags) => setValue('tags', tags)}
+                placeholder="Type and press Enter to add tags..."
               />
               {errors.tags && <p className="text-red-500">{errors.tags.message}</p>}
             </div>

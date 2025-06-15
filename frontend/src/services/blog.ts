@@ -89,8 +89,8 @@ export async function updateArticle(slug: string, article: {
   isDraft: boolean;
   publishedAt: number;
 }): Promise<ArticleListItem> {
-  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${slug}`, {
-    method: 'PUT',
+  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${slug}/update`, {
+    method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
