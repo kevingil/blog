@@ -3,6 +3,7 @@ package services
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -63,6 +64,7 @@ type UserData struct {
 }
 
 func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
+	fmt.Printf("Login request received for email:'%s'\n", req.Email)
 	user, err := s.db.GetUserByEmail(req.Email)
 	if err != nil {
 		return nil, errors.New("invalid account credentials")
@@ -136,7 +138,7 @@ func (s *AuthService) UpdateAccount(userID uint, req UpdateAccountRequest) error
 
 	// Check if user exists
 	var user models.User
-	err := db.QueryRow("SELECT id, name, email, password_hash, role FROM users WHERE id = ?", userID).Scan(
+	err := db.QueryRow("SELECT id, name, email, passwordHash, role FROM users WHERE id = ?", userID).Scan(
 		&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.Role,
 	)
 	if err != nil {
@@ -168,7 +170,7 @@ func (s *AuthService) UpdatePassword(userID uint, req UpdatePasswordRequest) err
 
 	// Get user
 	var user models.User
-	err := db.QueryRow("SELECT id, name, email, password_hash, role FROM users WHERE id = ?", userID).Scan(
+	err := db.QueryRow("SELECT id, name, email, passwordHash, role FROM users WHERE id = ?", userID).Scan(
 		&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.Role,
 	)
 	if err != nil {
@@ -190,7 +192,7 @@ func (s *AuthService) UpdatePassword(userID uint, req UpdatePasswordRequest) err
 	}
 
 	// Update password
-	_, err = db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", string(hashedPassword), userID)
+	_, err = db.Exec("UPDATE users SET passwordHash = ? WHERE id = ?", string(hashedPassword), userID)
 	return err
 }
 
@@ -199,7 +201,7 @@ func (s *AuthService) DeleteAccount(userID uint, password string) error {
 
 	// Get user to verify password
 	var user models.User
-	err := db.QueryRow("SELECT id, name, email, password_hash, role FROM users WHERE id = ?", userID).Scan(
+	err := db.QueryRow("SELECT id, name, email, passwordHash, role FROM users WHERE id = ?", userID).Scan(
 		&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.Role,
 	)
 	if err != nil {

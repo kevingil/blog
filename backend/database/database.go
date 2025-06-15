@@ -123,21 +123,26 @@ func (s *service) Close() error {
 
 func (s *service) GetUserByEmail(email string) (*models.User, error) {
 	var user models.User
-	err := s.db.QueryRow("SELECT id, name, email, password_hash, role FROM users WHERE email = ?", email).Scan(
+	query := "SELECT id, name, email, passwordHash, role FROM users WHERE email = ?"
+	fmt.Printf("Executing SQL: %s | args: [%s]\n", query, email)
+	err := s.db.QueryRow(query, email).Scan(
 		&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.Role,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
+			fmt.Printf("No user found for email: %s\n", email)
 			return nil, nil
 		}
+		fmt.Printf("SQL error: %v\n", err)
 		return nil, err
 	}
+	fmt.Printf("SQL result: %+v\n", user)
 	return &user, nil
 }
 
 func (s *service) CreateUser(user *models.User) error {
 	_, err := s.db.Exec(
-		"INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)",
+		"INSERT INTO users (name, email, passwordHash, role) VALUES (?, ?, ?, ?)",
 		user.Name, user.Email, user.PasswordHash, user.Role,
 	)
 	return err
