@@ -16,7 +16,7 @@ WORKDIR /app
 COPY --from=builder /run-app /usr/local/bin/
 # Copy the entire app directory to preserve env files
 COPY --from=builder /app /app
-RUN apt-get update && apt-get install -y ca-certificates
+#RUN apt-get update && apt-get install -y ca-certificates
 # List files to verify env file is present
 RUN ls -la /app
 CMD ["run-app"]
