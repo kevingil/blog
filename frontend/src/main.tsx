@@ -37,9 +37,8 @@ function RouterWithAuth() {
         if (error.message?.includes("Cannot read properties of undefined")) {
           // Handle auth context errors
           console.error("Auth context error:", error);
-          return <div>Authentication error. Please try logging in again.</div>;
         }
-        return <div>An error occurred: {error.message}</div>;
+        console.error("Error:", error);
       },
     });
   }, [auth]);
