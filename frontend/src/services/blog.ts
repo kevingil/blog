@@ -1,12 +1,13 @@
-import { ArticleListItem, ArticleData, RecommendedArticle, ArticleRow  } from '@/services/types';
+import { ArticleListItem, ArticleData, RecommendedArticle  } from '@/services/types';
 import { GetArticlesResponse } from '@/routes/dashboard/blog/index';
 import { VITE_API_BASE_URL } from '@/services/constants';
 
 // Article listing and search
-export async function getArticles(page: number, tag: string | null = null): Promise<{ articles: ArticleListItem[], totalPages: number }> {
+export async function getArticles(page: number, tag: string | null = null, includeDrafts?: boolean): Promise<{ articles: ArticleListItem[], totalPages: number }> {
   const params = new URLSearchParams({
     page: page.toString(),
-    ...(tag && tag !== 'All' ? { tag } : {})
+    ...(tag && tag !== 'All' ? { tag } : {}),
+    ...(includeDrafts !== undefined ? { includeDrafts: includeDrafts.toString() } : {})
   });
 
   const response = await fetch(`${VITE_API_BASE_URL}/blog/articles?${params}`);
@@ -15,26 +16,18 @@ export async function getArticles(page: number, tag: string | null = null): Prom
   }
   const data: GetArticlesResponse = await response.json();
   
-  // Transform to ArticleListItem format
+  // Debug: Log API response when includeDrafts is true
+  if (includeDrafts) {
+    console.log('articlesPayload API response:', {
+      totalArticles: data.articles.length,
+      drafts: data.articles.filter(a => a.article.is_draft).length,
+      published: data.articles.filter(a => !a.article.is_draft).length,
+      includeDraftsParam: includeDrafts
+    });
+  }
+  
   return {
-    articles: data.articles.map(item => ({
-      article: {
-        id: item.id,
-        title: item.title || '',
-        slug: item.slug || '',
-        content: item.content,
-        image: item.image,
-        created_at: item.created_at,
-        updated_at: item.created_at,
-        published_at: item.published_at,
-        is_draft: item.is_draft,
-        image_generation_request_id: item.image_generation_request_id,
-        author: null,
-        chat_history: null
-      },
-      author: { id: 0, name: item.author },
-      tags: item.tags.map(tag => ({ article_id: item.id, tag_id: 0, tag_name: tag }))
-    })),
+    articles: data.articles,
     totalPages: data.totalPages
   };
 }
@@ -52,26 +45,8 @@ export async function searchArticles(query: string, page: number = 1, tag: strin
   }
   const data: GetArticlesResponse = await response.json();
   
-  // Transform to ArticleListItem format
   return {
-    articles: data.articles.map(item => ({
-      article: {
-        id: item.id,
-        title: item.title || '',
-        slug: item.slug || '',
-        content: item.content,
-        image: item.image,
-        created_at: item.created_at,
-        updated_at: item.created_at,
-        published_at: item.published_at,
-        is_draft: item.is_draft,
-        image_generation_request_id: item.image_generation_request_id,
-        author: null,
-        chat_history: null
-      },
-      author: { id: 0, name: item.author },
-      tags: item.tags.map(tag => ({ article_id: item.id, tag_id: 0, tag_name: tag }))
-    })),
+    articles: data.articles,
     totalPages: data.totalPages
   };
 }

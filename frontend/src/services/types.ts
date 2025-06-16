@@ -122,7 +122,7 @@ export type ArticleListItem = {
     article_id: number;
     tag_id: number;
     tag_name: string;
-  }[];
+  }[] | null;
 };
 
 

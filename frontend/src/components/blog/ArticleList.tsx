@@ -267,9 +267,9 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
                 <Link to="/blog/$blogSlug" params={{ blogSlug: article.article.slug as string }} search={{ page: undefined, tag: undefined, search: undefined }}
                   className='w-full h-full flex flex-row justify-between'>
                   <div className='p-4 w-full'>
-                    <h2 className="text-xl font-semibold mb-2">{article.article.title}</h2>
+                    <h2 className="text-xl font-semibold mb-2">{article.article?.title}</h2>
                     <div className="flex items-center mb-4">
-                      <span className="text-sm text-muted-foreground">{article.article.author}</span>
+                      <span className="text-sm text-muted-foreground">{article.author?.name}</span>
                     </div>
                     <div className="flex items-center mb-4 gap-2">
                       <p className="text-sm text-muted-foreground mb-4">
@@ -288,7 +288,7 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
                       {article.article.published_at ? format(new Date(article.article.published_at), 'MMMM d, yyyy') : 'Unknown'}
                     </p>
                     <div className="flex flex-wrap gap-2 mb-4">
-                      {article.tags.map((tag: { tag_name: string }) => (
+                      {article.tags?.map((tag: { tag_name: string }) => (
                         <Badge key={tag.tag_name} variant="secondary" className="text-primary">{tag.tag_name.toUpperCase()}</Badge>
                       ))}
                     </div>

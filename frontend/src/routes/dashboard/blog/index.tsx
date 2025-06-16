@@ -28,19 +28,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 
 export type GetArticlesResponse = {
-  articles: {
-    id: number;
-    title: string | null;
-    slug: string | null;
-    image: string;
-    content: string;
-    created_at: number;
-    published_at: number;
-    author: string;
-    tags: string[];
-    is_draft: boolean;
-    image_generation_request_id: string;
-  }[];
+  articles: ArticleListItem[];
   totalPages: number;
 };
 
@@ -53,8 +41,9 @@ function ArticlesPage() {
   const navigate = useNavigate();
   const { data: articlesPayload, isLoading, error } = useQuery<{ articles: ArticleListItem[], totalPages: number }>({
     queryKey: ['articles', 1],
-    queryFn: () => getArticles(1) as Promise<{ articles: ArticleListItem[], totalPages: number }>
+    queryFn: () => getArticles(1, null, true) as Promise<{ articles: ArticleListItem[], totalPages: number }>
   });
+  console.log("articlesPayload error", error);
 
   console.log("articlesPayload", articlesPayload);
 
@@ -104,7 +93,7 @@ function ArticlesPage() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {articlesPayload?.articles ? articlesPayload?.articles.map((article) => (
+          {articles.map((article) => (
             <TableRow key={article.article.id}>
               <TableCell className="w-full flex flex-col gap-1">
                 <div className="flex items-start gap-2">
@@ -112,7 +101,7 @@ function ArticlesPage() {
                   <div className="flex flex-col">
                     <Link to={`/dashboard/blog/edit/$blogSlug`} params={{ blogSlug: article.article.slug || '' }} className="text-gray-900 text-md hover:underline dark:text-white">{article.article.title}</Link>
                     <p className="text-gray-500 text-xs">Published: {article.article.published_at ? new Date(article.article.published_at).toLocaleDateString() : 'Not published'}</p>
-                    <div className="flex flex-wrap gap-2">{article.tags.map((tag: { tag_name: string }) => <Badge key={tag.tag_name}
+                    <div className="flex flex-wrap gap-2">{article.tags?.map((tag: { tag_name: string }) => <Badge key={tag.tag_name}
                   className="text-[0.6rem]" variant="outline"
                   >{tag.tag_name.toUpperCase()}</Badge>)}</div>
                   <p className="text-gray-500 text-xs">{article.article.content ? article.article.content.slice(0, 150) + '...' : ''}</p>
@@ -144,7 +133,7 @@ function ArticlesPage() {
                 </DropdownMenu>
               </TableCell>
             </TableRow>
-          )) : null}
+          ))}
         </TableBody>
       </Table>
     )

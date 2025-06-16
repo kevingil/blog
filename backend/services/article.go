@@ -38,17 +38,9 @@ type ArticleChatHistory struct {
 }
 
 type ArticleListItem struct {
-	ID                       int64    `json:"id"`
-	Title                    string   `json:"title"`
-	Slug                     string   `json:"slug"`
-	Image                    string   `json:"image"`
-	Content                  string   `json:"content"`
-	CreatedAt                int64    `json:"created_at"`
-	PublishedAt              *int64   `json:"published_at"`
-	Author                   string   `json:"author"`
-	Tags                     []string `json:"tags"`
-	IsDraft                  bool     `json:"is_draft"`
-	ImageGenerationRequestID *string  `json:"image_generation_request_id"`
+	Article models.Article `json:"article"`
+	Author  AuthorData     `json:"author"`
+	Tags    []TagData      `json:"tags"`
 }
 
 type ArticleUpdateRequest struct {
@@ -61,8 +53,9 @@ type ArticleUpdateRequest struct {
 }
 
 type ArticleListResponse struct {
-	Articles   []ArticleListItem `json:"articles"`
-	TotalPages int               `json:"total_pages"`
+	Articles      []ArticleListItem `json:"articles"`
+	TotalPages    int               `json:"total_pages"`
+	IncludeDrafts bool              `json:"include_drafts"`
 }
 
 const ITEMS_PER_PAGE = 6
@@ -282,73 +275,90 @@ func (s *ArticleService) GetArticle(id int64) (*ArticleListItem, error) {
 		tagNames = append(tagNames, tagName)
 	}
 
-	var imageGenRequestIDPtr *string
+	var imageGenRequestIDPtr string
 	if imageGenRequestID.Valid {
-		imageGenRequestIDPtr = &imageGenRequestID.String
+		imageGenRequestIDPtr = imageGenRequestID.String
+	}
+
+	// Build TagData slice
+	var tagData []TagData
+	for _, name := range tagNames {
+		tagData = append(tagData, TagData{ArticleID: article.ID, TagID: 0, TagName: name})
 	}
 
 	return &ArticleListItem{
-		ID:                       article.ID,
-		Title:                    article.Title,
-		Slug:                     article.Slug,
-		Image:                    article.Image,
-		Content:                  article.Content,
-		CreatedAt:                article.CreatedAt,
-		PublishedAt:              article.PublishedAt,
-		Author:                   authorName,
-		Tags:                     tagNames,
-		IsDraft:                  article.IsDraft,
-		ImageGenerationRequestID: imageGenRequestIDPtr,
+		Article: models.Article{
+			ID:                       article.ID,
+			Title:                    article.Title,
+			Slug:                     article.Slug,
+			Image:                    article.Image,
+			Content:                  article.Content,
+			CreatedAt:                article.CreatedAt,
+			PublishedAt:              article.PublishedAt,
+			IsDraft:                  article.IsDraft,
+			Embedding:                article.Embedding,
+			ImageGenerationRequestID: imageGenRequestIDPtr,
+			ChatHistory:              article.ChatHistory,
+		},
+		Author: AuthorData{
+			ID:   article.Author,
+			Name: authorName,
+		},
+		Tags: tagData,
 	}, nil
 }
 
-func (s *ArticleService) GetArticles(page int, tag string) (*ArticleListResponse, error) {
+func (s *ArticleService) GetArticles(page int, tag string, includeDrafts bool) (*ArticleListResponse, error) {
 	db := s.db.GetDB()
 	offset := (page - 1) * ITEMS_PER_PAGE
 
-	var baseQuery string
-	var countQuery string
-	var args []interface{}
+	// Base SELECT and FROM clauses
+	selectClause := `SELECT a.id, a.image, a.slug, a.title, a.content, a.author, a.created_at, a.updated_at, ` +
+		`a.is_draft, a.embedding, a.image_generation_request_id, a.published_at, a.chat_history, u.name as author_name`
+	fromClause := ` FROM articles a LEFT JOIN users u ON a.author = u.id `
 
-	if tag != "" && tag != "All" {
-		baseQuery = `SELECT a.id, a.image, a.slug, a.title, a.content, a.author, a.created_at, a.updated_at, 
-			a.is_draft, a.embedding, a.image_generation_request_id, a.published_at, a.chat_history, u.name as author_name
-			FROM articles a 
-			LEFT JOIN users u ON a.author = u.id 
-			LEFT JOIN article_tags at ON a.id = at.article_id 
-			LEFT JOIN tags t ON at.tag_id = t.tag_id 
-			WHERE a.is_draft = ? AND t.tag_name = ? 
-			ORDER BY a.published_at DESC LIMIT ? OFFSET ?`
-		countQuery = `SELECT COUNT(DISTINCT a.id) FROM articles a 
-			LEFT JOIN article_tags at ON a.id = at.article_id 
-			LEFT JOIN tags t ON at.tag_id = t.tag_id 
-			WHERE a.is_draft = ? AND t.tag_name = ?`
-		args = []interface{}{false, tag, ITEMS_PER_PAGE, offset}
-	} else {
-		baseQuery = `SELECT a.id, a.image, a.slug, a.title, a.content, a.author, a.created_at, a.updated_at, 
-			a.is_draft, a.embedding, a.image_generation_request_id, a.published_at, a.chat_history, u.name as author_name
-			FROM articles a 
-			LEFT JOIN users u ON a.author = u.id 
-			WHERE a.is_draft = ? 
-			ORDER BY a.published_at DESC LIMIT ? OFFSET ?`
-		countQuery = `SELECT COUNT(*) FROM articles WHERE is_draft = ?`
-		args = []interface{}{false, ITEMS_PER_PAGE, offset}
+	// We only need the tag join if the caller filtered by tag
+	joinTagClause := ``
+	conditions := []string{}
+	args := []interface{}{}
+
+	// Apply draft filter only when drafts should be excluded
+	// includeDrafts == true  -> no filter (show drafts + published)
+	// includeDrafts == false -> show only published (is_draft = 0)
+	if !includeDrafts {
+		conditions = append(conditions, "a.is_draft = 0")
 	}
 
-	// Get total count for pagination
+	if tag != "" && tag != "All" {
+		joinTagClause = ` LEFT JOIN article_tags at ON a.id = at.article_id LEFT JOIN tags t ON at.tag_id = t.tag_id `
+		conditions = append(conditions, "t.tag_name = ?")
+		args = append(args, tag)
+	}
+
+	// Assemble WHERE clause
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	// Order drafts (published_at NULL) by created_at so they still appear in list
+	orderClause := " ORDER BY COALESCE(a.published_at, a.created_at) DESC LIMIT ? OFFSET ?"
+	args = append(args, ITEMS_PER_PAGE, offset)
+
+	// Final query for data
+	baseQuery := selectClause + fromClause + joinTagClause + whereClause + orderClause
+
+	// Build count query (for pagination)
+	countSelect := "SELECT COUNT(DISTINCT a.id)"
+	countQuery := countSelect + fromClause + joinTagClause + whereClause
+
+	// Total count
 	var totalCount int64
-	var countArgs []interface{}
-	if tag != "" && tag != "All" {
-		countArgs = []interface{}{false, tag}
-	} else {
-		countArgs = []interface{}{false}
-	}
-	err := db.QueryRow(countQuery, countArgs...).Scan(&totalCount)
-	if err != nil {
+	if err := db.QueryRow(countQuery, args[:len(args)-2]...).Scan(&totalCount); err != nil {
 		return nil, err
 	}
 
-	// Get articles with pagination
+	// Fetch rows
 	rows, err := db.Query(baseQuery, args...)
 	if err != nil {
 		return nil, err
@@ -360,18 +370,16 @@ func (s *ArticleService) GetArticles(page int, tag string) (*ArticleListResponse
 		var article models.Article
 		var authorName string
 		var imageGenRequestID sql.NullString
+		var image sql.NullString
 
-		err := rows.Scan(&article.ID, &article.Image, &article.Slug, &article.Title, &article.Content,
+		if err := rows.Scan(&article.ID, &image, &article.Slug, &article.Title, &article.Content,
 			&article.Author, &article.CreatedAt, &article.UpdatedAt, &article.IsDraft, &article.Embedding,
-			&imageGenRequestID, &article.PublishedAt, &article.ChatHistory, &authorName)
-		if err != nil {
+			&imageGenRequestID, &article.PublishedAt, &article.ChatHistory, &authorName); err != nil {
 			return nil, err
 		}
 
 		// Get tags for this article
-		tagRows, err := db.Query(`SELECT t.tag_name FROM tags t 
-			JOIN article_tags at ON t.tag_id = at.tag_id 
-			WHERE at.article_id = ?`, article.ID)
+		tagRows, err := db.Query(`SELECT t.tag_name FROM tags t JOIN article_tags at ON t.tag_id = at.tag_id WHERE at.article_id = ?`, article.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -387,29 +395,47 @@ func (s *ArticleService) GetArticles(page int, tag string) (*ArticleListResponse
 		}
 		tagRows.Close()
 
-		var imageGenRequestIDPtr *string
+		var imageGenRequestIDPtr string
 		if imageGenRequestID.Valid {
-			imageGenRequestIDPtr = &imageGenRequestID.String
+			imageGenRequestIDPtr = imageGenRequestID.String
+		}
+
+		// Build TagData slice
+		var tagData []TagData
+		for _, name := range tagNames {
+			tagData = append(tagData, TagData{ArticleID: article.ID, TagID: 0, TagName: name})
+		}
+
+		if image.Valid {
+			article.Image = image.String
 		}
 
 		articleList = append(articleList, ArticleListItem{
-			ID:                       article.ID,
-			Title:                    article.Title,
-			Slug:                     article.Slug,
-			Image:                    article.Image,
-			Content:                  article.Content,
-			CreatedAt:                article.CreatedAt,
-			PublishedAt:              article.PublishedAt,
-			Author:                   authorName,
-			Tags:                     tagNames,
-			IsDraft:                  article.IsDraft,
-			ImageGenerationRequestID: imageGenRequestIDPtr,
+			Article: models.Article{
+				ID:                       article.ID,
+				Title:                    article.Title,
+				Slug:                     article.Slug,
+				Image:                    article.Image,
+				Content:                  article.Content,
+				CreatedAt:                article.CreatedAt,
+				PublishedAt:              article.PublishedAt,
+				IsDraft:                  article.IsDraft,
+				Embedding:                article.Embedding,
+				ImageGenerationRequestID: imageGenRequestIDPtr,
+				ChatHistory:              article.ChatHistory,
+			},
+			Author: AuthorData{
+				ID:   article.Author,
+				Name: authorName,
+			},
+			Tags: tagData,
 		})
 	}
 
 	return &ArticleListResponse{
-		Articles:   articleList,
-		TotalPages: int(math.Ceil(float64(totalCount) / float64(ITEMS_PER_PAGE))),
+		Articles:      articleList,
+		TotalPages:    int(math.Ceil(float64(totalCount) / float64(ITEMS_PER_PAGE))),
+		IncludeDrafts: includeDrafts,
 	}, nil
 }
 
@@ -499,29 +525,43 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string) (*Ar
 		}
 		tagRows.Close()
 
-		var imageGenRequestIDPtr *string
+		var imageGenRequestIDPtr string
 		if imageGenRequestID.Valid {
-			imageGenRequestIDPtr = &imageGenRequestID.String
+			imageGenRequestIDPtr = imageGenRequestID.String
+		}
+
+		// Build TagData slice
+		var tagData []TagData
+		for _, name := range tagNames {
+			tagData = append(tagData, TagData{ArticleID: article.ID, TagID: 0, TagName: name})
 		}
 
 		articleList = append(articleList, ArticleListItem{
-			ID:                       article.ID,
-			Title:                    article.Title,
-			Slug:                     article.Slug,
-			Image:                    article.Image,
-			Content:                  article.Content,
-			CreatedAt:                article.CreatedAt,
-			PublishedAt:              article.PublishedAt,
-			Author:                   authorName,
-			Tags:                     tagNames,
-			IsDraft:                  article.IsDraft,
-			ImageGenerationRequestID: imageGenRequestIDPtr,
+			Article: models.Article{
+				ID:                       article.ID,
+				Title:                    article.Title,
+				Slug:                     article.Slug,
+				Image:                    article.Image,
+				Content:                  article.Content,
+				CreatedAt:                article.CreatedAt,
+				PublishedAt:              article.PublishedAt,
+				IsDraft:                  article.IsDraft,
+				Embedding:                article.Embedding,
+				ImageGenerationRequestID: imageGenRequestIDPtr,
+				ChatHistory:              article.ChatHistory,
+			},
+			Author: AuthorData{
+				ID:   article.Author,
+				Name: authorName,
+			},
+			Tags: tagData,
 		})
 	}
 
 	return &ArticleListResponse{
-		Articles:   articleList,
-		TotalPages: int(math.Ceil(float64(totalCount) / float64(ITEMS_PER_PAGE))),
+		Articles:      articleList,
+		TotalPages:    int(math.Ceil(float64(totalCount) / float64(ITEMS_PER_PAGE))),
+		IncludeDrafts: false,
 	}, nil
 }
 
@@ -662,7 +702,7 @@ func (s *ArticleService) GetRecommendedArticles(currentArticleID int64) ([]Recom
 		LEFT JOIN users u ON a.author = u.id 
 		WHERE a.id != ? AND a.is_draft = ? 
 		ORDER BY a.published_at DESC 
-		LIMIT 3`, currentArticleID, false)
+		LIMIT 3`, currentArticleID, 0)
 	if err != nil {
 		return nil, err
 	}
