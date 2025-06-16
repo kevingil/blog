@@ -27,7 +27,7 @@ import {
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 
-type GetArticlesResponse = {
+export type GetArticlesResponse = {
   articles: {
     id: number;
     title: string | null;
@@ -117,7 +117,7 @@ function ArticlesPage() {
                   <div className="flex items-start flex-wrap">{article.image && <img src={article.image} className="rounded-md mt-1 w-10 h-10 min-w-10 min-h-10 object-cover" />}</div>
                   <div className="flex flex-col">
                     <Link to={`/dashboard/blog/edit/$blogSlug`} params={{ blogSlug: article.slug || '' }} className="text-gray-900 text-md hover:underline dark:text-white">{article.title}</Link>
-                    <p className="text-gray-500 text-xs">Published: {article.publishedAt ? new Date(article.publishedAt).toLocaleDateString() : 'Not published'}</p>
+                    <p className="text-gray-500 text-xs">Published: {article.published_at ? new Date(article.published_at).toLocaleDateString() : 'Not published'}</p>
                     <div className="flex flex-wrap gap-2">{article.tags.map(tag => <Badge key={tag}
                   className="text-[0.6rem]" variant="outline"
                   >{tag}</Badge>)}</div>
@@ -125,8 +125,8 @@ function ArticlesPage() {
                   </div>  
                 </div>
               </TableCell>
-              <TableCell className=""><p className="text-gray-500 text-xs">Created: {new Date(article.createdAt).toLocaleDateString()}</p></TableCell>
-              <TableCell><Badge className={`text-[0.6rem] ${article.isDraft ? "bg-indigo-50 dark:bg-indigo-900" : "bg-orange-50 dark:bg-orange-900"}`} variant="outline">{article.isDraft ? 'Draft' : 'Published'}</Badge></TableCell>
+              <TableCell className=""><p className="text-gray-500 text-xs">Created: {new Date(article.created_at).toLocaleDateString()}</p></TableCell>
+              <TableCell><Badge className={`text-[0.6rem] ${article.is_draft ? "bg-indigo-50 dark:bg-indigo-900" : "bg-orange-50 dark:bg-orange-900"}`} variant="outline">{article.is_draft ? 'Draft' : 'Published'}</Badge></TableCell>
               <TableCell className="text-right">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -240,13 +240,13 @@ function ArticlesPage() {
             <TabsTrigger value="drafts">Drafts</TabsTrigger>
           </TabsList>
           <TabsContent value="all" className="p-0 w-full">
-            {renderArticles(articles.sort((a: ArticleRow, b: ArticleRow) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()))}
+            {renderArticles(articles.sort((a: ArticleRow, b: ArticleRow) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()))}
           </TabsContent>
           <TabsContent value="published" className="p-0 w-full">
-            {renderArticles(articles.filter((article: ArticleRow) => article.isDraft === false))}
+            {renderArticles(articles.filter((article: ArticleRow) => article.is_draft === false))}
           </TabsContent>
           <TabsContent value="drafts" className="p-0 w-full">
-            {renderArticles(articles.filter((article: ArticleRow) => article.isDraft === true))}
+            {renderArticles(articles.filter((article: ArticleRow) => article.is_draft === true))}
           </TabsContent>
           </Tabs>
         </CardContent>

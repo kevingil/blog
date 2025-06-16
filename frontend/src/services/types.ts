@@ -136,9 +136,9 @@ export type ArticleData = {
 }
 
 export type TagData = {
-  articleId: number;
-  tagId: number;
-  tagName: string | null;
+  article_id: number;
+  tag_id: number;
+  tag_name: string | null;
 }
 
 export type RecommendedArticle = {
@@ -146,8 +146,8 @@ export type RecommendedArticle = {
   title: string;
   slug: string;
   image: string | null;
-  publishedAt: number | null;
-  createdAt: number;
+  published_at: number | null;
+  created_at: number;
   author: string | null;
 }
 
@@ -155,9 +155,9 @@ export type ArticleRow = {
   id: number;
   title: string | null;
   content: string | null;
-  createdAt: number;
-  publishedAt: number | null;
-  isDraft: boolean;
+  created_at: number;
+  published_at: number | null;
+  is_draft: boolean;
   slug: string | null;
   tags: string[];
   image: string | null;

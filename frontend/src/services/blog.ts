@@ -1,8 +1,9 @@
-import { ArticleListItem, ArticleData, RecommendedArticle, ArticleRow } from '@/services/types';
+import { ArticleListItem, ArticleData, RecommendedArticle, ArticleRow  } from '@/services/types';
+import { GetArticlesResponse } from '@/routes/dashboard/blog/index';
 import { VITE_API_BASE_URL } from '@/services/constants';
 
 // Article listing and search
-export async function getArticles(page: number, tag: string | null = null): Promise<{ articles: ArticleListItem[], totalPages: number }> {
+export async function getArticles(page: number, tag: string | null = null): Promise<GetArticlesResponse> {
   const params = new URLSearchParams({
     page: page.toString(),
     ...(tag && tag !== 'All' ? { tag } : {})

@@ -135,7 +135,7 @@ function ArticleContent({ slug, articleData }: { slug: string, articleData: Arti
       )}
       <div className="flex items-center mb-6">
         <div>
-          <p className="font-semibold">{articleData?.author_name}</p>
+          <p className="font-semibold">{articleData?.author?.name}</p>
           <p className="text-sm text-muted-foreground">
             { content?.published_at ? format(new Date(content?.published_at), 'MMMM d, yyyy') : 'Unknown'}
           </p>
@@ -145,7 +145,7 @@ function ArticleContent({ slug, articleData }: { slug: string, articleData: Arti
       />
       <div className="flex flex-wrap gap-2 mb-8">
         {articleData?.tags?.map((tag) => (
-          <Badge key={tag.tagId} variant="secondary" className='text-primary'>{tag.tagName}</Badge>
+          <Badge key={tag.tag_id} variant="secondary" className='text-primary border-solid border-1 border-indigo-500'>{tag.tag_name?.toUpperCase()}</Badge>
         ))}
       </div>
     </article>
@@ -185,7 +185,7 @@ function RecommendedArticles({ slug, articleData }: { slug: string, articleData:
           <CardContent className="p-4">
             <h3 className="text-lg font-semibold mb-2">{article.title}</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              {article.publishedAt ? format(new Date(article.publishedAt), 'MMMM d, yyyy') : 'Unknown'}
+              {article.published_at ? format(new Date(article.published_at), 'MMMM d, yyyy') : 'Unknown'}
             </p>
           </CardContent>
         </Card>
