@@ -3,7 +3,7 @@ import { GetArticlesResponse } from '@/routes/dashboard/blog/index';
 import { VITE_API_BASE_URL } from '@/services/constants';
 
 // Article listing and search
-export async function getArticles(page: number, tag: string | null = null, includeDrafts?: boolean): Promise<{ articles: ArticleListItem[], totalPages: number }> {
+export async function   getArticles(page: number, tag: string | null = null, includeDrafts?: boolean): Promise<GetArticlesResponse> {
   const params = new URLSearchParams({
     page: page.toString(),
     ...(tag && tag !== 'All' ? { tag } : {}),
@@ -28,11 +28,12 @@ export async function getArticles(page: number, tag: string | null = null, inclu
   
   return {
     articles: data.articles,
-    totalPages: data.totalPages
+    total_pages: data.total_pages,
+    include_drafts: data.include_drafts
   };
 }
 
-export async function searchArticles(query: string, page: number = 1, tag: string | null = null): Promise<{ articles: ArticleListItem[], totalPages: number }> {
+export async function searchArticles(query: string, page: number = 1, tag: string | null = null): Promise<GetArticlesResponse> {
   const params = new URLSearchParams({
     query,
     page: page.toString(),
@@ -47,7 +48,8 @@ export async function searchArticles(query: string, page: number = 1, tag: strin
   
   return {
     articles: data.articles,
-    totalPages: data.totalPages
+    total_pages: data.total_pages,
+    include_drafts: data.include_drafts
   };
 }
 

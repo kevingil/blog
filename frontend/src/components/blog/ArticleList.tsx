@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { getArticles, searchArticles, getPopularTags } from '@/services/blog';
 import { ArticleListItem, ITEMS_PER_PAGE } from '@/services/types';
 import { GetArticlesResponse } from '@/routes/dashboard/blog';
+import { useQuery } from '@tanstack/react-query';
 
 
 // Debounce delay in ms
@@ -69,9 +70,6 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
   
   const [page, setPage] = useState(Number(search.get('page')) || 1);
   const [searchTag, setSearchTag] = useState<string | null>(search.get('tag'));
-  const [articles, setArticles] = useState<ArticleListItem[]>([]);
-  const [totalPages, setTotalPages] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState<string>(search.get('search') || '');
   const [recentTags, setRecentTags] = useState<string[]>(['All']);
 
@@ -104,26 +102,24 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
 
   }, [search]);
 
-  // On every action, query params are updated first
-  // then we fetch articles based on current search params
-  const fetchArticles = useCallback(async (searchValue: string, pageNum: number, tag: string | null = searchTag) => {
-    setLoading(true);
-    try {
-      let result;
-      if (searchValue) {
-        result = await searchArticles(searchValue, pageNum, tag);
-      } else {
-        result = await getArticles(pageNum, tag);
+  // React Query – fetch articles based on current params
+  const {
+    data: articlesData,
+    isLoading,
+    isFetching,
+  } = useQuery<GetArticlesResponse>({
+    queryKey: ['articles', page, searchTerm, searchTag],
+    queryFn: () => {
+      if (searchTerm) {
+        return searchArticles(searchTerm, page, searchTag);
       }
-      setArticles(result.articles);
-      setTotalPages(result.totalPages);
-    } catch (error) {
-      console.error('Error fetching articles:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return getArticles(page, searchTag);
+    },
+  });
 
+  const articles: ArticleListItem[] = (articlesData as GetArticlesResponse | undefined)?.articles ?? [];
+  const totalPages: number = (articlesData as GetArticlesResponse | undefined)?.total_pages ?? 0;
+  const loading = isLoading || (isFetching && !articlesData);
 
   // Debounce implementation function
   // thanks to: https://blog.alexefimenko.com/posts/debounce-react
@@ -146,9 +142,9 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
       setPage(1);
       setSearchTag(null);
       updateURLQuietly({ search: value, page: 1 });
-      fetchArticles(value, 1, searchTag);
+      // React Query will automatically refetch when searchTerm changes
     }, SEARCH_DELAY),
-    [updateURLQuietly, fetchArticles]
+    [updateURLQuietly]
   );
 
   // Handle search input change
@@ -163,14 +159,13 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
     setSearchTag(newTag);
     setPage(1);
     updateURLQuietly({ tag: newTag, page: 1 });
-    fetchArticles(searchTerm, 1, newTag);
+    // React Query refetch through dependency change
   };
 
   // Handle pagination
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
     updateURLQuietly({ page: newPage });
-    fetchArticles(searchTerm, newPage, searchTag);
   };
 
   // Initial data fetch
@@ -179,7 +174,7 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
       const allTags = ['All', ...tags.tags];
       setRecentTags(allTags);
     });
-    fetchArticles(searchTerm, 1, searchTag);
+    // React Query will handle the initial fetch automatically
   }, []); 
 
   // State to control the animation
@@ -261,7 +256,7 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
         </div>
       ) : (
         <div className={`grid grid-cols-1 gap-4 w-full`}>
-          {articles.map((article) => (
+          {articles.map((article: ArticleListItem) => (
             <Card key={article.article.id}>
               <CardContent className="p-0">
                 <Link to="/blog/$blogSlug" params={{ blogSlug: article.article.slug as string }} search={{ page: undefined, tag: undefined, search: undefined }}
