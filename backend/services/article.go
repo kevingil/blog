@@ -341,9 +341,12 @@ func (s *ArticleService) GetArticles(page int, tag string, includeDrafts bool) (
 		whereClause = " WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	// Order drafts (published_at NULL) by created_at so they still appear in list
-	orderClause := " ORDER BY COALESCE(a.published_at, a.created_at) DESC LIMIT ? OFFSET ?"
-	args = append(args, ITEMS_PER_PAGE, offset)
+	// Order clause (optionally add LIMIT/OFFSET for pagination)
+	orderClause := " ORDER BY COALESCE(a.published_at, a.created_at) DESC"
+	if page != 0 {
+		orderClause += " LIMIT ? OFFSET ?"
+		args = append(args, ITEMS_PER_PAGE, offset)
+	}
 
 	// Final query for data
 	baseQuery := selectClause + fromClause + joinTagClause + whereClause + orderClause
@@ -354,7 +357,13 @@ func (s *ArticleService) GetArticles(page int, tag string, includeDrafts bool) (
 
 	// Total count
 	var totalCount int64
-	if err := db.QueryRow(countQuery, args[:len(args)-2]...).Scan(&totalCount); err != nil {
+	// If page == 0, args might not include limit/offset, so use args as-is
+	countArgs := args
+	if page != 0 {
+		// exclude the limit & offset values which are the last two items
+		countArgs = args[:len(args)-2]
+	}
+	if err := db.QueryRow(countQuery, countArgs...).Scan(&totalCount); err != nil {
 		return nil, err
 	}
 

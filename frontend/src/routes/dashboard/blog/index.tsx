@@ -40,8 +40,8 @@ function ArticlesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: articlesPayload, isLoading, error } = useQuery<{ articles: ArticleListItem[], totalPages: number }>({
-    queryKey: ['articles', 1],
-    queryFn: () => getArticles(1, null, true) as Promise<{ articles: ArticleListItem[], totalPages: number }>
+    queryKey: ['articles', 0],
+    queryFn: () => getArticles(0, null, true) as Promise<{ articles: ArticleListItem[], totalPages: number }>
   });
   console.log("articlesPayload error", error);
 
