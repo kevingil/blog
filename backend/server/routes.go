@@ -49,9 +49,7 @@ func (s *FiberServer) RegisterRoutes() {
 	blog.Get("/articles/:slug", s.GetArticleDataHandler)
 	blog.Post("/articles/:slug/update", s.UpdateArticleHandler)
 	blog.Post("/articles", s.CreateArticleHandler)
-	blog.Get("/articles/:slug/metadata", s.GetArticleMetadataHandler)
 	blog.Get("/articles/:id/recommended", s.GetRecommendedArticlesHandler)
-	blog.Get("/articles/dashboard", s.GetDashboardArticlesHandler)
 	blog.Delete("/articles/:id", s.DeleteArticleHandler)
 
 	// Add new blog routes
@@ -577,24 +575,6 @@ func (s *FiberServer) GetPopularTagsHandler(c *fiber.Ctx) error {
 	})
 }
 
-func (s *FiberServer) GetArticleMetadataHandler(c *fiber.Ctx) error {
-	slug := c.Params("slug")
-	if slug == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Slug is required",
-		})
-	}
-
-	metadata, err := s.blogService.GetArticleMetadata(slug)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(metadata)
-}
-
 func (s *FiberServer) GetArticleDataHandler(c *fiber.Ctx) error {
 	slug := c.Params("slug")
 	if slug == "" {
@@ -627,17 +607,6 @@ func (s *FiberServer) GetRecommendedArticlesHandler(c *fiber.Ctx) error {
 	}
 
 	articles, err := s.blogService.GetRecommendedArticles(int64(id))
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(articles)
-}
-
-func (s *FiberServer) GetDashboardArticlesHandler(c *fiber.Ctx) error {
-	articles, err := s.blogService.GetDashboardArticles()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),

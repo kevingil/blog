@@ -55,14 +55,8 @@ function ArticlesPage() {
     queryKey: ['articles', 1],
     queryFn: () => getArticles(1) as Promise<{ articles: ArticleListItem[], totalPages: number }>
   });
-  const articles: ArticleRow[] = articlesPayload?.articles.map((article: any) => ({
-    ...article,
-    title: article.title ?? '',
-    slug: article.slug ?? '',
-    createdAt: article.created_at,
-    publishedAt: article.published_at,
-    isDraft: article.is_draft
-  })) || [];
+
+  console.log("articlesPayload", articlesPayload);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiArticleTitle, setAiArticleTitle] = useState<string>('');
@@ -70,7 +64,7 @@ function ArticlesPage() {
 
   const handleDelete = async (id: number) => {
     const result = await deleteArticle(id);
-    if (result.success && articles) {
+    if (result.success && articlesPayload?.articles) {
       // Filter out the deleted article from the articles state
       // This is a simple implementation. Depending on your use case, you might want to use a more robust state management solution
       // For example, you could use a state management library like Redux or a context to manage the state of your articles
@@ -98,7 +92,7 @@ function ArticlesPage() {
     }
   };
 
-  function renderArticles(articles: ArticleRow[]) {
+  function renderArticles(articles: ArticleListItem[]) {
     return (
       <Table className="">
         <TableHeader>
@@ -110,23 +104,23 @@ function ArticlesPage() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {articles ? articles.map((article) => (
-            <TableRow key={article.id}>
+          {articlesPayload?.articles ? articlesPayload?.articles.map((article) => (
+            <TableRow key={article.article.id}>
               <TableCell className="w-full flex flex-col gap-1">
                 <div className="flex items-start gap-2">
-                  <div className="flex items-start flex-wrap">{article.image && <img src={article.image} className="rounded-md mt-1 w-10 h-10 min-w-10 min-h-10 object-cover" />}</div>
+                  <div className="flex items-start flex-wrap">{article.article.image && <img src={article.article.image} className="rounded-md mt-1 w-10 h-10 min-w-10 min-h-10 object-cover" />}</div>
                   <div className="flex flex-col">
-                    <Link to={`/dashboard/blog/edit/$blogSlug`} params={{ blogSlug: article.slug || '' }} className="text-gray-900 text-md hover:underline dark:text-white">{article.title}</Link>
-                    <p className="text-gray-500 text-xs">Published: {article.published_at ? new Date(article.published_at).toLocaleDateString() : 'Not published'}</p>
-                    <div className="flex flex-wrap gap-2">{article.tags.map(tag => <Badge key={tag}
+                    <Link to={`/dashboard/blog/edit/$blogSlug`} params={{ blogSlug: article.article.slug || '' }} className="text-gray-900 text-md hover:underline dark:text-white">{article.article.title}</Link>
+                    <p className="text-gray-500 text-xs">Published: {article.article.published_at ? new Date(article.article.published_at).toLocaleDateString() : 'Not published'}</p>
+                    <div className="flex flex-wrap gap-2">{article.tags.map((tag: { tag_name: string }) => <Badge key={tag.tag_name}
                   className="text-[0.6rem]" variant="outline"
-                  >{tag}</Badge>)}</div>
-                  <p className="text-gray-500 text-xs">{article.content ? article.content.slice(0, 150) + '...' : ''}</p>
+                  >{tag.tag_name.toUpperCase()}</Badge>)}</div>
+                  <p className="text-gray-500 text-xs">{article.article.content ? article.article.content.slice(0, 150) + '...' : ''}</p>
                   </div>  
                 </div>
               </TableCell>
-              <TableCell className=""><p className="text-gray-500 text-xs">Created: {new Date(article.created_at).toLocaleDateString()}</p></TableCell>
-              <TableCell><Badge className={`text-[0.6rem] ${article.is_draft ? "bg-indigo-50 dark:bg-indigo-900" : "bg-orange-50 dark:bg-orange-900"}`} variant="outline">{article.is_draft ? 'Draft' : 'Published'}</Badge></TableCell>
+              <TableCell className=""><p className="text-gray-500 text-xs">Created: {new Date(article.article.created_at).toLocaleDateString()}</p></TableCell>
+              <TableCell><Badge className={`text-[0.6rem] ${article.article.is_draft ? "bg-indigo-50 dark:bg-indigo-900" : "bg-orange-50 dark:bg-orange-900"}`} variant="outline">{article.article.is_draft ? 'Draft' : 'Published'}</Badge></TableCell>
               <TableCell className="text-right">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -137,12 +131,12 @@ function ArticlesPage() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem asChild>
-                      <Link to={`/dashboard/blog/edit/$blogSlug`} params={{ blogSlug: article.slug || '' }}>
+                      <Link to={`/dashboard/blog/edit/$blogSlug`} params={{ blogSlug: article.article.slug || '' }}>
                         <Pencil className="mr-2 h-4 w-4" />
                         Edit
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleDelete(article.id)}>
+                    <DropdownMenuItem onClick={() => handleDelete(article.article.id)}>
                       <Trash2 className="mr-2 h-4 w-4" />
                       Delete
                     </DropdownMenuItem>
@@ -240,13 +234,13 @@ function ArticlesPage() {
             <TabsTrigger value="drafts">Drafts</TabsTrigger>
           </TabsList>
           <TabsContent value="all" className="p-0 w-full">
-            {renderArticles(articles.sort((a: ArticleRow, b: ArticleRow) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()))}
+            {renderArticles(articlesPayload?.articles.sort((a: ArticleListItem, b: ArticleListItem) => new Date(b.article.created_at || 0).getTime() - new Date(a.article.created_at || 0).getTime()) || [])}
           </TabsContent>
           <TabsContent value="published" className="p-0 w-full">
-            {renderArticles(articles.filter((article: ArticleRow) => article.is_draft === false))}
+            {renderArticles(articlesPayload?.articles.filter((article: ArticleListItem) => article.article.is_draft === false) || [])}
           </TabsContent>
           <TabsContent value="drafts" className="p-0 w-full">
-            {renderArticles(articles.filter((article: ArticleRow) => article.is_draft === true))}
+            {renderArticles(articlesPayload?.articles.filter((article: ArticleListItem) => article.article.is_draft === true) || [])}
           </TabsContent>
           </Tabs>
         </CardContent>

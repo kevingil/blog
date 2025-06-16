@@ -191,14 +191,6 @@ export async function updateArticleWithContext(articleId: number): Promise<{ con
   return response.json();
 }
 
-export async function getArticleMetadata(slug: string): Promise<{ title: string; description: string }> {
-  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${slug}/metadata`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch article metadata');
-  }
-  return response.json();
-}
-
 export async function getArticleData(slug: string): Promise<ArticleData | null> {
   const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${slug}`);
   if (response.status === 404) {
@@ -214,14 +206,6 @@ export async function getRecommendedArticles(currentArticleId: number): Promise<
   const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${currentArticleId}/recommended`);
   if (!response.ok) {
     throw new Error('Failed to fetch recommended articles');
-  }
-  return response.json();
-}
-
-export async function getDashboardArticles(): Promise<ArticleRow[]> {
-  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/dashboard`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch dashboard articles');
   }
   return response.json();
 }

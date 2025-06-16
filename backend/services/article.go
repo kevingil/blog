@@ -598,29 +598,6 @@ type ArticleRow struct {
 	Image       *string  `json:"image"`
 }
 
-func (s *ArticleService) GetArticleMetadata(slug string) (*ArticleMetadata, error) {
-	db := s.db.GetDB()
-	var article models.Article
-
-	err := db.QueryRow("SELECT title, content FROM articles WHERE slug = ?", slug).Scan(&article.Title, &article.Content)
-	if err != nil {
-		return nil, err
-	}
-
-	description := ""
-	if article.Content != "" {
-		description = article.Content
-		if len(description) > 160 {
-			description = description[:160]
-		}
-	}
-
-	return &ArticleMetadata{
-		Title:       article.Title,
-		Description: description,
-	}, nil
-}
-
 func (s *ArticleService) GetArticleData(slug string) (*ArticleData, error) {
 	db := s.db.GetDB()
 	var article models.Article
@@ -676,6 +653,7 @@ func (s *ArticleService) GetArticleData(slug string) (*ArticleData, error) {
 	}, nil
 }
 
+// TODO: Use embeddings
 func (s *ArticleService) GetRecommendedArticles(currentArticleID int64) ([]RecommendedArticle, error) {
 	db := s.db.GetDB()
 
@@ -713,44 +691,6 @@ func (s *ArticleService) GetRecommendedArticles(currentArticleID int64) ([]Recom
 	}
 
 	return recommended, nil
-}
-
-func (s *ArticleService) GetDashboardArticles() ([]ArticleRow, error) {
-	db := s.db.GetDB()
-
-	rows, err := db.Query(`SELECT a.id, a.title, a.content, a.created_at, a.published_at, a.is_draft, a.slug, a.image,
-		GROUP_CONCAT(t.tag_name) as tags 
-		FROM articles a 
-		LEFT JOIN article_tags at ON a.id = at.article_id 
-		LEFT JOIN tags t ON at.tag_id = t.tag_id 
-		GROUP BY a.id 
-		ORDER BY a.published_at DESC, a.created_at DESC`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var articles []ArticleRow
-	for rows.Next() {
-		var article ArticleRow
-		var tagsStr sql.NullString
-
-		err := rows.Scan(&article.ID, &article.Title, &article.Content, &article.CreatedAt,
-			&article.PublishedAt, &article.IsDraft, &article.Slug, &article.Image, &tagsStr)
-		if err != nil {
-			return nil, err
-		}
-
-		if tagsStr.Valid && tagsStr.String != "" {
-			article.Tags = strings.Split(tagsStr.String, ",")
-		} else {
-			article.Tags = []string{}
-		}
-
-		articles = append(articles, article)
-	}
-
-	return articles, nil
 }
 
 func (s *ArticleService) DeleteArticle(id int64) error {
