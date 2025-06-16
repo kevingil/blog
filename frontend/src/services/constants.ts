@@ -1,5 +1,5 @@
 export const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-export const PUBLIC_S3_URL_PREFIX = import.meta.env.VITE_PUBLIC_S3_URL_PREFIX;
+export const VITE_PUBLIC_S3_URL_PREFIX = import.meta.env.VITE_PUBLIC_S3_URL_PREFIX;
 
 export const siteMetadata = {
     title: "Kevin Gil",

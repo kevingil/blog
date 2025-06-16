@@ -212,7 +212,7 @@ func folderIsHidden(folderName string) bool {
 func NewR2S3Client() *s3.Client {
 	endpoint := os.Getenv("S3_ENDPOINT")
 	accessKey := os.Getenv("S3_ACCESS_KEY_ID")
-	secretKey := os.Getenv("S3_SECRET_ACCESS_KEY")
+	secretKey := os.Getenv("S3_ACCESS_KEY_SECRET")
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion("auto"),

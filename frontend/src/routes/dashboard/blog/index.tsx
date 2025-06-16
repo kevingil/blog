@@ -8,7 +8,7 @@ import { MoreHorizontal, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useState } from 'react';
 import { getArticles, deleteArticle } from '@/services/blog';
-import { ArticleRow } from '@/services/types';
+import { ArticleListItem, ArticleRow } from '@/services/types';
 import { generateArticle } from '@/services/llm/articles';
 import { useNavigate } from '@tanstack/react-router';
 import { Badge } from "@/components/ui/badge"
@@ -51,9 +51,9 @@ export const Route = createFileRoute('/dashboard/blog/')({
 function ArticlesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { data: articlesPayload, isLoading, error } = useQuery<GetArticlesResponse>({
+  const { data: articlesPayload, isLoading, error } = useQuery<{ articles: ArticleListItem[], totalPages: number }>({
     queryKey: ['articles', 1],
-    queryFn: () => getArticles(1) as Promise<GetArticlesResponse>
+    queryFn: () => getArticles(1) as Promise<{ articles: ArticleListItem[], totalPages: number }>
   });
   const articles: ArticleRow[] = articlesPayload?.articles.map((article: any) => ({
     ...article,

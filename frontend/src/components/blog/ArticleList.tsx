@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { getArticles, searchArticles, getPopularTags } from '@/services/blog';
 import { ArticleListItem, ITEMS_PER_PAGE } from '@/services/types';
+import { GetArticlesResponse } from '@/routes/dashboard/blog';
 
 
 // Debounce delay in ms
@@ -219,14 +220,14 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
             )}
           </div>
           <div className='flex flex-wrap gap-2 my-4'>
-            {recentTags.map((tag) => (
+            {recentTags && recentTags.length > 0 && recentTags.map((tag) => (
               <Badge
                 key={tag}
                 variant={searchTag === tag || (searchTag === null && tag === 'All') ? "default" : "secondary"}
                 className="cursor-pointer hover:bg-primary/90"
                 onClick={() => handleTagClick(tag)}
               >
-                {tag}
+                {tag.toUpperCase()}
               </Badge>
             ))}
           </div>
@@ -261,22 +262,22 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
       ) : (
         <div className={`grid grid-cols-1 gap-4 w-full`}>
           {articles.map((article) => (
-            <Card key={article.id}>
+            <Card key={article.article.id}>
               <CardContent className="p-0">
-                <Link to="/blog/$blogSlug" params={{ blogSlug: article.slug as string }} search={{ page: undefined, tag: undefined, search: undefined }}
+                <Link to="/blog/$blogSlug" params={{ blogSlug: article.article.slug as string }} search={{ page: undefined, tag: undefined, search: undefined }}
                   className='w-full h-full flex flex-row justify-between'>
                   <div className='p-4 w-full'>
-                    <h2 className="text-xl font-semibold mb-2">{article.title}</h2>
+                    <h2 className="text-xl font-semibold mb-2">{article.article.title}</h2>
                     <div className="flex items-center mb-4">
-                      <span className="text-sm text-muted-foreground">{article.author}</span>
+                      <span className="text-sm text-muted-foreground">{article.article.author}</span>
                     </div>
                     <div className="flex items-center mb-4 gap-2">
                       <p className="text-sm text-muted-foreground mb-4">
-                        {markdownToPlainText(article.content?.substring(0, 160) || '' )}
+                        {markdownToPlainText(article.article.content?.substring(0, 160) || '' )}
                       </p>
                       <div className='items-start flex sm:hidden w-full min-w-[40%]'>
-                        {article.image !== null && article.image !== '' ? (
-                          <img src={article.image} alt={article.title ? article.title : ''}
+                        {article.article.image !== null && article.article.image !== '' ? (
+                          <img src={article.article.image} alt={article.article.title ? article.article.title : ''}
                             className="rounded-lg object-cover aspect-square h-full w-full bg-gray-300/10 dark:bg-gray-100/10" />
                         ) : (
                           <ImageIcon className='h-2/3 w-full text-zinc-200 dark:text-zinc-600' />
@@ -284,17 +285,17 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
                       </div>
                     </div>
                     <p className="text-sm text-muted-foreground mb-4">
-                      {article.published_at ? format(new Date(article.published_at), 'MMMM d, yyyy') : 'Unknown'}
+                      {article.article.published_at ? format(new Date(article.article.published_at), 'MMMM d, yyyy') : 'Unknown'}
                     </p>
                     <div className="flex flex-wrap gap-2 mb-4">
-                      {article.tags.map((tag) => (
-                        <Badge key={tag} variant="secondary" className="text-primary">{tag}</Badge>
+                      {article.tags.map((tag: { tag_name: string }) => (
+                        <Badge key={tag.tag_name} variant="secondary" className="text-primary">{tag.tag_name.toUpperCase()}</Badge>
                       ))}
                     </div>
                   </div>
                   <div className='max-w-[30%] p-4 items-center hidden sm:flex aspect-square'>
-                    {article.image !== null && article.image !== '' ? (
-                      <img src={article.image} alt={article.title ? article.title : ''}
+                    {article.article.image !== null && article.article.image !== '' ? (
+                      <img src={article.article.image} alt={article.article.title ? article.article.title : ''}
                         className="rounded-lg object-cover h-full w-full bg-gray-300/10 dark:bg-gray-100/10" />
                     ) : (
                       <ImageIcon className='h-2/3 w-full text-zinc-200 dark:text-zinc-600' />

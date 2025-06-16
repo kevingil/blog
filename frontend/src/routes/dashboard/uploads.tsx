@@ -5,7 +5,7 @@ import { Input } from '../../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { listFiles, uploadFile, deleteFile, createFolder, FileData, FolderData } from '../../services/storage';
 import { Folder, File, Trash2, Upload } from 'lucide-react';
-import { PUBLIC_S3_URL_PREFIX } from '../../services/constants';
+import { VITE_PUBLIC_S3_URL_PREFIX } from '../../services/constants';
 
 import {
   Dialog,
@@ -28,6 +28,8 @@ function UploadsPage() {
   const [fileUpload, setFileUpload] = useState<File | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [fetchingError, setFetchingError] = useState<string | null>(null);
+
+  console.log("VITE_PUBLIC_S3_URL_PREFIX", VITE_PUBLIC_S3_URL_PREFIX);
   
   const fetchFiles = async () => {
     try {
@@ -189,7 +191,7 @@ function UploadsPage() {
                       <DialogTrigger className='flex items-center text-left'>
                           {file.is_image ?
                           <img
-                            src={`${PUBLIC_S3_URL_PREFIX}/${file.key}`}
+                            src={`${VITE_PUBLIC_S3_URL_PREFIX}/${file.key}`}
                             className="w-6 h-6 mr-2"
                           />
                           :
@@ -212,7 +214,7 @@ function UploadsPage() {
                           {file?.is_image ? (
                             <div className="flex justify-center">
                               <img
-                                src={`${PUBLIC_S3_URL_PREFIX}/${file.key}`}
+                                src={`${VITE_PUBLIC_S3_URL_PREFIX}/${file.key}`}
                                 alt={file.key}
                                 className="max-h-[500px] p-4"
                               />
