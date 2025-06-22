@@ -9,6 +9,8 @@ import (
 
 	"blog-agent-go/backend/database"
 	"blog-agent-go/backend/models"
+
+	"github.com/openai/openai-go"
 )
 
 type ImageGenerationService struct {
@@ -34,7 +36,7 @@ func (s *ImageGenerationService) GenerateArticleImage(ctx context.Context, promp
 	db := s.db.GetDB()
 
 	// Instantiate helpers
-	llmService := NewLLMService()
+	client := openai.NewClient()
 	textGen := NewTextGenerationService()
 
 	// Generate prompt from article content if requested or prompt empty
@@ -51,11 +53,22 @@ func (s *ImageGenerationService) GenerateArticleImage(ctx context.Context, promp
 		prompt = generatedPrompt
 	}
 
-	// Request base64 encoded image from OpenAI
-	b64Img, err := llmService.GenerateImage(ctx, prompt, "gpt-image-1", "1024x1024", "b64_json")
+	// Generate image using official OpenAI client and get base64 response
+	imgResp, err := client.Images.Generate(ctx, openai.ImageGenerateParams{
+		Prompt:         prompt,
+		Model:          openai.ImageModelGPTImage1,
+		ResponseFormat: openai.ImageGenerateParamsResponseFormatB64JSON,
+		N:              openai.Int(1),
+	})
 	if err != nil {
 		return nil, err
 	}
+
+	if len(imgResp.Data) == 0 {
+		return nil, fmt.Errorf("no data returned from openai image generation")
+	}
+
+	b64Img := imgResp.Data[0].B64JSON
 
 	// Decode base64
 	imgBytes, err := base64.StdEncoding.DecodeString(b64Img)
