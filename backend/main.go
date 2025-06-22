@@ -37,8 +37,8 @@ func main() {
 	authService := services.NewAuthService(dbService, secretKey)
 	writerAgent := services.NewWriterAgent(os.Getenv("ANTHROPIC_API_KEY"))
 	blogService := services.NewArticleService(dbService, writerAgent)
-	imageService := services.NewImageGenerationService(dbService)
 	storageService := services.NewStorageService(s3Client, bucket, urlPrefix)
+	imageService := services.NewImageGenerationService(dbService, storageService)
 	pagesService := services.NewPagesService(dbService)
 
 	// Initialize and start server
