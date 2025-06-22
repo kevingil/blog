@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"os"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -15,7 +17,11 @@ type WriterAgent struct {
 	client *anthropic.Client
 }
 
-func NewWriterAgent(apiKey string) *WriterAgent {
+func NewWriterAgent() *WriterAgent {
+	apiKey := os.Getenv("ANTHROPIC_API_KEY")
+	if apiKey == "" {
+		log.Fatal("ANTHROPIC_API_KEY environment variable is required")
+	}
 	client := anthropic.NewClient(option.WithAPIKey(apiKey))
 	return &WriterAgent{
 		client: &client,
