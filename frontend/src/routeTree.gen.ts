@@ -17,6 +17,7 @@ import { Route as LoginImport } from './routes/login'
 import { Route as DashboardImport } from './routes/dashboard'
 import { Route as ContactImport } from './routes/contact'
 import { Route as AboutImport } from './routes/about'
+import { Route as PublicLayoutImport } from './routes/_publicLayout'
 import { Route as IndexImport } from './routes/index'
 import { Route as DashboardIndexImport } from './routes/dashboard/index'
 import { Route as BlogIndexImport } from './routes/blog/index'
@@ -63,6 +64,11 @@ const ContactRoute = ContactImport.update({
 const AboutRoute = AboutImport.update({
   id: '/about',
   path: '/about',
+  getParentRoute: () => rootRoute,
+} as any)
+
+const PublicLayoutRoute = PublicLayoutImport.update({
+  id: '/_publicLayout',
   getParentRoute: () => rootRoute,
 } as any)
 
@@ -135,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexImport
+      parentRoute: typeof rootRoute
+    }
+    '/_publicLayout': {
+      id: '/_publicLayout'
+      path: ''
+      fullPath: ''
+      preLoaderRoute: typeof PublicLayoutImport
       parentRoute: typeof rootRoute
     }
     '/about': {
@@ -273,6 +286,7 @@ const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '': typeof PublicLayoutRoute
   '/about': typeof AboutRoute
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRouteWithChildren
@@ -292,6 +306,7 @@ export interface FileRoutesByFullPath {
 
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '': typeof PublicLayoutRoute
   '/about': typeof AboutRoute
   '/contact': typeof ContactRoute
   '/login': typeof LoginRoute
@@ -311,6 +326,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRoute
   '/': typeof IndexRoute
+  '/_publicLayout': typeof PublicLayoutRoute
   '/about': typeof AboutRoute
   '/contact': typeof ContactRoute
   '/dashboard': typeof DashboardRouteWithChildren
@@ -332,6 +348,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | ''
     | '/about'
     | '/contact'
     | '/dashboard'
@@ -350,6 +367,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | ''
     | '/about'
     | '/contact'
     | '/login'
@@ -367,6 +385,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/_publicLayout'
     | '/about'
     | '/contact'
     | '/dashboard'
@@ -387,6 +406,7 @@ export interface FileRouteTypes {
 
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  PublicLayoutRoute: typeof PublicLayoutRoute
   AboutRoute: typeof AboutRoute
   ContactRoute: typeof ContactRoute
   DashboardRoute: typeof DashboardRouteWithChildren
@@ -399,6 +419,7 @@ export interface RootRouteChildren {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  PublicLayoutRoute: PublicLayoutRoute,
   AboutRoute: AboutRoute,
   ContactRoute: ContactRoute,
   DashboardRoute: DashboardRouteWithChildren,
@@ -420,6 +441,7 @@ export const routeTree = rootRoute
       "filePath": "__root.tsx",
       "children": [
         "/",
+        "/_publicLayout",
         "/about",
         "/contact",
         "/dashboard",
@@ -432,6 +454,9 @@ export const routeTree = rootRoute
     },
     "/": {
       "filePath": "index.tsx"
+    },
+    "/_publicLayout": {
+      "filePath": "_publicLayout.tsx"
     },
     "/about": {
       "filePath": "about.tsx"
