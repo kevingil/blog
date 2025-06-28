@@ -18,6 +18,7 @@ import {
   IconShield,
   IconPencil,
   IconUpload,
+  IconHome,
 } from "@tabler/icons-react"
 
 import { NavDocuments } from "@/components/nav-documents"
@@ -33,38 +34,15 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { useAuth } from "@/services/auth/auth"
+import { useEffect, useState } from "react"
 
 const data = {
-  user: {
-    name: "Blog User",
-    email: "user@example.com",
-    avatar: "/avatars/user.jpg",
-  },
   navMain: [
     {
-      title: "Profile",
+      title: "Home",
       url: "/dashboard",
-      icon: IconUsers,
-    },
-    {
-      title: "Articles",
-      url: "/dashboard/blog",
-      icon: IconPencil,
-      items: [
-        {
-          title: "All Articles",
-          url: "/dashboard/blog",
-        },
-        {
-          title: "New Article",
-          url: "/dashboard/blog/new",
-        },
-      ],
-    },
-    {
-      title: "Uploads",
-      url: "/dashboard/uploads",
-      icon: IconUpload,
+      icon: IconHome,
     },
   ],
   navClouds: [
@@ -102,41 +80,68 @@ const data = {
   ],
   navSecondary: [
     {
-      title: "General Settings",
-      url: "/dashboard/general",
+      title: "Settings",
+      url: "/dashboard/settings",
       icon: IconSettings,
-    },
-    {
-      title: "Security",
-      url: "/dashboard/security",
-      icon: IconShield,
-    },
-    {
-      title: "Get Help",
-      url: "#",
-      icon: IconHelp,
     },
   ],
   documents: [
     {
-      name: "Blog Analytics",
-      url: "/dashboard/analytics",
-      icon: IconChartBar,
+      name: "Articles",
+      url: "/dashboard/blog",
+      icon: IconFileDescription,
+      items: [
+        {
+          title: "All Articles",
+          url: "/dashboard/blog",
+        },
+        {
+          title: "Draft Articles",
+          url: "/dashboard/blog?status=draft",
+        },
+        {
+          title: "Published Articles",
+          url: "/dashboard/blog?status=published",
+        },
+        {
+          title: "New Article",
+          url: "/dashboard/blog/new",
+        },
+      ],
     },
     {
-      name: "Content Library",
-      url: "/dashboard/library",
-      icon: IconDatabase,
-    },
-    {
-      name: "Writing Assistant",
-      url: "/dashboard/assistant",
-      icon: IconFileAi,
+      name: "Uploads",
+      url: "/dashboard/uploads",
+      icon: IconUpload,
     },
   ],
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+
+  const { user } = useAuth();
+
+  const [userData, setUserData] = useState<{ 
+    name: string, 
+    email: string,
+    avatar: string,
+  }>({ 
+    name: "", 
+    email: "", 
+    avatar: "" 
+  });
+  console.log(userData);
+
+  useEffect(() => {
+    if (user) {
+      setUserData({
+        name: user.name,
+        email: user.email,
+        avatar: "",
+      });
+    }
+  }, [user]);
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -160,7 +165,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={userData} />
       </SidebarFooter>
     </Sidebar>
   )

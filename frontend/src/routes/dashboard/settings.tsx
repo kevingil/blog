@@ -13,11 +13,11 @@ type ActionState = {
   success?: string;
 };
 
-export const Route = createFileRoute('/dashboard/general')({
-  component: GeneralPage,
+export const Route = createFileRoute('/dashboard/settings')({
+  component: SettingsPage,
 });
 
-function GeneralPage() {
+function SettingsPage() {
   const { user } = useAuth();
   const [state, setState] = useState<ActionState>({ error: '', success: '' });
   const [isPending, setIsPending] = useState(false);
@@ -40,7 +40,7 @@ function GeneralPage() {
   return (
     <section className="flex-1 p-0 md:p-4">
       <h1 className="text-lg lg:text-2xl font-medium text-gray-900 dark:text-white mb-6">
-        General Settings
+        Settings
       </h1>
 
       <Card>

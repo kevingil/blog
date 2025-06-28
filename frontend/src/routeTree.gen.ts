@@ -17,8 +17,8 @@ import { Route as PublicLayoutImport } from './routes/_publicLayout'
 import { Route as DashboardIndexImport } from './routes/dashboard/index'
 import { Route as PublicLayoutIndexImport } from './routes/_publicLayout/index'
 import { Route as DashboardUploadsImport } from './routes/dashboard/uploads'
+import { Route as DashboardSettingsImport } from './routes/dashboard/settings'
 import { Route as DashboardSecurityImport } from './routes/dashboard/security'
-import { Route as DashboardGeneralImport } from './routes/dashboard/general'
 import { Route as PublicLayoutSignupImport } from './routes/_publicLayout/signup'
 import { Route as PublicLayoutLoginImport } from './routes/_publicLayout/login'
 import { Route as PublicLayoutContactImport } from './routes/_publicLayout/contact'
@@ -66,15 +66,15 @@ const DashboardUploadsRoute = DashboardUploadsImport.update({
   getParentRoute: () => DashboardRoute,
 } as any)
 
-const DashboardSecurityRoute = DashboardSecurityImport.update({
-  id: '/security',
-  path: '/security',
+const DashboardSettingsRoute = DashboardSettingsImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => DashboardRoute,
 } as any)
 
-const DashboardGeneralRoute = DashboardGeneralImport.update({
-  id: '/general',
-  path: '/general',
+const DashboardSecurityRoute = DashboardSecurityImport.update({
+  id: '/security',
+  path: '/security',
   getParentRoute: () => DashboardRoute,
 } as any)
 
@@ -185,18 +185,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublicLayoutSignupImport
       parentRoute: typeof PublicLayoutImport
     }
-    '/dashboard/general': {
-      id: '/dashboard/general'
-      path: '/general'
-      fullPath: '/dashboard/general'
-      preLoaderRoute: typeof DashboardGeneralImport
-      parentRoute: typeof DashboardImport
-    }
     '/dashboard/security': {
       id: '/dashboard/security'
       path: '/security'
       fullPath: '/dashboard/security'
       preLoaderRoute: typeof DashboardSecurityImport
+      parentRoute: typeof DashboardImport
+    }
+    '/dashboard/settings': {
+      id: '/dashboard/settings'
+      path: '/settings'
+      fullPath: '/dashboard/settings'
+      preLoaderRoute: typeof DashboardSettingsImport
       parentRoute: typeof DashboardImport
     }
     '/dashboard/uploads': {
@@ -285,8 +285,8 @@ const PublicLayoutRouteWithChildren = PublicLayoutRoute._addFileChildren(
 )
 
 interface DashboardRouteChildren {
-  DashboardGeneralRoute: typeof DashboardGeneralRoute
   DashboardSecurityRoute: typeof DashboardSecurityRoute
+  DashboardSettingsRoute: typeof DashboardSettingsRoute
   DashboardUploadsRoute: typeof DashboardUploadsRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
   DashboardBlogNewRoute: typeof DashboardBlogNewRoute
@@ -295,8 +295,8 @@ interface DashboardRouteChildren {
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
-  DashboardGeneralRoute: DashboardGeneralRoute,
   DashboardSecurityRoute: DashboardSecurityRoute,
+  DashboardSettingsRoute: DashboardSettingsRoute,
   DashboardUploadsRoute: DashboardUploadsRoute,
   DashboardIndexRoute: DashboardIndexRoute,
   DashboardBlogNewRoute: DashboardBlogNewRoute,
@@ -316,8 +316,8 @@ export interface FileRoutesByFullPath {
   '/contact': typeof PublicLayoutContactRoute
   '/login': typeof PublicLayoutLoginRoute
   '/signup': typeof PublicLayoutSignupRoute
-  '/dashboard/general': typeof DashboardGeneralRoute
   '/dashboard/security': typeof DashboardSecurityRoute
+  '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/uploads': typeof DashboardUploadsRoute
   '/': typeof PublicLayoutIndexRoute
   '/dashboard/': typeof DashboardIndexRoute
@@ -334,8 +334,8 @@ export interface FileRoutesByTo {
   '/contact': typeof PublicLayoutContactRoute
   '/login': typeof PublicLayoutLoginRoute
   '/signup': typeof PublicLayoutSignupRoute
-  '/dashboard/general': typeof DashboardGeneralRoute
   '/dashboard/security': typeof DashboardSecurityRoute
+  '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/uploads': typeof DashboardUploadsRoute
   '/': typeof PublicLayoutIndexRoute
   '/dashboard': typeof DashboardIndexRoute
@@ -355,8 +355,8 @@ export interface FileRoutesById {
   '/_publicLayout/contact': typeof PublicLayoutContactRoute
   '/_publicLayout/login': typeof PublicLayoutLoginRoute
   '/_publicLayout/signup': typeof PublicLayoutSignupRoute
-  '/dashboard/general': typeof DashboardGeneralRoute
   '/dashboard/security': typeof DashboardSecurityRoute
+  '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/uploads': typeof DashboardUploadsRoute
   '/_publicLayout/': typeof PublicLayoutIndexRoute
   '/dashboard/': typeof DashboardIndexRoute
@@ -377,8 +377,8 @@ export interface FileRouteTypes {
     | '/contact'
     | '/login'
     | '/signup'
-    | '/dashboard/general'
     | '/dashboard/security'
+    | '/dashboard/settings'
     | '/dashboard/uploads'
     | '/'
     | '/dashboard/'
@@ -394,8 +394,8 @@ export interface FileRouteTypes {
     | '/contact'
     | '/login'
     | '/signup'
-    | '/dashboard/general'
     | '/dashboard/security'
+    | '/dashboard/settings'
     | '/dashboard/uploads'
     | '/'
     | '/dashboard'
@@ -413,8 +413,8 @@ export interface FileRouteTypes {
     | '/_publicLayout/contact'
     | '/_publicLayout/login'
     | '/_publicLayout/signup'
-    | '/dashboard/general'
     | '/dashboard/security'
+    | '/dashboard/settings'
     | '/dashboard/uploads'
     | '/_publicLayout/'
     | '/dashboard/'
@@ -468,8 +468,8 @@ export const routeTree = rootRoute
     "/dashboard": {
       "filePath": "dashboard.tsx",
       "children": [
-        "/dashboard/general",
         "/dashboard/security",
+        "/dashboard/settings",
         "/dashboard/uploads",
         "/dashboard/",
         "/dashboard/blog/new",
@@ -496,12 +496,12 @@ export const routeTree = rootRoute
       "filePath": "_publicLayout/signup.tsx",
       "parent": "/_publicLayout"
     },
-    "/dashboard/general": {
-      "filePath": "dashboard/general.tsx",
-      "parent": "/dashboard"
-    },
     "/dashboard/security": {
       "filePath": "dashboard/security.tsx",
+      "parent": "/dashboard"
+    },
+    "/dashboard/settings": {
+      "filePath": "dashboard/settings.tsx",
       "parent": "/dashboard"
     },
     "/dashboard/uploads": {
