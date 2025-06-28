@@ -15,6 +15,9 @@ import {
   IconSearch,
   IconSettings,
   IconUsers,
+  IconShield,
+  IconPencil,
+  IconUpload,
 } from "@tabler/icons-react"
 
 import { NavDocuments } from "@/components/nav-documents"
@@ -33,117 +36,102 @@ import {
 
 const data = {
   user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
+    name: "Blog User",
+    email: "user@example.com",
+    avatar: "/avatars/user.jpg",
   },
   navMain: [
     {
-      title: "Dashboard",
-      url: "#",
-      icon: IconDashboard,
-    },
-    {
-      title: "Lifecycle",
-      url: "#",
-      icon: IconListDetails,
-    },
-    {
-      title: "Analytics",
-      url: "#",
-      icon: IconChartBar,
-    },
-    {
-      title: "Projects",
-      url: "#",
-      icon: IconFolder,
-    },
-    {
-      title: "Team",
-      url: "#",
+      title: "Profile",
+      url: "/dashboard",
       icon: IconUsers,
+    },
+    {
+      title: "Articles",
+      url: "/dashboard/blog",
+      icon: IconPencil,
+      items: [
+        {
+          title: "All Articles",
+          url: "/dashboard/blog",
+        },
+        {
+          title: "New Article",
+          url: "/dashboard/blog/new",
+        },
+      ],
+    },
+    {
+      title: "Uploads",
+      url: "/dashboard/uploads",
+      icon: IconUpload,
     },
   ],
   navClouds: [
     {
-      title: "Capture",
-      icon: IconCamera,
+      title: "Content",
+      icon: IconFileDescription,
       isActive: true,
       url: "#",
       items: [
         {
-          title: "Active Proposals",
-          url: "#",
+          title: "Draft Articles",
+          url: "/dashboard/blog?status=draft",
         },
         {
-          title: "Archived",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Proposal",
-      icon: IconFileDescription,
-      url: "#",
-      items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
+          title: "Published Articles",
+          url: "/dashboard/blog?status=published",
         },
       ],
     },
     {
-      title: "Prompts",
-      icon: IconFileAi,
-      url: "#",
+      title: "Media",
+      icon: IconCamera,
+      url: "/dashboard/uploads",
       items: [
         {
-          title: "Active Proposals",
-          url: "#",
+          title: "Images",
+          url: "/dashboard/uploads?type=images",
         },
         {
-          title: "Archived",
-          url: "#",
+          title: "Documents",
+          url: "/dashboard/uploads?type=documents",
         },
       ],
     },
   ],
   navSecondary: [
     {
-      title: "Settings",
-      url: "#",
+      title: "General Settings",
+      url: "/dashboard/general",
       icon: IconSettings,
+    },
+    {
+      title: "Security",
+      url: "/dashboard/security",
+      icon: IconShield,
     },
     {
       title: "Get Help",
       url: "#",
       icon: IconHelp,
     },
-    {
-      title: "Search",
-      url: "#",
-      icon: IconSearch,
-    },
   ],
   documents: [
     {
-      name: "Data Library",
-      url: "#",
+      name: "Blog Analytics",
+      url: "/dashboard/analytics",
+      icon: IconChartBar,
+    },
+    {
+      name: "Content Library",
+      url: "/dashboard/library",
       icon: IconDatabase,
     },
     {
-      name: "Reports",
-      url: "#",
-      icon: IconReport,
-    },
-    {
-      name: "Word Assistant",
-      url: "#",
-      icon: IconFileWord,
+      name: "Writing Assistant",
+      url: "/dashboard/assistant",
+      icon: IconFileAi,
     },
   ],
 }
@@ -158,9 +146,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               asChild
               className="data-[slot=sidebar-menu-button]:!p-1.5"
             >
-              <a href="#">
+              <a href="/">
                 <IconInnerShadowTop className="!size-5" />
-                <span className="text-base font-semibold">Acme Inc.</span>
+                <span className="text-base font-semibold">Blog Dashboard</span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
