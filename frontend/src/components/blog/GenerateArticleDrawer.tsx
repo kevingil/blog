@@ -85,13 +85,13 @@ export function GenerateArticleDrawer({ children }: GenerateArticleDrawerProps) 
           </div>
 
           <DrawerFooter>
-            <div className="w-full flex justify-end items-center gap-4">
+            <div className="w-full flex flex-row gap-4">
             <DrawerClose asChild>
-              <Button className="w-full" variant="outline" type="button">
+              <Button className="w-1/2" variant="outline" type="button">
                 Cancel
               </Button>
             </DrawerClose>
-            <Button className="w-full" type="submit" disabled={isGenerating}>
+            <Button className="w-1/2" type="submit" disabled={isGenerating}>
               {isGenerating ? "Generating..." : "Generate"}
             </Button>
             </div>

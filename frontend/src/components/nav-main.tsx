@@ -8,7 +8,9 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { Link } from "@tanstack/react-router"
 import { GenerateArticleDrawer } from "@/components/blog/GenerateArticleDrawer"
+import { Plus, Sparkles } from "lucide-react"
 
 export function NavMain({
   items,
@@ -27,20 +29,22 @@ export function NavMain({
             <GenerateArticleDrawer>
               <SidebarMenuButton
                 tooltip="Quick Generate"
-                className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground min-w-8 duration-200 ease-linear"
+                className="bg-primary shadow-md text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground min-w-8 duration-200 ease-linear"
               >
-                <IconCirclePlusFilled />
+                <Sparkles className="h-4 w-4" />
                 <span>Quick Generate</span>
               </SidebarMenuButton>
             </GenerateArticleDrawer>
+            <Link to="/dashboard/blog/new">
             <Button
               size="icon"
-              className="size-8 group-data-[collapsible=icon]:opacity-0"
-              variant="outline"
-            >
-              <IconMail />
-              <span className="sr-only">Inbox</span>
-            </Button>
+                className="outline-1 outline-gray-400 shadow-md size-8 group-data-[collapsible=icon]:opacity-0"
+                variant="outline"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="sr-only">New Article</span>
+              </Button>
+            </Link>
           </SidebarMenuItem>
         </SidebarMenu>
         <SidebarMenu>
