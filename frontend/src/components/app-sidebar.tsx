@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/services/auth/auth"
 import { useEffect, useState } from "react"
+import { Link } from "@tanstack/react-router"
 
 const data = {
   navMain: [
@@ -151,10 +152,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               asChild
               className="data-[slot=sidebar-menu-button]:!p-1.5"
             >
-              <a href="/">
+              <Link to="/">
                 <IconInnerShadowTop className="!size-5" />
                 <span className="text-base font-semibold">Blog Dashboard</span>
-              </a>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

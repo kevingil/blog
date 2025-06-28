@@ -8,9 +8,10 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { Link } from "@tanstack/react-router"
 import { GenerateArticleDrawer } from "@/components/blog/GenerateArticleDrawer"
 import { Plus, Sparkles } from "lucide-react"
+
+import { Link } from "@tanstack/react-router"
 
 export function NavMain({
   items,
@@ -52,9 +53,9 @@ export function NavMain({
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton tooltip={item.title}>
                   {item.icon && <item.icon />}
-                <a href={item.url}>
+                <Link to={item.url}>
                   <span>{item.title}</span>
-                </a>
+                </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}

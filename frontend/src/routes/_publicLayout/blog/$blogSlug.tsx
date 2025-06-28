@@ -10,7 +10,7 @@ import { getArticleData, getRecommendedArticles } from '@/services/blog';
 import hljs from 'highlight.js';
 import { createFileRoute } from '@tanstack/react-router';
 import { ArticleData, RecommendedArticle } from '@/services/types';
-
+import { Link } from "@tanstack/react-router"
 
 export const Route = createFileRoute('/_publicLayout/blog/$blogSlug')({
   component: Page,
@@ -173,7 +173,7 @@ function RecommendedArticles({ slug, articleData }: { slug: string, articleData:
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
       {recommendedArticles?.map((article: RecommendedArticle) => (
-        <a href={`/blog/${article.slug}`} key={article.id} >
+        <Link to="/blog/$blogSlug" params={{ blogSlug: article.slug }} >
         <Card className="p-0">
           {article.image && (
             <img
@@ -189,7 +189,7 @@ function RecommendedArticles({ slug, articleData }: { slug: string, articleData:
             </p>
           </CardContent>
         </Card>
-        </a>
+        </Link>
       ))}
     </div>
   );
