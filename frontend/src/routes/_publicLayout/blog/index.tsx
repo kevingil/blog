@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import ArticlesList, { ArticlesSkeleton } from '@/components/blog/ArticleList';
 import { createFileRoute } from '@tanstack/react-router';
 
-export const Route = createFileRoute('/blog/')({
+export const Route = createFileRoute('/_publicLayout/blog/')({
   component: ArticlesPage,
 });
 

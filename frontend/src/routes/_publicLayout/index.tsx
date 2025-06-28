@@ -8,7 +8,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useAtomValue } from 'jotai';
 import { tokenAtom, isAuthenticatedAtom } from '@/services/auth/auth';
 
-export const Route = createFileRoute('/')({
+export const Route = createFileRoute('/_publicLayout/')({
   component: HomePage,
 });
 

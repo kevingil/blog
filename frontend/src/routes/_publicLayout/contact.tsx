@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Card, CardContent } from '../components/ui/card';
-import { Skeleton } from '../components/ui/skeleton';
-import { getContactPage } from '../services/user';
+import { Card, CardContent } from '../../components/ui/card';
+import { Skeleton } from '../../components/ui/skeleton';
+import { getContactPage } from '../../services/user';
 import { useRef } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 
-export const Route = createFileRoute('/contact')({
+export const Route = createFileRoute('/_publicLayout/contact')({
   component: ContactPage,
 });
 

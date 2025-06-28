@@ -11,41 +11,29 @@
 // Import Routes
 
 import { Route as rootRoute } from './routes/__root'
-import { Route as SignupImport } from './routes/signup'
 import { Route as NotFoundImport } from './routes/not-found'
-import { Route as LoginImport } from './routes/login'
 import { Route as DashboardImport } from './routes/dashboard'
-import { Route as ContactImport } from './routes/contact'
-import { Route as AboutImport } from './routes/about'
 import { Route as PublicLayoutImport } from './routes/_publicLayout'
-import { Route as IndexImport } from './routes/index'
 import { Route as DashboardIndexImport } from './routes/dashboard/index'
-import { Route as BlogIndexImport } from './routes/blog/index'
+import { Route as PublicLayoutIndexImport } from './routes/_publicLayout/index'
 import { Route as DashboardUploadsImport } from './routes/dashboard/uploads'
 import { Route as DashboardSecurityImport } from './routes/dashboard/security'
 import { Route as DashboardGeneralImport } from './routes/dashboard/general'
-import { Route as BlogBlogSlugImport } from './routes/blog/$blogSlug'
+import { Route as PublicLayoutSignupImport } from './routes/_publicLayout/signup'
+import { Route as PublicLayoutLoginImport } from './routes/_publicLayout/login'
+import { Route as PublicLayoutContactImport } from './routes/_publicLayout/contact'
+import { Route as PublicLayoutAboutImport } from './routes/_publicLayout/about'
 import { Route as DashboardBlogIndexImport } from './routes/dashboard/blog/index'
+import { Route as PublicLayoutBlogIndexImport } from './routes/_publicLayout/blog/index'
 import { Route as DashboardBlogNewImport } from './routes/dashboard/blog/new'
+import { Route as PublicLayoutBlogBlogSlugImport } from './routes/_publicLayout/blog/$blogSlug'
 import { Route as DashboardBlogEditBlogSlugImport } from './routes/dashboard/blog/edit.$blogSlug'
 
 // Create/Update Routes
 
-const SignupRoute = SignupImport.update({
-  id: '/signup',
-  path: '/signup',
-  getParentRoute: () => rootRoute,
-} as any)
-
 const NotFoundRoute = NotFoundImport.update({
   id: '/not-found',
   path: '/not-found',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const LoginRoute = LoginImport.update({
-  id: '/login',
-  path: '/login',
   getParentRoute: () => rootRoute,
 } as any)
 
@@ -55,26 +43,8 @@ const DashboardRoute = DashboardImport.update({
   getParentRoute: () => rootRoute,
 } as any)
 
-const ContactRoute = ContactImport.update({
-  id: '/contact',
-  path: '/contact',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const AboutRoute = AboutImport.update({
-  id: '/about',
-  path: '/about',
-  getParentRoute: () => rootRoute,
-} as any)
-
 const PublicLayoutRoute = PublicLayoutImport.update({
   id: '/_publicLayout',
-  getParentRoute: () => rootRoute,
-} as any)
-
-const IndexRoute = IndexImport.update({
-  id: '/',
-  path: '/',
   getParentRoute: () => rootRoute,
 } as any)
 
@@ -84,10 +54,10 @@ const DashboardIndexRoute = DashboardIndexImport.update({
   getParentRoute: () => DashboardRoute,
 } as any)
 
-const BlogIndexRoute = BlogIndexImport.update({
-  id: '/blog/',
-  path: '/blog/',
-  getParentRoute: () => rootRoute,
+const PublicLayoutIndexRoute = PublicLayoutIndexImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PublicLayoutRoute,
 } as any)
 
 const DashboardUploadsRoute = DashboardUploadsImport.update({
@@ -108,10 +78,28 @@ const DashboardGeneralRoute = DashboardGeneralImport.update({
   getParentRoute: () => DashboardRoute,
 } as any)
 
-const BlogBlogSlugRoute = BlogBlogSlugImport.update({
-  id: '/blog/$blogSlug',
-  path: '/blog/$blogSlug',
-  getParentRoute: () => rootRoute,
+const PublicLayoutSignupRoute = PublicLayoutSignupImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => PublicLayoutRoute,
+} as any)
+
+const PublicLayoutLoginRoute = PublicLayoutLoginImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => PublicLayoutRoute,
+} as any)
+
+const PublicLayoutContactRoute = PublicLayoutContactImport.update({
+  id: '/contact',
+  path: '/contact',
+  getParentRoute: () => PublicLayoutRoute,
+} as any)
+
+const PublicLayoutAboutRoute = PublicLayoutAboutImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => PublicLayoutRoute,
 } as any)
 
 const DashboardBlogIndexRoute = DashboardBlogIndexImport.update({
@@ -120,10 +108,22 @@ const DashboardBlogIndexRoute = DashboardBlogIndexImport.update({
   getParentRoute: () => DashboardRoute,
 } as any)
 
+const PublicLayoutBlogIndexRoute = PublicLayoutBlogIndexImport.update({
+  id: '/blog/',
+  path: '/blog/',
+  getParentRoute: () => PublicLayoutRoute,
+} as any)
+
 const DashboardBlogNewRoute = DashboardBlogNewImport.update({
   id: '/blog/new',
   path: '/blog/new',
   getParentRoute: () => DashboardRoute,
+} as any)
+
+const PublicLayoutBlogBlogSlugRoute = PublicLayoutBlogBlogSlugImport.update({
+  id: '/blog/$blogSlug',
+  path: '/blog/$blogSlug',
+  getParentRoute: () => PublicLayoutRoute,
 } as any)
 
 const DashboardBlogEditBlogSlugRoute = DashboardBlogEditBlogSlugImport.update({
@@ -136,32 +136,11 @@ const DashboardBlogEditBlogSlugRoute = DashboardBlogEditBlogSlugImport.update({
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexImport
-      parentRoute: typeof rootRoute
-    }
     '/_publicLayout': {
       id: '/_publicLayout'
       path: ''
       fullPath: ''
       preLoaderRoute: typeof PublicLayoutImport
-      parentRoute: typeof rootRoute
-    }
-    '/about': {
-      id: '/about'
-      path: '/about'
-      fullPath: '/about'
-      preLoaderRoute: typeof AboutImport
-      parentRoute: typeof rootRoute
-    }
-    '/contact': {
-      id: '/contact'
-      path: '/contact'
-      fullPath: '/contact'
-      preLoaderRoute: typeof ContactImport
       parentRoute: typeof rootRoute
     }
     '/dashboard': {
@@ -171,13 +150,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardImport
       parentRoute: typeof rootRoute
     }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginImport
-      parentRoute: typeof rootRoute
-    }
     '/not-found': {
       id: '/not-found'
       path: '/not-found'
@@ -185,19 +157,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NotFoundImport
       parentRoute: typeof rootRoute
     }
-    '/signup': {
-      id: '/signup'
+    '/_publicLayout/about': {
+      id: '/_publicLayout/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof PublicLayoutAboutImport
+      parentRoute: typeof PublicLayoutImport
+    }
+    '/_publicLayout/contact': {
+      id: '/_publicLayout/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof PublicLayoutContactImport
+      parentRoute: typeof PublicLayoutImport
+    }
+    '/_publicLayout/login': {
+      id: '/_publicLayout/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof PublicLayoutLoginImport
+      parentRoute: typeof PublicLayoutImport
+    }
+    '/_publicLayout/signup': {
+      id: '/_publicLayout/signup'
       path: '/signup'
       fullPath: '/signup'
-      preLoaderRoute: typeof SignupImport
-      parentRoute: typeof rootRoute
-    }
-    '/blog/$blogSlug': {
-      id: '/blog/$blogSlug'
-      path: '/blog/$blogSlug'
-      fullPath: '/blog/$blogSlug'
-      preLoaderRoute: typeof BlogBlogSlugImport
-      parentRoute: typeof rootRoute
+      preLoaderRoute: typeof PublicLayoutSignupImport
+      parentRoute: typeof PublicLayoutImport
     }
     '/dashboard/general': {
       id: '/dashboard/general'
@@ -220,12 +206,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardUploadsImport
       parentRoute: typeof DashboardImport
     }
-    '/blog/': {
-      id: '/blog/'
-      path: '/blog'
-      fullPath: '/blog'
-      preLoaderRoute: typeof BlogIndexImport
-      parentRoute: typeof rootRoute
+    '/_publicLayout/': {
+      id: '/_publicLayout/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof PublicLayoutIndexImport
+      parentRoute: typeof PublicLayoutImport
     }
     '/dashboard/': {
       id: '/dashboard/'
@@ -234,12 +220,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardIndexImport
       parentRoute: typeof DashboardImport
     }
+    '/_publicLayout/blog/$blogSlug': {
+      id: '/_publicLayout/blog/$blogSlug'
+      path: '/blog/$blogSlug'
+      fullPath: '/blog/$blogSlug'
+      preLoaderRoute: typeof PublicLayoutBlogBlogSlugImport
+      parentRoute: typeof PublicLayoutImport
+    }
     '/dashboard/blog/new': {
       id: '/dashboard/blog/new'
       path: '/blog/new'
       fullPath: '/dashboard/blog/new'
       preLoaderRoute: typeof DashboardBlogNewImport
       parentRoute: typeof DashboardImport
+    }
+    '/_publicLayout/blog/': {
+      id: '/_publicLayout/blog/'
+      path: '/blog'
+      fullPath: '/blog'
+      preLoaderRoute: typeof PublicLayoutBlogIndexImport
+      parentRoute: typeof PublicLayoutImport
     }
     '/dashboard/blog/': {
       id: '/dashboard/blog/'
@@ -259,6 +259,30 @@ declare module '@tanstack/react-router' {
 }
 
 // Create and export the route tree
+
+interface PublicLayoutRouteChildren {
+  PublicLayoutAboutRoute: typeof PublicLayoutAboutRoute
+  PublicLayoutContactRoute: typeof PublicLayoutContactRoute
+  PublicLayoutLoginRoute: typeof PublicLayoutLoginRoute
+  PublicLayoutSignupRoute: typeof PublicLayoutSignupRoute
+  PublicLayoutIndexRoute: typeof PublicLayoutIndexRoute
+  PublicLayoutBlogBlogSlugRoute: typeof PublicLayoutBlogBlogSlugRoute
+  PublicLayoutBlogIndexRoute: typeof PublicLayoutBlogIndexRoute
+}
+
+const PublicLayoutRouteChildren: PublicLayoutRouteChildren = {
+  PublicLayoutAboutRoute: PublicLayoutAboutRoute,
+  PublicLayoutContactRoute: PublicLayoutContactRoute,
+  PublicLayoutLoginRoute: PublicLayoutLoginRoute,
+  PublicLayoutSignupRoute: PublicLayoutSignupRoute,
+  PublicLayoutIndexRoute: PublicLayoutIndexRoute,
+  PublicLayoutBlogBlogSlugRoute: PublicLayoutBlogBlogSlugRoute,
+  PublicLayoutBlogIndexRoute: PublicLayoutBlogIndexRoute,
+}
+
+const PublicLayoutRouteWithChildren = PublicLayoutRoute._addFileChildren(
+  PublicLayoutRouteChildren,
+)
 
 interface DashboardRouteChildren {
   DashboardGeneralRoute: typeof DashboardGeneralRoute
@@ -285,61 +309,60 @@ const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
 )
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '': typeof PublicLayoutRoute
-  '/about': typeof AboutRoute
-  '/contact': typeof ContactRoute
+  '': typeof PublicLayoutRouteWithChildren
   '/dashboard': typeof DashboardRouteWithChildren
-  '/login': typeof LoginRoute
   '/not-found': typeof NotFoundRoute
-  '/signup': typeof SignupRoute
-  '/blog/$blogSlug': typeof BlogBlogSlugRoute
+  '/about': typeof PublicLayoutAboutRoute
+  '/contact': typeof PublicLayoutContactRoute
+  '/login': typeof PublicLayoutLoginRoute
+  '/signup': typeof PublicLayoutSignupRoute
   '/dashboard/general': typeof DashboardGeneralRoute
   '/dashboard/security': typeof DashboardSecurityRoute
   '/dashboard/uploads': typeof DashboardUploadsRoute
-  '/blog': typeof BlogIndexRoute
+  '/': typeof PublicLayoutIndexRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/blog/$blogSlug': typeof PublicLayoutBlogBlogSlugRoute
   '/dashboard/blog/new': typeof DashboardBlogNewRoute
+  '/blog': typeof PublicLayoutBlogIndexRoute
   '/dashboard/blog': typeof DashboardBlogIndexRoute
   '/dashboard/blog/edit/$blogSlug': typeof DashboardBlogEditBlogSlugRoute
 }
 
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '': typeof PublicLayoutRoute
-  '/about': typeof AboutRoute
-  '/contact': typeof ContactRoute
-  '/login': typeof LoginRoute
   '/not-found': typeof NotFoundRoute
-  '/signup': typeof SignupRoute
-  '/blog/$blogSlug': typeof BlogBlogSlugRoute
+  '/about': typeof PublicLayoutAboutRoute
+  '/contact': typeof PublicLayoutContactRoute
+  '/login': typeof PublicLayoutLoginRoute
+  '/signup': typeof PublicLayoutSignupRoute
   '/dashboard/general': typeof DashboardGeneralRoute
   '/dashboard/security': typeof DashboardSecurityRoute
   '/dashboard/uploads': typeof DashboardUploadsRoute
-  '/blog': typeof BlogIndexRoute
+  '/': typeof PublicLayoutIndexRoute
   '/dashboard': typeof DashboardIndexRoute
+  '/blog/$blogSlug': typeof PublicLayoutBlogBlogSlugRoute
   '/dashboard/blog/new': typeof DashboardBlogNewRoute
+  '/blog': typeof PublicLayoutBlogIndexRoute
   '/dashboard/blog': typeof DashboardBlogIndexRoute
   '/dashboard/blog/edit/$blogSlug': typeof DashboardBlogEditBlogSlugRoute
 }
 
 export interface FileRoutesById {
   __root__: typeof rootRoute
-  '/': typeof IndexRoute
-  '/_publicLayout': typeof PublicLayoutRoute
-  '/about': typeof AboutRoute
-  '/contact': typeof ContactRoute
+  '/_publicLayout': typeof PublicLayoutRouteWithChildren
   '/dashboard': typeof DashboardRouteWithChildren
-  '/login': typeof LoginRoute
   '/not-found': typeof NotFoundRoute
-  '/signup': typeof SignupRoute
-  '/blog/$blogSlug': typeof BlogBlogSlugRoute
+  '/_publicLayout/about': typeof PublicLayoutAboutRoute
+  '/_publicLayout/contact': typeof PublicLayoutContactRoute
+  '/_publicLayout/login': typeof PublicLayoutLoginRoute
+  '/_publicLayout/signup': typeof PublicLayoutSignupRoute
   '/dashboard/general': typeof DashboardGeneralRoute
   '/dashboard/security': typeof DashboardSecurityRoute
   '/dashboard/uploads': typeof DashboardUploadsRoute
-  '/blog/': typeof BlogIndexRoute
+  '/_publicLayout/': typeof PublicLayoutIndexRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/_publicLayout/blog/$blogSlug': typeof PublicLayoutBlogBlogSlugRoute
   '/dashboard/blog/new': typeof DashboardBlogNewRoute
+  '/_publicLayout/blog/': typeof PublicLayoutBlogIndexRoute
   '/dashboard/blog/': typeof DashboardBlogIndexRoute
   '/dashboard/blog/edit/$blogSlug': typeof DashboardBlogEditBlogSlugRoute
 }
@@ -347,87 +370,72 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/'
     | ''
+    | '/dashboard'
+    | '/not-found'
     | '/about'
     | '/contact'
-    | '/dashboard'
     | '/login'
-    | '/not-found'
     | '/signup'
-    | '/blog/$blogSlug'
     | '/dashboard/general'
     | '/dashboard/security'
     | '/dashboard/uploads'
-    | '/blog'
+    | '/'
     | '/dashboard/'
+    | '/blog/$blogSlug'
     | '/dashboard/blog/new'
+    | '/blog'
     | '/dashboard/blog'
     | '/dashboard/blog/edit/$blogSlug'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/'
-    | ''
+    | '/not-found'
     | '/about'
     | '/contact'
     | '/login'
-    | '/not-found'
     | '/signup'
-    | '/blog/$blogSlug'
     | '/dashboard/general'
     | '/dashboard/security'
     | '/dashboard/uploads'
-    | '/blog'
+    | '/'
     | '/dashboard'
+    | '/blog/$blogSlug'
     | '/dashboard/blog/new'
+    | '/blog'
     | '/dashboard/blog'
     | '/dashboard/blog/edit/$blogSlug'
   id:
     | '__root__'
-    | '/'
     | '/_publicLayout'
-    | '/about'
-    | '/contact'
     | '/dashboard'
-    | '/login'
     | '/not-found'
-    | '/signup'
-    | '/blog/$blogSlug'
+    | '/_publicLayout/about'
+    | '/_publicLayout/contact'
+    | '/_publicLayout/login'
+    | '/_publicLayout/signup'
     | '/dashboard/general'
     | '/dashboard/security'
     | '/dashboard/uploads'
-    | '/blog/'
+    | '/_publicLayout/'
     | '/dashboard/'
+    | '/_publicLayout/blog/$blogSlug'
     | '/dashboard/blog/new'
+    | '/_publicLayout/blog/'
     | '/dashboard/blog/'
     | '/dashboard/blog/edit/$blogSlug'
   fileRoutesById: FileRoutesById
 }
 
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  PublicLayoutRoute: typeof PublicLayoutRoute
-  AboutRoute: typeof AboutRoute
-  ContactRoute: typeof ContactRoute
+  PublicLayoutRoute: typeof PublicLayoutRouteWithChildren
   DashboardRoute: typeof DashboardRouteWithChildren
-  LoginRoute: typeof LoginRoute
   NotFoundRoute: typeof NotFoundRoute
-  SignupRoute: typeof SignupRoute
-  BlogBlogSlugRoute: typeof BlogBlogSlugRoute
-  BlogIndexRoute: typeof BlogIndexRoute
 }
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  PublicLayoutRoute: PublicLayoutRoute,
-  AboutRoute: AboutRoute,
-  ContactRoute: ContactRoute,
+  PublicLayoutRoute: PublicLayoutRouteWithChildren,
   DashboardRoute: DashboardRouteWithChildren,
-  LoginRoute: LoginRoute,
   NotFoundRoute: NotFoundRoute,
-  SignupRoute: SignupRoute,
-  BlogBlogSlugRoute: BlogBlogSlugRoute,
-  BlogIndexRoute: BlogIndexRoute,
 }
 
 export const routeTree = rootRoute
@@ -440,29 +448,22 @@ export const routeTree = rootRoute
     "__root__": {
       "filePath": "__root.tsx",
       "children": [
-        "/",
         "/_publicLayout",
-        "/about",
-        "/contact",
         "/dashboard",
-        "/login",
-        "/not-found",
-        "/signup",
-        "/blog/$blogSlug",
-        "/blog/"
+        "/not-found"
       ]
     },
-    "/": {
-      "filePath": "index.tsx"
-    },
     "/_publicLayout": {
-      "filePath": "_publicLayout.tsx"
-    },
-    "/about": {
-      "filePath": "about.tsx"
-    },
-    "/contact": {
-      "filePath": "contact.tsx"
+      "filePath": "_publicLayout.tsx",
+      "children": [
+        "/_publicLayout/about",
+        "/_publicLayout/contact",
+        "/_publicLayout/login",
+        "/_publicLayout/signup",
+        "/_publicLayout/",
+        "/_publicLayout/blog/$blogSlug",
+        "/_publicLayout/blog/"
+      ]
     },
     "/dashboard": {
       "filePath": "dashboard.tsx",
@@ -476,17 +477,24 @@ export const routeTree = rootRoute
         "/dashboard/blog/edit/$blogSlug"
       ]
     },
-    "/login": {
-      "filePath": "login.tsx"
-    },
     "/not-found": {
       "filePath": "not-found.tsx"
     },
-    "/signup": {
-      "filePath": "signup.tsx"
+    "/_publicLayout/about": {
+      "filePath": "_publicLayout/about.tsx",
+      "parent": "/_publicLayout"
     },
-    "/blog/$blogSlug": {
-      "filePath": "blog/$blogSlug.tsx"
+    "/_publicLayout/contact": {
+      "filePath": "_publicLayout/contact.tsx",
+      "parent": "/_publicLayout"
+    },
+    "/_publicLayout/login": {
+      "filePath": "_publicLayout/login.tsx",
+      "parent": "/_publicLayout"
+    },
+    "/_publicLayout/signup": {
+      "filePath": "_publicLayout/signup.tsx",
+      "parent": "/_publicLayout"
     },
     "/dashboard/general": {
       "filePath": "dashboard/general.tsx",
@@ -500,16 +508,25 @@ export const routeTree = rootRoute
       "filePath": "dashboard/uploads.tsx",
       "parent": "/dashboard"
     },
-    "/blog/": {
-      "filePath": "blog/index.tsx"
+    "/_publicLayout/": {
+      "filePath": "_publicLayout/index.tsx",
+      "parent": "/_publicLayout"
     },
     "/dashboard/": {
       "filePath": "dashboard/index.tsx",
       "parent": "/dashboard"
     },
+    "/_publicLayout/blog/$blogSlug": {
+      "filePath": "_publicLayout/blog/$blogSlug.tsx",
+      "parent": "/_publicLayout"
+    },
     "/dashboard/blog/new": {
       "filePath": "dashboard/blog/new.tsx",
       "parent": "/dashboard"
+    },
+    "/_publicLayout/blog/": {
+      "filePath": "_publicLayout/blog/index.tsx",
+      "parent": "/_publicLayout"
     },
     "/dashboard/blog/": {
       "filePath": "dashboard/blog/index.tsx",

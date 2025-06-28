@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Card, CardContent } from '../components/ui/card';
-import { Skeleton } from '../components/ui/skeleton';
-import { getAboutPage } from '../services/user';
+import { Card, CardContent } from '../../components/ui/card';
+import { Skeleton } from '../../components/ui/skeleton';
+import { getAboutPage } from '../../services/user';
 import { useRef } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 
-export const Route = createFileRoute('/about')({
+export const Route = createFileRoute('/_publicLayout/about')({
   component: AboutPage,
 });
 

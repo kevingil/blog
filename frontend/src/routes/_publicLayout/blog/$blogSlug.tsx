@@ -12,7 +12,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { ArticleData, RecommendedArticle } from '@/services/types';
 
 
-export const Route = createFileRoute('/blog/$blogSlug')({
+export const Route = createFileRoute('/_publicLayout/blog/$blogSlug')({
   component: Page,
 });
 
@@ -60,7 +60,7 @@ function RecommendedArticlesSkeleton() {
 }
 
 export default function Page() {
-  const { blogSlug } = useParams({ from: '/blog/$blogSlug' });
+  const { blogSlug } = useParams({ from: '/_publicLayout/blog/$blogSlug' });
   const [articleData, setArticleData] = useState<ArticleData | null>(null);
   const searchParams = new URLSearchParams(window.location.search);
   const previewDraft = searchParams.get('previewDraft');
