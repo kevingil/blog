@@ -540,40 +540,37 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               </div>
             </div>
             {!isNew && (
-              <Link
-                to="/blog"
-                params={{ slug: article?.article.slug || '' }}
-                search={{ page: undefined, tag: undefined, search: undefined }}
-                target="_blank"
-                className="flex items-center gap-1 text-sm text-gray-900 dark:text-white"
-              >
-                See Article <ExternalLinkIcon className="w-4 h-4" />
-              </Link>
+              <>
+                <Link
+                  to="/blog"
+                  params={{ slug: article?.article.slug || '' }}
+                  search={{ page: undefined, tag: undefined, search: undefined }}
+                  target="_blank"
+                  className="flex items-center gap-1 text-sm text-gray-900 dark:text-white"
+                >
+                  See Article <ExternalLinkIcon className="w-4 h-4" />
+                </Link>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="text-sm flex flex-row gap-2"
+                  onClick={rewriteArticle}
+                  disabled={generatingRewrite}
+                >
+                  <RefreshCw className={cn('w-4 h-4 text-indigo-500', generatingRewrite && 'animate-spin')} /> Regenerate
+                </Button>
+              </>
             )}
           </div>
         </div>
 
         <Card>
-          <form className="mt-6">
+          <form className="">
             <CardContent className="space-y-4">
-              <div className='flex flex-row w-full justify-between'>
-                <label className="block my-auto text-md font-medium leading-6 text-gray-900 dark:text-white ">Content</label>
-                
-                <Button
-                  type="button"
-                  variant="outline"
-                  className='text-sm font-medium text-gray-900 dark:text-white flex flex-row gap-2'
-                  onClick={async () => {
-                    rewriteArticle()
-                  }}>
-                  <RefreshCw className={cn("w-4 h-4 text-indigo-500", generatingRewrite && "animate-spin")} /> Regenerate
-                </Button>
-              
-              </div>
               <div>
                 <Textarea
                   defaultValue={article?.article.content || ''}
-                  className="w-full p-4 border border-gray-300 rounded-md h-[60vh]"
+                  className="w-full p-4 border border-gray-300 rounded-md h-[calc(100vh-425px)]"
                   {...register('content')}
                   value={watchedValues.content}
                   onChange={(e) => setValue('content', e.target.value)}
@@ -581,7 +578,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 {errors.content && <p className="text-red-500">{errors.content.message}</p>}
               </div>
               <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Tags</label>
-              <div>
+              <div className='mb-2'>
                 <ChipInput
                   value={watchedValues.tags}
                   onChange={(tags) => setValue('tags', tags.map((tag: string) => tag.toUpperCase()))}
