@@ -3,6 +3,8 @@ package services
 import (
 	"context"
 	"errors"
+	"log"
+	"os"
 
 	openai "github.com/openai/openai-go"
 )
@@ -191,6 +193,7 @@ type ChatMessage struct {
 //
 //   - Messages – full chat transcript
 //   - Model    – allow the caller to pick a model (optional, defaults to GPT-4o)
+//   - DocumentContent – the current article content to provide context (optional)
 //
 // In the reference CopilotKit implementation there are also fields for
 //
@@ -202,8 +205,9 @@ type ChatMessage struct {
 // have to maintain without losing forward compatibility (unknown fields are
 // ignored by encoding/json).
 type ChatRequest struct {
-	Messages []ChatMessage `json:"messages"`
-	Model    string        `json:"model"`
+	Messages        []ChatMessage `json:"messages"`
+	Model           string        `json:"model"`
+	DocumentContent string        `json:"documentContent,omitempty"`
 }
 
 // CopilotKitService is a thin wrapper around the OpenAI client that exposes a
@@ -220,6 +224,12 @@ type CopilotKitService struct {
 
 func NewCopilotKitService() *CopilotKitService {
 	c := openai.NewClient()
+
+	// Log if API key is missing (helpful for debugging)
+	if os.Getenv("OPENAI_API_KEY") == "" {
+		log.Printf("WARNING: OPENAI_API_KEY environment variable is not set")
+	}
+
 	return &CopilotKitService{client: &c}
 }
 
@@ -234,7 +244,26 @@ func (s *CopilotKitService) Generate(ctx context.Context, req ChatRequest) (stri
 	}
 
 	// Convert messages into the union type the SDK expects.
-	converted := make([]openai.ChatCompletionMessageParamUnion, 0, len(req.Messages))
+	converted := make([]openai.ChatCompletionMessageParamUnion, 0, len(req.Messages)+1)
+
+	// Build system message for the writing assistant
+	systemPrompt := `You are an expert writing assistant helping users improve their articles and blog posts. 
+
+Your capabilities:
+- Analyze and provide feedback on writing
+- Suggest improvements for clarity, structure, and engagement
+- Help with editing, rewriting, and content enhancement
+- Answer questions about writing techniques and best practices
+
+When the user asks you to make changes to their document, provide clear suggestions and explain your reasoning. Be conversational and helpful in your responses.`
+
+	// Include document content in system prompt if provided
+	if req.DocumentContent != "" {
+		systemPrompt += "\n\nCurrent document content:\n\n" + req.DocumentContent
+	}
+
+	converted = append(converted, openai.SystemMessage(systemPrompt))
+
 	for _, m := range req.Messages {
 		switch m.Role {
 		case "system":
@@ -273,6 +302,7 @@ type StreamResponse struct {
 	Role    string `json:"role,omitempty"`
 	Content string `json:"content,omitempty"`
 	Done    bool   `json:"done,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 // GenerateStream sends the chat transcript to OpenAI and streams the response back
@@ -284,7 +314,7 @@ func (s *CopilotKitService) GenerateStream(ctx context.Context, req ChatRequest)
 	// Convert messages into the union type the SDK expects
 	converted := make([]openai.ChatCompletionMessageParamUnion, 0, len(req.Messages))
 
-	// Add system message for the writing assistant
+	// Build system message for the writing assistant
 	systemPrompt := `You are an expert writing assistant helping users improve their articles and blog posts. 
 
 Your capabilities:
@@ -294,6 +324,11 @@ Your capabilities:
 - Answer questions about writing techniques and best practices
 
 When the user asks you to make changes to their document, provide clear suggestions and explain your reasoning. Be conversational and helpful in your responses.`
+
+	// Include document content in system prompt if provided
+	if req.DocumentContent != "" {
+		systemPrompt += "\n\nCurrent document content:\n\n" + req.DocumentContent
+	}
 
 	converted = append(converted, openai.SystemMessage(systemPrompt))
 
@@ -315,10 +350,13 @@ When the user asks you to make changes to their document, provide clear suggesti
 		model = openai.ChatModelGPT4o
 	}
 
-	stream := s.client.Chat.Completions.NewStreaming(ctx, openai.ChatCompletionNewParams{
+	// Create the streaming request
+	streamParams := openai.ChatCompletionNewParams{
 		Model:    model,
 		Messages: converted,
-	})
+	}
+
+	stream := s.client.Chat.Completions.NewStreaming(ctx, streamParams)
 
 	responseChan := make(chan StreamResponse, 10)
 
@@ -326,6 +364,17 @@ When the user asks you to make changes to their document, provide clear suggesti
 		defer close(responseChan)
 		defer stream.Close()
 
+		// Check for immediate errors
+		if stream.Err() != nil {
+			log.Printf("OpenAI streaming error: %v", stream.Err())
+			responseChan <- StreamResponse{
+				Error: stream.Err().Error(),
+				Done:  true,
+			}
+			return
+		}
+
+		hasContent := false
 		for stream.Next() {
 			chunk := stream.Current()
 
@@ -338,15 +387,37 @@ When the user asks you to make changes to their document, provide clear suggesti
 
 			// Handle regular content
 			if delta.Content != "" {
+				hasContent = true
 				responseChan <- StreamResponse{
 					Role:    "assistant",
 					Content: delta.Content,
 				}
 			}
+
+			// Handle finish reason
+			if choice.FinishReason != "" {
+				log.Printf("Stream finished with reason: %s", choice.FinishReason)
+				break
+			}
 		}
 
+		// Check for stream errors
 		if err := stream.Err(); err != nil {
-			// Log error but don't break the stream
+			log.Printf("OpenAI stream error: %v", err)
+			responseChan <- StreamResponse{
+				Error: err.Error(),
+				Done:  true,
+			}
+			return
+		}
+
+		// If no content was received, send an error
+		if !hasContent {
+			log.Printf("No content received from OpenAI")
+			responseChan <- StreamResponse{
+				Error: "No response received from OpenAI",
+				Done:  true,
+			}
 			return
 		}
 

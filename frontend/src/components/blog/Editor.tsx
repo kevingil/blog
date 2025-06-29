@@ -407,15 +407,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       return;
     }
 
-    // Include current document content in context for edit requests
+    // Get current document content to send separately
     const currentContent = editor?.getText() || '';
-    const contextualMessage = currentContent ? 
-      `Current document content:\n\n${currentContent}\n\nUser request: ${text}` : text;
 
     // Check if this looks like an edit request
     const isEditRequest = /\b(rewrite|edit|improve|change|update|fix|enhance|modify)\b/i.test(text);
 
-    // optimistic user message (show original user message, not contextual)
+    // Show original user message in UI
     const baseMessages = [...chatMessages, { role: 'user', content: text } as ChatMessage];
     setChatMessages(baseMessages);
     setChatInput(''); // Clear the input state
@@ -424,11 +422,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     const assistantIndex = baseMessages.length;
     setChatMessages((prev) => [...prev, { role: 'assistant', content: '' } as ChatMessage]);
 
-    // Create messages for API (include context)
-    const apiMessages = [...chatMessages, { role: 'user', content: contextualMessage } as ChatMessage];
+    // Create messages for API (send original user message without document content)
+    const apiMessages = [...chatMessages, { role: 'user', content: text } as ChatMessage];
 
     // Rest of the chat logic...
-    await performChatRequest(apiMessages, assistantIndex, isEditRequest, text);
+    await performChatRequest(apiMessages, assistantIndex, isEditRequest, text, currentContent);
   };
 
   const sendChat = async () => {
@@ -446,18 +444,21 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     await sendChatWithMessage(text);
   };
 
-  const performChatRequest = async (apiMessages: ChatMessage[], assistantIndex: number, isEditRequest: boolean, originalText: string) => {
+  const performChatRequest = async (apiMessages: ChatMessage[], assistantIndex: number, isEditRequest: boolean, originalText: string, documentContent: string) => {
     setChatLoading(true);
     try {
       const apiUrl = `${VITE_API_BASE_URL}/agent/writing_copilot`;
       console.log('API Base URL:', VITE_API_BASE_URL);
       console.log('Full API URL:', apiUrl);
-      console.log('Sending chat request:', { messages: apiMessages });
+      console.log('Sending chat request:', { messages: apiMessages, documentContent });
       
       const resp = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: apiMessages }),
+        body: JSON.stringify({ 
+          messages: apiMessages,
+          documentContent: documentContent 
+        }),
       });
 
       console.log('Response status:', resp.status);
@@ -498,6 +499,17 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           }
           try {
             const msg = JSON.parse(payload);
+            if (msg.error) {
+              console.error('Stream error:', msg.error);
+              toast({ 
+                title: "Assistant Error", 
+                description: msg.error,
+                variant: "destructive"
+              });
+              // Remove the optimistic message on error
+              setChatMessages((prev) => prev.slice(0, -1));
+              return;
+            }
             if (msg.role === 'assistant') {
               acc += msg.content || '';
               setChatMessages((prev) => {

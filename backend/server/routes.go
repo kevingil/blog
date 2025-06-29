@@ -25,7 +25,7 @@ func (s *FiberServer) RegisterRoutes() {
 	}))
 
 	// CopilotKit runtime (agentic document editor)
-	s.App.Post("/agent/writing_copilot", s.CopilotKitHandler)
+	s.App.Post("/agent/writing_copilot", s.WritingCopilotHandler)
 
 	// Pages routes
 	pages := s.App.Group("/pages")
