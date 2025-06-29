@@ -13,6 +13,7 @@ import StarterKit from '@tiptap/starter-kit';
 import MarkdownIt from 'markdown-it';
 import { diffWords } from 'diff';
 import type { Editor as TiptapEditor } from '@tiptap/core';
+import { VITE_API_BASE_URL } from "@/services/constants";
  
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -192,6 +193,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     { role: 'assistant', content: 'Hi! I can help you improve your article. Try asking me to "rewrite the introduction" or "make the content more engaging".' },
   ]);
   const [chatLoading, setChatLoading] = useState(false);
+  const [chatInput, setChatInput] = useState('');
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
   
   // Document editing state
@@ -396,9 +398,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   };
 
-  const sendChat = async () => {
-    const text = chatInputRef.current?.value.trim();
-    if (!text) return;
+  const sendChatWithMessage = async (message: string) => {
+    const text = message.trim();
+    console.log("Sending chat with message:", text);
+    
+    if (!text) {
+      console.log("No text to send");
+      return;
+    }
 
     // Include current document content in context for edit requests
     const currentContent = editor?.getText() || '';
@@ -411,22 +418,61 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     // optimistic user message (show original user message, not contextual)
     const baseMessages = [...chatMessages, { role: 'user', content: text } as ChatMessage];
     setChatMessages(baseMessages);
-    if (chatInputRef.current) chatInputRef.current.value = '';
+    setChatInput(''); // Clear the input state
+
+    // Add placeholder assistant message
+    const assistantIndex = baseMessages.length;
+    setChatMessages((prev) => [...prev, { role: 'assistant', content: '' } as ChatMessage]);
 
     // Create messages for API (include context)
     const apiMessages = [...chatMessages, { role: 'user', content: contextualMessage } as ChatMessage];
 
-    // placeholder assistant message we will populate token-by-token
-    const assistantIndex = baseMessages.length;
-    setChatMessages((prev) => [...prev, { role: 'assistant', content: '' } as ChatMessage]);
+    // Rest of the chat logic...
+    await performChatRequest(apiMessages, assistantIndex, isEditRequest, text);
+  };
 
+  const sendChat = async () => {
+    console.log("Sending chat");
+    const text = chatInput.trim();
+    console.log("Chat Text:", text);
+    console.log("Chat Input State:", chatInput);
+    console.log("Ref current value:", chatInputRef.current?.value);
+    
+    if (!text) {
+      console.log("No text to send");
+      return;
+    }
+
+    await sendChatWithMessage(text);
+  };
+
+  const performChatRequest = async (apiMessages: ChatMessage[], assistantIndex: number, isEditRequest: boolean, originalText: string) => {
     setChatLoading(true);
     try {
-      const resp = await fetch('/api/copilotkit', {
+      const apiUrl = `${VITE_API_BASE_URL}/agent/writing_copilot`;
+      console.log('API Base URL:', VITE_API_BASE_URL);
+      console.log('Full API URL:', apiUrl);
+      console.log('Sending chat request:', { messages: apiMessages });
+      
+      const resp = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: apiMessages }),
       });
+
+      console.log('Response status:', resp.status);
+      console.log('Response headers:', Object.fromEntries(resp.headers.entries()));
+      
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        console.error('Response error:', errorText);
+        toast({ 
+          title: "Connection Error", 
+          description: `Failed to connect to writing assistant: ${resp.status} ${errorText}`,
+          variant: "destructive"
+        });
+        throw new Error(`HTTP ${resp.status}: ${errorText}`);
+      }
 
       if (!resp.body) throw new Error('No response body');
 
@@ -475,13 +521,27 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           if (suggestedContent.length > 50) {
             setPendingEdit({
               newContent: suggestedContent,
-              summary: `Suggested changes from: "${text}"`
+              summary: `Suggested changes from: "${originalText}"`
             });
           }
         }
       }
     } catch (err) {
-      console.error(err);
+      console.error('Chat error:', err);
+      
+      // Remove the optimistic message on error
+      setChatMessages((prev) => prev.slice(0, -1));
+      
+      // Show user-friendly error
+      if (err instanceof Error) {
+        if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+          toast({ 
+            title: "Connection Error", 
+            description: "Cannot connect to the writing assistant. Make sure the backend server is running on http://localhost:8080",
+            variant: "destructive"
+          });
+        }
+      }
     } finally {
       setChatLoading(false);
     }
@@ -829,10 +889,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               variant="outline"
               size="sm"
               onClick={() => {
-                if (chatInputRef.current) {
-                  chatInputRef.current.value = 'Please rewrite this article to make it more engaging and clear';
-                  sendChat();
-                }
+                const message = 'Please rewrite this article to make it more engaging and clear';
+                setChatInput(message);
+                sendChatWithMessage(message);
               }}
               disabled={chatLoading}
             >
@@ -842,10 +901,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               variant="outline"
               size="sm"
               onClick={() => {
-                if (chatInputRef.current) {
-                  chatInputRef.current.value = 'Fix any grammar and spelling issues in this article';
-                  sendChat();
-                }
+                const message = 'Fix any grammar and spelling issues in this article';
+                setChatInput(message);
+                sendChatWithMessage(message);
               }}
               disabled={chatLoading}
             >
@@ -855,10 +913,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               variant="outline"
               size="sm"
               onClick={() => {
-                if (chatInputRef.current) {
-                  chatInputRef.current.value = 'Make this article shorter and more concise';
-                  sendChat();
-                }
+                const message = 'Make this article shorter and more concise';
+                setChatInput(message);
+                sendChatWithMessage(message);
               }}
               disabled={chatLoading}
             >
@@ -868,6 +925,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           <div className="flex gap-2">
             <Textarea
               ref={chatInputRef}
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
               rows={2}
               placeholder="Ask the assistant or click a quick action above…"
               className="flex-1 resize-none"

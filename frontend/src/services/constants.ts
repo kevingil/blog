@@ -1,4 +1,4 @@
-export const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+export const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 export const VITE_PUBLIC_S3_URL_PREFIX = import.meta.env.VITE_PUBLIC_S3_URL_PREFIX;
 
 export const siteMetadata = {
