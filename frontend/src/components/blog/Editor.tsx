@@ -196,6 +196,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
+  const chatMessagesRef = useRef<HTMLDivElement>(null);
   
   // Document editing state
   const [pendingEdit, setPendingEdit] = useState<{
@@ -316,6 +317,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   useEffect(() => {
     console.log("Current form values:", watchedValues);
   }, [watchedValues]);
+
+  // Auto-scroll chat to bottom when messages change
+  useEffect(() => {
+    if (chatMessagesRef.current) {
+      chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
 
   const onSubmit = async (data: ArticleFormData, returnToDashboard: boolean = true) => {
     if (!user) {
@@ -924,7 +932,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
       {/* Chat side-panel */}
       <div className="hidden xl:flex flex-col w-96 border rounded-md">
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div ref={chatMessagesRef} className="flex-1 overflow-y-auto p-4 space-y-3">
           {chatMessages.map((m, i) => (
             <div key={i} className={`w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div
