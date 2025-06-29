@@ -1,17 +1,20 @@
 import { redirect, useLocation } from '@tanstack/react-router';
 import { createFileRoute } from '@tanstack/react-router';
 import { Outlet } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
 import { AppSidebar } from "@/components/app-sidebar"
 import { ChartAreaInteractive } from "@/components/chart-area-interactive"
-import { DataTable } from "@/components/data-table"
+import { ArticlesTable } from "@/components/blog/ArticlesTable"
 import { SectionCards } from "@/components/section-cards"
 import { SiteHeader } from "@/components/site-header"
 import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-
-import data from "@/app/dashboard/data.json"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent } from '@/components/ui/card'
+import { getArticles } from '@/services/blog';
+import { ArticleListItem } from '@/services/types';
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardLayout,
@@ -31,6 +34,12 @@ export const Route = createFileRoute('/dashboard')({
 function DashboardLayout() {
   const location = useLocation();
   const isRootDashboard = location.pathname === '/dashboard';
+
+  const { data: articlesPayload, isLoading, error, refetch } = useQuery<{ articles: ArticleListItem[], total_pages: number }>({
+    queryKey: ['dashboard-articles', 0],
+    queryFn: () => getArticles(0, null, true) as Promise<{ articles: ArticleListItem[], total_pages: number }>,
+    enabled: isRootDashboard // Only fetch when on the root dashboard
+  });
 
   return (
     <SidebarProvider
@@ -52,7 +61,43 @@ function DashboardLayout() {
                 <div className="px-4 lg:px-6">
                   <ChartAreaInteractive />
                 </div>
-                <DataTable data={data} />
+                <div className="px-4 lg:px-6">
+                  <Card>
+                    <CardContent>
+                      {isLoading ? (
+                        <div className="p-4">Loading articles...</div>
+                      ) : error ? (
+                        <div className="p-4">Error loading articles</div>
+                      ) : (
+                        <Tabs defaultValue="published">
+                          <TabsList className="mt-4">
+                            <TabsTrigger value="all">All</TabsTrigger>
+                            <TabsTrigger value="published">Published</TabsTrigger>
+                            <TabsTrigger value="drafts">Drafts</TabsTrigger>
+                          </TabsList>
+                          <TabsContent value="all" className="p-0 w-full">
+                            <ArticlesTable 
+                              articles={articlesPayload?.articles.sort((a: ArticleListItem, b: ArticleListItem) => new Date(b.article.created_at || 0).getTime() - new Date(a.article.created_at || 0).getTime()) || []}
+                              onArticleDeleted={() => refetch()}
+                            />
+                          </TabsContent>
+                          <TabsContent value="published" className="p-0 w-full">
+                            <ArticlesTable 
+                              articles={articlesPayload?.articles.filter((article: ArticleListItem) => article.article.is_draft === false) || []}
+                              onArticleDeleted={() => refetch()}
+                            />
+                          </TabsContent>
+                          <TabsContent value="drafts" className="p-0 w-full">
+                            <ArticlesTable 
+                              articles={articlesPayload?.articles.filter((article: ArticleListItem) => article.article.is_draft === true) || []}
+                              onArticleDeleted={() => refetch()}
+                            />
+                          </TabsContent>
+                        </Tabs>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
             </div>
           ) : (
