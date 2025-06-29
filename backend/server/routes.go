@@ -24,6 +24,9 @@ func (s *FiberServer) RegisterRoutes() {
 		MaxAge:           300,
 	}))
 
+	// CopilotKit runtime (agentic document editor)
+	s.App.Post("/api/copilotkit", s.CopilotKitHandler)
+
 	// Pages routes
 	pages := s.App.Group("/pages")
 	pages.Get("/about", s.GetAboutPageHandler)
