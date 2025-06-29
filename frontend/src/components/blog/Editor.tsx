@@ -1,4 +1,4 @@
-import { useState, useEffect} from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from '@tanstack/react-router';
 import { useAuth } from '@/services/auth/auth';
 import { useForm } from 'react-hook-form';
@@ -53,6 +53,13 @@ const articleSchema = z.object({
 });
 
 type ArticleFormData = z.infer<typeof articleSchema>;
+
+// Minimal shape for the conversational side panel. Mirrors what our backend
+// expects/returns.
+type ChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
 
 export function ImageLoader({ article, newImageGenerationRequestId, stagedImageUrl, setStagedImageUrl }: {
   article: ArticleListItem | null | undefined,
@@ -120,6 +127,15 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [stagedImageUrl, setStagedImageUrl] = useState<string | null | undefined>(undefined);
   const [generateImageOpen, setGenerateImageOpen] = useState(false);
   const [generatingRewrite, setGeneratingRewrite] = useState(false);
+
+  /* --------------------------------------------------------------------- */
+  /* Chat (right-hand panel)                                               */
+  /* --------------------------------------------------------------------- */
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    { role: 'assistant', content: 'Hi! Ask me anything about your article.' },
+  ]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
 
   // Use React Query to fetch article data
   const { data: article, isLoading: articleLoading, error } = useQuery({
@@ -263,6 +279,71 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   };
 
+  const sendChat = async () => {
+    const text = chatInputRef.current?.value.trim();
+    if (!text) return;
+
+    // optimistic user message
+    const baseMessages = [...chatMessages, { role: 'user', content: text } as ChatMessage];
+    setChatMessages(baseMessages);
+    if (chatInputRef.current) chatInputRef.current.value = '';
+
+    // placeholder assistant message we will populate token-by-token
+    const assistantIndex = baseMessages.length;
+    setChatMessages((prev) => [...prev, { role: 'assistant', content: '' } as ChatMessage]);
+
+    setChatLoading(true);
+    try {
+      const resp = await fetch('/api/copilotkit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: baseMessages }),
+      });
+
+      if (!resp.body) throw new Error('No response body');
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let acc = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() || '';
+
+        for (const part of parts) {
+          if (!part.startsWith('data: ')) continue;
+          const payload = part.slice(6).trim();
+          if (payload === '[DONE]') {
+            reader.cancel();
+            break;
+          }
+          try {
+            const msg = JSON.parse(payload);
+            if (msg.role === 'assistant') {
+              acc += msg.content || '';
+              setChatMessages((prev) => {
+                const updated = [...prev];
+                updated[assistantIndex] = { role: 'assistant', content: acc } as ChatMessage;
+                return updated;
+              });
+            }
+          } catch {
+            /* ignore malformed chunks */
+          }
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
   // Show loading state while fetching article
   if (articleLoading && !isNew) {
     return (
@@ -286,240 +367,278 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   }
 
   return (
-    <section className="flex-1 p-0 md:p-4">
-      <h1 className="text-lg lg:text-2xl font-medium text-gray-900 dark:text-white mb-6">
-        {isNew ? 'New Article' : 'Edit Article'}
-      </h1>
-      <Card>
-        <form className="mt-6">
-          <CardContent className="space-y-4">
-            <div>
-              <div className='flex items-center justify-between gap-2 my-4'>
-                <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Title</label>
-                <Link to="/blog" params={{ slug: article?.article.slug || '' }} search={{ page: undefined, tag: undefined, search: undefined }} target="_blank" className="flex items-center gap-2 text-sm text-gray-900 dark:text-white">
-                  See Article <ExternalLinkIcon className="w-4 h-4" />
-                </Link>
-              </div>
-              <Input
-                {...register('title')}
-                value={watchedValues.title}
-                placeholder="Article Title"
-              />
-              {errors.title && <p className="text-red-500">{errors.title.message}</p>}
-            </div>
-
-            <div className='flex items-center justify-center flex-col sm:flex-row '>
-              <div className='flex items-center justify-center flex-col w-full sm:w-1/2 gap-2 mb-auto h-full min-h-[250px]'>
-                <ImageLoader
-                  article={article}
-                  newImageGenerationRequestId={newImageGenerationRequestId}
-                  stagedImageUrl={stagedImageUrl}
-                  setStagedImageUrl={setStagedImageUrl}
-                />
-              </div>
-              <div className='flex items-center justify-between flex-col w-full sm:w-1/2 gap-2 h-full min-h-[250px] '>
-              <div className='flex flex-col items-start mr-auto w-full ml-2 gap-2'>
-                <div className='flex flex-col items-start mr-auto w-full ml-2 gap-2'>
-                  <label className="block text-md font-medium leading-6 text-gray-900 dark:text-white mr-auto mr-2">Image</label>
-                  <div className='flex items-center justify-center w-full'>
-                  <Input
-                    className='w-full'
-                    {...register('image')}
-                    value={watchedValues.image}
-                    onChange={(e) => {
-                      setValue('image', e.target.value);
-                      setStagedImageUrl(e.target.value);
-                    }}
-                    placeholder="Optional, for header"
-                  />
-                  {errors.image && <p className="text-red-500">{errors.image.message}</p>}
+    <section className="flex gap-4 p-0 md:p-4 h-[calc(100vh-60px)]">
+      <div className="flex-1">
+        <h1 className="text-lg lg:text-2xl font-medium text-gray-900 dark:text-white mb-6">
+          {isNew ? 'New Article' : 'Edit Article'}
+        </h1>
+        <Card>
+          <form className="mt-6">
+            <CardContent className="space-y-4">
+              <div>
+                <div className='flex items-center justify-between gap-2 my-4'>
+                  <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Title</label>
+                  <Link to="/blog" params={{ slug: article?.article.slug || '' }} search={{ page: undefined, tag: undefined, search: undefined }} target="_blank" className="flex items-center gap-2 text-sm text-gray-900 dark:text-white">
+                    See Article <ExternalLinkIcon className="w-4 h-4" />
+                  </Link>
                 </div>
-                </div>              
-                <div className='flex items-center justify-between w-full ml-2'>
-                  <div className='flex gap-2 w-full'>
-                    <Button variant="outline" size="icon" disabled>
-                      <UploadIcon className="w-4 h-4" />
-                    </Button>
-                    <div className='flex justify-end gap-2 w-full'>
-                    <Dialog open={generateImageOpen} onOpenChange={setGenerateImageOpen}>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" className=''>
-                          <PencilIcon className="w-4 h-4 text-indigo-500" /> Edit Prompt
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-[600px]">
-                        <DialogHeader>
-                          <DialogTitle>Generate New Image</DialogTitle>
-                          <DialogDescription>
-                            Generate a new image for your article header.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="flex flex-col items-start gap-4 w-full">
-                          <Textarea
-                            value={imagePrompt || ''}
-                            onChange={(e) => setImagePrompt(e.target.value)}
-                            placeholder="Prompt"
-                            className='h-[300px] w-full'
-                          />
-                        </div>
-                        <DialogFooter>
-                          <div className="flex items-center gap-2 w-full">
-                            <DialogClose asChild>
-                              <Button variant="outline" className="w-full">Cancel</Button>
-                            </DialogClose>
-                            <Button 
-                              type="submit" 
-                              className="w-full"
-                              onClick={async () => {
-                                console.log("image prompt", imagePrompt);
-                                const result = await generateArticleImage(imagePrompt || "", article?.article.id || 0);
+                <Input
+                  {...register('title')}
+                  value={watchedValues.title}
+                  placeholder="Article Title"
+                />
+                {errors.title && <p className="text-red-500">{errors.title.message}</p>}
+              </div>
 
-                                if (result.success) {
-                                  setNewImageGenerationRequestId(result.generationRequestId);
-                                  toast({ title: "Success", description: "Image generated successfully." });
-                                  setGenerateImageOpen(false);
-                                } else {
-                                  toast({ title: "Error", description: "Failed to generate image. Please try again." });
-                                }
-                              }}>Generate</Button>
-                          </div>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        disabled={generatingImage}
-                        onClick={async (e) => {
-                          setGeneratingImage(true);
-                          e.preventDefault();
-                          console.log("image prompt", imagePrompt);
-                          const result = await generateArticleImage(article?.article.title || "", article?.article.id || 0);
-
-                          if (result.success) {
-                            setNewImageGenerationRequestId(result.generationRequestId);
-                            toast({ title: "Success", description: "Image generated successfully." });
-                          } else {
-                            toast({ title: "Error", description: "Failed to generate image. Please try again." });
-                          }
-                          setGeneratingImage(false);
-                        }}>
-                        <SparklesIcon className={cn("w-4 h-4 text-indigo-500", generatingImage && "animate-spin")} />
+              <div className='flex items-center justify-center flex-col sm:flex-row '>
+                <div className='flex items-center justify-center flex-col w-full sm:w-1/2 gap-2 mb-auto h-full min-h-[250px]'>
+                  <ImageLoader
+                    article={article}
+                    newImageGenerationRequestId={newImageGenerationRequestId}
+                    stagedImageUrl={stagedImageUrl}
+                    setStagedImageUrl={setStagedImageUrl}
+                  />
+                </div>
+                <div className='flex items-center justify-between flex-col w-full sm:w-1/2 gap-2 h-full min-h-[250px] '>
+                <div className='flex flex-col items-start mr-auto w-full ml-2 gap-2'>
+                  <div className='flex flex-col items-start mr-auto w-full ml-2 gap-2'>
+                    <label className="block text-md font-medium leading-6 text-gray-900 dark:text-white mr-auto mr-2">Image</label>
+                    <div className='flex items-center justify-center w-full'>
+                    <Input
+                      className='w-full'
+                      {...register('image')}
+                      value={watchedValues.image}
+                      onChange={(e) => {
+                        setValue('image', e.target.value);
+                        setStagedImageUrl(e.target.value);
+                      }}
+                      placeholder="Optional, for header"
+                    />
+                    {errors.image && <p className="text-red-500">{errors.image.message}</p>}
+                  </div>
+                  </div>              
+                  <div className='flex items-center justify-between w-full ml-2'>
+                    <div className='flex gap-2 w-full'>
+                      <Button variant="outline" size="icon" disabled>
+                        <UploadIcon className="w-4 h-4" />
                       </Button>
+                      <div className='flex justify-end gap-2 w-full'>
+                      <Dialog open={generateImageOpen} onOpenChange={setGenerateImageOpen}>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" className=''>
+                            <PencilIcon className="w-4 h-4 text-indigo-500" /> Edit Prompt
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[600px]">
+                          <DialogHeader>
+                            <DialogTitle>Generate New Image</DialogTitle>
+                            <DialogDescription>
+                              Generate a new image for your article header.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="flex flex-col items-start gap-4 w-full">
+                            <Textarea
+                              value={imagePrompt || ''}
+                              onChange={(e) => setImagePrompt(e.target.value)}
+                              placeholder="Prompt"
+                              className='h-[300px] w-full'
+                            />
+                          </div>
+                          <DialogFooter>
+                            <div className="flex items-center gap-2 w-full">
+                              <DialogClose asChild>
+                                <Button variant="outline" className="w-full">Cancel</Button>
+                              </DialogClose>
+                              <Button 
+                                type="submit" 
+                                className="w-full"
+                                onClick={async () => {
+                                  console.log("image prompt", imagePrompt);
+                                  const result = await generateArticleImage(imagePrompt || "", article?.article.id || 0);
+
+                                  if (result.success) {
+                                    setNewImageGenerationRequestId(result.generationRequestId);
+                                    toast({ title: "Success", description: "Image generated successfully." });
+                                    setGenerateImageOpen(false);
+                                  } else {
+                                    toast({ title: "Error", description: "Failed to generate image. Please try again." });
+                                  }
+                                }}>Generate</Button>
+                            </div>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          disabled={generatingImage}
+                          onClick={async (e) => {
+                            setGeneratingImage(true);
+                            e.preventDefault();
+                            console.log("image prompt", imagePrompt);
+                            const result = await generateArticleImage(article?.article.title || "", article?.article.id || 0);
+
+                            if (result.success) {
+                              setNewImageGenerationRequestId(result.generationRequestId);
+                              toast({ title: "Success", description: "Image generated successfully." });
+                            } else {
+                              toast({ title: "Error", description: "Failed to generate image. Please try again." });
+                            }
+                            setGeneratingImage(false);
+                          }}>
+                          <SparklesIcon className={cn("w-4 h-4 text-indigo-500", generatingImage && "animate-spin")} />
+                        </Button>
+                      </div>
+                      
                     </div>
-                    
                   </div>
                 </div>
-              </div>
-                <div style={{marginLeft: '2rem'}} className='flex w-full items-center flex-col gap-2 mt-auto'>
-              <div className='mr-auto flex flex-row'>
-              <label htmlFor="isDraft" className='text-sm font-medium flex flex-row mr-2'>Published </label>
-              <Switch 
-                id="isDraft"
-                checked={!watchedValues.isDraft} 
-                onCheckedChange={(checked) => {
-                  setValue('isDraft', !checked);
-                }} 
-              />
-              </div>
-            <div className='flex w-full flex-col'>
-                <div>
-                  <label htmlFor="publishedAt" className='text-sm font-medium'>Published Date</label>
-                </div>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                  variant={"outline"}
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !article?.article.published_at && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {article?.article.published_at ? format(article.article.published_at, "PPP") : <span>Pick a date</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={article?.article.published_at ? new Date(article.article.published_at) : undefined}
-                  onSelect={(date: Date | undefined) => {
-                    // Date selection handled by the calendar component
-                    // Published date is not part of the form schema
-                  }}
-                  initialFocus
+                  <div style={{marginLeft: '2rem'}} className='flex w-full items-center flex-col gap-2 mt-auto'>
+                <div className='mr-auto flex flex-row'>
+                <label htmlFor="isDraft" className='text-sm font-medium flex flex-row mr-2'>Published </label>
+                <Switch 
+                  id="isDraft"
+                  checked={!watchedValues.isDraft} 
+                  onCheckedChange={(checked) => {
+                    setValue('isDraft', !checked);
+                  }} 
                 />
-              </PopoverContent>
-                </Popover>
-            </div>
-            </div>
+                </div>
+              <div className='flex w-full flex-col'>
+                  <div>
+                    <label htmlFor="publishedAt" className='text-sm font-medium'>Published Date</label>
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !article?.article.published_at && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {article?.article.published_at ? format(article.article.published_at, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={article?.article.published_at ? new Date(article.article.published_at) : undefined}
+                    onSelect={(date: Date | undefined) => {
+                      // Date selection handled by the calendar component
+                      // Published date is not part of the form schema
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+                  </Popover>
+              </div>
+              </div>
+                </div>
+              </div>
+
+              <div className='flex flex-row w-full justify-between'>
+
+              <label className="block my-auto text-md font-medium leading-6 text-gray-900 dark:text-white ">Content</label>
+              
+                <Button
+                  type="button"
+                  variant="outline"
+                  className='text-sm font-medium text-gray-900 dark:text-white flex flex-row gap-2'
+                  onClick={async () => {
+                    rewriteArticle()
+                  }}>
+                  <RefreshCw className={cn("w-4 h-4 text-indigo-500", generatingRewrite && "animate-spin")} /> Regenerate
+                </Button>
+              
+              </div>
+              <div>
+                <Textarea
+                  defaultValue={article?.article.content || ''}
+                  className="w-full p-4 border border-gray-300 rounded-md h-[60vh]"
+                  {...register('content')}
+                  value={watchedValues.content}
+                  onChange={(e) => setValue('content', e.target.value)}
+                />
+                {errors.content && <p className="text-red-500">{errors.content.message}</p>}
+              </div>
+              <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Tags</label>
+              <div>
+                <ChipInput
+                  value={watchedValues.tags}
+                  onChange={(tags) => setValue('tags', tags.map((tag: string) => tag.toUpperCase()))}
+                  placeholder="Type and press Enter to add tags..."
+                />
+                {errors.tags && <p className="text-red-500">{errors.tags.message}</p>}
+              </div>
+            </CardContent>
+            <CardFooter className="flex justify-between">
+              <Button variant="secondary">
+                <Link to="/dashboard/blog">
+                  {isNew ? 'Cancel' : 'Go Back'}
+                </Link>
+              </Button>
+              <div className='flex items-center justify-center gap-2'>
+                {!isNew && 
+                  <Button
+                    variant="outline"
+                  type="submit"
+                  onClick={() => {
+                    setIsSaving(true);
+                    handleSubmit((data) => onSubmit(data, false))();
+                  }}
+                  disabled={isSaving}>
+                   {isSaving ? 'Saving...' : 'Save'}
+                  </Button>
+                }
+              <Button type='submit' disabled={isLoading} onClick={() => {
+                setIsLoading(true);
+                handleSubmit((data) => onSubmit(data, true))();
+              }}>
+                {isLoading ? 'Updating...' : isNew ? 'Create Article' : 'Save & Return'}
+              </Button>
+              </div>
+            </CardFooter>
+          </form>
+        </Card>
+      </div>
+
+      {/* Chat side-panel */}
+      <div className="hidden xl:flex flex-col w-96 border rounded-md">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {chatMessages.map((m, i) => (
+            <div key={i} className={`w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div
+                className={`max-w-xs whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
+                  m.role === 'user'
+                    ? 'bg-indigo-500 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 dark:text-white'
+                }`}
+              >
+                {m.content}
               </div>
             </div>
-
-            <div className='flex flex-row w-full justify-between'>
-
-            <label className="block my-auto text-md font-medium leading-6 text-gray-900 dark:text-white ">Content</label>
-            
-              <Button
-                type="button"
-                variant="outline"
-                className='text-sm font-medium text-gray-900 dark:text-white flex flex-row gap-2'
-                onClick={async () => {
-                  rewriteArticle()
-                }}>
-                <RefreshCw className={cn("w-4 h-4 text-indigo-500", generatingRewrite && "animate-spin")} /> Regenerate
-              </Button>
-            
-            </div>
-            <div>
-              <Textarea
-                defaultValue={article?.article.content || ''}
-                className="w-full p-4 border border-gray-300 rounded-md h-[60vh]"
-                {...register('content')}
-                value={watchedValues.content}
-                onChange={(e) => setValue('content', e.target.value)}
-              />
-              {errors.content && <p className="text-red-500">{errors.content.message}</p>}
-            </div>
-            <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Tags</label>
-            <div>
-              <ChipInput
-                value={watchedValues.tags}
-                onChange={(tags) => setValue('tags', tags.map((tag: string) => tag.toUpperCase()))}
-                placeholder="Type and press Enter to add tags..."
-              />
-              {errors.tags && <p className="text-red-500">{errors.tags.message}</p>}
-            </div>
-          </CardContent>
-          <CardFooter className="flex justify-between">
-            <Button variant="secondary">
-              <Link to="/dashboard/blog">
-                {isNew ? 'Cancel' : 'Go Back'}
-              </Link>
-            </Button>
-            <div className='flex items-center justify-center gap-2'>
-              {!isNew && 
-                <Button
-                  variant="outline"
-                type="submit"
-                onClick={() => {
-                  setIsSaving(true);
-                  handleSubmit((data) => onSubmit(data, false))();
-                }}
-                disabled={isSaving}>
-                 {isSaving ? 'Saving...' : 'Save'}
-                </Button>
+          ))}
+        </div>
+        <div className="p-4 border-t flex gap-2">
+          <Textarea
+            ref={chatInputRef}
+            rows={2}
+            placeholder="Ask the assistant…"
+            className="flex-1 resize-none"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendChat();
               }
-            <Button type='submit' disabled={isLoading} onClick={() => {
-              setIsLoading(true);
-              handleSubmit((data) => onSubmit(data, true))();
-            }}>
-              {isLoading ? 'Updating...' : isNew ? 'Create Article' : 'Save & Return'}
-            </Button>
-            </div>
-          </CardFooter>
-        </form>
-      </Card>
+            }}
+          />
+          <Button onClick={sendChat} disabled={chatLoading}>
+            {chatLoading ? '…' : 'Send'}
+          </Button>
+        </div>
+      </div>
     </section>
   );
 }
