@@ -37,6 +37,9 @@ import {
 import { useAuth } from "@/services/auth/auth"
 import { useEffect, useState } from "react"
 import { Link } from "@tanstack/react-router"
+import { useQuery } from "@tanstack/react-query"
+import { getArticles } from "@/services/blog"
+import { ArticleListItem } from "@/services/types"
 
 const data = {
   navMain: [
@@ -44,6 +47,34 @@ const data = {
       title: "Home",
       url: "/dashboard",
       icon: IconHome,
+    },
+    {
+      title: "Articles",
+      url: "/dashboard/blog",
+      icon: IconFileDescription,
+      items: [
+        {
+          title: "All Articles",
+          url: "/dashboard/blog",
+        },
+        {
+          title: "Draft Articles",
+          url: "/dashboard/blog?status=draft",
+        },
+        {
+          title: "Published Articles",
+          url: "/dashboard/blog?status=published",
+        },
+        {
+          title: "New Article",
+          url: "/dashboard/blog/new",
+        },
+      ],
+    },
+    {
+      title: "Uploads",
+      url: "/dashboard/uploads",
+      icon: IconUpload,
     },
   ],
   navClouds: [
@@ -119,7 +150,6 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-
   const { user } = useAuth();
 
   const [userData, setUserData] = useState<{ 
@@ -131,7 +161,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     email: "", 
     avatar: "" 
   });
-  console.log(userData);
+
+  // Fetch articles for the sidebar
+  const { data: articlesPayload, isLoading, error } = useQuery<{ articles: ArticleListItem[], total_pages: number }>({
+    queryKey: ['articles', 0],
+    queryFn: () => getArticles(0, null, true) as Promise<{ articles: ArticleListItem[], total_pages: number }>
+  });
 
   useEffect(() => {
     if (user) {
@@ -162,7 +197,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
-        <NavDocuments items={data.documents} />
+        <NavDocuments articles={articlesPayload?.articles || []} />
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
