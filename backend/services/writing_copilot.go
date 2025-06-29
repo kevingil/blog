@@ -5,7 +5,10 @@ import (
 	"errors"
 	"log"
 	"os"
+	"sync"
+	"time"
 
+	"github.com/google/uuid"
 	openai "github.com/openai/openai-go"
 )
 
@@ -210,6 +213,12 @@ type ChatRequest struct {
 	DocumentContent string        `json:"documentContent,omitempty"`
 }
 
+// ChatRequestResponse is the immediate response returned when a chat request is submitted
+type ChatRequestResponse struct {
+	RequestID string `json:"requestId"`
+	Status    string `json:"status"`
+}
+
 // CopilotKitService is a thin wrapper around the OpenAI client that exposes a
 // helper to open a streaming chat completion. We keep it completely stateless
 // so callers can create it ad-hoc – no need to attach it to the FiberServer
@@ -299,10 +308,134 @@ When the user asks you to make changes to their document, provide clear suggesti
 
 // StreamResponse represents a single chunk in the streaming response
 type StreamResponse struct {
-	Role    string `json:"role,omitempty"`
-	Content string `json:"content,omitempty"`
-	Done    bool   `json:"done,omitempty"`
-	Error   string `json:"error,omitempty"`
+	RequestID string `json:"requestId,omitempty"`
+	Role      string `json:"role,omitempty"`
+	Content   string `json:"content,omitempty"`
+	Done      bool   `json:"done,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+// AsyncCopilotManager manages background processing of chat requests
+type AsyncCopilotManager struct {
+	mu       sync.RWMutex
+	requests map[string]*AsyncChatRequest
+	service  *CopilotKitService
+}
+
+// AsyncChatRequest represents a chat request being processed in the background
+type AsyncChatRequest struct {
+	ID           string
+	Request      ChatRequest
+	Status       string
+	StartTime    time.Time
+	ResponseChan chan StreamResponse
+	ctx          context.Context
+	cancel       context.CancelFunc
+}
+
+var (
+	globalAsyncManager *AsyncCopilotManager
+	managerOnce        sync.Once
+)
+
+// GetAsyncCopilotManager returns the global async copilot manager (singleton)
+func GetAsyncCopilotManager() *AsyncCopilotManager {
+	managerOnce.Do(func() {
+		globalAsyncManager = &AsyncCopilotManager{
+			requests: make(map[string]*AsyncChatRequest),
+			service:  NewCopilotKitService(),
+		}
+	})
+	return globalAsyncManager
+}
+
+// SubmitChatRequest submits a chat request for async processing and returns a request ID
+func (m *AsyncCopilotManager) SubmitChatRequest(req ChatRequest) (string, error) {
+	if len(req.Messages) == 0 {
+		return "", errors.New("no messages provided")
+	}
+
+	requestID := uuid.New().String()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+
+	asyncReq := &AsyncChatRequest{
+		ID:           requestID,
+		Request:      req,
+		Status:       "processing",
+		StartTime:    time.Now(),
+		ResponseChan: make(chan StreamResponse, 100),
+		ctx:          ctx,
+		cancel:       cancel,
+	}
+
+	m.mu.Lock()
+	m.requests[requestID] = asyncReq
+	m.mu.Unlock()
+
+	// Start background processing
+	go m.processRequest(asyncReq)
+
+	return requestID, nil
+}
+
+// GetResponseChannel returns the response channel for a given request ID
+func (m *AsyncCopilotManager) GetResponseChannel(requestID string) (<-chan StreamResponse, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	req, exists := m.requests[requestID]
+	if !exists {
+		return nil, false
+	}
+
+	return req.ResponseChan, true
+}
+
+// processRequest processes a chat request in the background
+func (m *AsyncCopilotManager) processRequest(asyncReq *AsyncChatRequest) {
+	defer func() {
+		asyncReq.cancel()
+		close(asyncReq.ResponseChan)
+
+		// Clean up after 10 minutes
+		time.AfterFunc(10*time.Minute, func() {
+			m.mu.Lock()
+			delete(m.requests, asyncReq.ID)
+			m.mu.Unlock()
+		})
+	}()
+
+	log.Printf("AsyncCopilotManager: Starting processing for request %s", asyncReq.ID)
+
+	streamChan, err := m.service.GenerateStream(asyncReq.ctx, asyncReq.Request)
+	if err != nil {
+		log.Printf("AsyncCopilotManager: Failed to generate stream for request %s: %v", asyncReq.ID, err)
+		asyncReq.ResponseChan <- StreamResponse{
+			RequestID: asyncReq.ID,
+			Error:     err.Error(),
+			Done:      true,
+		}
+		return
+	}
+
+	// Forward streaming responses
+	for response := range streamChan {
+		response.RequestID = asyncReq.ID
+
+		select {
+		case asyncReq.ResponseChan <- response:
+			// Successfully sent
+		case <-asyncReq.ctx.Done():
+			log.Printf("AsyncCopilotManager: Request %s cancelled", asyncReq.ID)
+			return
+		}
+
+		if response.Done || response.Error != "" {
+			break
+		}
+	}
+
+	log.Printf("AsyncCopilotManager: Completed processing for request %s", asyncReq.ID)
 }
 
 // GenerateStream sends the chat transcript to OpenAI and streams the response back

@@ -452,6 +452,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       console.log('Full API URL:', apiUrl);
       console.log('Sending chat request:', { messages: apiMessages, documentContent });
       
+      // Submit the request and get immediate response with request ID
       const resp = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -462,7 +463,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       });
 
       console.log('Response status:', resp.status);
-      console.log('Response headers:', Object.fromEntries(resp.headers.entries()));
       
       if (!resp.ok) {
         const errorText = await resp.text();
@@ -475,69 +475,16 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         throw new Error(`HTTP ${resp.status}: ${errorText}`);
       }
 
-      if (!resp.body) throw new Error('No response body');
-
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let acc = '';
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        const parts = buffer.split('\n\n');
-        buffer = parts.pop() || '';
-
-        for (const part of parts) {
-          if (!part.startsWith('data: ')) continue;
-          const payload = part.slice(6).trim();
-          if (payload === '[DONE]') {
-            reader.cancel();
-            break;
-          }
-          try {
-            const msg = JSON.parse(payload);
-            if (msg.error) {
-              console.error('Stream error:', msg.error);
-              toast({ 
-                title: "Assistant Error", 
-                description: msg.error,
-                variant: "destructive"
-              });
-              // Remove the optimistic message on error
-              setChatMessages((prev) => prev.slice(0, -1));
-              return;
-            }
-            if (msg.role === 'assistant') {
-              acc += msg.content || '';
-              setChatMessages((prev) => {
-                const updated = [...prev];
-                updated[assistantIndex] = { role: 'assistant', content: acc } as ChatMessage;
-                return updated;
-              });
-            }
-          } catch {
-            /* ignore malformed chunks */
-          }
-        }
+      const result = await resp.json();
+      console.log('Got request response:', result);
+      
+      if (!result.requestId) {
+        throw new Error('No request ID received');
       }
 
-      // After response is complete, check if we should show a document edit option
-      if (isEditRequest && acc.length > 100) {
-        // Extract potential document content from response
-        const codeBlockMatch = acc.match(/```(?:markdown|md)?\n([\s\S]*?)\n```/);
-        if (codeBlockMatch) {
-          const suggestedContent = codeBlockMatch[1].trim();
-          if (suggestedContent.length > 50) {
-            setPendingEdit({
-              newContent: suggestedContent,
-              summary: `Suggested changes from: "${originalText}"`
-            });
-          }
-        }
-      }
+      // Connect to WebSocket and stream the response
+      await streamChatResponse(result.requestId, assistantIndex, isEditRequest, originalText);
+
     } catch (err) {
       console.error('Chat error:', err);
       
@@ -557,6 +504,102 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     } finally {
       setChatLoading(false);
     }
+  };
+
+  const streamChatResponse = async (requestId: string, assistantIndex: number, isEditRequest: boolean, originalText: string) => {
+    return new Promise<void>((resolve, reject) => {
+      const wsUrl = `${VITE_API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://')}/websocket`;
+      console.log('Connecting to WebSocket:', wsUrl);
+      
+      const ws = new WebSocket(wsUrl);
+      let acc = '';
+
+      ws.onopen = () => {
+        console.log('WebSocket connected, subscribing to request:', requestId);
+        ws.send(JSON.stringify({
+          action: 'subscribe',
+          requestId: requestId
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          console.log('WebSocket message:', msg);
+          
+          if (msg.error) {
+            console.error('Stream error:', msg.error);
+            toast({ 
+              title: "Assistant Error", 
+              description: msg.error,
+              variant: "destructive"
+            });
+            setChatMessages((prev) => prev.slice(0, -1));
+            ws.close();
+            reject(new Error(msg.error));
+            return;
+          }
+          
+          if (msg.role === 'assistant' && msg.content) {
+            acc += msg.content;
+            setChatMessages((prev) => {
+              const updated = [...prev];
+              updated[assistantIndex] = { role: 'assistant', content: acc } as ChatMessage;
+              return updated;
+            });
+          }
+          
+          if (msg.done) {
+            console.log('Stream completed');
+            ws.close();
+            
+            // After response is complete, check if we should show a document edit option
+            if (isEditRequest && acc.length > 100) {
+              const codeBlockMatch = acc.match(/```(?:markdown|md)?\n([\s\S]*?)\n```/);
+              if (codeBlockMatch) {
+                const suggestedContent = codeBlockMatch[1].trim();
+                if (suggestedContent.length > 50) {
+                  setPendingEdit({
+                    newContent: suggestedContent,
+                    summary: `Suggested changes from: "${originalText}"`
+                  });
+                }
+              }
+            }
+            
+            resolve();
+          }
+        } catch (parseError) {
+          console.error('Failed to parse WebSocket message:', parseError);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        toast({ 
+          title: "Connection Error", 
+          description: "Failed to connect to WebSocket for real-time streaming",
+          variant: "destructive"
+        });
+        setChatMessages((prev) => prev.slice(0, -1));
+        reject(error);
+      };
+
+      ws.onclose = (event) => {
+        console.log('WebSocket closed:', event.code, event.reason);
+        if (event.code !== 1000) { // 1000 is normal closure
+          console.error('WebSocket closed unexpectedly');
+        }
+      };
+
+      // Set a timeout to prevent hanging
+      setTimeout(() => {
+        if (ws.readyState !== WebSocket.CLOSED) {
+          ws.close();
+          reject(new Error('WebSocket timeout'));
+        }
+      }, 120000); // 2 minutes timeout
+    });
   };
 
   // Show loading state while fetching article

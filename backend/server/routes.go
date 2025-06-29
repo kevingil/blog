@@ -4,9 +4,9 @@ import (
 	"blog-agent-go/backend/services"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
@@ -98,29 +98,82 @@ func (s *FiberServer) healthHandler(c *fiber.Ctx) error {
 
 func (s *FiberServer) websocketHandler(con *websocket.Conn) {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
+	// Handle incoming messages to subscribe to request streams
 	go func() {
+		defer cancel()
 		for {
-			_, _, err := con.ReadMessage()
+			messageType, message, err := con.ReadMessage()
 			if err != nil {
-				cancel()
-				log.Println("Receiver Closing", err)
+				log.Printf("WebSocket read error: %v", err)
 				break
+			}
+
+			if messageType == websocket.TextMessage {
+				// Parse the message to get request ID
+				var msg struct {
+					RequestID string `json:"requestId"`
+					Action    string `json:"action"`
+				}
+
+				if err := json.Unmarshal(message, &msg); err != nil {
+					log.Printf("WebSocket message parse error: %v", err)
+					continue
+				}
+
+				if msg.Action == "subscribe" && msg.RequestID != "" {
+					log.Printf("WebSocket: Subscribing to request %s", msg.RequestID)
+					s.handleCopilotStreaming(ctx, con, msg.RequestID)
+				}
 			}
 		}
 	}()
 
+	// Keep connection alive until context is cancelled
+	<-ctx.Done()
+	log.Println("WebSocket connection closed")
+}
+
+func (s *FiberServer) handleCopilotStreaming(ctx context.Context, con *websocket.Conn, requestID string) {
+	manager := services.GetAsyncCopilotManager()
+	responseChan, exists := manager.GetResponseChannel(requestID)
+	if !exists {
+		log.Printf("WebSocket: Request ID %s not found", requestID)
+		return
+	}
+
+	log.Printf("WebSocket: Starting stream for request %s", requestID)
+
 	for {
 		select {
-		case <-ctx.Done():
-			return
-		default:
-			payload := fmt.Sprintf("server timestamp: %d", time.Now().UnixNano())
-			if err := con.WriteMessage(websocket.TextMessage, []byte(payload)); err != nil {
-				log.Printf("could not write to socket: %v", err)
+		case response, ok := <-responseChan:
+			if !ok {
+				log.Printf("WebSocket: Response channel closed for request %s", requestID)
 				return
 			}
-			time.Sleep(time.Second * 2)
+
+			// Send response as JSON message
+			responseBytes, err := json.Marshal(response)
+			if err != nil {
+				log.Printf("WebSocket: Failed to marshal response: %v", err)
+				continue
+			}
+
+			if err := con.WriteMessage(websocket.TextMessage, responseBytes); err != nil {
+				log.Printf("WebSocket: Failed to write message: %v", err)
+				return
+			}
+
+			// If response is done or has error, we can stop streaming
+			if response.Done || response.Error != "" {
+				log.Printf("WebSocket: Stream completed for request %s", requestID)
+				return
+			}
+
+		case <-ctx.Done():
+			log.Printf("WebSocket: Context cancelled for request %s", requestID)
+			return
 		}
 	}
 }
