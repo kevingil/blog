@@ -247,12 +247,16 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     },
   });
 
-  // Keep editor content in sync when article loads / resets
+  // When form values are externally reset (e.g., after fetching the article or clearing for a new one) we
+  // synchronise those changes into the editor exactly once.
   useEffect(() => {
-    if (editor && !diffing) {
-      editor.commands.setContent(mdParser.render(watchedValues.content || ''));
+    if (!editor) return;
+    // If the change came from user typing inside the editor, `editor.getText()` already matches `watchedValues.content`.
+    // We only want to update when the two differ – i.e., an external change.
+    if (watch('content') !== editor.getText()) {
+      editor.commands.setContent(mdParser.render(watch('content') || ''));
     }
-  }, [watchedValues.content, diffing, editor, mdParser]);
+  }, [watch('content'), editor, mdParser]);
 
   if (!user) {
     return <div>Please log in to edit articles.</div>;
@@ -271,22 +275,31 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       console.log("Populating form with article data:", article);
       // Extract tag names from the server response format
       const tagNames = article.tags ? article.tags.map((tag: any) => tag?.tag_name?.toUpperCase() || tag) : [];
-      reset({
+      const newValues = {
         title: article.article.title || '',
         content: article.article.content || '',
         image: article.article.image || '',
         tags: tagNames,
         isDraft: article.article.is_draft,
-      });
+      } as ArticleFormData;
+      reset(newValues);
+      // Sync editor with fresh content
+      if (editor) {
+        editor.commands.setContent(mdParser.render(newValues.content));
+      }
     } else if (isNew) {
       console.log("Resetting form for new article");
-      reset({
+      const blank: ArticleFormData = {
         title: '',
         content: '',
         image: '',
         tags: [],
         isDraft: false,
-      });
+      };
+      reset(blank);
+      if (editor) {
+        editor.commands.setContent('');
+      }
     }
   }, [article, isNew, reset]);
 
