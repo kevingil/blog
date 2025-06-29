@@ -7,6 +7,7 @@ import * as z from 'zod';
 import { format } from "date-fns"
 import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
+import { IconLoader, IconLoader2 } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -933,7 +934,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     : 'bg-gray-200 dark:bg-gray-700 dark:text-white'
                 }`}
               >
-                {m.content}
+                {m.content || (m.role === 'assistant' && chatLoading ? (
+                  <div className="flex items-center gap-1">
+                    <div className="flex space-x-1">
+                      <IconLoader2 className="w-4 h-4 text-indigo-500 animate-spin" />
+                    </div>
+                    <span className="text-xs opacity-75">thinking...</span>
+                  </div>
+                ) : m.content)}
               </div>
             </div>
           ))}
