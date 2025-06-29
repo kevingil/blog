@@ -35,6 +35,7 @@ import { Link } from '@tanstack/react-router';
 import { ArticleListItem } from '@/services/types';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogTitle, DialogContent, DialogTrigger, DialogDescription, DialogFooter, DialogHeader, DialogClose } from '@/components/ui/dialog';
+import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerClose } from '@/components/ui/drawer';
 
 const DEFAULT_IMAGE_PROMPT = [
   "A modern, minimalist illustration",
@@ -369,179 +370,195 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   return (
     <section className="flex gap-4 p-0 md:p-4 h-[calc(100vh-60px)]">
       <div className="flex-1">
-        <h1 className="text-lg lg:text-2xl font-medium text-gray-900 dark:text-white mb-6">
-          {isNew ? 'New Article' : 'Edit Article'}
-        </h1>
+        {/* Heading + Title input */}
+        <div className="flex flex-col sm:flex-row items-center gap-4 mb-4">
+          <h1 className="text-lg lg:text-2xl font-medium text-gray-900 dark:text-white whitespace-nowrap">
+            {isNew ? 'New Article' : 'Edit Article'}
+          </h1>
+          <Input
+            {...register('title')}
+            value={watchedValues.title}
+            onChange={(e) => setValue('title', e.target.value)}
+            placeholder="Article Title"
+            className="flex-1"
+          />
+          {errors.title && <p className="text-red-500 text-sm">{errors.title.message}</p>}
+        </div>
+
+        {/* Image card + publish controls + See Article */}
+        <div className="flex flex-col sm:flex-row items-center gap-4 mb-6">
+          {/* Small image card that opens the drawer */}
+          <Drawer direction="right">
+            <DrawerTrigger asChild>
+              <Card className="w-24 h-16 flex items-center justify-center overflow-hidden cursor-pointer">
+                <ImageLoader
+                  article={article}
+                  newImageGenerationRequestId={newImageGenerationRequestId}
+                  stagedImageUrl={stagedImageUrl}
+                  setStagedImageUrl={setStagedImageUrl}
+                />
+                {(!stagedImageUrl && !article?.article.image) && (
+                  <span className="text-xs text-muted-foreground">Add Image</span>
+                )}
+              </Card>
+            </DrawerTrigger>
+
+            {/* Drawer content reused from previous implementation */}
+            <DrawerContent className="w-full sm:max-w-sm ml-auto">
+              <DrawerHeader>
+                <DrawerTitle>Edit Header Image</DrawerTitle>
+                <DrawerDescription>Update or generate a header image for your article.</DrawerDescription>
+              </DrawerHeader>
+              <div className="space-y-4 px-4">
+                <div className="space-y-2">
+                  <label className="block text-md font-medium leading-6 text-gray-900 dark:text-white">Image URL</label>
+                  <Input
+                    className="w-full"
+                    {...register('image')}
+                    value={watchedValues.image}
+                    onChange={(e) => {
+                      setValue('image', e.target.value);
+                      setStagedImageUrl(e.target.value);
+                    }}
+                    placeholder="Optional, for header"
+                  />
+                  {errors.image && <p className="text-red-500">{errors.image.message}</p>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Dialog open={generateImageOpen} onOpenChange={setGenerateImageOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" className="">
+                        <PencilIcon className="w-4 h-4 text-indigo-500" /> Edit Prompt
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[600px]">
+                      <DialogHeader>
+                        <DialogTitle>Generate New Image</DialogTitle>
+                        <DialogDescription>
+                          Generate a new image for your article header.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="flex flex-col items-start gap-4 w-full">
+                        <Textarea
+                          value={imagePrompt || ''}
+                          onChange={(e) => setImagePrompt(e.target.value)}
+                          placeholder="Prompt"
+                          className="h-[300px] w-full"
+                        />
+                      </div>
+                      <DialogFooter>
+                        <div className="flex items-center gap-2 w-full">
+                          <DialogClose asChild>
+                            <Button variant="outline" className="w-full">Cancel</Button>
+                          </DialogClose>
+                          <Button
+                            type="submit"
+                            className="w-full"
+                            onClick={async () => {
+                              const result = await generateArticleImage(imagePrompt || '', article?.article.id || 0);
+                              if (result.success) {
+                                setNewImageGenerationRequestId(result.generationRequestId);
+                                toast({ title: 'Success', description: 'Image generated successfully.' });
+                                setGenerateImageOpen(false);
+                              } else {
+                                toast({ title: 'Error', description: 'Failed to generate image. Please try again.' });
+                              }
+                            }}
+                          >Generate</Button>
+                        </div>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    disabled={generatingImage}
+                    onClick={async (e) => {
+                      setGeneratingImage(true);
+                      e.preventDefault();
+                      const result = await generateArticleImage(article?.article.title || '', article?.article.id || 0);
+                      if (result.success) {
+                        setNewImageGenerationRequestId(result.generationRequestId);
+                        toast({ title: 'Success', description: 'Image generated successfully.' });
+                      } else {
+                        toast({ title: 'Error', description: 'Failed to generate image. Please try again.' });
+                      }
+                      setGeneratingImage(false);
+                    }}
+                  >
+                    <SparklesIcon className={cn('w-4 h-4 text-indigo-500', generatingImage && 'animate-spin')} />
+                  </Button>
+                </div>
+              </div>
+              <DrawerFooter>
+                <DrawerClose asChild>
+                  <Button variant="outline" className="w-full">Close</Button>
+                </DrawerClose>
+              </DrawerFooter>
+            </DrawerContent>
+          </Drawer>
+
+          {/* Publish toggle, date picker, and See Article */}
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label htmlFor="isDraft" className="text-sm font-medium">Published</label>
+              <Switch
+                id="isDraft"
+                checked={!watchedValues.isDraft}
+                onCheckedChange={(checked) => {
+                  setValue('isDraft', !checked);
+                }}
+              />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <label htmlFor="publishedAt" className="text-sm font-medium">Published Date</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        'justify-start text-left font-normal',
+                        !article?.article.published_at && 'text-muted-foreground'
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {article?.article.published_at ? format(article.article.published_at, 'PPP') : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={article?.article.published_at ? new Date(article.article.published_at) : undefined}
+                      onSelect={(date: Date | undefined) => {
+                        /* Not a form field; selection handled elsewhere if needed */
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+            {!isNew && (
+              <Link
+                to="/blog"
+                params={{ slug: article?.article.slug || '' }}
+                search={{ page: undefined, tag: undefined, search: undefined }}
+                target="_blank"
+                className="flex items-center gap-1 text-sm text-gray-900 dark:text-white"
+              >
+                See Article <ExternalLinkIcon className="w-4 h-4" />
+              </Link>
+            )}
+          </div>
+        </div>
+
         <Card>
           <form className="mt-6">
             <CardContent className="space-y-4">
-              <div>
-                <div className='flex items-center justify-between gap-2 my-4'>
-                  <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Title</label>
-                  <Link to="/blog" params={{ slug: article?.article.slug || '' }} search={{ page: undefined, tag: undefined, search: undefined }} target="_blank" className="flex items-center gap-2 text-sm text-gray-900 dark:text-white">
-                    See Article <ExternalLinkIcon className="w-4 h-4" />
-                  </Link>
-                </div>
-                <Input
-                  {...register('title')}
-                  value={watchedValues.title}
-                  placeholder="Article Title"
-                />
-                {errors.title && <p className="text-red-500">{errors.title.message}</p>}
-              </div>
-
-              <div className='flex items-center justify-center flex-col sm:flex-row '>
-                <div className='flex items-center justify-center flex-col w-full sm:w-1/2 gap-2 mb-auto h-full min-h-[250px]'>
-                  <ImageLoader
-                    article={article}
-                    newImageGenerationRequestId={newImageGenerationRequestId}
-                    stagedImageUrl={stagedImageUrl}
-                    setStagedImageUrl={setStagedImageUrl}
-                  />
-                </div>
-                <div className='flex items-center justify-between flex-col w-full sm:w-1/2 gap-2 h-full min-h-[250px] '>
-                <div className='flex flex-col items-start mr-auto w-full ml-2 gap-2'>
-                  <div className='flex flex-col items-start mr-auto w-full ml-2 gap-2'>
-                    <label className="block text-md font-medium leading-6 text-gray-900 dark:text-white mr-auto mr-2">Image</label>
-                    <div className='flex items-center justify-center w-full'>
-                    <Input
-                      className='w-full'
-                      {...register('image')}
-                      value={watchedValues.image}
-                      onChange={(e) => {
-                        setValue('image', e.target.value);
-                        setStagedImageUrl(e.target.value);
-                      }}
-                      placeholder="Optional, for header"
-                    />
-                    {errors.image && <p className="text-red-500">{errors.image.message}</p>}
-                  </div>
-                  </div>              
-                  <div className='flex items-center justify-between w-full ml-2'>
-                    <div className='flex gap-2 w-full'>
-                      <Button variant="outline" size="icon" disabled>
-                        <UploadIcon className="w-4 h-4" />
-                      </Button>
-                      <div className='flex justify-end gap-2 w-full'>
-                      <Dialog open={generateImageOpen} onOpenChange={setGenerateImageOpen}>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" className=''>
-                            <PencilIcon className="w-4 h-4 text-indigo-500" /> Edit Prompt
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-[600px]">
-                          <DialogHeader>
-                            <DialogTitle>Generate New Image</DialogTitle>
-                            <DialogDescription>
-                              Generate a new image for your article header.
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="flex flex-col items-start gap-4 w-full">
-                            <Textarea
-                              value={imagePrompt || ''}
-                              onChange={(e) => setImagePrompt(e.target.value)}
-                              placeholder="Prompt"
-                              className='h-[300px] w-full'
-                            />
-                          </div>
-                          <DialogFooter>
-                            <div className="flex items-center gap-2 w-full">
-                              <DialogClose asChild>
-                                <Button variant="outline" className="w-full">Cancel</Button>
-                              </DialogClose>
-                              <Button 
-                                type="submit" 
-                                className="w-full"
-                                onClick={async () => {
-                                  console.log("image prompt", imagePrompt);
-                                  const result = await generateArticleImage(imagePrompt || "", article?.article.id || 0);
-
-                                  if (result.success) {
-                                    setNewImageGenerationRequestId(result.generationRequestId);
-                                    toast({ title: "Success", description: "Image generated successfully." });
-                                    setGenerateImageOpen(false);
-                                  } else {
-                                    toast({ title: "Error", description: "Failed to generate image. Please try again." });
-                                  }
-                                }}>Generate</Button>
-                            </div>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          disabled={generatingImage}
-                          onClick={async (e) => {
-                            setGeneratingImage(true);
-                            e.preventDefault();
-                            console.log("image prompt", imagePrompt);
-                            const result = await generateArticleImage(article?.article.title || "", article?.article.id || 0);
-
-                            if (result.success) {
-                              setNewImageGenerationRequestId(result.generationRequestId);
-                              toast({ title: "Success", description: "Image generated successfully." });
-                            } else {
-                              toast({ title: "Error", description: "Failed to generate image. Please try again." });
-                            }
-                            setGeneratingImage(false);
-                          }}>
-                          <SparklesIcon className={cn("w-4 h-4 text-indigo-500", generatingImage && "animate-spin")} />
-                        </Button>
-                      </div>
-                      
-                    </div>
-                  </div>
-                </div>
-                  <div style={{marginLeft: '2rem'}} className='flex w-full items-center flex-col gap-2 mt-auto'>
-                <div className='mr-auto flex flex-row'>
-                <label htmlFor="isDraft" className='text-sm font-medium flex flex-row mr-2'>Published </label>
-                <Switch 
-                  id="isDraft"
-                  checked={!watchedValues.isDraft} 
-                  onCheckedChange={(checked) => {
-                    setValue('isDraft', !checked);
-                  }} 
-                />
-                </div>
-              <div className='flex w-full flex-col'>
-                  <div>
-                    <label htmlFor="publishedAt" className='text-sm font-medium'>Published Date</label>
-                  </div>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                    variant={"outline"}
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !article?.article.published_at && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {article?.article.published_at ? format(article.article.published_at, "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={article?.article.published_at ? new Date(article.article.published_at) : undefined}
-                    onSelect={(date: Date | undefined) => {
-                      // Date selection handled by the calendar component
-                      // Published date is not part of the form schema
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-                  </Popover>
-              </div>
-              </div>
-                </div>
-              </div>
-
               <div className='flex flex-row w-full justify-between'>
-
-              <label className="block my-auto text-md font-medium leading-6 text-gray-900 dark:text-white ">Content</label>
-              
+                <label className="block my-auto text-md font-medium leading-6 text-gray-900 dark:text-white ">Content</label>
+                
                 <Button
                   type="button"
                   variant="outline"
