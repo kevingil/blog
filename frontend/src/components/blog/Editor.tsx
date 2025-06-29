@@ -108,7 +108,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const { toast } = useToast()
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { blogSlug } = useParams({ from: '/dashboard/blog/edit/$blogSlug' });
+  
+  // Only use useParams when editing an existing article
+  const params = !isNew ? useParams({ from: '/dashboard/blog/edit/$blogSlug' }) : null;
+  const blogSlug = params?.blogSlug;
+  
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
@@ -284,7 +288,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   return (
     <section className="flex-1 p-0 md:p-4">
       <h1 className="text-lg lg:text-2xl font-medium text-gray-900 dark:text-white mb-6">
-        Edit Article 
+        {isNew ? 'New Article' : 'Edit Article'}
       </h1>
       <Card>
         <form className="mt-6">

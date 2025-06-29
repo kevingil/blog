@@ -25,8 +25,6 @@ export const Route = createFileRoute('/dashboard/blog/')({
 });
 
 function ArticlesPage() {
-  const { user } = useAuth();
-  const navigate = useNavigate();
   const { data: articlesPayload, isLoading, error } = useQuery<{ articles: ArticleListItem[], total_pages: number }>({
     queryKey: ['articles', 0],
     queryFn: () => getArticles(0, null, true) as Promise<{ articles: ArticleListItem[], total_pages: number }>
