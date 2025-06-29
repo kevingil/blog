@@ -189,10 +189,16 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   /* Chat (right-hand panel)                                               */
   /* --------------------------------------------------------------------- */
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { role: 'assistant', content: 'Hi! Ask me anything about your article.' },
+    { role: 'assistant', content: 'Hi! I can help you improve your article. Try asking me to "rewrite the introduction" or "make the content more engaging".' },
   ]);
   const [chatLoading, setChatLoading] = useState(false);
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
+  
+  // Document editing state
+  const [pendingEdit, setPendingEdit] = useState<{
+    newContent: string;
+    summary: string;
+  } | null>(null);
 
   // Use React Query to fetch article data
   const { data: article, isLoading: articleLoading, error } = useQuery({
@@ -394,10 +400,21 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     const text = chatInputRef.current?.value.trim();
     if (!text) return;
 
-    // optimistic user message
+    // Include current document content in context for edit requests
+    const currentContent = editor?.getText() || '';
+    const contextualMessage = currentContent ? 
+      `Current document content:\n\n${currentContent}\n\nUser request: ${text}` : text;
+
+    // Check if this looks like an edit request
+    const isEditRequest = /\b(rewrite|edit|improve|change|update|fix|enhance|modify)\b/i.test(text);
+
+    // optimistic user message (show original user message, not contextual)
     const baseMessages = [...chatMessages, { role: 'user', content: text } as ChatMessage];
     setChatMessages(baseMessages);
     if (chatInputRef.current) chatInputRef.current.value = '';
+
+    // Create messages for API (include context)
+    const apiMessages = [...chatMessages, { role: 'user', content: contextualMessage } as ChatMessage];
 
     // placeholder assistant message we will populate token-by-token
     const assistantIndex = baseMessages.length;
@@ -408,7 +425,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       const resp = await fetch('/api/copilotkit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: baseMessages }),
+        body: JSON.stringify({ messages: apiMessages }),
       });
 
       if (!resp.body) throw new Error('No response body');
@@ -445,6 +462,21 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             }
           } catch {
             /* ignore malformed chunks */
+          }
+        }
+      }
+
+      // After response is complete, check if we should show a document edit option
+      if (isEditRequest && acc.length > 100) {
+        // Extract potential document content from response
+        const codeBlockMatch = acc.match(/```(?:markdown|md)?\n([\s\S]*?)\n```/);
+        if (codeBlockMatch) {
+          const suggestedContent = codeBlockMatch[1].trim();
+          if (suggestedContent.length > 50) {
+            setPendingEdit({
+              newContent: suggestedContent,
+              summary: `Suggested changes from: "${text}"`
+            });
           }
         }
       }
@@ -705,6 +737,33 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     }}
                   />
                 )}
+                {pendingEdit && !diffing && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-10">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg border border-gray-200 space-y-4 max-w-md">
+                      <h2 className="text-lg font-bold">Apply AI Suggestions?</h2>
+                      <p className="text-sm text-gray-600 dark:text-gray-300">{pendingEdit.summary}</p>
+                      <div className="flex justify-end space-x-4">
+                        <Button variant="outline" onClick={() => setPendingEdit(null)}>
+                          Ignore
+                        </Button>
+                        <Button onClick={() => {
+                          const currentText = editor?.getText() || '';
+                          const diff = diffPartialText(currentText, pendingEdit.newContent, true);
+                          const diffHtml = mdParser.render(diff);
+                          setOriginalDocument(currentText);
+                          setPendingNewDocument(pendingEdit.newContent);
+                          setDiffing(true);
+                          if (editor) {
+                            editor.commands.setContent(diffHtml);
+                          }
+                          setPendingEdit(null);
+                        }}>
+                          Preview Changes
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
               <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Tags</label>
               <div className='mb-2'>
@@ -764,22 +823,65 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             </div>
           ))}
         </div>
-        <div className="p-4 border-t flex gap-2">
-          <Textarea
-            ref={chatInputRef}
-            rows={2}
-            placeholder="Ask the assistant…"
-            className="flex-1 resize-none"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendChat();
-              }
-            }}
-          />
-          <Button onClick={sendChat} disabled={chatLoading}>
-            {chatLoading ? '…' : 'Send'}
-          </Button>
+        <div className="p-4 border-t space-y-2">
+          <div className="flex gap-1 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (chatInputRef.current) {
+                  chatInputRef.current.value = 'Please rewrite this article to make it more engaging and clear';
+                  sendChat();
+                }
+              }}
+              disabled={chatLoading}
+            >
+              ✨ Improve
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (chatInputRef.current) {
+                  chatInputRef.current.value = 'Fix any grammar and spelling issues in this article';
+                  sendChat();
+                }
+              }}
+              disabled={chatLoading}
+            >
+              ✓ Fix Grammar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (chatInputRef.current) {
+                  chatInputRef.current.value = 'Make this article shorter and more concise';
+                  sendChat();
+                }
+              }}
+              disabled={chatLoading}
+            >
+              📝 Shorten
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <Textarea
+              ref={chatInputRef}
+              rows={2}
+              placeholder="Ask the assistant or click a quick action above…"
+              className="flex-1 resize-none"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  sendChat();
+                }
+              }}
+            />
+            <Button onClick={sendChat} disabled={chatLoading}>
+              {chatLoading ? '…' : 'Send'}
+            </Button>
+          </div>
         </div>
       </div>
     </section>
