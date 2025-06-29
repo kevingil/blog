@@ -12,7 +12,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// CopilotKitHandler handles POST /api/copilotkit
+// CopilotKitHandler handles POST agent/writing_copilot
 //
 // This implementation uses streaming responses from the OpenAI API and forwards
 // them to the frontend as Server-Sent Events (SSE). This provides real-time
