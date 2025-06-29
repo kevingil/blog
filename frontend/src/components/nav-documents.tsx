@@ -22,7 +22,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { Link } from "@tanstack/react-router"
+import { Link, useLocation } from "@tanstack/react-router"
 
 
 export function NavDocuments({
@@ -35,6 +35,7 @@ export function NavDocuments({
   }[]
 }) {
   const { isMobile } = useSidebar()
+  const location = useLocation()
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
@@ -42,7 +43,7 @@ export function NavDocuments({
       <SidebarMenu>
         {items.map((item) => (
           <SidebarMenuItem key={item.name}>
-            <SidebarMenuButton asChild>
+            <SidebarMenuButton isActive={location.pathname === item.url} asChild>
               <Link to={item.url}>
                 <item.icon />
                 <span>{item.name}</span>
@@ -80,12 +81,6 @@ export function NavDocuments({
             </DropdownMenu>
           </SidebarMenuItem>
         ))}
-        <SidebarMenuItem>
-          <SidebarMenuButton className="text-sidebar-foreground/70">
-            <IconDots className="text-sidebar-foreground/70" />
-            <span>More</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
       </SidebarMenu>
     </SidebarGroup>
   )

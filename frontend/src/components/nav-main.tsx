@@ -11,7 +11,7 @@ import {
 import { GenerateArticleDrawer } from "@/components/blog/GenerateArticleDrawer"
 import { Plus, Sparkles } from "lucide-react"
 
-import { Link } from "@tanstack/react-router"
+import { Link, useLocation } from "@tanstack/react-router"
 
 export function NavMain({
   items,
@@ -22,6 +22,8 @@ export function NavMain({
     icon?: Icon
   }[]
 }) {
+  const location = useLocation()
+  
   return (
     <SidebarGroup>
       <SidebarGroupContent className="flex flex-col gap-2">
@@ -39,7 +41,11 @@ export function NavMain({
             <Link to="/dashboard/blog/new">
             <Button
               size="icon"
-                className="outline-1 outline-gray-400 shadow-md size-8 group-data-[collapsible=icon]:opacity-0"
+                className={`outline-1 outline-gray-400 shadow-md size-8 group-data-[collapsible=icon]:opacity-0 ${
+                  location.pathname === '/dashboard/blog/new' 
+                    ? 'bg-accent text-accent-foreground' 
+                    : ''
+                }`}
                 variant="outline"
               >
                 <Plus className="h-4 w-4" />
@@ -51,7 +57,10 @@ export function NavMain({
         <SidebarMenu>
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton tooltip={item.title}>
+              <SidebarMenuButton 
+                tooltip={item.title}
+                isActive={location.pathname === item.url}
+              >
                   {item.icon && <item.icon />}
                 <Link to={item.url}>
                   <span>{item.title}</span>
