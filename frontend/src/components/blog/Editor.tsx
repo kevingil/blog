@@ -8,6 +8,11 @@ import { format } from "date-fns"
 import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery } from '@tanstack/react-query';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import MarkdownIt from 'markdown-it';
+import { diffWords } from 'diff';
+import type { Editor as TiptapEditor } from '@tiptap/core';
  
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -61,6 +66,57 @@ type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
 };
+
+// === Helper utilities for Markdown ↔️ HTML and diff markup ===================
+function fromMarkdown(text: string) {
+  const md = new MarkdownIt({ typographer: true, html: true });
+  return md.render(text);
+}
+
+function diffPartialText(
+  oldText: string,
+  newText: string,
+  isComplete: boolean = false,
+): string {
+  let oldTextToCompare = oldText;
+  if (oldText.length > newText.length && !isComplete) {
+    oldTextToCompare = oldText.slice(0, newText.length);
+  }
+
+  const changes = diffWords(oldTextToCompare, newText);
+
+  let result = '';
+  changes.forEach((part: any) => {
+    if (part.added) {
+      result += `<em>${part.value}</em>`;
+    } else if (part.removed) {
+      result += `<s>${part.value}</s>`;
+    } else {
+      result += part.value;
+    }
+  });
+
+  if (oldText.length > newText.length && !isComplete) {
+    result += oldText.slice(newText.length);
+  }
+
+  return result;
+}
+
+// Simple overlay component to confirm/reject AI changes
+function ConfirmChanges({ onReject, onConfirm }: { onReject: () => void; onConfirm: () => void; }) {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-10">
+      <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg border border-gray-200 space-y-4">
+        <h2 className="text-lg font-bold">Accept AI changes?</h2>
+        <div className="flex justify-end space-x-4">
+          <Button variant="outline" onClick={onReject}>Reject</Button>
+          <Button onClick={onConfirm}>Confirm</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function ImageLoader({ article, newImageGenerationRequestId, stagedImageUrl, setStagedImageUrl }: {
   article: ArticleListItem | null | undefined,
@@ -161,6 +217,42 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const watchedValues = watch();
 
   const [imagePrompt, setImagePrompt] = useState<string | null>(DEFAULT_IMAGE_PROMPT[Math.floor(Math.random() * DEFAULT_IMAGE_PROMPT.length)]);
+
+  /* --------------------------------------------------------------------- */
+  /* Tiptap Editor Setup                                                   */
+  /* --------------------------------------------------------------------- */
+  const mdParserRef = useRef<MarkdownIt>();
+  if (!mdParserRef.current) {
+    mdParserRef.current = new MarkdownIt({ typographer: true, html: true });
+  }
+  const mdParser = mdParserRef.current;
+
+  const [diffing, setDiffing] = useState(false);
+  const [originalDocument, setOriginalDocument] = useState<string>('');
+  const [pendingNewDocument, setPendingNewDocument] = useState<string>('');
+
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: mdParser.render(watchedValues.content || ''),
+    editorProps: {
+      attributes: {
+        class:
+          'w-full p-4 border border-gray-300 rounded-md h-[calc(100vh-425px)] focus:outline-none',
+      },
+    },
+    onUpdate({ editor }: { editor: TiptapEditor }) {
+      if (!diffing) {
+        setValue('content', editor.getText());
+      }
+    },
+  });
+
+  // Keep editor content in sync when article loads / resets
+  useEffect(() => {
+    if (editor && !diffing) {
+      editor.commands.setContent(mdParser.render(watchedValues.content || ''));
+    }
+  }, [watchedValues.content, diffing, editor, mdParser]);
 
   if (!user) {
     return <div>Please log in to edit articles.</div>;
@@ -263,18 +355,23 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   };
 
   const rewriteArticle = async () => {
-    if (!article?.article.id) return;
-    
+    if (!article?.article.id || !editor) return;
     setGeneratingRewrite(true);
     try {
+      const oldText = editor.getText();
       const result = await updateArticleWithContext(article.article.id);
       if (result.success) {
-        setValue('content', result.content);
-        console.log("Updated content via rewrite:", result.content);
+        const newText = result.content;
+        const diff = diffPartialText(oldText, newText, true);
+        const diffHtml = mdParser.render(diff);
+        setOriginalDocument(oldText);
+        setPendingNewDocument(newText);
+        setDiffing(true);
+        editor.commands.setContent(diffHtml);
       }
     } catch (error) {
       console.error('Error rewriting article:', error);
-      toast({ title: "Error", description: "Failed to rewrite article. Please try again." });
+      toast({ title: 'Error', description: 'Failed to rewrite article. Please try again.' });
     } finally {
       setGeneratingRewrite(false);
     }
@@ -568,14 +665,33 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           <form className="">
             <CardContent className="space-y-4">
               <div>
-                <Textarea
-                  defaultValue={article?.article.content || ''}
-                  className="w-full p-4 border border-gray-300 rounded-md h-[calc(100vh-425px)]"
-                  {...register('content')}
-                  value={watchedValues.content}
-                  onChange={(e) => setValue('content', e.target.value)}
+                <EditorContent
+                  editor={editor}
+                  className="w-full border-none rounded-md h-[calc(100vh-425px)] overflow-y-auto focus:outline-none"
                 />
+                {/* Hidden input to keep react-hook-form registration for content */}
+                <input type="hidden" {...register('content')} value={watchedValues.content} />
                 {errors.content && <p className="text-red-500">{errors.content.message}</p>}
+                {diffing && (
+                  <ConfirmChanges
+                    onReject={() => {
+                      if (editor) {
+                        editor.commands.setContent(mdParser.render(originalDocument));
+                      }
+                      setValue('content', originalDocument);
+                      setDiffing(false);
+                      setPendingNewDocument('');
+                    }}
+                    onConfirm={() => {
+                      if (editor) {
+                        editor.commands.setContent(mdParser.render(pendingNewDocument));
+                      }
+                      setValue('content', pendingNewDocument);
+                      setDiffing(false);
+                      setPendingNewDocument('');
+                    }}
+                  />
+                )}
               </div>
               <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Tags</label>
               <div className='mb-2'>
