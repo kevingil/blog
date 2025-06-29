@@ -267,3 +267,92 @@ func (s *CopilotKitService) Generate(ctx context.Context, req ChatRequest) (stri
 
 	return completion.Choices[0].Message.Content, nil
 }
+
+// StreamResponse represents a single chunk in the streaming response
+type StreamResponse struct {
+	Role    string `json:"role,omitempty"`
+	Content string `json:"content,omitempty"`
+	Done    bool   `json:"done,omitempty"`
+}
+
+// GenerateStream sends the chat transcript to OpenAI and streams the response back
+func (s *CopilotKitService) GenerateStream(ctx context.Context, req ChatRequest) (<-chan StreamResponse, error) {
+	if len(req.Messages) == 0 {
+		return nil, errors.New("no messages provided")
+	}
+
+	// Convert messages into the union type the SDK expects
+	converted := make([]openai.ChatCompletionMessageParamUnion, 0, len(req.Messages))
+
+	// Add system message for the writing assistant
+	systemPrompt := `You are an expert writing assistant helping users improve their articles and blog posts. 
+
+Your capabilities:
+- Analyze and provide feedback on writing
+- Suggest improvements for clarity, structure, and engagement
+- Help with editing, rewriting, and content enhancement
+- Answer questions about writing techniques and best practices
+
+When the user asks you to make changes to their document, provide clear suggestions and explain your reasoning. Be conversational and helpful in your responses.`
+
+	converted = append(converted, openai.SystemMessage(systemPrompt))
+
+	for _, m := range req.Messages {
+		switch m.Role {
+		case "system":
+			converted = append(converted, openai.SystemMessage(m.Content))
+		case "assistant":
+			converted = append(converted, openai.AssistantMessage(m.Content))
+		case "user":
+			converted = append(converted, openai.UserMessage(m.Content))
+		default:
+			converted = append(converted, openai.UserMessage(m.Content))
+		}
+	}
+
+	model := req.Model
+	if model == "" {
+		model = openai.ChatModelGPT4o
+	}
+
+	stream := s.client.Chat.Completions.NewStreaming(ctx, openai.ChatCompletionNewParams{
+		Model:    model,
+		Messages: converted,
+	})
+
+	responseChan := make(chan StreamResponse, 10)
+
+	go func() {
+		defer close(responseChan)
+		defer stream.Close()
+
+		for stream.Next() {
+			chunk := stream.Current()
+
+			if len(chunk.Choices) == 0 {
+				continue
+			}
+
+			choice := chunk.Choices[0]
+			delta := choice.Delta
+
+			// Handle regular content
+			if delta.Content != "" {
+				responseChan <- StreamResponse{
+					Role:    "assistant",
+					Content: delta.Content,
+				}
+			}
+		}
+
+		if err := stream.Err(); err != nil {
+			// Log error but don't break the stream
+			return
+		}
+
+		// Send done signal
+		responseChan <- StreamResponse{Done: true}
+	}()
+
+	return responseChan, nil
+}
