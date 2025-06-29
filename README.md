@@ -1,24 +1,45 @@
-# Project blog-agent
+# Blog Copilot
 
-One Paragraph of project description goes here
+An intelligent blogging platform with AI-powered writing assistance, featuring automated content generation, image creation, and a smart copilot to help you write better articles.
+
+![frontend/public/Xnip2025-06-29_15-58-49.jpg](frontend/public/Xnip2025-06-29_15-58-49.jpg)
+
 
 ## Getting Started
 
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See deployment for notes on how to deploy the project on a live system.
+### Frontend Setup
 
-## MakeFile
+Navigate to the frontend directory and install dependencies:
+```bash
+cd frontend
+bun install
+```
 
-Run build make command with tests
+Start the development server:
+```bash
+bun run dev
+```
+
+Build for production:
+```bash
+bun run build
+```
+
+### Backend Setup (Go)
+
+The Makefile commands are for the backend only:
+
+Run build make command with tests:
 ```bash
 make all
 ```
 
-Build the application
+Build the application:
 ```bash
 make build
 ```
 
-Run the application
+Run the application:
 ```bash
 make run
 ```
