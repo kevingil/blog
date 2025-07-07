@@ -2,7 +2,9 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"sync"
@@ -219,19 +221,76 @@ type ChatRequestResponse struct {
 	Status    string `json:"status"`
 }
 
-// CopilotKitService is a thin wrapper around the OpenAI client that exposes a
-// helper to open a streaming chat completion. We keep it completely stateless
-// so callers can create it ad-hoc – no need to attach it to the FiberServer
-// unless you want to reuse it.
-//
-// It intentionally does not try to be generic – only implement what we need
-// today. If you later want to integrate advanced features (tools, function
-// calling, parallel_tool_calls, …) you can layer it on top.
-type WritingCopilotService struct {
-	client *openai.Client
+// Tool definitions
+type ToolDefinition struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Parameters  any    `json:"parameters"`
 }
 
-func NewWritingCopilotService() *WritingCopilotService {
+// Planning phase structured output
+type AgentPlan struct {
+	Strategy    string        `json:"strategy"`     // "respond_only", "use_tools"
+	Reasoning   string        `json:"reasoning"`    // Why this strategy was chosen
+	Tools       []PlannedTool `json:"tools"`        // Tools to execute in order
+	ResponseMsg string        `json:"response_msg"` // Initial response to user
+}
+
+type PlannedTool struct {
+	Name       string                 `json:"name"`
+	Parameters map[string]interface{} `json:"parameters"`
+	Message    string                 `json:"message"` // Message to show in artifact while executing
+}
+
+// Agent memory for storing intermediary information
+type AgentMemory struct {
+	SessionID   string                 `json:"session_id"`
+	Context     map[string]interface{} `json:"context"`
+	ToolResults []ToolExecutionResult  `json:"tool_results"`
+	UpdatedAt   time.Time              `json:"updated_at"`
+}
+
+type ToolExecutionResult struct {
+	ToolName   string                 `json:"tool_name"`
+	Parameters map[string]interface{} `json:"parameters"`
+	Result     interface{}            `json:"result"`
+	Error      string                 `json:"error,omitempty"`
+	Timestamp  time.Time              `json:"timestamp"`
+}
+
+// WebSocket streaming types
+type StreamResponse struct {
+	RequestID string `json:"requestId,omitempty"`
+	Type      string `json:"type"` // "chat", "artifact", "plan", "error", "done"
+	Role      string `json:"role,omitempty"`
+	Content   string `json:"content,omitempty"`
+	Data      any    `json:"data,omitempty"`
+	Done      bool   `json:"done,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+// Artifact represents tool execution status shown to user
+type ArtifactUpdate struct {
+	ToolName string      `json:"tool_name"`
+	Status   string      `json:"status"` // "starting", "in_progress", "completed", "error"
+	Message  string      `json:"message"`
+	Result   interface{} `json:"result,omitempty"`
+	Error    string      `json:"error,omitempty"`
+}
+
+// Enhanced Writing Copilot Service
+type WritingCopilotService struct {
+	client      *openai.Client
+	textGenSvc  *TextGenerationService
+	writerAgent *WriterAgent
+	imageGenSvc *ImageGenerationService
+	storageSvc  *StorageService
+	tools       map[string]ToolDefinition
+	memory      map[string]*AgentMemory
+	memoryMutex sync.RWMutex
+}
+
+func NewWritingCopilotService(textGenSvc *TextGenerationService, writerAgent *WriterAgent, imageGenSvc *ImageGenerationService, storageSvc *StorageService) *WritingCopilotService {
 	c := openai.NewClient()
 
 	// Log if API key is missing (helpful for debugging)
@@ -239,50 +298,115 @@ func NewWritingCopilotService() *WritingCopilotService {
 		log.Printf("WARNING: OPENAI_API_KEY environment variable is not set")
 	}
 
-	return &WritingCopilotService{client: &c}
+	service := &WritingCopilotService{
+		client:      &c,
+		textGenSvc:  textGenSvc,
+		writerAgent: writerAgent,
+		imageGenSvc: imageGenSvc,
+		storageSvc:  storageSvc,
+		memory:      make(map[string]*AgentMemory),
+		tools:       make(map[string]ToolDefinition),
+	}
+
+	service.initializeTools()
+	return service
 }
 
-// Generate sends the accumulated chat transcript to the OpenAI API and returns
-// the assistant's response. We intentionally do **not** stream for now to keep
-// the implementation straightforward and compatible with the version of the
-// SDK that is pinned in go.sum. The HTTP handler turns this single response
-// into a Server-Sent-Events (SSE) stream so that the frontend stays unchanged.
-func (s *WritingCopilotService) Generate(ctx context.Context, req ChatRequest) (string, error) {
-	if len(req.Messages) == 0 {
-		return "", errors.New("no messages provided")
+// Initialize available tools
+func (s *WritingCopilotService) initializeTools() {
+	s.tools["rewrite_document"] = ToolDefinition{
+		Name:        "rewrite_document",
+		Description: "Completely rewrite or significantly edit the document content",
+		Parameters: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"new_content": map[string]interface{}{
+					"type":        "string",
+					"description": "The new document content in markdown format",
+				},
+				"reason": map[string]interface{}{
+					"type":        "string",
+					"description": "Brief explanation of the changes made",
+				},
+			},
+			"required": []string{"new_content", "reason"},
+		},
 	}
 
-	// Convert messages into the union type the SDK expects.
-	converted := make([]openai.ChatCompletionMessageParamUnion, 0, len(req.Messages)+1)
-
-	// Build system message for the writing assistant
-	systemPrompt := `You are an expert writing assistant helping users improve their articles and blog posts. 
-
-Your capabilities:
-- Analyze and provide feedback on writing
-- Suggest improvements for clarity, structure, and engagement
-- Help with editing, rewriting, and content enhancement
-- Answer questions about writing techniques and best practices
-
-When the user asks you to make changes to their document, provide clear suggestions and explain your reasoning. Be conversational and helpful in your responses.`
-
-	// Include document content in system prompt if provided
-	if req.DocumentContent != "" {
-		systemPrompt += "\n\nCurrent document content:\n\n" + req.DocumentContent
+	s.tools["generate_image_prompt"] = ToolDefinition{
+		Name:        "generate_image_prompt",
+		Description: "Generate an image prompt based on document content",
+		Parameters: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"content": map[string]interface{}{
+					"type":        "string",
+					"description": "The document content to generate image prompt for",
+				},
+			},
+			"required": []string{"content"},
+		},
 	}
 
-	converted = append(converted, openai.SystemMessage(systemPrompt))
+	s.tools["search_for_improvements"] = ToolDefinition{
+		Name:        "search_for_improvements",
+		Description: "Analyze document and search for specific areas to improve",
+		Parameters: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"focus_area": map[string]interface{}{
+					"type":        "string",
+					"description": "What aspect to focus on: structure, clarity, engagement, grammar, etc.",
+				},
+			},
+			"required": []string{"focus_area"},
+		},
+	}
+}
 
-	for _, m := range req.Messages {
-		switch m.Role {
-		case "system":
-			converted = append(converted, openai.SystemMessage(m.Content))
-		case "assistant":
-			converted = append(converted, openai.AssistantMessage(m.Content))
+// Planning phase - decides what tools to use
+func (s *WritingCopilotService) createPlan(ctx context.Context, req ChatRequest) (*AgentPlan, error) {
+	planningPrompt := `You are a writing assistant planning agent. Analyze the user's request and current document to decide what action to take.
+
+Your response must be valid JSON with this exact structure:
+{
+  "strategy": "respond_only" or "use_tools",
+  "reasoning": "Brief explanation of why this strategy was chosen",
+  "tools": [
+    {
+      "name": "tool_name",
+      "parameters": {"param": "value"},
+      "message": "What to show user while executing (e.g., 'Rewriting document...', 'Generating image prompt...')"
+    }
+  ],
+  "response_msg": "Initial conversational response to user"
+}
+
+Available tools:
+- rewrite_document: For major content changes or complete rewrites
+- generate_image_prompt: To create image prompts from content
+- search_for_improvements: To analyze and suggest specific improvements
+
+Strategy guidelines:
+- Use "respond_only" for: questions, simple advice, explanations, small suggestions
+- Use "use_tools" for: actual document editing, generating content, creating prompts
+
+Current document:` + req.DocumentContent
+
+	// Create planning messages
+	messages := []openai.ChatCompletionMessageParamUnion{
+		openai.SystemMessage(planningPrompt),
+	}
+
+	// Add conversation history
+	for _, msg := range req.Messages {
+		switch msg.Role {
 		case "user":
-			converted = append(converted, openai.UserMessage(m.Content))
-		default:
-			converted = append(converted, openai.UserMessage(m.Content))
+			messages = append(messages, openai.UserMessage(msg.Content))
+		case "assistant":
+			messages = append(messages, openai.AssistantMessage(msg.Content))
+		case "system":
+			messages = append(messages, openai.SystemMessage(msg.Content))
 		}
 	}
 
@@ -293,36 +417,324 @@ When the user asks you to make changes to their document, provide clear suggesti
 
 	completion, err := s.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
 		Model:    model,
-		Messages: converted,
+		Messages: messages,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(completion.Choices) == 0 {
+		return nil, errors.New("no planning response from OpenAI")
+	}
+
+	// Parse the JSON response
+	var plan AgentPlan
+	if err := json.Unmarshal([]byte(completion.Choices[0].Message.Content), &plan); err != nil {
+		// Fallback to respond_only if JSON parsing fails
+		log.Printf("Failed to parse planning response as JSON: %v", err)
+		return &AgentPlan{
+			Strategy:    "respond_only",
+			Reasoning:   "Failed to parse planning response",
+			Tools:       []PlannedTool{},
+			ResponseMsg: completion.Choices[0].Message.Content,
+		}, nil
+	}
+
+	return &plan, nil
+}
+
+// Execute a single tool
+func (s *WritingCopilotService) executeTool(ctx context.Context, tool PlannedTool, memory *AgentMemory) (*ToolExecutionResult, error) {
+	result := &ToolExecutionResult{
+		ToolName:   tool.Name,
+		Parameters: tool.Parameters,
+		Timestamp:  time.Now(),
+	}
+
+	switch tool.Name {
+	case "rewrite_document":
+		content, ok := tool.Parameters["new_content"].(string)
+		if !ok {
+			result.Error = "new_content parameter is required"
+			return result, errors.New(result.Error)
+		}
+		reason, _ := tool.Parameters["reason"].(string)
+
+		result.Result = map[string]interface{}{
+			"new_content": content,
+			"reason":      reason,
+		}
+
+	case "generate_image_prompt":
+		content, ok := tool.Parameters["content"].(string)
+		if !ok {
+			result.Error = "content parameter is required"
+			return result, errors.New(result.Error)
+		}
+
+		prompt, err := s.textGenSvc.GenerateImagePrompt(ctx, content)
+		if err != nil {
+			result.Error = err.Error()
+			return result, err
+		}
+
+		result.Result = map[string]interface{}{
+			"prompt": prompt,
+		}
+
+	case "search_for_improvements":
+		focusArea, ok := tool.Parameters["focus_area"].(string)
+		if !ok {
+			result.Error = "focus_area parameter is required"
+			return result, errors.New(result.Error)
+		}
+
+		// Simulate analysis (in real implementation, this might use AI to analyze)
+		result.Result = map[string]interface{}{
+			"focus_area":    focusArea,
+			"suggestions":   []string{"Consider adding more specific examples", "Break up long paragraphs"},
+			"analysis_done": true,
+		}
+
+	default:
+		result.Error = "unknown tool: " + tool.Name
+		return result, errors.New(result.Error)
+	}
+
+	return result, nil
+}
+
+// Get or create agent memory for session
+func (s *WritingCopilotService) getMemory(sessionID string) *AgentMemory {
+	s.memoryMutex.Lock()
+	defer s.memoryMutex.Unlock()
+
+	if memory, exists := s.memory[sessionID]; exists {
+		return memory
+	}
+
+	memory := &AgentMemory{
+		SessionID:   sessionID,
+		Context:     make(map[string]interface{}),
+		ToolResults: []ToolExecutionResult{},
+		UpdatedAt:   time.Now(),
+	}
+	s.memory[sessionID] = memory
+	return memory
+}
+
+// Generate final response after tool execution
+func (s *WritingCopilotService) generateFinalResponse(ctx context.Context, req ChatRequest, plan *AgentPlan, toolResults []ToolExecutionResult) (string, error) {
+	if plan.Strategy == "respond_only" {
+		return plan.ResponseMsg, nil
+	}
+
+	// Build context about what tools were executed
+	toolContext := "Tools executed:\n"
+	for _, result := range toolResults {
+		if result.Error != "" {
+			toolContext += fmt.Sprintf("- %s: ERROR - %s\n", result.ToolName, result.Error)
+		} else {
+			toolContext += fmt.Sprintf("- %s: SUCCESS\n", result.ToolName)
+		}
+	}
+
+	systemPrompt := `You are a writing assistant. Based on the tools that were just executed, provide a helpful response to the user. Be conversational and explain what was done.
+
+` + toolContext + `
+
+Document content: ` + req.DocumentContent
+
+	messages := []openai.ChatCompletionMessageParamUnion{
+		openai.SystemMessage(systemPrompt),
+	}
+
+	// Add conversation history
+	for _, msg := range req.Messages {
+		switch msg.Role {
+		case "user":
+			messages = append(messages, openai.UserMessage(msg.Content))
+		case "assistant":
+			messages = append(messages, openai.AssistantMessage(msg.Content))
+		}
+	}
+
+	model := req.Model
+	if model == "" {
+		model = openai.ChatModelGPT4o
+	}
+
+	completion, err := s.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		Model:    model,
+		Messages: messages,
 	})
 	if err != nil {
 		return "", err
 	}
 
 	if len(completion.Choices) == 0 {
-		return "", errors.New("openai returned no choices")
+		return "", errors.New("no response from OpenAI")
 	}
 
 	return completion.Choices[0].Message.Content, nil
 }
 
-// StreamResponse represents a single chunk in the streaming response
-type StreamResponse struct {
-	RequestID string `json:"requestId,omitempty"`
-	Role      string `json:"role,omitempty"`
-	Content   string `json:"content,omitempty"`
-	Done      bool   `json:"done,omitempty"`
-	Error     string `json:"error,omitempty"`
+// Main method for processing chat requests with new architecture
+func (s *WritingCopilotService) ProcessChatStream(ctx context.Context, req ChatRequest, sessionID string) (<-chan StreamResponse, error) {
+	if len(req.Messages) == 0 {
+		return nil, errors.New("no messages provided")
+	}
+
+	responseChan := make(chan StreamResponse, 50)
+
+	go func() {
+		defer close(responseChan)
+
+		// Get agent memory
+		memory := s.getMemory(sessionID)
+
+		// Phase 1: Planning
+		log.Printf("WritingCopilot: Starting planning phase for session %s", sessionID)
+		responseChan <- StreamResponse{
+			Type:    "artifact",
+			Content: "Planning response...",
+			Data: ArtifactUpdate{
+				ToolName: "planning",
+				Status:   "starting",
+				Message:  "Analyzing request and creating plan...",
+			},
+		}
+
+		plan, err := s.createPlan(ctx, req)
+		if err != nil {
+			log.Printf("WritingCopilot: Planning failed: %v", err)
+			responseChan <- StreamResponse{
+				Type:  "error",
+				Error: "Planning failed: " + err.Error(),
+				Done:  true,
+			}
+			return
+		}
+
+		// Send plan to frontend
+		responseChan <- StreamResponse{
+			Type: "plan",
+			Data: plan,
+		}
+
+		// Phase 2: Initial Response
+		if plan.ResponseMsg != "" {
+			responseChan <- StreamResponse{
+				Type:    "chat",
+				Role:    "assistant",
+				Content: plan.ResponseMsg,
+			}
+		}
+
+		// Phase 3: Tool Execution (if needed)
+		var toolResults []ToolExecutionResult
+		if plan.Strategy == "use_tools" && len(plan.Tools) > 0 {
+			for _, tool := range plan.Tools {
+				// Send artifact update
+				responseChan <- StreamResponse{
+					Type: "artifact",
+					Data: ArtifactUpdate{
+						ToolName: tool.Name,
+						Status:   "starting",
+						Message:  tool.Message,
+					},
+				}
+
+				// Execute tool
+				result, err := s.executeTool(ctx, tool, memory)
+				if err != nil {
+					log.Printf("WritingCopilot: Tool %s failed: %v", tool.Name, err)
+					responseChan <- StreamResponse{
+						Type: "artifact",
+						Data: ArtifactUpdate{
+							ToolName: tool.Name,
+							Status:   "error",
+							Message:  "Failed to execute " + tool.Name,
+							Error:    err.Error(),
+						},
+					}
+				} else {
+					responseChan <- StreamResponse{
+						Type: "artifact",
+						Data: ArtifactUpdate{
+							ToolName: tool.Name,
+							Status:   "completed",
+							Message:  "Completed " + tool.Name,
+							Result:   result.Result,
+						},
+					}
+				}
+
+				toolResults = append(toolResults, *result)
+				memory.ToolResults = append(memory.ToolResults, *result)
+			}
+		}
+
+		// Phase 4: Final Response (if tools were used)
+		if plan.Strategy == "use_tools" && len(toolResults) > 0 {
+			finalResponse, err := s.generateFinalResponse(ctx, req, plan, toolResults)
+			if err != nil {
+				log.Printf("WritingCopilot: Final response generation failed: %v", err)
+			} else {
+				responseChan <- StreamResponse{
+					Type:    "chat",
+					Role:    "assistant",
+					Content: finalResponse,
+				}
+			}
+		}
+
+		// Update memory
+		memory.UpdatedAt = time.Now()
+		if req.DocumentContent != "" {
+			memory.Context["last_document"] = req.DocumentContent
+		}
+
+		// Send completion signal
+		responseChan <- StreamResponse{
+			Type: "done",
+			Done: true,
+		}
+
+		log.Printf("WritingCopilot: Completed processing for session %s", sessionID)
+	}()
+
+	return responseChan, nil
 }
 
-// AsyncCopilotManager manages background processing of chat requests
+// Legacy method for backward compatibility (non-streaming)
+func (s *WritingCopilotService) Generate(ctx context.Context, req ChatRequest) (string, error) {
+	sessionID := uuid.New().String()
+	streamChan, err := s.ProcessChatStream(ctx, req, sessionID)
+	if err != nil {
+		return "", err
+	}
+
+	var finalResponse string
+	for response := range streamChan {
+		if response.Type == "chat" && response.Role == "assistant" {
+			finalResponse += response.Content
+		}
+		if response.Done || response.Error != "" {
+			break
+		}
+	}
+
+	return finalResponse, nil
+}
+
+// AsyncCopilotManager - Updated to use new architecture
 type AsyncCopilotManager struct {
 	mu       sync.RWMutex
 	requests map[string]*AsyncChatRequest
 	service  *WritingCopilotService
 }
 
-// AsyncChatRequest represents a chat request being processed in the background
 type AsyncChatRequest struct {
 	ID           string
 	Request      ChatRequest
@@ -331,6 +743,7 @@ type AsyncChatRequest struct {
 	ResponseChan chan StreamResponse
 	ctx          context.Context
 	cancel       context.CancelFunc
+	SessionID    string
 }
 
 var (
@@ -338,25 +751,30 @@ var (
 	managerOnce        sync.Once
 )
 
-// GetAsyncCopilotManager returns the global async copilot manager (singleton)
+// Updated to use new services
 func GetAsyncCopilotManager() *AsyncCopilotManager {
 	managerOnce.Do(func() {
 		globalAsyncManager = &AsyncCopilotManager{
 			requests: make(map[string]*AsyncChatRequest),
-			service:  NewWritingCopilotService(),
+			service:  NewWritingCopilotService(nil, nil, nil, nil), // Services will be injected later
 		}
 	})
 	return globalAsyncManager
 }
 
-// SubmitChatRequest submits a chat request for async processing and returns a request ID
+// Updated to inject services
+func (m *AsyncCopilotManager) SetServices(textGenSvc *TextGenerationService, writerAgent *WriterAgent, imageGenSvc *ImageGenerationService, storageSvc *StorageService) {
+	m.service = NewWritingCopilotService(textGenSvc, writerAgent, imageGenSvc, storageSvc)
+}
+
 func (m *AsyncCopilotManager) SubmitChatRequest(req ChatRequest) (string, error) {
 	if len(req.Messages) == 0 {
 		return "", errors.New("no messages provided")
 	}
 
 	requestID := uuid.New().String()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	sessionID := uuid.New().String() // In real implementation, this should come from user session
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 
 	asyncReq := &AsyncChatRequest{
 		ID:           requestID,
@@ -366,19 +784,18 @@ func (m *AsyncCopilotManager) SubmitChatRequest(req ChatRequest) (string, error)
 		ResponseChan: make(chan StreamResponse, 100),
 		ctx:          ctx,
 		cancel:       cancel,
+		SessionID:    sessionID,
 	}
 
 	m.mu.Lock()
 	m.requests[requestID] = asyncReq
 	m.mu.Unlock()
 
-	// Start background processing
 	go m.processRequest(asyncReq)
 
 	return requestID, nil
 }
 
-// GetResponseChannel returns the response channel for a given request ID
 func (m *AsyncCopilotManager) GetResponseChannel(requestID string) (<-chan StreamResponse, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -391,14 +808,13 @@ func (m *AsyncCopilotManager) GetResponseChannel(requestID string) (<-chan Strea
 	return req.ResponseChan, true
 }
 
-// processRequest processes a chat request in the background
 func (m *AsyncCopilotManager) processRequest(asyncReq *AsyncChatRequest) {
 	defer func() {
 		asyncReq.cancel()
 		close(asyncReq.ResponseChan)
 
-		// Clean up after 10 minutes
-		time.AfterFunc(10*time.Minute, func() {
+		// Clean up after 15 minutes
+		time.AfterFunc(15*time.Minute, func() {
 			m.mu.Lock()
 			delete(m.requests, asyncReq.ID)
 			m.mu.Unlock()
@@ -407,11 +823,12 @@ func (m *AsyncCopilotManager) processRequest(asyncReq *AsyncChatRequest) {
 
 	log.Printf("AsyncCopilotManager: Starting processing for request %s", asyncReq.ID)
 
-	streamChan, err := m.service.GenerateStream(asyncReq.ctx, asyncReq.Request)
+	streamChan, err := m.service.ProcessChatStream(asyncReq.ctx, asyncReq.Request, asyncReq.SessionID)
 	if err != nil {
-		log.Printf("AsyncCopilotManager: Failed to generate stream for request %s: %v", asyncReq.ID, err)
+		log.Printf("AsyncCopilotManager: Failed to process stream for request %s: %v", asyncReq.ID, err)
 		asyncReq.ResponseChan <- StreamResponse{
 			RequestID: asyncReq.ID,
+			Type:      "error",
 			Error:     err.Error(),
 			Done:      true,
 		}
@@ -436,127 +853,4 @@ func (m *AsyncCopilotManager) processRequest(asyncReq *AsyncChatRequest) {
 	}
 
 	log.Printf("AsyncCopilotManager: Completed processing for request %s", asyncReq.ID)
-}
-
-// GenerateStream sends the chat transcript to OpenAI and streams the response back
-func (s *WritingCopilotService) GenerateStream(ctx context.Context, req ChatRequest) (<-chan StreamResponse, error) {
-	if len(req.Messages) == 0 {
-		return nil, errors.New("no messages provided")
-	}
-
-	// Convert messages into the union type the SDK expects
-	converted := make([]openai.ChatCompletionMessageParamUnion, 0, len(req.Messages))
-
-	// Build system message for the writing assistant
-	systemPrompt := `You are an expert writing assistant helping users improve their articles and blog posts. 
-
-Your capabilities:
-- Analyze and provide feedback on writing
-- Suggest improvements for clarity, structure, and engagement
-- Help with editing, rewriting, and content enhancement
-- Answer questions about writing techniques and best practices
-
-When the user asks you to make changes to their document, provide clear suggestions and explain your reasoning. Be conversational and helpful in your responses.`
-
-	// Include document content in system prompt if provided
-	if req.DocumentContent != "" {
-		systemPrompt += "\n\nCurrent document content:\n\n" + req.DocumentContent
-	}
-
-	converted = append(converted, openai.SystemMessage(systemPrompt))
-
-	for _, m := range req.Messages {
-		switch m.Role {
-		case "system":
-			converted = append(converted, openai.SystemMessage(m.Content))
-		case "assistant":
-			converted = append(converted, openai.AssistantMessage(m.Content))
-		case "user":
-			converted = append(converted, openai.UserMessage(m.Content))
-		default:
-			converted = append(converted, openai.UserMessage(m.Content))
-		}
-	}
-
-	model := req.Model
-	if model == "" {
-		model = openai.ChatModelGPT4o
-	}
-
-	// Create the streaming request
-	streamParams := openai.ChatCompletionNewParams{
-		Model:    model,
-		Messages: converted,
-	}
-
-	stream := s.client.Chat.Completions.NewStreaming(ctx, streamParams)
-
-	responseChan := make(chan StreamResponse, 10)
-
-	go func() {
-		defer close(responseChan)
-		defer stream.Close()
-
-		// Check for immediate errors
-		if stream.Err() != nil {
-			log.Printf("OpenAI streaming error: %v", stream.Err())
-			responseChan <- StreamResponse{
-				Error: stream.Err().Error(),
-				Done:  true,
-			}
-			return
-		}
-
-		hasContent := false
-		for stream.Next() {
-			chunk := stream.Current()
-
-			if len(chunk.Choices) == 0 {
-				continue
-			}
-
-			choice := chunk.Choices[0]
-			delta := choice.Delta
-
-			// Handle regular content
-			if delta.Content != "" {
-				hasContent = true
-				responseChan <- StreamResponse{
-					Role:    "assistant",
-					Content: delta.Content,
-				}
-			}
-
-			// Handle finish reason
-			if choice.FinishReason != "" {
-				log.Printf("Stream finished with reason: %s", choice.FinishReason)
-				break
-			}
-		}
-
-		// Check for stream errors
-		if err := stream.Err(); err != nil {
-			log.Printf("OpenAI stream error: %v", err)
-			responseChan <- StreamResponse{
-				Error: err.Error(),
-				Done:  true,
-			}
-			return
-		}
-
-		// If no content was received, send an error
-		if !hasContent {
-			log.Printf("No content received from OpenAI")
-			responseChan <- StreamResponse{
-				Error: "No response received from OpenAI",
-				Done:  true,
-			}
-			return
-		}
-
-		// Send done signal
-		responseChan <- StreamResponse{Done: true}
-	}()
-
-	return responseChan, nil
 }
