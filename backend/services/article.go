@@ -308,7 +308,7 @@ func (s *ArticleService) GetArticle(id uint) (*ArticleListItem, error) {
 	}, nil
 }
 
-func (s *ArticleService) GetArticles(page int, tag string, includeDrafts bool, articlesPerPage int) (*ArticleListResponse, error) {
+func (s *ArticleService) GetArticles(page int, tag string, status string, articlesPerPage int) (*ArticleListResponse, error) {
 	db := s.db.GetDB()
 	var articles []models.Article
 	var totalCount int64
@@ -321,7 +321,16 @@ func (s *ArticleService) GetArticles(page int, tag string, includeDrafts bool, a
 	// Build query
 	query := db.Model(&models.Article{}).Preload("Author").Preload("Tags")
 
-	if !includeDrafts {
+	// Apply status filter
+	switch status {
+	case "published":
+		query = query.Where("is_draft = ?", false)
+	case "drafts":
+		query = query.Where("is_draft = ?", true)
+	case "all":
+		// No filter - include all articles
+	default:
+		// Default to published only for invalid status
 		query = query.Where("is_draft = ?", false)
 	}
 
@@ -370,7 +379,7 @@ func (s *ArticleService) GetArticles(page int, tag string, includeDrafts bool, a
 	return &ArticleListResponse{
 		Articles:      articleItems,
 		TotalPages:    totalPages,
-		IncludeDrafts: includeDrafts,
+		IncludeDrafts: status == "all" || status == "drafts",
 	}, nil
 }
 

@@ -587,10 +587,10 @@ func (s *FiberServer) UpdateFolderHandler(c *fiber.Ctx) error {
 func (s *FiberServer) GetArticlesHandler(c *fiber.Ctx) error {
 	page := c.QueryInt("page", 1)
 	tag := c.Query("tag", "")
-	includeDrafts := c.Query("includeDrafts", "false") == "true"
+	status := c.Query("status", "published")            // Default to published only
 	articlesPerPage := c.QueryInt("articlesPerPage", 6) // Default to ITEMS_PER_PAGE (6)
 
-	response, err := s.blogService.GetArticles(page, tag, includeDrafts, articlesPerPage)
+	response, err := s.blogService.GetArticles(page, tag, status, articlesPerPage)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
