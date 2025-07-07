@@ -26,7 +26,7 @@ import { Link, useLocation } from "@tanstack/react-router"
 import { Badge } from "@/components/ui/badge"
 import { ArticleListItem } from "@/services/types"
 import { useEffect, useRef } from "react"
-import { FetchNextPageOptions, InfiniteQueryObserverResult, InfiniteData } from "@tanstack/react-query"
+import { FetchNextPageOptions, InfiniteQueryObserverResult, InfiniteData, useQueryClient } from "@tanstack/react-query"
 import { GetArticlesResponse } from "@/routes/dashboard/blog/index"
 
 interface NavDocumentsProps {
@@ -45,6 +45,7 @@ export function NavDocuments({
   const { isMobile } = useSidebar()
   const location = useLocation()
   const loadMoreRef = useRef<HTMLDivElement>(null)
+  const queryClient = useQueryClient()
 
   // Sort articles by created date, most recent first
   const sortedArticles = articles
@@ -84,7 +85,13 @@ export function NavDocuments({
           return (
             <SidebarMenuItem key={articleItem.article.id}>
               <SidebarMenuButton isActive={location.pathname === editUrl} asChild>
-                <Link to={editUrl} className="flex flex-col items-start gap-1 p-2">
+                <Link 
+                  to={editUrl} 
+                  className="flex flex-col items-start gap-1 p-2"
+                  onClick={() => {
+                    queryClient.invalidateQueries({ queryKey: ['article', articleItem.article.slug] })
+                  }}
+                >
                   <div className="flex items-center gap-2 w-full">
                     <span className="text-sm font-medium truncate flex-1">{articleItem.article.title}</span>
                     <Badge 
