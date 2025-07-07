@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"time"
 
 	"blog-agent-go/backend/database"
 	"blog-agent-go/backend/models"
@@ -45,12 +44,12 @@ type ArticleListItem struct {
 }
 
 type ArticleUpdateRequest struct {
-	Title       string     `json:"title"`
-	Content     string     `json:"content"`
-	Image       string     `json:"image"`
-	Tags        []string   `json:"tags"`
-	IsDraft     bool       `json:"is_draft"`
-	PublishedAt *time.Time `json:"published_at"`
+	Title       string   `json:"title"`
+	Content     string   `json:"content"`
+	Image       string   `json:"image"`
+	Tags        []string `json:"tags"`
+	IsDraft     bool     `json:"is_draft"`
+	PublishedAt *int64   `json:"published_at"`
 }
 
 type ArticleListResponse struct {
@@ -187,11 +186,11 @@ func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uint, req 
 
 		// Check if tag exists (case-insensitive lookup)
 		var tag models.Tag
-		result = tx.Where("LOWER(name) = ?", normalizedTag).First(&tag)
+		result = tx.Where("LOWER(tag_name) = ?", normalizedTag).First(&tag)
 
 		if result.Error == gorm.ErrRecordNotFound {
 			// Tag doesn't exist, create it
-			tag = models.Tag{Name: normalizedTag}
+			tag = models.Tag{TagName: normalizedTag}
 			result = tx.Create(&tag)
 			if result.Error != nil {
 				tx.Rollback()
@@ -294,8 +293,8 @@ func (s *ArticleService) GetArticle(id uint) (*ArticleListItem, error) {
 	for _, tag := range article.Tags {
 		tags = append(tags, TagData{
 			ArticleID: article.ID,
-			TagID:     tag.ID,
-			TagName:   tag.Name,
+			TagID:     tag.TagID,
+			TagName:   tag.TagName,
 		})
 	}
 
@@ -323,8 +322,8 @@ func (s *ArticleService) GetArticles(page int, tag string, includeDrafts bool) (
 
 	if tag != "" {
 		query = query.Joins("JOIN article_tags ON articles.id = article_tags.article_id").
-			Joins("JOIN tags ON article_tags.tag_id = tags.id").
-			Where("LOWER(tags.name) = ?", strings.ToLower(tag))
+			Joins("JOIN tags ON article_tags.tag_id = tags.tag_id").
+			Where("LOWER(tags.tag_name) = ?", strings.ToLower(tag))
 	}
 
 	// Get total count
@@ -348,8 +347,8 @@ func (s *ArticleService) GetArticles(page int, tag string, includeDrafts bool) (
 		for _, tag := range article.Tags {
 			tags = append(tags, TagData{
 				ArticleID: article.ID,
-				TagID:     tag.ID,
-				TagName:   tag.Name,
+				TagID:     tag.TagID,
+				TagName:   tag.TagName,
 			})
 		}
 
@@ -382,8 +381,8 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string) (*Ar
 
 	if tag != "" {
 		searchQuery = searchQuery.Joins("JOIN article_tags ON articles.id = article_tags.article_id").
-			Joins("JOIN tags ON article_tags.tag_id = tags.id").
-			Where("LOWER(tags.name) = ?", strings.ToLower(tag))
+			Joins("JOIN tags ON article_tags.tag_id = tags.tag_id").
+			Where("LOWER(tags.tag_name) = ?", strings.ToLower(tag))
 	}
 
 	// Get total count
@@ -407,8 +406,8 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string) (*Ar
 		for _, tag := range article.Tags {
 			tags = append(tags, TagData{
 				ArticleID: article.ID,
-				TagID:     tag.ID,
-				TagName:   tag.Name,
+				TagID:     tag.TagID,
+				TagName:   tag.TagName,
 			})
 		}
 
@@ -432,16 +431,16 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string) (*Ar
 func (s *ArticleService) GetPopularTags() ([]string, error) {
 	db := s.db.GetDB()
 	var results []struct {
-		Name  string
-		Count int
+		TagName string `db:"tag_name"`
+		Count   int
 	}
 
 	err := db.Table("tags").
-		Select("tags.name, COUNT(article_tags.tag_id) as count").
-		Joins("JOIN article_tags ON tags.id = article_tags.tag_id").
+		Select("tags.tag_name, COUNT(article_tags.tag_id) as count").
+		Joins("JOIN article_tags ON tags.tag_id = article_tags.tag_id").
 		Joins("JOIN articles ON article_tags.article_id = articles.id").
 		Where("articles.is_draft = ?", false).
-		Group("tags.id, tags.name").
+		Group("tags.tag_id, tags.tag_name").
 		Order("count DESC").
 		Limit(10).
 		Scan(&results).Error
@@ -452,7 +451,7 @@ func (s *ArticleService) GetPopularTags() ([]string, error) {
 
 	var tags []string
 	for _, result := range results {
-		tags = append(tags, result.Name)
+		tags = append(tags, result.TagName)
 	}
 
 	return tags, nil
@@ -481,25 +480,25 @@ type TagData struct {
 }
 
 type RecommendedArticle struct {
-	ID          uint       `json:"id"`
-	Title       string     `json:"title"`
-	Slug        string     `json:"slug"`
-	Image       *string    `json:"image"`
-	PublishedAt *time.Time `json:"published_at"`
-	CreatedAt   time.Time  `json:"created_at"`
-	Author      *string    `json:"author"`
+	ID          uint    `json:"id"`
+	Title       string  `json:"title"`
+	Slug        string  `json:"slug"`
+	Image       *string `json:"image"`
+	PublishedAt *int64  `json:"published_at"`
+	CreatedAt   int64   `json:"created_at"`
+	Author      *string `json:"author"`
 }
 
 type ArticleRow struct {
-	ID          uint       `json:"id"`
-	Title       *string    `json:"title"`
-	Content     *string    `json:"content"`
-	CreatedAt   time.Time  `json:"created_at"`
-	PublishedAt *time.Time `json:"published_at"`
-	IsDraft     bool       `json:"is_draft"`
-	Slug        *string    `json:"slug"`
-	Tags        []string   `json:"tags"`
-	Image       *string    `json:"image"`
+	ID          uint     `json:"id"`
+	Title       *string  `json:"title"`
+	Content     *string  `json:"content"`
+	CreatedAt   int64    `json:"created_at"`
+	PublishedAt *int64   `json:"published_at"`
+	IsDraft     bool     `json:"is_draft"`
+	Slug        *string  `json:"slug"`
+	Tags        []string `json:"tags"`
+	Image       *string  `json:"image"`
 }
 
 func (s *ArticleService) GetArticleData(slug string) (*ArticleData, error) {
@@ -516,8 +515,8 @@ func (s *ArticleService) GetArticleData(slug string) (*ArticleData, error) {
 	for _, tag := range article.Tags {
 		tags = append(tags, TagData{
 			ArticleID: article.ID,
-			TagID:     tag.ID,
-			TagName:   tag.Name,
+			TagID:     tag.TagID,
+			TagName:   tag.TagName,
 		})
 	}
 
@@ -664,10 +663,10 @@ func (s *ArticleService) CreateArticle(ctx context.Context, req ArticleCreateReq
 		}
 
 		var tag models.Tag
-		result = tx.Where("LOWER(name) = ?", normalizedTag).First(&tag)
+		result = tx.Where("LOWER(tag_name) = ?", normalizedTag).First(&tag)
 
 		if result.Error == gorm.ErrRecordNotFound {
-			tag = models.Tag{Name: normalizedTag}
+			tag = models.Tag{TagName: normalizedTag}
 			result = tx.Create(&tag)
 			if result.Error != nil {
 				tx.Rollback()
