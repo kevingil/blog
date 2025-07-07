@@ -308,10 +308,15 @@ func (s *ArticleService) GetArticle(id uint) (*ArticleListItem, error) {
 	}, nil
 }
 
-func (s *ArticleService) GetArticles(page int, tag string, includeDrafts bool) (*ArticleListResponse, error) {
+func (s *ArticleService) GetArticles(page int, tag string, includeDrafts bool, articlesPerPage int) (*ArticleListResponse, error) {
 	db := s.db.GetDB()
 	var articles []models.Article
 	var totalCount int64
+
+	// Use default if articlesPerPage is not provided or invalid
+	if articlesPerPage <= 0 {
+		articlesPerPage = ITEMS_PER_PAGE
+	}
 
 	// Build query
 	query := db.Model(&models.Article{}).Preload("Author").Preload("Tags")
@@ -331,11 +336,11 @@ func (s *ArticleService) GetArticles(page int, tag string, includeDrafts bool) (
 	countQuery.Count(&totalCount)
 
 	// Calculate pagination
-	offset := (page - 1) * ITEMS_PER_PAGE
-	totalPages := int(math.Ceil(float64(totalCount) / float64(ITEMS_PER_PAGE)))
+	offset := (page - 1) * articlesPerPage
+	totalPages := int(math.Ceil(float64(totalCount) / float64(articlesPerPage)))
 
 	// Get articles with pagination
-	result := query.Order("created_at DESC").Offset(offset).Limit(ITEMS_PER_PAGE).Find(&articles)
+	result := query.Order("created_at DESC").Offset(offset).Limit(articlesPerPage).Find(&articles)
 	if result.Error != nil {
 		return nil, result.Error
 	}

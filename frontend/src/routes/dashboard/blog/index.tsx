@@ -23,8 +23,8 @@ export const Route = createFileRoute('/dashboard/blog/')({
 
 function ArticlesPage() {
   const { data: articlesPayload, isLoading, error, refetch } = useQuery<{ articles: ArticleListItem[], total_pages: number }>({
-    queryKey: ['articles', 0],
-    queryFn: () => getArticles(0, null, true) as Promise<{ articles: ArticleListItem[], total_pages: number }>
+    queryKey: ['articles', 0, 20],
+    queryFn: () => getArticles(0, null, true, 20) as Promise<{ articles: ArticleListItem[], total_pages: number }>
   });
   console.log("articlesPayload error", error);
 

@@ -35,8 +35,8 @@ function DashboardLayout() {
   const isRootDashboard = location.pathname === '/dashboard';
 
   const { data: articlesPayload, isLoading, error, refetch } = useQuery<{ articles: ArticleListItem[], total_pages: number }>({
-    queryKey: ['dashboard-articles', 0],
-    queryFn: () => getArticles(0, null, true) as Promise<{ articles: ArticleListItem[], total_pages: number }>,
+    queryKey: ['dashboard-articles', 0, 20],
+    queryFn: () => getArticles(0, null, true, 20) as Promise<{ articles: ArticleListItem[], total_pages: number }>,
     enabled: isRootDashboard // Only fetch when on the root dashboard
   });
 

@@ -3,11 +3,12 @@ import { GetArticlesResponse } from '@/routes/dashboard/blog/index';
 import { VITE_API_BASE_URL } from '@/services/constants';
 
 // Article listing and search
-export async function   getArticles(page: number, tag: string | null = null, includeDrafts?: boolean): Promise<GetArticlesResponse> {
+export async function   getArticles(page: number, tag: string | null = null, includeDrafts?: boolean, articlesPerPage?: number): Promise<GetArticlesResponse> {
   const params = new URLSearchParams({
     page: page.toString(),
     ...(tag && tag !== 'All' ? { tag } : {}),
-    ...(includeDrafts !== undefined ? { includeDrafts: includeDrafts.toString() } : {})
+    ...(includeDrafts !== undefined ? { includeDrafts: includeDrafts.toString() } : {}),
+    ...(articlesPerPage !== undefined ? { articlesPerPage: articlesPerPage.toString() } : {})
   });
 
   const response = await fetch(`${VITE_API_BASE_URL}/blog/articles?${params}`);
