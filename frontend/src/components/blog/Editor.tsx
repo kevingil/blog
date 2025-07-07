@@ -818,7 +818,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Header Image Section */}
-              <div className="space-y-2">
+              <div className="flex flex-col gap-[4px]">
                 <label className="text-sm font-medium text-gray-900 dark:text-white">Header Image</label>
                 <Drawer direction="right">
                   <DrawerTrigger asChild>
@@ -1026,7 +1026,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 <FormattingToolbar editor={editor} />
                 <EditorContent
                   editor={editor}
-                  className="w-full border-none rounded-b-md h-[calc(100vh-425px)] overflow-y-auto focus:outline-none"
+                  className="w-full border-none rounded-b-md h-[calc(100vh-610px)] overflow-y-auto focus:outline-none"
                 />
                 {/* Hidden input to keep react-hook-form registration for content */}
                 <input type="hidden" {...register('content')} value={watchedValues.content} />
