@@ -384,7 +384,7 @@ Your response must be valid JSON with this exact structure:
       "message": "What to show user while executing (e.g., 'Rewriting document...', 'Analyzing content...')"
     }
   ],
-  "response_msg": "Initial conversational response to user"
+  "response_msg": "Brief, natural initial response to user"
 }
 
 Available tools:
@@ -399,7 +399,13 @@ Strategy guidelines:
 - Use "respond_only" for: questions, simple advice, explanations, small suggestions
 - Use "use_tools" for: actual document editing, generating content, creating prompts, analyzing documents
 
-Important: When using analyze_document, ALWAYS include "user_request" parameter with the user's original request text.
+Important guidelines for response_msg:
+- Keep initial responses SHORT and conversational (1-2 sentences max)
+- For analyze_document: Use phrases like "Let me analyze that for you" or "I'll take a look at some suggestions for improvement"
+- For rewrite_document: Use phrases like "I'll rewrite that for you" or "Let me improve that content"
+- The detailed work will be shown after tool execution, so the initial response should just acknowledge the request
+
+Always include "user_request" parameter when using analyze_document.
 
 Current document:` + req.DocumentContent
 
@@ -455,6 +461,8 @@ Current document:` + req.DocumentContent
 
 // Execute a single tool
 func (s *WritingCopilotService) executeTool(ctx context.Context, tool PlannedTool, memory *AgentMemory) (*ToolExecutionResult, error) {
+	log.Printf("WritingCopilot: Starting tool execution - %s with parameters: %+v", tool.Name, tool.Parameters)
+
 	result := &ToolExecutionResult{
 		ToolName:   tool.Name,
 		Parameters: tool.Parameters,
@@ -466,27 +474,38 @@ func (s *WritingCopilotService) executeTool(ctx context.Context, tool PlannedToo
 		content, ok := tool.Parameters["new_content"].(string)
 		if !ok {
 			result.Error = "new_content parameter is required"
+			log.Printf("WritingCopilot: rewrite_document failed - missing new_content parameter")
 			return result, errors.New(result.Error)
 		}
 		reason, _ := tool.Parameters["reason"].(string)
+
+		log.Printf("WritingCopilot: rewrite_document executing - content length: %d, reason: %s", len(content), reason)
 
 		result.Result = map[string]interface{}{
 			"new_content": content,
 			"reason":      reason,
 		}
 
+		log.Printf("WritingCopilot: rewrite_document completed successfully")
+
 	case "generate_image_prompt":
 		content, ok := tool.Parameters["content"].(string)
 		if !ok {
 			result.Error = "content parameter is required"
+			log.Printf("WritingCopilot: generate_image_prompt failed - missing content parameter")
 			return result, errors.New(result.Error)
 		}
+
+		log.Printf("WritingCopilot: generate_image_prompt executing - content length: %d", len(content))
 
 		prompt, err := s.textGenSvc.GenerateImagePrompt(ctx, content)
 		if err != nil {
 			result.Error = err.Error()
+			log.Printf("WritingCopilot: generate_image_prompt failed - %v", err)
 			return result, err
 		}
+
+		log.Printf("WritingCopilot: generate_image_prompt completed - generated prompt: %s", prompt)
 
 		result.Result = map[string]interface{}{
 			"prompt": prompt,
@@ -515,85 +534,25 @@ func (s *WritingCopilotService) executeTool(ctx context.Context, tool PlannedToo
 			}
 		}
 
-		// Generate context-aware suggestions based on focus area and user request
-		suggestions := s.generateAnalysisSuggestions(focusArea, userRequest)
+		log.Printf("WritingCopilot: Executing analyze_document tool - Focus Area: %s, User Request: %s", focusArea, userRequest)
 
+		// Just capture the analysis context - let the final response generation create the actual analysis
 		result.Result = map[string]interface{}{
 			"focus_area":    focusArea,
 			"user_request":  userRequest,
-			"suggestions":   suggestions,
 			"analysis_done": true,
 		}
 
+		log.Printf("WritingCopilot: analyze_document completed - will generate contextual analysis in final response")
+
 	default:
 		result.Error = "unknown tool: " + tool.Name
+		log.Printf("WritingCopilot: Unknown tool requested: %s", tool.Name)
 		return result, errors.New(result.Error)
 	}
 
+	log.Printf("WritingCopilot: Tool %s execution completed successfully", tool.Name)
 	return result, nil
-}
-
-// Generate context-aware analysis suggestions based on focus area and user request
-func (s *WritingCopilotService) generateAnalysisSuggestions(focusArea, userRequest string) []string {
-	switch focusArea {
-	case "engagement":
-		return []string{
-			"Consider adding more compelling examples or stories",
-			"Use active voice instead of passive voice",
-			"Break up long paragraphs for better readability",
-			"Add rhetorical questions to engage readers",
-			"Include specific details and concrete examples",
-		}
-	case "clarity":
-		return []string{
-			"Simplify complex sentences",
-			"Define technical terms when first introduced",
-			"Use bullet points or numbered lists for complex information",
-			"Ensure logical flow between paragraphs",
-			"Remove unnecessary jargon or redundant words",
-		}
-	case "structure":
-		return []string{
-			"Add clear headings and subheadings",
-			"Ensure each paragraph has a single main idea",
-			"Improve transitions between sections",
-			"Consider reorganizing content for better flow",
-			"Add a stronger conclusion that summarizes key points",
-		}
-	case "grammar":
-		return []string{
-			"Check for subject-verb agreement",
-			"Review punctuation usage",
-			"Ensure consistent tense throughout",
-			"Fix any run-on sentences",
-			"Verify proper use of apostrophes and quotation marks",
-		}
-	case "flow":
-		return []string{
-			"Improve transitions between ideas",
-			"Ensure smooth progression from introduction to conclusion",
-			"Remove abrupt topic changes",
-			"Add connecting words and phrases",
-			"Make sure each section builds on the previous one",
-		}
-	case "technical_accuracy":
-		return []string{
-			"Verify all facts and statistics",
-			"Check technical terminology usage",
-			"Ensure code examples are correct and functional",
-			"Update any outdated information",
-			"Add proper citations for claims",
-		}
-	default: // "overall"
-		return []string{
-			"Review overall document structure and organization",
-			"Check for clarity and readability",
-			"Ensure engaging and appropriate tone",
-			"Verify logical flow between sections",
-			"Consider adding examples or visual elements",
-			"Review grammar and spelling throughout",
-		}
-	}
 }
 
 // Get or create agent memory for session
@@ -618,25 +577,97 @@ func (s *WritingCopilotService) getMemory(sessionID string) *AgentMemory {
 // Generate final response after tool execution
 func (s *WritingCopilotService) generateFinalResponse(ctx context.Context, req ChatRequest, plan *AgentPlan, toolResults []ToolExecutionResult) (string, error) {
 	if plan.Strategy == "respond_only" {
+		log.Printf("WritingCopilot: Strategy is respond_only, returning initial response: %s", plan.ResponseMsg)
 		return plan.ResponseMsg, nil
 	}
 
-	// Build context about what tools were executed
-	toolContext := "Tools executed:\n"
+	log.Printf("WritingCopilot: Generating final response after tool execution")
+
+	// Build context about what tools were executed and their results
+	toolContext := "Tools executed and results:\n"
+	var analysisRequests []map[string]interface{}
+	var documentChanges []string
+	var imagePrompts []string
+
 	for _, result := range toolResults {
+		log.Printf("WritingCopilot: Processing tool result - %s: %s", result.ToolName, func() string {
+			if result.Error != "" {
+				return "ERROR - " + result.Error
+			}
+			return "SUCCESS"
+		}())
+
 		if result.Error != "" {
 			toolContext += fmt.Sprintf("- %s: ERROR - %s\n", result.ToolName, result.Error)
 		} else {
 			toolContext += fmt.Sprintf("- %s: SUCCESS\n", result.ToolName)
+
+			// Extract specific results for better integration
+			if resultMap, ok := result.Result.(map[string]interface{}); ok {
+				switch result.ToolName {
+				case "analyze_document":
+					log.Printf("WritingCopilot: Found analyze_document result - Focus: %v, User Request: %v",
+						resultMap["focus_area"], resultMap["user_request"])
+					analysisRequests = append(analysisRequests, resultMap)
+				case "rewrite_document":
+					if newContent, ok := resultMap["new_content"].(string); ok && newContent != "" {
+						documentChanges = append(documentChanges, "Document has been rewritten with improvements")
+					}
+				case "generate_image_prompt":
+					if prompt, ok := resultMap["prompt"].(string); ok && prompt != "" {
+						imagePrompts = append(imagePrompts, prompt)
+					}
+				}
+			}
 		}
 	}
 
-	systemPrompt := `You are a writing assistant. Based on the tools that were just executed, provide a helpful response to the user. Be conversational and explain what was done.
+	// Create a more conversational system prompt that generates contextual analysis
+	systemPrompt := `You are a writing assistant. The user made a request and tools were executed to help them. 
 
-` + toolContext + `
+Based on the conversation history and the document content, provide a natural, helpful response that directly addresses what the user asked for.
 
-Document content: ` + req.DocumentContent
+` + toolContext
 
+	// Add specific guidance based on what was executed
+	if len(analysisRequests) > 0 {
+		log.Printf("WritingCopilot: Creating analysis-focused response for %d analysis requests", len(analysisRequests))
+
+		for _, analysis := range analysisRequests {
+			focusArea, _ := analysis["focus_area"].(string)
+			userRequest, _ := analysis["user_request"].(string)
+
+			systemPrompt += fmt.Sprintf(`
+
+DOCUMENT ANALYSIS REQUEST:
+- User asked: "%s"
+- Focus area: %s
+- Document content: %s
+
+Please analyze the actual document content and provide specific, contextual suggestions for improvement. 
+Look at the actual text and provide concrete recommendations based on what you see.
+Make your response conversational and directly address the user's request.
+Provide numbered suggestions with specific examples from their document where possible.
+Your response should flow naturally as if you're having a conversation with the user.`,
+				userRequest, focusArea, req.DocumentContent)
+		}
+	}
+
+	if len(documentChanges) > 0 {
+		log.Printf("WritingCopilot: Adding document rewrite context")
+		systemPrompt += `
+
+Document rewriting has been completed. Explain what was changed and why.`
+	}
+
+	if len(imagePrompts) > 0 {
+		log.Printf("WritingCopilot: Adding image prompt context: %s", strings.Join(imagePrompts, "; "))
+		systemPrompt += `
+
+Image prompt has been generated: ` + strings.Join(imagePrompts, "; ")
+	}
+
+	// Build conversation messages
 	messages := []openai.ChatCompletionMessageParamUnion{
 		openai.SystemMessage(systemPrompt),
 	}
@@ -656,25 +687,44 @@ Document content: ` + req.DocumentContent
 		model = openai.ChatModelGPT4o
 	}
 
+	log.Printf("WritingCopilot: Calling OpenAI for final response generation")
+
 	completion, err := s.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
 		Model:    model,
 		Messages: messages,
 	})
 	if err != nil {
+		log.Printf("WritingCopilot: OpenAI call failed: %v", err)
 		return "", err
 	}
 
 	if len(completion.Choices) == 0 {
+		log.Printf("WritingCopilot: No response choices returned from OpenAI")
 		return "", errors.New("no response from OpenAI")
 	}
 
-	return completion.Choices[0].Message.Content, nil
+	finalResponse := completion.Choices[0].Message.Content
+	log.Printf("WritingCopilot: Generated final response (length: %d)", len(finalResponse))
+
+	// Add line break separation if there was an initial response
+	separatedResponse := finalResponse
+	if plan.ResponseMsg != "" {
+		separatedResponse = "\n\n" + finalResponse
+		log.Printf("WritingCopilot: Added line break separation between initial response and tool response")
+	}
+
+	return separatedResponse, nil
 }
 
 // Main method for processing chat requests with new architecture
 func (s *WritingCopilotService) ProcessChatStream(ctx context.Context, req ChatRequest, sessionID string) (<-chan StreamResponse, error) {
 	if len(req.Messages) == 0 {
 		return nil, errors.New("no messages provided")
+	}
+
+	log.Printf("WritingCopilot: Starting ProcessChatStream for session %s with %d messages", sessionID, len(req.Messages))
+	if req.DocumentContent != "" {
+		log.Printf("WritingCopilot: Document content provided (length: %d)", len(req.DocumentContent))
 	}
 
 	responseChan := make(chan StreamResponse, 50)
@@ -684,6 +734,7 @@ func (s *WritingCopilotService) ProcessChatStream(ctx context.Context, req ChatR
 
 		// Get agent memory
 		memory := s.getMemory(sessionID)
+		log.Printf("WritingCopilot: Retrieved/created memory for session %s", sessionID)
 
 		// Phase 1: Planning
 		log.Printf("WritingCopilot: Starting planning phase for session %s", sessionID)
@@ -708,6 +759,8 @@ func (s *WritingCopilotService) ProcessChatStream(ctx context.Context, req ChatR
 			return
 		}
 
+		log.Printf("WritingCopilot: Plan created - Strategy: %s, Tools: %d", plan.Strategy, len(plan.Tools))
+
 		// Send plan to frontend
 		responseChan <- StreamResponse{
 			Type: "plan",
@@ -716,6 +769,7 @@ func (s *WritingCopilotService) ProcessChatStream(ctx context.Context, req ChatR
 
 		// Phase 2: Initial Response
 		if plan.ResponseMsg != "" {
+			log.Printf("WritingCopilot: Sending initial response: %s", plan.ResponseMsg)
 			responseChan <- StreamResponse{
 				Type:    "chat",
 				Role:    "assistant",
@@ -726,7 +780,11 @@ func (s *WritingCopilotService) ProcessChatStream(ctx context.Context, req ChatR
 		// Phase 3: Tool Execution (if needed)
 		var toolResults []ToolExecutionResult
 		if plan.Strategy == "use_tools" && len(plan.Tools) > 0 {
-			for _, tool := range plan.Tools {
+			log.Printf("WritingCopilot: Executing %d tools", len(plan.Tools))
+
+			for i, tool := range plan.Tools {
+				log.Printf("WritingCopilot: Executing tool %d/%d: %s", i+1, len(plan.Tools), tool.Name)
+
 				// Send artifact update
 				responseChan <- StreamResponse{
 					Type: "artifact",
@@ -751,6 +809,7 @@ func (s *WritingCopilotService) ProcessChatStream(ctx context.Context, req ChatR
 						},
 					}
 				} else {
+					log.Printf("WritingCopilot: Tool %s completed successfully", tool.Name)
 					responseChan <- StreamResponse{
 						Type: "artifact",
 						Data: ArtifactUpdate{
@@ -769,10 +828,13 @@ func (s *WritingCopilotService) ProcessChatStream(ctx context.Context, req ChatR
 
 		// Phase 4: Final Response (if tools were used)
 		if plan.Strategy == "use_tools" && len(toolResults) > 0 {
+			log.Printf("WritingCopilot: Generating final response after %d tool executions", len(toolResults))
 			finalResponse, err := s.generateFinalResponse(ctx, req, plan, toolResults)
 			if err != nil {
 				log.Printf("WritingCopilot: Final response generation failed: %v", err)
 			} else {
+				log.Printf("WritingCopilot: Final response generated, sending to frontend")
+
 				responseChan <- StreamResponse{
 					Type:    "chat",
 					Role:    "assistant",
@@ -786,6 +848,7 @@ func (s *WritingCopilotService) ProcessChatStream(ctx context.Context, req ChatR
 		if req.DocumentContent != "" {
 			memory.Context["last_document"] = req.DocumentContent
 		}
+		log.Printf("WritingCopilot: Updated memory for session %s", sessionID)
 
 		// Send completion signal
 		responseChan <- StreamResponse{
