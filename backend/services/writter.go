@@ -169,7 +169,7 @@ func (w *WriterAgent) GenerateArticle(ctx context.Context, prompt, title string,
 	article := &models.Article{
 		Title:       title,
 		Content:     finalMsg.Content[0].Text,
-		Author:      authorID,
+		AuthorID:    uint(authorID),
 		IsDraft:     true,
 		ChatHistory: chatHistoryJSON,
 	}
