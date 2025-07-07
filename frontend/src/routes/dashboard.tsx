@@ -3,10 +3,9 @@ import { createFileRoute } from '@tanstack/react-router';
 import { Outlet } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { AppSidebar } from "@/components/app-sidebar"
-import { ChartAreaInteractive } from "@/components/chart-area-interactive"
 import { ArticlesTable } from "@/components/blog/ArticlesTable"
-import { SectionCards } from "@/components/section-cards"
 import { SiteHeader } from "@/components/site-header"
+import { UserProfileBanner } from "@/components/user-profile-banner"
 import {
   SidebarInset,
   SidebarProvider,
@@ -57,9 +56,8 @@ function DashboardLayout() {
           {isRootDashboard ? (
             <div className="@container/main flex flex-1 flex-col gap-2">
               <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-                <SectionCards />
                 <div className="px-4 lg:px-6">
-                  <ChartAreaInteractive />
+                  <UserProfileBanner />
                 </div>
                 <div className="px-4 lg:px-6">
                   <Card>
