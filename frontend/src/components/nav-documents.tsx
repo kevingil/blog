@@ -25,18 +25,53 @@ import {
 import { Link, useLocation } from "@tanstack/react-router"
 import { Badge } from "@/components/ui/badge"
 import { ArticleListItem } from "@/services/types"
+import { useEffect, useRef } from "react"
+import { FetchNextPageOptions, InfiniteQueryObserverResult, InfiniteData } from "@tanstack/react-query"
+import { GetArticlesResponse } from "@/routes/dashboard/blog/index"
+
+interface NavDocumentsProps {
+  articles: ArticleListItem[]
+  fetchNextPage: (options?: FetchNextPageOptions) => Promise<InfiniteQueryObserverResult<InfiniteData<GetArticlesResponse, unknown>, Error>>
+  hasNextPage: boolean
+  isFetchingNextPage: boolean
+}
 
 export function NavDocuments({
   articles,
-}: {
-  articles: ArticleListItem[]
-}) {
+  fetchNextPage,
+  hasNextPage,
+  isFetchingNextPage,
+}: NavDocumentsProps) {
   const { isMobile } = useSidebar()
   const location = useLocation()
+  const loadMoreRef = useRef<HTMLDivElement>(null)
 
   // Sort articles by created date, most recent first
   const sortedArticles = articles
     .sort((a, b) => new Date(b.article.created_at || 0).getTime() - new Date(a.article.created_at || 0).getTime())
+
+  // Intersection Observer for infinite scrolling
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0]
+        if (first.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage()
+        }
+      },
+      { threshold: 1 }
+    )
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current)
+    }
+
+    return () => {
+      if (loadMoreRef.current) {
+        observer.unobserve(loadMoreRef.current)
+      }
+    }
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage])
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
@@ -99,6 +134,17 @@ export function NavDocuments({
             </SidebarMenuItem>
           )
         })}
+        
+        {/* Loading indicator for infinite scroll */}
+        {hasNextPage && (
+          <div ref={loadMoreRef} className="flex justify-center p-4">
+            {isFetchingNextPage ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+            ) : (
+              <div className="text-xs text-muted-foreground">Scroll for more</div>
+            )}
+          </div>
+        )}
       </SidebarMenu>
     </SidebarGroup>
   )
