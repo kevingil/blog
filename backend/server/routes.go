@@ -101,6 +101,8 @@ func (s *FiberServer) websocketHandler(con *websocket.Conn) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	log.Printf("WebSocket: New connection established")
+
 	// Handle incoming messages to subscribe to request streams
 	go func() {
 		defer cancel()
@@ -141,6 +143,16 @@ func (s *FiberServer) handleCopilotStreaming(ctx context.Context, con *websocket
 	responseChan, exists := manager.GetResponseChannel(requestID)
 	if !exists {
 		log.Printf("WebSocket: Request ID %s not found", requestID)
+		// Send error message to client
+		errorMsg := services.StreamResponse{
+			RequestID: requestID,
+			Type:      "error",
+			Error:     "Request not found",
+			Done:      true,
+		}
+		if msgBytes, err := json.Marshal(errorMsg); err == nil {
+			con.WriteMessage(websocket.TextMessage, msgBytes)
+		}
 		return
 	}
 
@@ -152,6 +164,23 @@ func (s *FiberServer) handleCopilotStreaming(ctx context.Context, con *websocket
 			if !ok {
 				log.Printf("WebSocket: Response channel closed for request %s", requestID)
 				return
+			}
+
+			// Add request ID to response
+			response.RequestID = requestID
+
+			// Log different message types for debugging
+			switch response.Type {
+			case "plan":
+				log.Printf("WebSocket: Sending plan for request %s", requestID)
+			case "artifact":
+				log.Printf("WebSocket: Sending artifact update for request %s", requestID)
+			case "chat":
+				log.Printf("WebSocket: Sending chat message for request %s", requestID)
+			case "error":
+				log.Printf("WebSocket: Sending error for request %s: %s", requestID, response.Error)
+			case "done":
+				log.Printf("WebSocket: Sending completion signal for request %s", requestID)
 			}
 
 			// Send response as JSON message

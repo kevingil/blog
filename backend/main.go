@@ -41,6 +41,15 @@ func main() {
 	imageService := services.NewImageGenerationService(dbService, storageService)
 	pagesService := services.NewPagesService(dbService)
 
+	// Initialize text generation service for the new copilot architecture
+	textGenService := services.NewTextGenerationService()
+
+	// Initialize the AsyncCopilotManager with proper services injection
+	copilotManager := services.GetAsyncCopilotManager()
+	copilotManager.SetServices(textGenService, writerAgent, imageService, storageService)
+
+	log.Printf("Initialized AsyncCopilotManager with all required services")
+
 	// Initialize and start server
 	srv := server.NewFiberServer(
 		dbService,
