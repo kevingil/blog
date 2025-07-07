@@ -227,11 +227,11 @@ type ChatRequestResponse struct {
 // It intentionally does not try to be generic – only implement what we need
 // today. If you later want to integrate advanced features (tools, function
 // calling, parallel_tool_calls, …) you can layer it on top.
-type CopilotKitService struct {
+type WritingCopilotService struct {
 	client *openai.Client
 }
 
-func NewCopilotKitService() *CopilotKitService {
+func NewWritingCopilotService() *WritingCopilotService {
 	c := openai.NewClient()
 
 	// Log if API key is missing (helpful for debugging)
@@ -239,7 +239,7 @@ func NewCopilotKitService() *CopilotKitService {
 		log.Printf("WARNING: OPENAI_API_KEY environment variable is not set")
 	}
 
-	return &CopilotKitService{client: &c}
+	return &WritingCopilotService{client: &c}
 }
 
 // Generate sends the accumulated chat transcript to the OpenAI API and returns
@@ -247,7 +247,7 @@ func NewCopilotKitService() *CopilotKitService {
 // the implementation straightforward and compatible with the version of the
 // SDK that is pinned in go.sum. The HTTP handler turns this single response
 // into a Server-Sent-Events (SSE) stream so that the frontend stays unchanged.
-func (s *CopilotKitService) Generate(ctx context.Context, req ChatRequest) (string, error) {
+func (s *WritingCopilotService) Generate(ctx context.Context, req ChatRequest) (string, error) {
 	if len(req.Messages) == 0 {
 		return "", errors.New("no messages provided")
 	}
@@ -319,7 +319,7 @@ type StreamResponse struct {
 type AsyncCopilotManager struct {
 	mu       sync.RWMutex
 	requests map[string]*AsyncChatRequest
-	service  *CopilotKitService
+	service  *WritingCopilotService
 }
 
 // AsyncChatRequest represents a chat request being processed in the background
@@ -343,7 +343,7 @@ func GetAsyncCopilotManager() *AsyncCopilotManager {
 	managerOnce.Do(func() {
 		globalAsyncManager = &AsyncCopilotManager{
 			requests: make(map[string]*AsyncChatRequest),
-			service:  NewCopilotKitService(),
+			service:  NewWritingCopilotService(),
 		}
 	})
 	return globalAsyncManager
@@ -439,7 +439,7 @@ func (m *AsyncCopilotManager) processRequest(asyncReq *AsyncChatRequest) {
 }
 
 // GenerateStream sends the chat transcript to OpenAI and streams the response back
-func (s *CopilotKitService) GenerateStream(ctx context.Context, req ChatRequest) (<-chan StreamResponse, error) {
+func (s *WritingCopilotService) GenerateStream(ctx context.Context, req ChatRequest) (<-chan StreamResponse, error) {
 	if len(req.Messages) == 0 {
 		return nil, errors.New("no messages provided")
 	}
