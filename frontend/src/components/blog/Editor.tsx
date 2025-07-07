@@ -243,7 +243,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
   const editor = useEditor({
     extensions: [StarterKit],
-    content: mdParser.render(watchedValues.content || ''),
+    content: watchedValues.content || '', //mdParser.render(watchedValues.content || ''),
     editorProps: {
       attributes: {
         class:
@@ -346,7 +346,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           navigate({ to: '/dashboard/blog' });
         }
       } else {
-        await updateArticle(blogSlug as string, {
+        // COMMENTED OUT FOR DEBUGGING - Preview article update data
+        const updateData = {
           title: data.title,
           content: data.content,
           image: data.image,
@@ -366,7 +367,17 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             // Otherwise, use current time for newly published articles
             return new Date().getTime();
           })(),
-        });
+        };
+        
+        console.log('=== ARTICLE UPDATE DATA PREVIEW ===');
+        console.log('Blog Slug:', blogSlug);
+        console.log('Update Data:', updateData);
+        console.log('Tiptap Editor Content (HTML):', editor?.getHTML());
+        console.log('Tiptap Editor Content (Text):', editor?.getText());
+        console.log('Tiptap Editor Content (JSON):', editor?.getJSON());
+        console.log('================================');
+        
+        // await updateArticle(blogSlug as string, updateData);
         if (returnToDashboard) {
           navigate({ to: '/dashboard/blog' });
         } else {
@@ -389,7 +400,19 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     setGeneratingRewrite(true);
     try {
       const oldText = editor.getText();
-      const result = await updateArticleWithContext(article.article.id);
+      
+      // COMMENTED OUT FOR DEBUGGING - Preview article rewrite request
+      console.log('=== ARTICLE REWRITE REQUEST PREVIEW ===');
+      console.log('Article ID:', article.article.id);
+      console.log('Current Editor Content (HTML):', editor?.getHTML());
+      console.log('Current Editor Content (Text):', oldText);
+      console.log('Current Editor Content (JSON):', editor?.getJSON());
+      console.log('======================================');
+      
+      // const result = await updateArticleWithContext(article.article.id);
+      // Simulate success for now
+      const result = { success: false, content: 'Simulated content (updateArticleWithContext is commented out)' };
+      
       if (result.success) {
         const newText = result.content;
         const diff = diffPartialText(oldText, newText, true);

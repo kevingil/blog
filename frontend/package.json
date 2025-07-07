@@ -53,6 +53,7 @@
     "@tanstack/react-router": "^1.116.0",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/router-cli": "^1.116.0",
+    "@tiptap/extension-code-block": "^2.25.0",
     "@tiptap/pm": "^2.23.0",
     "@tiptap/react": "^2.23.0",
     "@tiptap/starter-kit": "^2.23.0",
