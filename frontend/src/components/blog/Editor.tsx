@@ -494,11 +494,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         if (returnToDashboard) {
           navigate({ to: '/dashboard/blog' });
         }
-      } else {
-        // COMMENTED OUT FOR DEBUGGING - Preview article update data
+      } else {        
         const updateData = {
           title: data.title,
-          content: data.content,
+          content: data.content, // Use HTML content from editor
           image: data.image,
           tags: data.tags,
           is_draft: data.isDraft,
@@ -518,15 +517,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           })(),
         };
         
-        console.log('=== ARTICLE UPDATE DATA PREVIEW ===');
+        console.log('=== ARTICLE UPDATE DATA ===');
         console.log('Blog Slug:', blogSlug);
         console.log('Update Data:', updateData);
-        console.log('Tiptap Editor Content (HTML):', editor?.getHTML());
-        console.log('Tiptap Editor Content (Text):', editor?.getText());
-        console.log('Tiptap Editor Content (JSON):', editor?.getJSON());
-        console.log('================================');
+        console.log('==========================');
         
-        // await updateArticle(blogSlug as string, updateData);
+        await updateArticle(blogSlug as string, updateData);
         if (returnToDashboard) {
           navigate({ to: '/dashboard/blog' });
         } else {
@@ -549,18 +545,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     setGeneratingRewrite(true);
     try {
       const oldText = editor.getText();
+      const oldHtml = editor.getHTML();
       
-      // COMMENTED OUT FOR DEBUGGING - Preview article rewrite request
-      console.log('=== ARTICLE REWRITE REQUEST PREVIEW ===');
-      console.log('Article ID:', article.article.id);
-      console.log('Current Editor Content (HTML):', editor?.getHTML());
-      console.log('Current Editor Content (Text):', oldText);
-      console.log('Current Editor Content (JSON):', editor?.getJSON());
-      console.log('======================================');
-      
-      // const result = await updateArticleWithContext(article.article.id);
-      // Simulate success for now
-      const result = { success: false, content: 'Simulated content (updateArticleWithContext is commented out)' };
+      const result = await updateArticleWithContext(article.article.id);
       
       if (result.success) {
         const newText = result.content;
