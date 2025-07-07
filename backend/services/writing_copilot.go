@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -348,18 +349,22 @@ func (s *WritingCopilotService) initializeTools() {
 		},
 	}
 
-	s.tools["search_for_improvements"] = ToolDefinition{
-		Name:        "search_for_improvements",
-		Description: "Analyze document and search for specific areas to improve",
+	s.tools["analyze_document"] = ToolDefinition{
+		Name:        "analyze_document",
+		Description: "Analyze document and provide improvement suggestions. Can focus on specific areas or provide general analysis.",
 		Parameters: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
 				"focus_area": map[string]interface{}{
 					"type":        "string",
-					"description": "What aspect to focus on: structure, clarity, engagement, grammar, etc.",
+					"description": "Optional: What aspect to focus on (structure, clarity, engagement, grammar, flow, technical_accuracy). If not provided, will analyze overall document quality.",
+				},
+				"user_request": map[string]interface{}{
+					"type":        "string",
+					"description": "The user's original request to help understand what they want to improve",
 				},
 			},
-			"required": []string{"focus_area"},
+			"required": []string{"user_request"},
 		},
 	}
 }
@@ -376,7 +381,7 @@ Your response must be valid JSON with this exact structure:
     {
       "name": "tool_name",
       "parameters": {"param": "value"},
-      "message": "What to show user while executing (e.g., 'Rewriting document...', 'Generating image prompt...')"
+      "message": "What to show user while executing (e.g., 'Rewriting document...', 'Analyzing content...')"
     }
   ],
   "response_msg": "Initial conversational response to user"
@@ -384,12 +389,17 @@ Your response must be valid JSON with this exact structure:
 
 Available tools:
 - rewrite_document: For major content changes or complete rewrites
+  Parameters: {"new_content": "...", "reason": "..."}
 - generate_image_prompt: To create image prompts from content
-- search_for_improvements: To analyze and suggest specific improvements
+  Parameters: {"content": "document content"}
+- analyze_document: To analyze and provide improvement suggestions
+  Parameters: {"user_request": "user's original request", "focus_area": "optional: engagement|clarity|structure|grammar|flow|technical_accuracy"}
 
 Strategy guidelines:
 - Use "respond_only" for: questions, simple advice, explanations, small suggestions
-- Use "use_tools" for: actual document editing, generating content, creating prompts
+- Use "use_tools" for: actual document editing, generating content, creating prompts, analyzing documents
+
+Important: When using analyze_document, ALWAYS include "user_request" parameter with the user's original request text.
 
 Current document:` + req.DocumentContent
 
@@ -482,17 +492,36 @@ func (s *WritingCopilotService) executeTool(ctx context.Context, tool PlannedToo
 			"prompt": prompt,
 		}
 
-	case "search_for_improvements":
-		focusArea, ok := tool.Parameters["focus_area"].(string)
+	case "analyze_document":
+		userRequest, ok := tool.Parameters["user_request"].(string)
 		if !ok {
-			result.Error = "focus_area parameter is required"
+			result.Error = "user_request parameter is required"
 			return result, errors.New(result.Error)
 		}
 
-		// Simulate analysis (in real implementation, this might use AI to analyze)
+		focusArea, _ := tool.Parameters["focus_area"].(string)
+		if focusArea == "" {
+			// Infer focus area from user request
+			if strings.Contains(strings.ToLower(userRequest), "engaging") || strings.Contains(strings.ToLower(userRequest), "boring") {
+				focusArea = "engagement"
+			} else if strings.Contains(strings.ToLower(userRequest), "clear") || strings.Contains(strings.ToLower(userRequest), "confusing") {
+				focusArea = "clarity"
+			} else if strings.Contains(strings.ToLower(userRequest), "structure") || strings.Contains(strings.ToLower(userRequest), "organize") {
+				focusArea = "structure"
+			} else if strings.Contains(strings.ToLower(userRequest), "grammar") || strings.Contains(strings.ToLower(userRequest), "spelling") {
+				focusArea = "grammar"
+			} else {
+				focusArea = "overall"
+			}
+		}
+
+		// Generate context-aware suggestions based on focus area and user request
+		suggestions := s.generateAnalysisSuggestions(focusArea, userRequest)
+
 		result.Result = map[string]interface{}{
 			"focus_area":    focusArea,
-			"suggestions":   []string{"Consider adding more specific examples", "Break up long paragraphs"},
+			"user_request":  userRequest,
+			"suggestions":   suggestions,
 			"analysis_done": true,
 		}
 
@@ -502,6 +531,69 @@ func (s *WritingCopilotService) executeTool(ctx context.Context, tool PlannedToo
 	}
 
 	return result, nil
+}
+
+// Generate context-aware analysis suggestions based on focus area and user request
+func (s *WritingCopilotService) generateAnalysisSuggestions(focusArea, userRequest string) []string {
+	switch focusArea {
+	case "engagement":
+		return []string{
+			"Consider adding more compelling examples or stories",
+			"Use active voice instead of passive voice",
+			"Break up long paragraphs for better readability",
+			"Add rhetorical questions to engage readers",
+			"Include specific details and concrete examples",
+		}
+	case "clarity":
+		return []string{
+			"Simplify complex sentences",
+			"Define technical terms when first introduced",
+			"Use bullet points or numbered lists for complex information",
+			"Ensure logical flow between paragraphs",
+			"Remove unnecessary jargon or redundant words",
+		}
+	case "structure":
+		return []string{
+			"Add clear headings and subheadings",
+			"Ensure each paragraph has a single main idea",
+			"Improve transitions between sections",
+			"Consider reorganizing content for better flow",
+			"Add a stronger conclusion that summarizes key points",
+		}
+	case "grammar":
+		return []string{
+			"Check for subject-verb agreement",
+			"Review punctuation usage",
+			"Ensure consistent tense throughout",
+			"Fix any run-on sentences",
+			"Verify proper use of apostrophes and quotation marks",
+		}
+	case "flow":
+		return []string{
+			"Improve transitions between ideas",
+			"Ensure smooth progression from introduction to conclusion",
+			"Remove abrupt topic changes",
+			"Add connecting words and phrases",
+			"Make sure each section builds on the previous one",
+		}
+	case "technical_accuracy":
+		return []string{
+			"Verify all facts and statistics",
+			"Check technical terminology usage",
+			"Ensure code examples are correct and functional",
+			"Update any outdated information",
+			"Add proper citations for claims",
+		}
+	default: // "overall"
+		return []string{
+			"Review overall document structure and organization",
+			"Check for clarity and readability",
+			"Ensure engaging and appropriate tone",
+			"Verify logical flow between sections",
+			"Consider adding examples or visual elements",
+			"Review grammar and spelling throughout",
+		}
+	}
 }
 
 // Get or create agent memory for session
