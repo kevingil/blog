@@ -4,12 +4,10 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 
 	"blog-agent-go/backend/models"
 
 	libsql "github.com/ekristen/gorm-libsql"
-	"github.com/joho/godotenv"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -45,24 +43,12 @@ func New() Service {
 		return dbInstance
 	}
 
-	// Load .env file explicitly
-	envPath := filepath.Join("..", ".env")
-	if err := godotenv.Load(envPath); err != nil {
-		log.Printf("Warning: Could not load .env file from %s: %v", envPath, err)
-		// Try loading from current directory
-		if err := godotenv.Load(".env"); err != nil {
-			log.Printf("Warning: Could not load .env file from current directory: %v", err)
-		}
-	}
-
 	dburl := os.Getenv("DB_URL")
 
 	// Require DB_URL for libsql connection
 	if dburl == "" {
 		log.Fatal("DB_URL environment variable is required for libsql connection")
 	}
-
-	log.Printf("Connecting to libsql database: %s", dburl)
 
 	// Configure GORM logger
 	gormLogger := logger.Default.LogMode(logger.Info)
