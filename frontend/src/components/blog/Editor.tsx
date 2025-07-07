@@ -392,7 +392,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         },
       }),
     ],
-    content: watchedValues.content || '', //mdParser.render(watchedValues.content || ''),
+    content: watchedValues.content || '', // Content is already HTML
     editorProps: {
       attributes: {
         class:
@@ -401,7 +401,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     },
     onUpdate({ editor }: { editor: TiptapEditor }) {
       if (!diffing) {
-        setValue('content', editor.getText());
+        setValue('content', editor.getHTML());
       }
     },
   });
@@ -410,12 +410,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   // synchronise those changes into the editor exactly once.
   useEffect(() => {
     if (!editor) return;
-    // If the change came from user typing inside the editor, `editor.getText()` already matches `watchedValues.content`.
+    // If the change came from user typing inside the editor, `editor.getHTML()` already matches `watchedValues.content`.
     // We only want to update when the two differ – i.e., an external change.
-    if (watch('content') !== editor.getText()) {
-      editor.commands.setContent(mdParser.render(watch('content') || ''));
+    if (watch('content') !== editor.getHTML()) {
+      // Load content directly as HTML since we're now saving as HTML
+      editor.commands.setContent(watch('content') || '');
     }
-  }, [watch('content'), editor, mdParser]);
+  }, [watch('content'), editor]);
 
   if (!user) {
     return <div>Please log in to edit articles.</div>;
@@ -442,9 +443,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         isDraft: article.article.is_draft,
       } as ArticleFormData;
       reset(newValues);
-      // Sync editor with fresh content
+      // Sync editor with fresh content - load directly as HTML since content is already HTML
       if (editor) {
-        editor.commands.setContent(mdParser.render(newValues.content));
+        editor.commands.setContent(newValues.content);
       }
     } else if (isNew) {
       console.log("Resetting form for new article");
@@ -497,7 +498,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       } else {        
         const updateData = {
           title: data.title,
-          content: data.content, // Use HTML content from editor
+          content: data.content, // HTML content from Tiptap editor
           image: data.image,
           tags: data.tags,
           is_draft: data.isDraft,
@@ -544,19 +545,18 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     if (!article?.article.id || !editor) return;
     setGeneratingRewrite(true);
     try {
-      const oldText = editor.getText();
       const oldHtml = editor.getHTML();
       
       const result = await updateArticleWithContext(article.article.id);
       
       if (result.success) {
-        const newText = result.content;
-        const diff = diffPartialText(oldText, newText, true);
-        const diffHtml = mdParser.render(diff);
-        setOriginalDocument(oldText);
-        setPendingNewDocument(newText);
+        const newHtml = result.content;
+        // For now, show the new content directly - you can implement HTML diffing later if needed
+        setOriginalDocument(oldHtml);
+        setPendingNewDocument(newHtml);
         setDiffing(true);
-        editor.commands.setContent(diffHtml);
+        // Show new content directly
+        editor.commands.setContent(newHtml);
       }
     } catch (error) {
       console.error('Error rewriting article:', error);
@@ -1035,7 +1035,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   <ConfirmChanges
                     onReject={() => {
                       if (editor) {
-                        editor.commands.setContent(mdParser.render(originalDocument));
+                        editor.commands.setContent(originalDocument);
                       }
                       setValue('content', originalDocument);
                       setDiffing(false);
@@ -1043,7 +1043,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     }}
                     onConfirm={() => {
                       if (editor) {
-                        editor.commands.setContent(mdParser.render(pendingNewDocument));
+                        editor.commands.setContent(pendingNewDocument);
                       }
                       setValue('content', pendingNewDocument);
                       setDiffing(false);
@@ -1061,14 +1061,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                           Ignore
                         </Button>
                         <Button onClick={() => {
-                          const currentText = editor?.getText() || '';
-                          const diff = diffPartialText(currentText, pendingEdit.newContent, true);
-                          const diffHtml = mdParser.render(diff);
-                          setOriginalDocument(currentText);
+                          const currentHtml = editor?.getHTML() || '';
+                          // For now, just replace content directly - you can implement HTML diffing later if needed
+                          setOriginalDocument(currentHtml);
                           setPendingNewDocument(pendingEdit.newContent);
                           setDiffing(true);
                           if (editor) {
-                            editor.commands.setContent(diffHtml);
+                            // Assuming pendingEdit.newContent is markdown, convert it to HTML
+                            editor.commands.setContent(mdParser.render(pendingEdit.newContent));
                           }
                           setPendingEdit(null);
                         }}>
