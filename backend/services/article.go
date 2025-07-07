@@ -133,6 +133,8 @@ func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uint, req 
 		return nil, fmt.Errorf("failed to find article: %w", result.Error)
 	}
 
+	fmt.Println("Article content", req.Content)
+
 	// Update article fields
 	updates := models.Article{
 		Title:       req.Title,
@@ -236,7 +238,9 @@ func (s *ArticleService) UpdateArticleWithContext(ctx context.Context, articleID
 
 	// Convert to old format for writer agent
 	oldArticle := &models.Article{
-		Model:                    article.Model,
+		ID:                       article.ID,
+		CreatedAt:                article.CreatedAt,
+		UpdatedAt:                article.UpdatedAt,
 		Image:                    article.Image,
 		Slug:                     article.Slug,
 		Title:                    article.Title,

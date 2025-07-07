@@ -2,12 +2,12 @@ package models
 
 import (
 	"time"
-
-	"gorm.io/gorm"
 )
 
 type Article struct {
-	gorm.Model
+	ID                       uint       `json:"id" gorm:"primaryKey"`
+	CreatedAt                time.Time  `json:"created_at"`
+	UpdatedAt                time.Time  `json:"updated_at"`
 	Image                    string     `json:"image"`
 	Slug                     string     `json:"slug" gorm:"uniqueIndex;not null"`
 	Title                    string     `json:"title" gorm:"not null"`
@@ -23,9 +23,11 @@ type Article struct {
 }
 
 type Tag struct {
-	gorm.Model
-	Name     string    `json:"tag_name" gorm:"uniqueIndex;not null"`
-	Articles []Article `json:"articles" gorm:"many2many:article_tags;"`
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Name      string    `json:"tag_name" gorm:"uniqueIndex;not null"`
+	Articles  []Article `json:"articles" gorm:"many2many:article_tags;"`
 }
 
 type ArticleTag struct {
