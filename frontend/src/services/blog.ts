@@ -3,11 +3,11 @@ import { GetArticlesResponse } from '@/routes/dashboard/blog/index';
 import { VITE_API_BASE_URL } from '@/services/constants';
 
 // Article listing and search
-export async function   getArticles(page: number, tag: string | null = null, includeDrafts?: boolean, articlesPerPage?: number): Promise<GetArticlesResponse> {
+export async function getArticles(page: number, tag: string | null = null, status: 'all' | 'published' | 'drafts' = 'published', articlesPerPage?: number): Promise<GetArticlesResponse> {
   const params = new URLSearchParams({
     page: page.toString(),
     ...(tag && tag !== 'All' ? { tag } : {}),
-    ...(includeDrafts !== undefined ? { includeDrafts: includeDrafts.toString() } : {}),
+    status,
     ...(articlesPerPage !== undefined ? { articlesPerPage: articlesPerPage.toString() } : {})
   });
 
@@ -17,15 +17,13 @@ export async function   getArticles(page: number, tag: string | null = null, inc
   }
   const data: GetArticlesResponse = await response.json();
   
-  // Debug: Log API response when includeDrafts is true
-  if (includeDrafts) {
-    console.log('articlesPayload API response:', {
-      totalArticles: data.articles.length,
-      drafts: data.articles.filter(a => a.article.is_draft).length,
-      published: data.articles.filter(a => !a.article.is_draft).length,
-      includeDraftsParam: includeDrafts
-    });
-  }
+  // Debug: Log API response
+  console.log('articlesPayload API response:', {
+    totalArticles: data.articles.length,
+    drafts: data.articles.filter(a => a.article.is_draft).length,
+    published: data.articles.filter(a => !a.article.is_draft).length,
+    status
+  });
   
   return {
     articles: data.articles,

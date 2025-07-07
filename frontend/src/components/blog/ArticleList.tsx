@@ -108,12 +108,12 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
     isLoading,
     isFetching,
   } = useQuery<GetArticlesResponse>({
-    queryKey: ['articles', page, searchTerm, searchTag],
+    queryKey: ['public-articles', page, searchTerm, searchTag],
     queryFn: () => {
       if (searchTerm) {
         return searchArticles(searchTerm, page, searchTag);
       }
-      return getArticles(page, searchTag);
+      return getArticles(page, searchTag, 'published'); // Only show published articles in public view
     },
   });
 

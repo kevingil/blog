@@ -22,13 +22,34 @@ export const Route = createFileRoute('/dashboard/blog/')({
 });
 
 function ArticlesPage() {
-  const { data: articlesPayload, isLoading, error, refetch } = useQuery<{ articles: ArticleListItem[], total_pages: number }>({
-    queryKey: ['articles', 0, 20],
-    queryFn: () => getArticles(0, null, true, 20) as Promise<{ articles: ArticleListItem[], total_pages: number }>
+  // Separate queries for each tab
+  const { data: allArticles, isLoading: allLoading, error: allError, refetch: refetchAll } = useQuery<{ articles: ArticleListItem[], total_pages: number }>({
+    queryKey: ['articles', 'all', 0, 20],
+    queryFn: () => getArticles(0, null, 'all', 20) as Promise<{ articles: ArticleListItem[], total_pages: number }>
   });
-  console.log("articlesPayload error", error);
 
-  console.log("articlesPayload", articlesPayload);
+  const { data: publishedArticles, isLoading: publishedLoading, error: publishedError, refetch: refetchPublished } = useQuery<{ articles: ArticleListItem[], total_pages: number }>({
+    queryKey: ['articles', 'published', 0, 20],
+    queryFn: () => getArticles(0, null, 'published', 20) as Promise<{ articles: ArticleListItem[], total_pages: number }>
+  });
+
+  const { data: draftArticles, isLoading: draftLoading, error: draftError, refetch: refetchDrafts } = useQuery<{ articles: ArticleListItem[], total_pages: number }>({
+    queryKey: ['articles', 'drafts', 0, 20],
+    queryFn: () => getArticles(0, null, 'drafts', 20) as Promise<{ articles: ArticleListItem[], total_pages: number }>
+  });
+
+  const isLoading = allLoading || publishedLoading || draftLoading;
+  const error = allError || publishedError || draftError;
+  const refetch = () => {
+    refetchAll();
+    refetchPublished();
+    refetchDrafts();
+  };
+
+  console.log("articlesPayload error", error);
+  console.log("allArticles", allArticles);
+  console.log("publishedArticles", publishedArticles);
+  console.log("draftArticles", draftArticles);
 
   if (isLoading) return <div>Loading articles...</div>;
   if (error) return <div>Error loading articles</div>;
@@ -64,19 +85,19 @@ function ArticlesPage() {
           </TabsList>
           <TabsContent value="all" className="p-0 w-full">
             <ArticlesTable 
-              articles={articlesPayload?.articles.sort((a: ArticleListItem, b: ArticleListItem) => new Date(b.article.created_at || 0).getTime() - new Date(a.article.created_at || 0).getTime()) || []}
+              articles={allArticles?.articles.sort((a: ArticleListItem, b: ArticleListItem) => new Date(b.article.created_at || 0).getTime() - new Date(a.article.created_at || 0).getTime()) || []}
               onArticleDeleted={() => refetch()}
             />
           </TabsContent>
           <TabsContent value="published" className="p-0 w-full">
             <ArticlesTable 
-              articles={articlesPayload?.articles.filter((article: ArticleListItem) => article.article.is_draft === false) || []}
+              articles={publishedArticles?.articles.sort((a: ArticleListItem, b: ArticleListItem) => new Date(b.article.created_at || 0).getTime() - new Date(a.article.created_at || 0).getTime()) || []}
               onArticleDeleted={() => refetch()}
             />
           </TabsContent>
           <TabsContent value="drafts" className="p-0 w-full">
             <ArticlesTable 
-              articles={articlesPayload?.articles.filter((article: ArticleListItem) => article.article.is_draft === true) || []}
+              articles={draftArticles?.articles.sort((a: ArticleListItem, b: ArticleListItem) => new Date(b.article.created_at || 0).getTime() - new Date(a.article.created_at || 0).getTime()) || []}
               onArticleDeleted={() => refetch()}
             />
           </TabsContent>

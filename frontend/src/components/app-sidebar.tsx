@@ -164,8 +164,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   // Fetch articles for the sidebar
   const { data: articlesPayload, isLoading, error } = useQuery<{ articles: ArticleListItem[], total_pages: number }>({
-    queryKey: ['articles', 0, 20],
-    queryFn: () => getArticles(0, null, true, 20) as Promise<{ articles: ArticleListItem[], total_pages: number }>
+    queryKey: ['sidebar-articles', 'all', 0, 20],
+    queryFn: () => getArticles(0, null, 'all', 20) as Promise<{ articles: ArticleListItem[], total_pages: number }>
   });
 
   useEffect(() => {
