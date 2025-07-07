@@ -1,32 +1,28 @@
 package database
 
 import (
-	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"os"
-	"strconv"
-	"time"
 
 	"blog-agent-go/backend/models"
 
 	_ "github.com/joho/godotenv/autoload"
-	_ "github.com/tursodatabase/libsql-client-go/libsql"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // Service represents a service that interacts with a database.
 type Service interface {
 	// Health returns a map of health status information.
-	// The keys and values in the map are service-specific.
 	Health() map[string]string
 
 	// Close terminates the database connection.
-	// It returns an error if the connection cannot be closed.
 	Close() error
 
-	// GetDB returns the underlying database connection
-	GetDB() *sql.DB
+	// GetDB returns the underlying GORM database connection
+	GetDB() *gorm.DB
 
 	// User operations
 	GetUserByEmail(email string) (*models.User, error)
@@ -34,7 +30,7 @@ type Service interface {
 }
 
 type service struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
 var (
@@ -48,11 +44,40 @@ func New() Service {
 		return dbInstance
 	}
 
-	db, err := sql.Open("libsql", dburl)
+	// Configure GORM logger
+	gormLogger := logger.Default.LogMode(logger.Info)
+
+	// Open connection with GORM using SQLite driver for Turso
+	db, err := gorm.Open(sqlite.Open(dburl), &gorm.Config{
+		Logger: gormLogger,
+	})
 	if err != nil {
-		// This will not be a connection error, but a DSN parse error or
-		// another initialization error.
-		log.Fatal(err)
+		log.Fatal("Failed to connect to database:", err)
+	}
+
+	// Get underlying sql.DB for health checks
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatal("Failed to get underlying sql.DB:", err)
+	}
+
+	// Configure connection pool
+	sqlDB.SetMaxOpenConns(25)
+	sqlDB.SetMaxIdleConns(25)
+
+	// Auto-migrate all models
+	err = db.AutoMigrate(
+		&models.User{},
+		&models.Article{},
+		&models.Tag{},
+		&models.ArticleTag{},
+		&models.ImageGeneration{},
+		&models.AboutPage{},
+		&models.ContactPage{},
+		&models.Project{},
+	)
+	if err != nil {
+		log.Fatal("Failed to auto-migrate models:", err)
 	}
 
 	dbInstance = &service{
@@ -62,92 +87,67 @@ func New() Service {
 }
 
 // Health checks the health of the database connection by pinging the database.
-// It returns a map with keys indicating various health statistics.
 func (s *service) Health() map[string]string {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
 	stats := make(map[string]string)
 
-	// Ping the database
-	err := s.db.PingContext(ctx)
+	// Get underlying sql.DB for health check
+	sqlDB, err := s.db.DB()
 	if err != nil {
 		stats["status"] = "down"
-		stats["error"] = fmt.Sprintf("db down: %v", err)
-		log.Fatalf("db down: %v", err) // Log the error and terminate the program
+		stats["error"] = fmt.Sprintf("failed to get sql.DB: %v", err)
 		return stats
 	}
 
-	// Database is up, add more statistics
+	// Ping the database
+	err = sqlDB.Ping()
+	if err != nil {
+		stats["status"] = "down"
+		stats["error"] = fmt.Sprintf("db down: %v", err)
+		return stats
+	}
+
+	// Database is up
 	stats["status"] = "up"
 	stats["message"] = "It's healthy"
 
-	// Get database stats (like open connections, in use, idle, etc.)
-	dbStats := s.db.Stats()
-	stats["open_connections"] = strconv.Itoa(dbStats.OpenConnections)
-	stats["in_use"] = strconv.Itoa(dbStats.InUse)
-	stats["idle"] = strconv.Itoa(dbStats.Idle)
-	stats["wait_count"] = strconv.FormatInt(dbStats.WaitCount, 10)
-	stats["wait_duration"] = dbStats.WaitDuration.String()
-	stats["max_idle_closed"] = strconv.FormatInt(dbStats.MaxIdleClosed, 10)
-	stats["max_lifetime_closed"] = strconv.FormatInt(dbStats.MaxLifetimeClosed, 10)
-
-	// Evaluate stats to provide a health message
-	if dbStats.OpenConnections > 40 { // Assuming 50 is the max for this example
-		stats["message"] = "The database is experiencing heavy load."
-	}
-
-	if dbStats.WaitCount > 1000 {
-		stats["message"] = "The database has a high number of wait events, indicating potential bottlenecks."
-	}
-
-	if dbStats.MaxIdleClosed > int64(dbStats.OpenConnections)/2 {
-		stats["message"] = "Many idle connections are being closed, consider revising the connection pool settings."
-	}
-
-	if dbStats.MaxLifetimeClosed > int64(dbStats.OpenConnections)/2 {
-		stats["message"] = "Many connections are being closed due to max lifetime, consider increasing max lifetime or revising the connection usage pattern."
-	}
+	// Get database stats
+	dbStats := sqlDB.Stats()
+	stats["open_connections"] = fmt.Sprintf("%d", dbStats.OpenConnections)
+	stats["in_use"] = fmt.Sprintf("%d", dbStats.InUse)
+	stats["idle"] = fmt.Sprintf("%d", dbStats.Idle)
 
 	return stats
 }
 
 // Close closes the database connection.
-// It logs a message indicating the disconnection from the specific database.
-// If the connection is successfully closed, it returns nil.
-// If an error occurs while closing the connection, it returns the error.
 func (s *service) Close() error {
 	log.Printf("Disconnected from database: %s", dburl)
-	return s.db.Close()
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Close()
 }
 
 func (s *service) GetUserByEmail(email string) (*models.User, error) {
 	var user models.User
-	query := "SELECT id, name, email, passwordHash, role FROM users WHERE email = ?"
-	fmt.Printf("Executing SQL: %s | args: [%s]\n", query, email)
-	err := s.db.QueryRow(query, email).Scan(
-		&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.Role,
-	)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			fmt.Printf("No user found for email: %s\n", email)
+
+	result := s.db.Where("email = ?", email).First(&user)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
-		fmt.Printf("SQL error: %v\n", err)
-		return nil, err
+		return nil, result.Error
 	}
-	fmt.Printf("SQL result: %+v\n", user)
+
 	return &user, nil
 }
 
 func (s *service) CreateUser(user *models.User) error {
-	_, err := s.db.Exec(
-		"INSERT INTO users (name, email, passwordHash, role) VALUES (?, ?, ?, ?)",
-		user.Name, user.Email, user.PasswordHash, user.Role,
-	)
-	return err
+	result := s.db.Create(user)
+	return result.Error
 }
 
-func (s *service) GetDB() *sql.DB {
+func (s *service) GetDB() *gorm.DB {
 	return s.db
 }
