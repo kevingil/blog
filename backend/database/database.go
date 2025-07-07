@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"blog-agent-go/backend/models"
 
-	_ "github.com/joho/godotenv/autoload"
-	"gorm.io/driver/sqlite"
+	libsql "github.com/ekristen/gorm-libsql"
+	"github.com/joho/godotenv"
+	_ "github.com/tursodatabase/libsql-client-go/libsql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -34,7 +36,6 @@ type service struct {
 }
 
 var (
-	dburl      = os.Getenv("DB_URL")
 	dbInstance *service
 )
 
@@ -44,42 +45,63 @@ func New() Service {
 		return dbInstance
 	}
 
+	// Load .env file explicitly
+	envPath := filepath.Join("..", ".env")
+	if err := godotenv.Load(envPath); err != nil {
+		log.Printf("Warning: Could not load .env file from %s: %v", envPath, err)
+		// Try loading from current directory
+		if err := godotenv.Load(".env"); err != nil {
+			log.Printf("Warning: Could not load .env file from current directory: %v", err)
+		}
+	}
+
+	dburl := os.Getenv("DB_URL")
+
+	// Require DB_URL for libsql connection
+	if dburl == "" {
+		log.Fatal("DB_URL environment variable is required for libsql connection")
+	}
+
+	log.Printf("Connecting to libsql database: %s", dburl)
+
 	// Configure GORM logger
 	gormLogger := logger.Default.LogMode(logger.Info)
 
-	// Open connection with GORM using SQLite driver for Turso
-	db, err := gorm.Open(sqlite.Open(dburl), &gorm.Config{
+	// Connect using libsql driver
+	db, err := gorm.Open(libsql.Open(dburl), &gorm.Config{
 		Logger: gormLogger,
 	})
 	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
+		log.Fatalf("Failed to connect to libsql database '%s': %v", dburl, err)
 	}
 
-	// Get underlying sql.DB for health checks
+	// Get underlying sql.DB for health checks and connection pool configuration
 	sqlDB, err := db.DB()
 	if err != nil {
 		log.Fatal("Failed to get underlying sql.DB:", err)
 	}
 
-	// Configure connection pool
-	sqlDB.SetMaxOpenConns(25)
-	sqlDB.SetMaxIdleConns(25)
+	// Configure connection pool (conservative settings for Turso)
+	sqlDB.SetMaxOpenConns(5)
+	sqlDB.SetMaxIdleConns(5)
 
-	// Auto-migrate all models
-	err = db.AutoMigrate(
-		&models.User{},
-		&models.Article{},
-		&models.Tag{},
-		&models.ArticleTag{},
-		&models.ImageGeneration{},
-		&models.AboutPage{},
-		&models.ContactPage{},
-		&models.Project{},
-	)
-	if err != nil {
-		log.Fatal("Failed to auto-migrate models:", err)
-	}
+	// Auto-migrate all models (commented out - models now match existing schema)
+	// log.Println("Running database migrations...")
+	// err = db.AutoMigrate(
+	// 	&models.User{},
+	// 	&models.Article{},
+	// 	&models.Tag{},
+	// 	&models.ArticleTag{},
+	// 	&models.ImageGeneration{},
+	// 	&models.AboutPage{},
+	// 	&models.ContactPage{},
+	// 	&models.Project{},
+	// )
+	// if err != nil {
+	// 	log.Fatal("Failed to auto-migrate models:", err)
+	// }
 
+	log.Printf("Successfully connected to libsql database")
 	dbInstance = &service{
 		db: db,
 	}
@@ -121,11 +143,11 @@ func (s *service) Health() map[string]string {
 
 // Close closes the database connection.
 func (s *service) Close() error {
-	log.Printf("Disconnected from database: %s", dburl)
 	sqlDB, err := s.db.DB()
 	if err != nil {
 		return err
 	}
+	log.Println("Closing database connection")
 	return sqlDB.Close()
 }
 
