@@ -1,27 +1,36 @@
 package models
 
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
+
 type Article struct {
-	ID                       int64  `json:"id"`
-	Image                    string `json:"image"`
-	Slug                     string `json:"slug"`
-	Title                    string `json:"title"`
-	Content                  string `json:"content"`
-	Author                   int64  `json:"author"`
-	CreatedAt                int64  `json:"created_at"`
-	UpdatedAt                int64  `json:"updated_at"`
-	IsDraft                  bool   `json:"is_draft"`
-	Embedding                []byte `json:"-"`
-	ImageGenerationRequestID string `json:"image_generation_request_id"`
-	PublishedAt              *int64 `json:"published_at,omitempty"`
-	ChatHistory              []byte `json:"chat_history"`
+	gorm.Model
+	Image                    string     `json:"image"`
+	Slug                     string     `json:"slug" gorm:"uniqueIndex;not null"`
+	Title                    string     `json:"title" gorm:"not null"`
+	Content                  string     `json:"content" gorm:"type:text"`
+	AuthorID                 uint       `json:"author" gorm:"not null"`
+	Author                   User       `json:"author_data" gorm:"foreignKey:AuthorID"`
+	IsDraft                  bool       `json:"is_draft" gorm:"default:true"`
+	Embedding                []byte     `json:"-" gorm:"type:blob"`
+	ImageGenerationRequestID string     `json:"image_generation_request_id"`
+	PublishedAt              *time.Time `json:"published_at,omitempty"`
+	ChatHistory              []byte     `json:"chat_history" gorm:"type:blob"`
+	Tags                     []Tag      `json:"tags" gorm:"many2many:article_tags;"`
 }
 
 type Tag struct {
-	ID   int64  `json:"tag_id"`
-	Name string `json:"tag_name"`
+	gorm.Model
+	Name     string    `json:"tag_name" gorm:"uniqueIndex;not null"`
+	Articles []Article `json:"articles" gorm:"many2many:article_tags;"`
 }
 
 type ArticleTag struct {
-	ArticleID int64 `json:"article_id"`
-	TagID     int64 `json:"tag_id"`
+	ArticleID uint    `json:"article_id" gorm:"primaryKey"`
+	TagID     uint    `json:"tag_id" gorm:"primaryKey"`
+	Article   Article `gorm:"foreignKey:ArticleID"`
+	Tag       Tag     `gorm:"foreignKey:TagID"`
 }

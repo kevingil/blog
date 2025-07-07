@@ -28,7 +28,7 @@ type ImageGenerationStatus struct {
 	OutputURL string `json:"output_url"`
 }
 
-func (s *ImageGenerationService) GenerateArticleImage(ctx context.Context, prompt string, articleID int64, generatePrompt bool) (*models.ImageGeneration, error) {
+func (s *ImageGenerationService) GenerateArticleImage(ctx context.Context, prompt string, articleID uint, generatePrompt bool) (*models.ImageGeneration, error) {
 	if articleID == 0 {
 		return nil, nil
 	}
@@ -41,12 +41,13 @@ func (s *ImageGenerationService) GenerateArticleImage(ctx context.Context, promp
 
 	// Generate prompt from article content if requested or prompt empty
 	if generatePrompt || prompt == "" {
-		var articleContent string
-		if err := db.QueryRow("SELECT content FROM articles WHERE id = ?", articleID).Scan(&articleContent); err != nil {
-			return nil, err
+		var article models.Article
+		result := db.Select("content").First(&article, articleID)
+		if result.Error != nil {
+			return nil, result.Error
 		}
 
-		generatedPrompt, err := textGen.GenerateImagePrompt(ctx, articleContent)
+		generatedPrompt, err := textGen.GenerateImagePrompt(ctx, article.Content)
 		if err != nil {
 			return nil, err
 		}
@@ -86,25 +87,52 @@ func (s *ImageGenerationService) GenerateArticleImage(ctx context.Context, promp
 	imageURL := fmt.Sprintf("%s/%s", os.Getenv("S3_URL_PREFIX"), key)
 
 	// Update article with new image URL
-	if _, err := db.Exec("UPDATE articles SET image = ?, image_generation_request_id = NULL WHERE id = ?", imageURL, articleID); err != nil {
-		return nil, err
+	result := db.Model(&models.Article{}).Where("id = ?", articleID).Updates(map[string]interface{}{
+		"image":                       imageURL,
+		"image_generation_request_id": nil,
+	})
+	if result.Error != nil {
+		return nil, result.Error
 	}
 
 	imageGen := &models.ImageGeneration{
-		Prompt:    prompt,
-		Provider:  "openai",
-		ModelName: "gpt-image-1",
-		OutputURL: imageURL,
-		CreatedAt: timestamp,
+		Prompt:     prompt,
+		Provider:   "openai",
+		ModelName:  "gpt-image-1",
+		OutputURL:  imageURL,
+		StorageKey: key,
+	}
+
+	// Save to database
+	result = db.Create(imageGen)
+	if result.Error != nil {
+		return nil, result.Error
 	}
 
 	return imageGen, nil
 }
 
 func (s *ImageGenerationService) GetImageGeneration(ctx context.Context, requestID string) (*models.ImageGeneration, error) {
-	return nil, fmt.Errorf("GetImageGeneration no longer supported")
+	db := s.db.GetDB()
+	var imageGen models.ImageGeneration
+
+	result := db.Where("request_id = ?", requestID).First(&imageGen)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	return &imageGen, nil
 }
 
 func (s *ImageGenerationService) GetImageGenerationStatus(ctx context.Context, requestID string) (*ImageGenerationStatus, error) {
-	return &ImageGenerationStatus{Accepted: false, RequestID: requestID, OutputURL: ""}, nil
+	imageGen, err := s.GetImageGeneration(ctx, requestID)
+	if err != nil {
+		return &ImageGenerationStatus{Accepted: false, RequestID: requestID, OutputURL: ""}, nil
+	}
+
+	return &ImageGenerationStatus{
+		Accepted:  true,
+		RequestID: requestID,
+		OutputURL: imageGen.OutputURL,
+	}, nil
 }
