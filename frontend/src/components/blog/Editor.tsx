@@ -735,6 +735,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       };
 
       let toolCompletionMessage = '';
+      let toolCompletionInserted = false;
 
       ws.onmessage = (event) => {
         try {
@@ -766,31 +767,35 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 // Apply the edit to the editor
                 applyTextEdit(editResult.original_text, editResult.new_text, editResult.reason);
                 
-                // Store the completion message to inject into the response stream
+                // Insert the completion message at the current position in the stream
                 toolCompletionMessage = `\n\n✅ Text edited: ${editResult.reason}\n\n`;
+                toolCompletionInserted = true;
+                acc += toolCompletionMessage;
                 
-                // Update the current assistant message with the tool completion
+                // Update the current assistant message 
                 setChatMessages((prev) => {
                   const updated = [...prev];
                   if (updated[assistantIndex]) {
                     updated[assistantIndex] = { 
                       role: 'assistant', 
-                      content: acc + toolCompletionMessage 
+                      content: acc 
                     } as ChatMessage;
                   }
                   return updated;
                 });
               } else if (artifact.status === 'error') {
-                // Store error message to inject into the response stream
+                // Insert error message at the current position in the stream
                 toolCompletionMessage = `\n\n❌ Edit failed: ${artifact.error || 'Unknown error'}\n\n`;
+                toolCompletionInserted = true;
+                acc += toolCompletionMessage;
                 
-                // Update the current assistant message with the error
+                // Update the current assistant message 
                 setChatMessages((prev) => {
                   const updated = [...prev];
                   if (updated[assistantIndex]) {
                     updated[assistantIndex] = { 
                       role: 'assistant', 
-                      content: acc + toolCompletionMessage 
+                      content: acc 
                     } as ChatMessage;
                   }
                   return updated;
@@ -816,10 +821,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             acc += msg.content;
             setChatMessages((prev) => {
               const updated = [...prev];
-              // Include any tool completion message that was added
+              // Just use the accumulated content - tool completion is already included if it was inserted
               updated[assistantIndex] = { 
                 role: 'assistant', 
-                content: acc + toolCompletionMessage 
+                content: acc 
               } as ChatMessage;
               return updated;
             });

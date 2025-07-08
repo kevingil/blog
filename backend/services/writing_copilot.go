@@ -770,8 +770,8 @@ Image prompt has been generated: ` + strings.Join(imagePrompts, "; ")
 	// Add line break separation if there was an initial response
 	separatedResponse := finalResponse
 	if plan.ResponseMsg != "" {
-		separatedResponse = "\n\n" + finalResponse
-		log.Printf("WritingCopilot: Added line break separation between initial response and tool response")
+		separatedResponse = finalResponse
+		//log.Printf("WritingCopilot: Added line break separation between initial response and tool response")
 	}
 
 	return separatedResponse, nil
