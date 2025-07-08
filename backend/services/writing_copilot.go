@@ -684,9 +684,19 @@ func (s *WritingCopilotService) generateFinalResponse(ctx context.Context, req C
 	}
 
 	// Create a more conversational system prompt that generates contextual analysis
-	systemPrompt := `You are a writing assistant. The user made a request and tools were executed to help them. 
+	systemPrompt := `You are a writing assistant providing a follow-up response after executing tools to help the user.
 
-Based on the conversation history and the document content, provide a natural, helpful response that directly addresses what the user asked for.
+CONTEXT: You previously gave an initial response to the user's request, then executed tools to fulfill their request. Now you need to provide a natural continuation that explains what was accomplished.
+
+CRITICAL INSTRUCTIONS:
+- This is a CONTINUATION of your previous response, not a new conversation
+- You should acknowledge the specific work that was completed
+- Be specific about what you changed and why it helps
+- Do NOT use conversation starters like "Sure thing!", "Absolutely!", "Great!", etc.
+- Flow naturally from your initial response
+- Reference the actual changes made by the tools
+
+Based on the conversation history, tool execution results, and document content, provide a natural continuation response.
 
 ` + toolContext
 
@@ -726,6 +736,45 @@ Document rewriting has been completed. Explain what was changed and why.`
 		systemPrompt += `
 
 Image prompt has been generated: ` + strings.Join(imagePrompts, "; ")
+	}
+
+	// Add context for edit_text tools
+	var editDetails []string
+	for _, result := range toolResults {
+		if result.ToolName == "edit_text" && result.Error == "" {
+			if resultMap, ok := result.Result.(map[string]interface{}); ok {
+				originalText, _ := resultMap["original_text"].(string)
+				newText, _ := resultMap["new_text"].(string)
+				reason, _ := resultMap["reason"].(string)
+
+				editDetails = append(editDetails, fmt.Sprintf("- Changed '%s' to '%s' (%s)",
+					originalText, newText, reason))
+			}
+		}
+	}
+
+	if len(editDetails) > 0 {
+		log.Printf("WritingCopilot: Adding edit_text context for %d edits", len(editDetails))
+		systemPrompt += fmt.Sprintf(`
+
+TEXT EDITS COMPLETED:
+%s
+
+IMPORTANT: You just executed text editing tools. Your response should acknowledge the specific changes made and flow naturally from your initial response. 
+
+RESPONSE STRUCTURE GUIDELINES:
+- Do NOT start with phrases like "Sure thing!", "Absolutely!", "Great!", "Perfect!", etc.
+- Instead, directly explain what you changed: "I've changed X to Y because..."
+- Reference specific text that was modified
+- Explain why the change improves the document
+- Keep it concise and natural
+- End with offer for further help if appropriate
+
+EXAMPLE GOOD RESPONSE: "I've changed 'quick implementation' to 'code overview' to make the section title clearer and more descriptive. This helps readers immediately understand what the section covers."
+
+EXAMPLE BAD RESPONSE: "Sure thing! I've corrected the section title to 'Code Overview.'"
+
+Your response should feel like a continuation of the conversation, not a new response.`, strings.Join(editDetails, "\n"))
 	}
 
 	// Build conversation messages
