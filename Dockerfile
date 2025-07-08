@@ -18,6 +18,8 @@ COPY --from=builder /run-app /usr/local/bin/
 
 # Copy the app directory
 COPY --from=builder /app /app
+
+# Required for secure connections to external services
 RUN apt-get update && apt-get install -y ca-certificates
 
 RUN ls -la /app
