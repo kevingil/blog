@@ -367,6 +367,29 @@ func (s *WritingCopilotService) initializeTools() {
 			"required": []string{"user_request"},
 		},
 	}
+
+	s.tools["edit_text"] = ToolDefinition{
+		Name:        "edit_text",
+		Description: "Edit specific text in the document while preserving the rest. Use this for targeted edits, improvements, or changes to specific sections.",
+		Parameters: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"original_text": map[string]interface{}{
+					"type":        "string",
+					"description": "The exact text to find and replace in the document",
+				},
+				"new_text": map[string]interface{}{
+					"type":        "string",
+					"description": "The new text to replace the original text with",
+				},
+				"reason": map[string]interface{}{
+					"type":        "string",
+					"description": "Brief explanation of why this edit is being made",
+				},
+			},
+			"required": []string{"original_text", "new_text", "reason"},
+		},
+	}
 }
 
 // Planning phase - decides what tools to use
@@ -388,7 +411,9 @@ Your response must be valid JSON with this exact structure:
 }
 
 Available tools:
-- rewrite_document: For major content changes or complete rewrites
+- edit_text: For targeted edits to specific parts of the document (preferred for small changes)
+  Parameters: {"original_text": "exact text to replace", "new_text": "replacement text", "reason": "..."}
+- rewrite_document: For major content changes or complete rewrites (use when >50% of content changes)
   Parameters: {"new_content": "...", "reason": "..."}
 - generate_image_prompt: To create image prompts from content
   Parameters: {"content": "document content"}
@@ -399,11 +424,20 @@ Strategy guidelines:
 - Use "respond_only" for: questions, simple advice, explanations, small suggestions
 - Use "use_tools" for: actual document editing, generating content, creating prompts, analyzing documents
 
+Tool selection guidelines:
+- Use "edit_text" for: fixing typos, improving specific sentences/paragraphs, changing tone of specific sections, grammar fixes
+- Use "rewrite_document" for: major restructuring, complete rewrites, changing the entire document's approach
+- Use "analyze_document" for: providing suggestions without making changes, reviewing content quality
+
 Important guidelines for response_msg:
 - Keep initial responses SHORT and conversational (1-2 sentences max)
+- For edit_text: Use phrases like "I'll make that edit for you" or "Let me fix that text"
 - For analyze_document: Use phrases like "Let me analyze that for you" or "I'll take a look at some suggestions for improvement"
 - For rewrite_document: Use phrases like "I'll rewrite that for you" or "Let me improve that content"
 - The detailed work will be shown after tool execution, so the initial response should just acknowledge the request
+
+Message guidelines for tools:
+- For edit_text: Use messages like "Editing: [brief description]" or "Improving: [section name]"
 
 Always include "user_request" parameter when using analyze_document.
 
@@ -544,6 +578,33 @@ func (s *WritingCopilotService) executeTool(ctx context.Context, tool PlannedToo
 		}
 
 		log.Printf("WritingCopilot: analyze_document completed - will generate contextual analysis in final response")
+
+	case "edit_text":
+		originalText, ok := tool.Parameters["original_text"].(string)
+		if !ok {
+			result.Error = "original_text parameter is required"
+			log.Printf("WritingCopilot: edit_text failed - missing original_text parameter")
+			return result, errors.New(result.Error)
+		}
+		newText, ok := tool.Parameters["new_text"].(string)
+		if !ok {
+			result.Error = "new_text parameter is required"
+			log.Printf("WritingCopilot: edit_text failed - missing new_text parameter")
+			return result, errors.New(result.Error)
+		}
+		reason, _ := tool.Parameters["reason"].(string)
+
+		log.Printf("WritingCopilot: edit_text executing - original length: %d, new length: %d, reason: %s",
+			len(originalText), len(newText), reason)
+
+		result.Result = map[string]interface{}{
+			"original_text": originalText,
+			"new_text":      newText,
+			"reason":        reason,
+			"edit_type":     "replace",
+		}
+
+		log.Printf("WritingCopilot: edit_text completed successfully")
 
 	default:
 		result.Error = "unknown tool: " + tool.Name
@@ -738,15 +799,17 @@ func (s *WritingCopilotService) ProcessChatStream(ctx context.Context, req ChatR
 
 		// Phase 1: Planning
 		log.Printf("WritingCopilot: Starting planning phase for session %s", sessionID)
-		responseChan <- StreamResponse{
-			Type:    "artifact",
-			Content: "Planning response...",
-			Data: ArtifactUpdate{
-				ToolName: "planning",
-				Status:   "starting",
-				Message:  "Analyzing request and creating plan...",
-			},
-		}
+		// We always plan first so we don't need to send a planning response
+		// but it could be useful one day if we have a need.
+		// responseChan <- StreamResponse{
+		// 	Type:    "artifact",
+		// 	Content: "Planning response...",
+		// 	Data: ArtifactUpdate{
+		// 		ToolName: "planning",
+		// 		Status:   "starting",
+		// 		Message:  "Analyzing request and creating plan...",
+		// 	},
+		// }
 
 		plan, err := s.createPlan(ctx, req)
 		if err != nil {

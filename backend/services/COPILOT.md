@@ -196,14 +196,33 @@ function handleCompletion() {
 
 ## Available Tools
 
-### 1. rewrite_document
+### 1. edit_text
+Edits specific text in the document while preserving the rest. Ideal for targeted improvements and live editing.
+
+**Parameters:**
+- `original_text` (string): The exact text to find and replace in the document
+- `new_text` (string): The new text to replace the original text with
+- `reason` (string): Brief explanation of why this edit is being made
+
+**Result:**
+- `original_text` (string): The text that was replaced
+- `new_text` (string): The replacement text
+- `reason` (string): Explanation of the edit
+- `edit_type` (string): Type of edit performed
+
+**Frontend Behavior:**
+- Shows live progress in chat with status updates
+- Applies text changes directly to the TipTap editor in real-time
+- Provides visual feedback about successful edits
+
+### 2. rewrite_document
 Completely rewrites or significantly edits document content.
 
 **Parameters:**
 - `new_content` (string): The new document content in markdown
 - `reason` (string): Brief explanation of changes made
 
-### 2. generate_image_prompt
+### 3. generate_image_prompt
 Generates an image prompt based on document content.
 
 **Parameters:**
@@ -212,7 +231,7 @@ Generates an image prompt based on document content.
 **Result:**
 - `prompt` (string): Generated image prompt
 
-### 3. analyze_document
+### 4. analyze_document
 Analyzes document for improvement areas and provides contextual suggestions.
 
 **Parameters:**
@@ -333,6 +352,64 @@ ws.onclose = (event) => {
   }
 };
 ```
+
+## Live Text Editing
+
+The `edit_text` tool provides a Cursor-like agentic editing experience with real-time updates:
+
+### Frontend Integration
+
+```javascript
+// Handle edit_text artifacts specifically
+if (artifact.tool_name === 'edit_text') {
+  if (artifact.status === 'starting') {
+    // Show starting feedback in chat
+    showChatMessage(`🔧 Starting text edit: ${artifact.message}`);
+  } else if (artifact.status === 'completed' && artifact.result) {
+    const editResult = artifact.result;
+    // Apply the edit to the TipTap editor
+    applyTextEdit(editResult.original_text, editResult.new_text, editResult.reason);
+    
+    // Show completion feedback in chat
+    showChatMessage(`✅ Text edited: ${editResult.reason}`);
+  }
+}
+
+// Apply text edit to TipTap editor
+function applyTextEdit(originalText, newText, reason) {
+  const currentText = editor.getText();
+  const index = currentText.indexOf(originalText);
+  
+  if (index !== -1) {
+    const from = index;
+    const to = index + originalText.length;
+    
+    // Replace the text in the editor
+    editor.chain()
+      .focus()
+      .setTextSelection({ from, to })
+      .insertContent(newText)
+      .run();
+    
+    // Show success feedback
+    toast({ title: "Text Updated", description: reason });
+  }
+}
+```
+
+### User Experience
+
+1. **Live Progress**: Users see real-time updates in the chat as edits are applied
+2. **Visual Feedback**: Success toasts and progress indicators show edit status
+3. **Immediate Application**: Text changes are applied instantly to the editor
+4. **Fallback Handling**: If text cannot be found, user gets clear error feedback
+
+### Usage Examples
+
+- **Typo fixes**: "Fix the typo in the second paragraph"
+- **Tone adjustments**: "Make the introduction more formal"
+- **Grammar improvements**: "Fix grammar issues in this sentence"
+- **Style changes**: "Simplify the technical jargon in the conclusion"
 
 ## Agent Memory
 
