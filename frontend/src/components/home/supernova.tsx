@@ -53,11 +53,11 @@ export const SupernovaAnimation: React.FC<SupernovaProps> = ({ className = '' })
       
       ages[i] = Math.random() * 100;
       
-      // Color based on temperature/age
+      // Color based on temperature/age - reduced intensity
       const heat = Math.random();
-      colors[i3] = 1.0; // Red
-      colors[i3 + 1] = heat * 0.8; // Green
-      colors[i3 + 2] = heat * 0.3; // Blue
+      colors[i3] = 0.6; // Red - reduced from 1.0
+      colors[i3 + 1] = heat * 0.4; // Green - reduced from 0.8
+      colors[i3 + 2] = heat * 0.2; // Blue - reduced from 0.3
     }
 
     // Vertex shader for particle animation
@@ -96,17 +96,17 @@ export const SupernovaAnimation: React.FC<SupernovaProps> = ({ className = '' })
           // Implosion phase - dramatic collapse
           float implosionForce = pow(1.0 - phase, 3.0);
           pos *= implosionForce * 0.05;
-          vSize = 1.0;
-        } else if (phase < 2.0) {
-          // Explosion phase - violent expansion
-          float explosionProgress = smoothstep(0.0, 1.0, phase - 1.0);
-          pos += velocity * explosionProgress * 4.0;
-          
-          // Add some chaotic motion during explosion
-          float chaos = noise(pos + time) * 0.3;
-          pos += velocity * chaos * explosionProgress;
-          
-          vSize = 3.0 + explosionProgress * 4.0;
+                     vSize = 0.8; // Reduced from 1.0
+         } else if (phase < 2.0) {
+           // Explosion phase - violent expansion
+           float explosionProgress = smoothstep(0.0, 1.0, phase - 1.0);
+           pos += velocity * explosionProgress * 4.0;
+           
+           // Add some chaotic motion during explosion
+           float chaos = noise(pos + time) * 0.3;
+           pos += velocity * chaos * explosionProgress;
+           
+           vSize = 2.0 + explosionProgress * 2.5; // Reduced from 3.0 + 4.0
         } else {
           // Expansion phase - beautiful slow growth with plasma-like motion
           float expansionTime = (phase - 2.0) * 0.3; // Slower expansion
@@ -120,34 +120,36 @@ export const SupernovaAnimation: React.FC<SupernovaProps> = ({ className = '' })
           
           vec3 waveOffset = normalize(pos) * (wave1 + wave2) + vec3(0.0, 0.0, spiral);
           pos += waveOffset;
-          
-          vSize = 2.0 + sin(particleAge * 0.3) * 0.5;
+                     
+           vSize = 1.5 + sin(particleAge * 0.3) * 0.3; // Reduced from 2.0
         }
         
         // Enhanced color based on phase and position
         vec3 finalColor = color;
         float temp = length(velocity) / 3.0;
         
-        if (phase >= 2.0) {
-          // Expansion phase: shift to cooler, more varied colors
-          float hue = mod(temp + time * 0.1 + length(pos) * 0.05, 1.0);
-          float saturation = 0.8 + sin(particleAge * 0.2) * 0.2;
-          float brightness = 0.7 + temp * 0.3;
-          finalColor = hsv2rgb(vec3(hue, saturation, brightness));
-        } else if (phase >= 1.0) {
-          // Explosion phase: hot white/yellow/orange
-          finalColor = mix(vec3(1.0, 0.8, 0.2), vec3(1.0, 1.0, 1.0), temp);
-        }
+                 if (phase >= 2.0) {
+           // Expansion phase: shift to cooler, more varied colors - reduced intensity
+           float hue = mod(temp + time * 0.1 + length(pos) * 0.05, 1.0);
+           float saturation = 0.5 + sin(particleAge * 0.2) * 0.1; // Reduced from 0.8
+           float brightness = 0.4 + temp * 0.2; // Reduced from 0.7
+           finalColor = hsv2rgb(vec3(hue, saturation, brightness));
+         } else if (phase >= 1.0) {
+           // Explosion phase: hot white/yellow/orange - reduced intensity
+           finalColor = mix(vec3(0.6, 0.4, 0.1), vec3(0.8, 0.7, 0.5), temp); // Much more subdued
+         }
         
-        // Calculate alpha with distance fade and phase effects
-        float alpha = 1.0;
-        if (phase >= 2.0) {
-          float dist = length(pos);
-          alpha = max(0.05, 1.0 - dist * 0.03);
-          alpha *= 0.6 + sin(particleAge * 0.4) * 0.4; // Pulsing effect
-        } else if (phase >= 1.0) {
-          alpha = 0.8 + (phase - 1.0) * 0.2;
-        }
+                 // Calculate alpha with distance fade and phase effects - more transparent
+         float alpha = 1.0;
+         if (phase >= 2.0) {
+           float dist = length(pos);
+           alpha = max(0.02, 0.5 - dist * 0.02); // Much more transparent
+           alpha *= 0.3 + sin(particleAge * 0.4) * 0.2; // Reduced pulsing effect
+         } else if (phase >= 1.0) {
+           alpha = 0.4 + (phase - 1.0) * 0.1; // Reduced from 0.8
+         } else {
+           alpha = 0.6; // Reduced implosion alpha
+         }
         
         vColor = finalColor;
         vAlpha = alpha;
@@ -184,28 +186,28 @@ export const SupernovaAnimation: React.FC<SupernovaProps> = ({ className = '' })
         float alpha = vAlpha;
         vec3 color = vColor;
         
-        if (phase >= 2.0) {
-          // Expansion phase: create plasma-like particles with cores
-          float core = 1.0 - smoothstep(0.0, 0.3, dist);
-          float halo = 1.0 - smoothstep(0.3, 1.0, dist);
-          
-          // Multi-layered color effect
-          vec3 coreColor = color * 2.0;
-          vec3 haloColor = color * 0.7;
-          
-          // Mix core and halo
-          color = mix(haloColor, coreColor, core);
-          alpha *= (core + halo * 0.5);
-          
-          // Add energy fluctuations
-          float energy = sin(time * 3.0 + length(vPosition) * 0.5) * 0.2 + 0.8;
-          color *= energy;
-          
-        } else if (phase >= 1.0) {
-          // Explosion phase: bright, intense particles
-          float intensity = 1.0 - smoothstep(0.0, 0.8, dist);
-          color *= 1.5 + intensity;
-          alpha *= intensity * 0.9;
+                 if (phase >= 2.0) {
+           // Expansion phase: create plasma-like particles with cores - reduced intensity
+           float core = 1.0 - smoothstep(0.0, 0.3, dist);
+           float halo = 1.0 - smoothstep(0.3, 1.0, dist);
+           
+           // Multi-layered color effect - much more subtle
+           vec3 coreColor = color * 1.2; // Reduced from 2.0
+           vec3 haloColor = color * 0.5; // Reduced from 0.7
+           
+           // Mix core and halo
+           color = mix(haloColor, coreColor, core);
+           alpha *= (core * 0.6 + halo * 0.3); // Reduced intensity
+           
+           // Add energy fluctuations - more subtle
+           float energy = sin(time * 3.0 + length(vPosition) * 0.5) * 0.1 + 0.6; // Reduced
+           color *= energy;
+           
+         } else if (phase >= 1.0) {
+           // Explosion phase: bright, intense particles - reduced
+           float intensity = 1.0 - smoothstep(0.0, 0.8, dist);
+           color *= 0.8 + intensity * 0.4; // Much more subdued
+           alpha *= intensity * 0.5; // Reduced from 0.9
           
         } else {
           // Implosion phase: dense, focused particles
@@ -213,10 +215,10 @@ export const SupernovaAnimation: React.FC<SupernovaProps> = ({ className = '' })
           alpha *= focus;
         }
         
-        // Soft edges for all phases
-        alpha *= (1.0 - dist * 0.3);
-        
-        gl_FragColor = vec4(color, alpha);
+                 // Soft edges for all phases with additional transparency
+         alpha *= (1.0 - dist * 0.5) * 0.6; // Additional 0.6 multiplier for overall transparency
+         
+         gl_FragColor = vec4(color, alpha);
       }
     `;
 
@@ -243,7 +245,9 @@ export const SupernovaAnimation: React.FC<SupernovaProps> = ({ className = '' })
     const particles = new THREE.Points(geometry, material);
     scene.add(particles);
 
-    camera.position.z = 5;
+    // Position camera to make supernova appear center-right
+    camera.position.set(-2, 0, 5); // Move camera left so supernova appears right of center
+    camera.lookAt(0, 0, 0);
 
     // Animation variables
     let startTime = Date.now();
@@ -317,7 +321,7 @@ export const SupernovaAnimation: React.FC<SupernovaProps> = ({ className = '' })
       ref={mountRef} 
       className={`fixed inset-0 pointer-events-none z-0 ${className}`}
       style={{
-        background: 'radial-gradient(ellipse at center, rgba(5,5,15,0) 0%, rgba(5,5,15,0.3) 40%, rgba(0,0,5,0.6) 100%)',
+        background: 'radial-gradient(ellipse at 65% center, rgba(5,5,15,0) 0%, rgba(5,5,15,0.1) 40%, rgba(0,0,5,0.2) 100%)',
         mixBlendMode: 'normal'
       }}
     />
