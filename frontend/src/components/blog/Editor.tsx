@@ -566,6 +566,50 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   };
 
+  // Apply text edit from AI assistant
+  const applyTextEdit = (originalText: string, newText: string, reason: string) => {
+    if (!editor) return;
+    
+    console.log('Applying text edit:', { originalText, newText, reason });
+    
+    // Get the current editor content as text
+    const currentText = editor.getText();
+    
+    // Find the original text in the document
+    const index = currentText.indexOf(originalText);
+    if (index === -1) {
+      console.warn('Original text not found in document:', originalText);
+      toast({
+        title: "Edit Warning",
+        description: "Could not locate the text to edit. The document may have changed.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Calculate the position for replacement
+    const from = index;
+    const to = index + originalText.length;
+    
+    // Replace the text in the editor
+    editor.chain()
+      .focus()
+      .setTextSelection({ from, to })
+      .insertContent(newText)
+      .run();
+    
+    // Update the form value
+    setValue('content', editor.getHTML());
+    
+    // Show success feedback
+    toast({
+      title: "Text Updated",
+      description: reason || "Text has been edited successfully",
+    });
+    
+    console.log('Text edit applied successfully');
+  };
+
   const sendChatWithMessage = async (message: string) => {
     const text = message.trim();
     console.log("Sending chat with message:", text);
@@ -690,6 +734,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         }));
       };
 
+      let toolCompletionMessage = '';
+
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
@@ -707,12 +753,74 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             reject(new Error(msg.error));
             return;
           }
+
+          // Handle artifact updates for tool execution
+          if (msg.type === 'artifact' && msg.data) {
+            const artifact = msg.data;
+            console.log('Received artifact update:', artifact);
+            
+            // Handle edit_text tool specifically
+            if (artifact.tool_name === 'edit_text') {
+              if (artifact.status === 'completed' && artifact.result) {
+                const editResult = artifact.result;
+                // Apply the edit to the editor
+                applyTextEdit(editResult.original_text, editResult.new_text, editResult.reason);
+                
+                // Store the completion message to inject into the response stream
+                toolCompletionMessage = `\n\n✅ Text edited: ${editResult.reason}\n\n`;
+                
+                // Update the current assistant message with the tool completion
+                setChatMessages((prev) => {
+                  const updated = [...prev];
+                  if (updated[assistantIndex]) {
+                    updated[assistantIndex] = { 
+                      role: 'assistant', 
+                      content: acc + toolCompletionMessage 
+                    } as ChatMessage;
+                  }
+                  return updated;
+                });
+              } else if (artifact.status === 'error') {
+                // Store error message to inject into the response stream
+                toolCompletionMessage = `\n\n❌ Edit failed: ${artifact.error || 'Unknown error'}\n\n`;
+                
+                // Update the current assistant message with the error
+                setChatMessages((prev) => {
+                  const updated = [...prev];
+                  if (updated[assistantIndex]) {
+                    updated[assistantIndex] = { 
+                      role: 'assistant', 
+                      content: acc + toolCompletionMessage 
+                    } as ChatMessage;
+                  }
+                  return updated;
+                });
+              }
+            }
+            
+            // Handle other tool types with generic progress updates (keep existing behavior)
+            else if (artifact.tool_name && artifact.status === 'starting') {
+              setChatMessages((prev) => [
+                ...prev,
+                { role: 'assistant', content: `🔧 ${artifact.message}` }
+              ]);
+            } else if (artifact.tool_name && artifact.status === 'completed') {
+              setChatMessages((prev) => [
+                ...prev.slice(0, -1), // Remove progress message
+                { role: 'assistant', content: `✅ ${artifact.message}` }
+              ]);
+            }
+          }
           
           if (msg.role === 'assistant' && msg.content) {
             acc += msg.content;
             setChatMessages((prev) => {
               const updated = [...prev];
-              updated[assistantIndex] = { role: 'assistant', content: acc } as ChatMessage;
+              // Include any tool completion message that was added
+              updated[assistantIndex] = { 
+                role: 'assistant', 
+                content: acc + toolCompletionMessage 
+              } as ChatMessage;
               return updated;
             });
           }
@@ -1181,6 +1289,18 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               disabled={chatLoading}
             >
               📝 Shorten
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const message = 'Fix any typos and improve the first paragraph to be more engaging';
+                setChatInput(message);
+                sendChatWithMessage(message);
+              }}
+              disabled={chatLoading}
+            >
+              ✏️ Edit Text
             </Button>
           </div>
           <div className="flex gap-2">
