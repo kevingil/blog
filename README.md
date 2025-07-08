@@ -1,6 +1,10 @@
 # Blog Copilot
 
-An intelligent blogging platform with AI-powered writing assistance, featuring automated content generation, image creation, and a smart copilot to help you write better articles.
+An agentic blog editor.
+
+
+![frontend/public/Xnip2025-06-29_15-58-49.jpg](frontend/public/Xnip2025-07-08_00-16-13.png)
+
 
 ![frontend/public/Xnip2025-06-29_15-58-49.jpg](frontend/public/Xnip2025-06-29_15-58-49.jpg)
 
