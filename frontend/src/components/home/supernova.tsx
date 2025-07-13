@@ -42,7 +42,7 @@ export const SupernovaAnimation: React.FC<SupernovaProps> = ({ className = '' })
     /* ------------------------------------------------------------
      * Particle Buffer Setup with Orbital Physics
      * ---------------------------------------------------------- */
-    const PARTICLE_COUNT = 40000;
+    const PARTICLE_COUNT = 36000; // 10% fewer particles
     const initPositions = new Float32Array(PARTICLE_COUNT * 3);
     const velocities = new Float32Array(PARTICLE_COUNT * 3);
     const masses = new Float32Array(PARTICLE_COUNT);
@@ -71,8 +71,8 @@ export const SupernovaAnimation: React.FC<SupernovaProps> = ({ className = '' })
       // Velocity distribution that creates natural particle stopping
       const distanceFromCenter = explosionRadius;
       
-      // Base speed varies significantly - creates natural separation
-      const baseSpeed = THREE.MathUtils.randFloat(1.2, 6.5); // Slightly increased range
+      // Base speed varies much less - creates a thin shell
+      const baseSpeed = THREE.MathUtils.randFloat(8, 8.001); // Tighter range for shell effect
       
       // Particles at different distances get different speed profiles
       let speedMultiplier;
@@ -172,108 +172,50 @@ export const SupernovaAnimation: React.FC<SupernovaProps> = ({ className = '' })
         // Each particle has a definitive maximum expansion distance
         float maxExpansionDistance = initialSpeed * 1.8; // Reduced from 2.0
         
-        // Exponential approach to maximum distance - particles STOP
-        float timeConstant = 3.0 + (maxExpansionDistance / 8.0); // Slower for farther particles
+        // Exponential approach to maximum distance - sharper burst
+        float timeConstant = 0.7 + (maxExpansionDistance / 16.0); // Sharper burst
         float expansionProgress = 1.0 - exp(-age / timeConstant);
         
-        // Ensure particles actually reach and STAY at maximum distance
-        float currentExpansionDist = maxExpansionDistance * min(expansionProgress, 0.98);
-        
-        // Base position from expansion (no more movement after reaching max)
-        vec3 pos = aInitPos + expansionDir * currentExpansionDist;
-        
-        // MUCH smaller wobbling - only when fully stopped
-        if (expansionProgress > 0.90) {
-          float wobbleIntensity = (expansionProgress - 0.90) * 2.0; // Much reduced
-          
-          // Very gentle wobbling motion
-          vec3 wobble = vec3(
-            sin(uTime * 0.3 + length(aInitPos) * 3.0) * 0.08,  // Much smaller amplitude
-            cos(uTime * 0.25 + length(aInitPos) * 2.5) * 0.08,
-            sin(uTime * 0.2 + length(aInitPos) * 2.0) * 0.05
-          ) * wobbleIntensity * min(maxExpansionDistance / 15.0, 1.0); // Scale with distance
-          
-          pos += wobble;
-        }
-        
+        // All particles expand outward to the same shell, regardless of initial distance
+        float shellRadius = initialSpeed * (1.0 - exp(-age / timeConstant));
+        vec3 shellDir = normalize(aInitPos);
+        vec3 shellPos = aInitPos + shellDir * shellRadius;
+
+        // Add a subtle, time-dependent orbital (swirl) effect
+        float swirlStrength = 0.12 + 0.08 * sin(dot(aInitPos, vec3(12.3, 7.7, 3.1)));
+        float swirlAngle = swirlStrength * uTime;
+        float cosA = cos(swirlAngle);
+        float sinA = sin(swirlAngle);
+        vec3 pos = shellPos;
+        pos.x = shellPos.x * cosA - shellPos.y * sinA;
+        pos.y = shellPos.x * sinA + shellPos.y * cosA;
+
+        // Spiral rate depends on distance from center (outer edge barely spirals)
+        float spiralRate = 0.01 * (1.0 - clamp(length(pos) / shellRadius, 0.0, 1.0));
+        float spiralFactor = max(1.0 - spiralRate * uTime, 0.95); // Outer edge barely spirals
+        pos *= spiralFactor;
+
         // Black hole influence - proper gravitational physics
-        if (blackHoleStrength > 0.0) {
-          float distanceFromCenter = length(pos);
-          
-          // Large influence zone for realistic orbital mechanics
-          float maxInfluenceRadius = uAccretionRadius * 1.2; // Much larger reach
-          
-          if (distanceFromCenter < maxInfluenceRadius) {
-            
-            // Proper inverse square law gravity (F = GM/r²)
-            float gravityStrength = (uBlackHoleMass * blackHoleStrength) / (distanceFromCenter * distanceFromCenter + 0.1);
-            
-            // Distance-based influence falloff for large scale
-            float distanceFalloff = 1.0 / (1.0 + distanceFromCenter * 0.3); // Gradual falloff
-            gravityStrength *= distanceFalloff;
-            
-            // Only apply if gravity is strong enough to matter
-            if (gravityStrength > 0.05) {
-              
-              vec3 dirToCenter = -normalize(pos);
-              
-              // Calculate gravitational acceleration
-              vec3 gravityAccel = dirToCenter * gravityStrength / aMass;
-              
-              // Apply gravitational pull over time
-              float gravityTime = blackHoleAge;
-              vec3 gravityDisplacement = gravityAccel * gravityTime * gravityTime * 0.5;
-              
-              // Different behavior based on distance
-              if (distanceFromCenter > uAccretionRadius * 0.6) {
-                // Far particles: Large stable orbits with slow decay
-                
-                // Calculate orbital motion
-                float orbitalSpeed = sqrt(gravityStrength * distanceFromCenter) * 0.8;
-                float orbitalAngle = orbitalSpeed * gravityTime / distanceFromCenter;
-                
-                // Apply orbital rotation
-                vec3 orbitPos = pos;
-                pos.x = orbitPos.x * cos(orbitalAngle) - orbitPos.y * sin(orbitalAngle);
-                pos.y = orbitPos.x * sin(orbitalAngle) + orbitPos.y * cos(orbitalAngle);
-                
-                // Very slow orbital decay for distant particles
-                float decayRate = 1.0 - (gravityStrength * 0.008);
-                pos *= max(decayRate, 0.85); // Don't decay too fast
-                
-              } else if (distanceFromCenter > uSchwarzschildRadius * 3.0) {
-                // Medium particles: Closer orbits with faster decay
-                
-                // Calculate orbital motion
-                float orbitalSpeed = sqrt(gravityStrength * distanceFromCenter) * 1.0;
-                float orbitalAngle = orbitalSpeed * gravityTime / distanceFromCenter;
-                
-                // Apply orbital rotation
-                vec3 orbitPos = pos;
-                pos.x = orbitPos.x * cos(orbitalAngle) - orbitPos.y * sin(orbitalAngle);
-                pos.y = orbitPos.x * sin(orbitalAngle) + orbitPos.y * cos(orbitalAngle);
-                
-                // Moderate orbital decay
-                float decayRate = 1.0 - (gravityStrength * 0.015);
-                pos *= max(decayRate, 0.7);
-                
-                // Additional inward pull
-                pos += gravityDisplacement * 0.3;
-                
-              } else {
-                // Close particles: Direct consumption with minimal orbit
-                pos += gravityDisplacement;
-                
-                // Small orbital motion even when being consumed
-                if (distanceFromCenter > uSchwarzschildRadius * 1.5) {
-                  float orbitalSpeed = sqrt(gravityStrength * distanceFromCenter) * 0.5;
-                  float orbitalAngle = orbitalSpeed * gravityTime / distanceFromCenter;
-                  
-                  vec3 orbitPos = pos;
-                  pos.x = orbitPos.x * cos(orbitalAngle) - orbitPos.y * sin(orbitalAngle);
-                  pos.y = orbitPos.x * sin(orbitalAngle) + orbitPos.y * cos(orbitalAngle);
-                }
-              }
+        float distanceFromCenter = length(pos);
+        float maxInfluenceRadius = uAccretionRadius * 0.54; // Half the previous radius
+        if (blackHoleStrength > 0.0 && distanceFromCenter < maxInfluenceRadius) {
+          // Double the pull
+          float gravityStrength = (uBlackHoleMass * 2.0 * blackHoleStrength) / (distanceFromCenter * distanceFromCenter + 0.1);
+          float distanceFalloff = 1.0 / (1.0 + distanceFromCenter * 0.3);
+          gravityStrength *= distanceFalloff;
+          if (gravityStrength > 0.01) {
+            vec3 dirToCenter = -normalize(pos);
+            vec3 gravityAccel = dirToCenter * gravityStrength / aMass;
+            float gravityTime = blackHoleAge;
+            vec3 gravityDisplacement = gravityAccel * gravityTime * gravityTime * 0.5;
+            pos += gravityDisplacement;
+            // Small orbital motion even when being consumed
+            if (distanceFromCenter > uSchwarzschildRadius * 1.5) {
+              float orbitalSpeed = sqrt(gravityStrength * distanceFromCenter) * 0.5;
+              float orbitalAngle = orbitalSpeed * gravityTime / distanceFromCenter;
+              vec3 orbitPos = pos;
+              pos.x = orbitPos.x * cos(orbitalAngle) - orbitPos.y * sin(orbitalAngle);
+              pos.y = orbitPos.x * sin(orbitalAngle) + orbitPos.y * cos(orbitalAngle);
             }
           }
         }
