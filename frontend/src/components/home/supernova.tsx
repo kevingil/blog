@@ -38,7 +38,7 @@ export const SupernovaAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = -1 
       scene = new THREE.Scene();
       // Camera
       camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
-      camera.position.z = 120;
+      camera.position.z =150;
 
       // --- Quasar (center of gravity) ---
       // Placeholder: bright sphere, ready for shader
@@ -55,7 +55,7 @@ export const SupernovaAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = -1 
       scene.add(blackHole);
 
       // --- Particles (explosion + orbit) ---
-      const particleCount = 3000;
+      const particleCount = 6000;
       const particleGeometry = new THREE.BufferGeometry();
       const positions: number[] = [];
       // Add alpha for fading
@@ -83,21 +83,23 @@ export const SupernovaAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = -1 
         const theta = Math.random() * 2 * Math.PI;
         const phi = Math.acos(2 * Math.random() - 1);
         
-        // Create density distribution: particles from 0.3 to orbit radius
-        // 60% of particles should be at orbit_radius * 0.6 or more
+        // All particles start from center (r = 0) for explosion effect
+        const r = 0;
+        
+        // Store target radius for expansion - maintains original distribution
         const outerThreshold = ORBIT_RADIUS * 0.6; // 72 units
         const minRadius = 0.3;
         const maxRadius = ORBIT_RADIUS;
         
-        let r: number;
+        let targetRadius: number;
         if (Math.random() < 0.6) {
-          // 60% of particles: spawn from outer threshold to max radius
+          // 60% of particles: expand to outer threshold to max radius
           const outerBias = Math.pow(Math.random(), 0.3); // Bias towards outer edge
-          r = outerThreshold + outerBias * (maxRadius - outerThreshold);
+          targetRadius = outerThreshold + outerBias * (maxRadius - outerThreshold);
         } else {
-          // 40% of particles: spawn from min radius to outer threshold
+          // 40% of particles: expand to min radius to outer threshold
           const innerBias = Math.pow(Math.random(), 0.8); // Less bias, more uniform
-          r = minRadius + innerBias * (outerThreshold - minRadius);
+          targetRadius = minRadius + innerBias * (outerThreshold - minRadius);
         }
         
         const x = Math.sin(phi) * Math.cos(theta) * r;
@@ -105,7 +107,7 @@ export const SupernovaAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = -1 
         const z = Math.sin(phi) * Math.sin(theta) * r;
         const radialSpeed = 2.5 + Math.random() * 2.5;
         const angularSpeed = (Math.random() - 0.5) * 0.0004;
-        particles.push({ r, theta, y, radialSpeed, angularSpeed, orbiting: false, phi, fading: false, alpha: 1, fastOrbiting: false });
+        particles.push({ r, theta, y, radialSpeed, angularSpeed, orbiting: false, phi, fading: false, alpha: 1, fastOrbiting: false, targetRadius });
         positions.push(x, y, z);
         alphas.push(1);
         colors.push(1, 1, 1); // Start with white color (RGB)
@@ -137,8 +139,19 @@ export const SupernovaAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = -1 
         const colorArr = particleGeometry.attributes.color.array as number[];
         for (let i = 0; i < particleCount; i++) {
           let p = particles[i];
-          // Always update angle for spiral motion (now in 3D)
-          p.theta += p.angularSpeed;
+          // Galaxy-like rotation: farther particles rotate slower (like a spiral galaxy)
+          // This creates a more realistic galactic rotation curve
+          const baseRotationSpeed = 0.0003; // Much slower base rotation for visible spiral effect
+          const distanceRotationFactor = ORBIT_RADIUS / (p.r + 5); // Farther = slower (galaxy-like)
+          
+          // 3x faster orbital speed for particles being sucked in by black hole
+          let orbitalSpeedMultiplier = 1;
+          if (phase === 'blackhole' && p.r < GRAVITY_RADIUS && !p.fading) {
+            orbitalSpeedMultiplier = 3; // 3x faster orbital speed when being sucked in
+          }
+          
+          const currentAngularSpeed = baseRotationSpeed * distanceRotationFactor * orbitalSpeedMultiplier;
+          p.theta += currentAngularSpeed;
           // Particles expand outward but don't all reach the same final radius
           if (phase === 'explosion') {
             if (!p.orbiting) {
@@ -152,7 +165,7 @@ export const SupernovaAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = -1 
               const distToTarget = p.targetRadius - p.r;
               if (distToTarget > EPSILON) {
                 const ease = Math.max(0.01, distToTarget / p.targetRadius);
-                p.r += p.radialSpeed * ease * 0.5;
+                p.r += p.radialSpeed * ease * 0.25; // Halved from 0.5
               } else {
                 p.r = p.targetRadius;
                 p.orbiting = true;
@@ -172,16 +185,12 @@ export const SupernovaAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = -1 
               
               // Apply gravitational pull
               if (p.r > BLACK_HOLE_RADIUS) {
-                // Pull particle inward with cubic-bezier curve strength
-                p.r *= (1 - gravityStrength * 0.015);
-                
-                // Increase angular speed as particle gets closer (orbital mechanics)
-                const orbitalSpeedMultiplier = 1 + gravityStrength * 0.008;
-                p.angularSpeed *= orbitalSpeedMultiplier;
+                // Pull particle inward with cubic-bezier curve strength (gravity halved again)
+                p.r *= (1 - gravityStrength * 0.00375);
+                // Angular speed is now automatically handled by distance-based rotation
               } else {
                 // Particle is within black hole radius - rapid spiral and fade
-                p.angularSpeed *= 1.05;
-                p.r *= 0.95;
+                p.r *= 0.975; // Slower fade (was 0.95)
                 if (p.r < EVENT_HORIZON) {
                   p.fading = true;
                 }
