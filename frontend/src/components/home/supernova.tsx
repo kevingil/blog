@@ -62,7 +62,7 @@ export const SupernovaAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = -1 
       const alphas: number[] = [];
       // Add colors for gravity visualization
       const colors: number[] = [];
-      const particles: { r: number; theta: number; y: number; radialSpeed: number; angularSpeed: number; orbiting: boolean; phi: number; fading?: boolean; alpha?: number; fastOrbiting?: boolean; targetRadius?: number; }[] = [];
+      const particles: { r: number; theta: number; y: number; radialSpeed: number; angularSpeed: number; orbiting: boolean; phi: number; fading?: boolean; alpha?: number; fastOrbiting?: boolean; targetRadius: number; gravityRandomness: number; strengthRandomness: number; orbitalNoise: number; }[] = [];
       const ORBIT_RADIUS = 120;
       const EPSILON = 0.01;
       const BLACK_HOLE_RADIUS = 10;
@@ -105,9 +105,13 @@ export const SupernovaAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = -1 
         const x = Math.sin(phi) * Math.cos(theta) * r;
         const y = Math.cos(phi) * r;
         const z = Math.sin(phi) * Math.sin(theta) * r;
-        const radialSpeed = 2.5 + Math.random() * 2.5;
+        const radialSpeed = 4.0 + Math.random() * 4.0; // Fast supernova expansion speed
         const angularSpeed = (Math.random() - 0.5) * 0.0004;
-        particles.push({ r, theta, y, radialSpeed, angularSpeed, orbiting: false, phi, fading: false, alpha: 1, fastOrbiting: false, targetRadius });
+        // Pre-calculate random values to avoid per-frame jittering
+        const gravityRandomness = (Math.random() - 0.5) * 0.3; // ±30% variation
+        const strengthRandomness = 0.7 + Math.random() * 0.6; // 70% to 130% of base strength
+        const orbitalNoise = (Math.random() - 0.5) * 0.0001; // Small random perturbation
+        particles.push({ r, theta, y, radialSpeed, angularSpeed, orbiting: false, phi, fading: false, alpha: 1, fastOrbiting: false, targetRadius, gravityRandomness, strengthRandomness, orbitalNoise });
         positions.push(x, y, z);
         alphas.push(1);
         colors.push(1, 1, 1); // Start with white color (RGB)
@@ -122,10 +126,26 @@ export const SupernovaAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = -1 
       const particleSystem = new THREE.Points(particleGeometry, particleMaterial);
       scene.add(particleSystem);
 
-      // --- Phase timer slower because "phase" dictates the expansion of the particles
+      // --- Smooth phase transitions
+      let phaseTransition = 0; // 0 = full explosion, 1 = full blackhole
+      
+      // Start transition to blackhole phase after particles have mostly expanded
       phaseTimer = window.setTimeout(() => {
         phase = 'blackhole';
-      }, 3000);
+        // Smooth transition over 2 seconds
+        const transitionDuration = 2000;
+        const transitionStart = Date.now();
+        
+        const smoothTransition = () => {
+          const elapsed = Date.now() - transitionStart;
+          phaseTransition = Math.min(1, elapsed / transitionDuration);
+          
+          if (phaseTransition < 1) {
+            requestAnimationFrame(smoothTransition);
+          }
+        };
+        smoothTransition();
+      }, 2000); // Start transition earlier for smoother effect
 
       gravityTimer = window.setTimeout(() => {
         quasar.visible = false;
@@ -139,33 +159,63 @@ export const SupernovaAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = -1 
         const colorArr = particleGeometry.attributes.color.array as number[];
         for (let i = 0; i < particleCount; i++) {
           let p = particles[i];
-          // Galaxy-like rotation: farther particles rotate slower (like a spiral galaxy)
-          // This creates a more realistic galactic rotation curve
-          const baseRotationSpeed = 0.0003; // Much slower base rotation for visible spiral effect
-          const distanceRotationFactor = ORBIT_RADIUS / (p.r + 5); // Farther = slower (galaxy-like)
           
-          // 3x faster orbital speed for particles being sucked in by black hole
-          let orbitalSpeedMultiplier = 1;
-          if (phase === 'blackhole' && p.r < GRAVITY_RADIUS && !p.fading) {
-            orbitalSpeedMultiplier = 3; // 3x faster orbital speed when being sucked in
+          // ORBITAL SPEED SYSTEM - Different speeds for different phases
+          let currentAngularSpeed = 0;
+          
+          if (phase === 'explosion') {
+            // DRAMATIC INITIAL EXPLOSION SPIRAL - separate orbital speed from expansion
+            // Orbital speed during explosion - moderate for visible spiral effect
+            const explosionOrbitalSpeed = 0.003; // Moderate orbital speed for explosion spiral
+            const explosionDistanceFactor = Math.max(0.1, (ORBIT_RADIUS - p.r) / ORBIT_RADIUS); // Closer = faster
+            const explosionDecay = Math.max(0.3, 1 - (p.r / p.targetRadius)); // Slow down as approaching target
+            currentAngularSpeed = explosionOrbitalSpeed * explosionDistanceFactor * explosionDecay;
+          } else if (phase === 'blackhole') {
+            // GALAXY SPIRAL EFFECT + BLACK HOLE ACCELERATION
+            // Smooth transition from explosion to blackhole phase
+            const galaxyBaseSpeed = 0.0001; // Much slower for large scale space effect
+            const explosionToGalaxyBlend = Math.max(0, 1 - phaseTransition * 3); // Fade out explosion quickly
+            
+            // Blend explosion spiral with galaxy rotation during transition
+            if (explosionToGalaxyBlend > 0 && !p.orbiting) {
+              const explosionOrbitalSpeed = 0.003;
+              const explosionDistanceFactor = Math.max(0.1, (ORBIT_RADIUS - p.r) / ORBIT_RADIUS);
+              const explosionDecay = Math.max(0.3, 1 - (p.r / p.targetRadius));
+              const explosionAngularSpeed = explosionOrbitalSpeed * explosionDistanceFactor * explosionDecay;
+              currentAngularSpeed = explosionAngularSpeed * explosionToGalaxyBlend;
+            }
+            
+            // Use pre-calculated random gravity radius for consistency (no jittering)
+            const effectiveGravityRadius = GRAVITY_RADIUS * (1 + p.gravityRandomness);
+            
+            if (p.r < effectiveGravityRadius && !p.fading) {
+              // BLACK HOLE ACCELERATION - dramatic speed increase as particles fall in
+              const fallDistance = effectiveGravityRadius - p.r;
+              const fallRatio = fallDistance / effectiveGravityRadius; // 0 at edge, 1 at center
+              const accelerationFactor = 1 + Math.pow(fallRatio, 2) * 15; // Exponential acceleration
+              const galaxyDistanceFactor = Math.pow(ORBIT_RADIUS / (p.r + 1), 0.7); // Galaxy rotation curve
+              const blackholeAngularSpeed = galaxyBaseSpeed * galaxyDistanceFactor * accelerationFactor;
+              currentAngularSpeed = Math.max(currentAngularSpeed, blackholeAngularSpeed * phaseTransition);
+            } else {
+              // NORMAL GALAXY ROTATION - farther particles rotate slower
+              const galaxyDistanceFactor = Math.pow(ORBIT_RADIUS / (p.r + 1), 0.7); // Galaxy rotation curve
+              const galaxyAngularSpeed = galaxyBaseSpeed * galaxyDistanceFactor;
+              currentAngularSpeed = Math.max(currentAngularSpeed, galaxyAngularSpeed * phaseTransition);
+            }
           }
           
-          const currentAngularSpeed = baseRotationSpeed * distanceRotationFactor * orbitalSpeedMultiplier;
-          p.theta += currentAngularSpeed;
-          // Particles expand outward but don't all reach the same final radius
+          // Add organic randomness to orbital motion (pre-calculated to avoid jittering)
+          p.theta += currentAngularSpeed + p.orbitalNoise;
+          
+          // Removed phi randomization to prevent up/down jittering
+          // Phi remains constant for smooth orbital motion
+          // RADIAL MOVEMENT - Particles expand outward during explosion
           if (phase === 'explosion') {
             if (!p.orbiting) {
-              // Each particle has its own target radius based on initial distribution
-              if (!p.targetRadius) {
-                // Set target radius based on initial spawn position and some expansion factor
-                p.targetRadius = p.r * (8 + Math.random() * 12); // Expand by 8-20x original radius
-                p.targetRadius = Math.min(p.targetRadius, ORBIT_RADIUS); // Cap at orbit radius
-              }
-              
               const distToTarget = p.targetRadius - p.r;
               if (distToTarget > EPSILON) {
                 const ease = Math.max(0.01, distToTarget / p.targetRadius);
-                p.r += p.radialSpeed * ease * 0.25; // Halved from 0.5
+                p.r += p.radialSpeed * ease * 0.4; // Fast supernova expansion
               } else {
                 p.r = p.targetRadius;
                 p.orbiting = true;
@@ -173,20 +223,23 @@ export const SupernovaAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = -1 
             }
           } else if (phase === 'blackhole') {
             // In spherical coordinates, p.r is the distance from center
-            // Only affect particles within the gravity radius (1/5th of orbit radius = 24 units)
-            if (p.r < GRAVITY_RADIUS && !p.fading) {
+            // Apply gravity with random, organic edges (pre-calculated to avoid jittering)
+            const effectiveGravityRadius = GRAVITY_RADIUS * (1 + p.gravityRandomness);
+            
+            if (p.r < effectiveGravityRadius && !p.fading) {
               // Calculate distance-based gravity strength with smooth falloff
-              // Particles at the edge (24 units) have minimal pull, particles closer have stronger pull
-              const distanceFromEdge = GRAVITY_RADIUS - p.r;
-              const normalizedDistance = distanceFromEdge / GRAVITY_RADIUS; // 0 at edge, 1 at center
+              // Add additional randomness to gravity strength for organic feel
+              const distanceFromEdge = effectiveGravityRadius - p.r;
+              const normalizedDistance = distanceFromEdge / effectiveGravityRadius; // 0 at edge, 1 at center
               
-              // Apply cubic-bezier curve for smooth gravity effects
-              const gravityStrength = cubicBezier(normalizedDistance);
+              // Apply cubic-bezier curve for smooth gravity effects (pre-calculated randomness)
+              const baseGravityStrength = cubicBezier(normalizedDistance);
+              const gravityStrength = baseGravityStrength * p.strengthRandomness;
               
               // Apply gravitational pull
               if (p.r > BLACK_HOLE_RADIUS) {
-                // Pull particle inward with cubic-bezier curve strength (gravity halved again)
-                p.r *= (1 - gravityStrength * 0.00375);
+                // Pull particle inward with cubic-bezier curve strength (much more gradual)
+                p.r *= (1 - gravityStrength * 0.001);
                 // Angular speed is now automatically handled by distance-based rotation
               } else {
                 // Particle is within black hole radius - rapid spiral and fade
@@ -216,7 +269,9 @@ export const SupernovaAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = -1 
           alphaArr[i] = p.alpha ?? 1;
           
           // Color particles red if they're within gravity radius during black hole phase
-          if (phase === 'blackhole' && p.r < GRAVITY_RADIUS) {
+          // Use same pre-calculated random gravity radius for visual consistency
+          const colorEffectiveGravityRadius = GRAVITY_RADIUS * (1 + p.gravityRandomness);
+          if (phase === 'blackhole' && p.r < colorEffectiveGravityRadius) {
             colorArr[i * 3] = 1;     // Red
             colorArr[i * 3 + 1] = 0; // Green
             colorArr[i * 3 + 2] = 0; // Blue
