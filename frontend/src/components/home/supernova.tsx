@@ -18,11 +18,14 @@ export const SupernovaAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = -1 
   const animationRef = useRef<number>();
 
   useEffect(() => {
-    let renderer: any, scene: any, camera: any, quasar: any;
+    let renderer: any, scene: any, camera: any, quasar: any, blackHole: any;
     let width = window.innerWidth;
     let height = window.innerHeight;
     let frameId: number;
     let THREE: any;
+    let phase: 'explosion' | 'blackhole' = 'explosion';
+    let phaseTimer: number;
+    let gravityTimer: number;
 
     let cleanup = () => {};
 
@@ -35,7 +38,7 @@ export const SupernovaAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = -1 
       scene = new THREE.Scene();
       // Camera
       camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
-      camera.position.z = 150;
+      camera.position.z = 120;
 
       // --- Quasar (center of gravity) ---
       // Placeholder: bright sphere, ready for shader
@@ -44,72 +47,179 @@ export const SupernovaAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = -1 
       quasar = new THREE.Mesh(quasarGeometry, quasarMaterial);
       scene.add(quasar);
 
+      // --- Black hole (hidden at first) ---
+      const blackHoleGeometry = new THREE.SphereGeometry(1.5, 32, 32);
+      const blackHoleMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+      blackHole = new THREE.Mesh(blackHoleGeometry, blackHoleMaterial);
+      blackHole.visible = false;
+      scene.add(blackHole);
+
       // --- Particles (explosion + orbit) ---
-      const particleCount = 300;
+      const particleCount = 3000;
       const particleGeometry = new THREE.BufferGeometry();
       const positions: number[] = [];
-      // Store per-particle state: [radius, angle, y, radialSpeed, angularSpeed]
-      const particles: { r: number; theta: number; y: number; radialSpeed: number; angularSpeed: number; orbiting: boolean; phi: number; }[] = [];
+      // Add alpha for fading
+      const alphas: number[] = [];
+      // Add colors for gravity visualization
+      const colors: number[] = [];
+      const particles: { r: number; theta: number; y: number; radialSpeed: number; angularSpeed: number; orbiting: boolean; phi: number; fading?: boolean; alpha?: number; fastOrbiting?: boolean; targetRadius?: number; }[] = [];
       const ORBIT_RADIUS = 120;
-      const EPSILON = 0.01; // how close to orbit before clamping
+      const EPSILON = 0.01;
+      const BLACK_HOLE_RADIUS = 10;
+      const EVENT_HORIZON = 1.5;
+      const GRAVITY_RADIUS = ORBIT_RADIUS * 0.7; // 24 units - only particles within this radius are affected by gravity
+
+      // Cubic-bezier curve function for gravity effects: cubic-bezier(0, 1.054, 0, 0.941)
+      function cubicBezier(t: number): number {
+        // Cubic-bezier curve approximation for (0, 1.054, 0, 0.941)
+        // This creates a smooth easing curve
+        const p1 = 1.054;
+        const p2 = 0.941;
+        const u = 1 - t;
+        return 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t;
+      }
+
       for (let i = 0; i < particleCount; i++) {
-        // Spherical distribution
-        const theta = Math.random() * 2 * Math.PI; // azimuthal
-        const phi = Math.acos(2 * Math.random() - 1); // polar, uniform sphere
-        const r = Math.random() * 2 + 2;
-        // Spherical to Cartesian
+        const theta = Math.random() * 2 * Math.PI;
+        const phi = Math.acos(2 * Math.random() - 1);
+        
+        // Create density distribution: particles from 0.3 to orbit radius
+        // 60% of particles should be at orbit_radius * 0.6 or more
+        const outerThreshold = ORBIT_RADIUS * 0.6; // 72 units
+        const minRadius = 0.3;
+        const maxRadius = ORBIT_RADIUS;
+        
+        let r: number;
+        if (Math.random() < 0.6) {
+          // 60% of particles: spawn from outer threshold to max radius
+          const outerBias = Math.pow(Math.random(), 0.3); // Bias towards outer edge
+          r = outerThreshold + outerBias * (maxRadius - outerThreshold);
+        } else {
+          // 40% of particles: spawn from min radius to outer threshold
+          const innerBias = Math.pow(Math.random(), 0.8); // Less bias, more uniform
+          r = minRadius + innerBias * (outerThreshold - minRadius);
+        }
+        
         const x = Math.sin(phi) * Math.cos(theta) * r;
         const y = Math.cos(phi) * r;
         const z = Math.sin(phi) * Math.sin(theta) * r;
-        // Outward radial speed
         const radialSpeed = 2.5 + Math.random() * 2.5;
-        // Slow orbit: random direction, but always tangent to sphere
-        // We'll use theta for azimuthal orbit, but keep phi fixed for simplicity
         const angularSpeed = (Math.random() - 0.5) * 0.0004;
-        particles.push({
-          r,
-          theta,
-          y,
-          radialSpeed,
-          angularSpeed,
-          orbiting: false,
-          phi // store phi for orbiting
-        });
+        particles.push({ r, theta, y, radialSpeed, angularSpeed, orbiting: false, phi, fading: false, alpha: 1, fastOrbiting: false });
         positions.push(x, y, z);
+        alphas.push(1);
+        colors.push(1, 1, 1); // Start with white color (RGB)
       }
       particleGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      // Simple white points, ready for shader
-      const particleMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.3 });
+      // Add alpha attribute for fading
+      particleGeometry.setAttribute('alpha', new THREE.Float32BufferAttribute(alphas, 1));
+      // Add color attribute for gravity visualization
+      particleGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      // Use vertex colors for gravity visualization
+      const particleMaterial = new THREE.PointsMaterial({ size: 0.3, transparent: true, vertexColors: true });
       const particleSystem = new THREE.Points(particleGeometry, particleMaterial);
       scene.add(particleSystem);
+
+      // --- Phase timer slower because "phase" dictates the expansion of the particles
+      phaseTimer = window.setTimeout(() => {
+        phase = 'blackhole';
+      }, 3000);
+
+      gravityTimer = window.setTimeout(() => {
+        quasar.visible = false;
+        blackHole.visible = true;
+      }, 1000);
 
       // --- Animation loop ---
       function animate() {
         const pos = particleGeometry.attributes.position.array as number[];
+        const alphaArr = particleGeometry.attributes.alpha.array as number[];
+        const colorArr = particleGeometry.attributes.color.array as number[];
         for (let i = 0; i < particleCount; i++) {
           let p = particles[i];
           // Always update angle for spiral motion (now in 3D)
           p.theta += p.angularSpeed;
-          // Ease out radius as it approaches the orbit radius
-          if (!p.orbiting) {
-            const distToOrbit = ORBIT_RADIUS - p.r;
-            if (distToOrbit > EPSILON) {
-              const ease = Math.max(0.01, distToOrbit / ORBIT_RADIUS);
-              p.r += p.radialSpeed * ease * 0.5;
-            } else {
-              p.r = ORBIT_RADIUS;
-              p.orbiting = true;
+          // Particles expand outward but don't all reach the same final radius
+          if (phase === 'explosion') {
+            if (!p.orbiting) {
+              // Each particle has its own target radius based on initial distribution
+              if (!p.targetRadius) {
+                // Set target radius based on initial spawn position and some expansion factor
+                p.targetRadius = p.r * (8 + Math.random() * 12); // Expand by 8-20x original radius
+                p.targetRadius = Math.min(p.targetRadius, ORBIT_RADIUS); // Cap at orbit radius
+              }
+              
+              const distToTarget = p.targetRadius - p.r;
+              if (distToTarget > EPSILON) {
+                const ease = Math.max(0.01, distToTarget / p.targetRadius);
+                p.r += p.radialSpeed * ease * 0.5;
+              } else {
+                p.r = p.targetRadius;
+                p.orbiting = true;
+              }
+            }
+          } else if (phase === 'blackhole') {
+            // In spherical coordinates, p.r is the distance from center
+            // Only affect particles within the gravity radius (1/5th of orbit radius = 24 units)
+            if (p.r < GRAVITY_RADIUS && !p.fading) {
+              // Calculate distance-based gravity strength with smooth falloff
+              // Particles at the edge (24 units) have minimal pull, particles closer have stronger pull
+              const distanceFromEdge = GRAVITY_RADIUS - p.r;
+              const normalizedDistance = distanceFromEdge / GRAVITY_RADIUS; // 0 at edge, 1 at center
+              
+              // Apply cubic-bezier curve for smooth gravity effects
+              const gravityStrength = cubicBezier(normalizedDistance);
+              
+              // Apply gravitational pull
+              if (p.r > BLACK_HOLE_RADIUS) {
+                // Pull particle inward with cubic-bezier curve strength
+                p.r *= (1 - gravityStrength * 0.015);
+                
+                // Increase angular speed as particle gets closer (orbital mechanics)
+                const orbitalSpeedMultiplier = 1 + gravityStrength * 0.008;
+                p.angularSpeed *= orbitalSpeedMultiplier;
+              } else {
+                // Particle is within black hole radius - rapid spiral and fade
+                p.angularSpeed *= 1.05;
+                p.r *= 0.95;
+                if (p.r < EVENT_HORIZON) {
+                  p.fading = true;
+                }
+              }
+            }
+            
+            // Handle fading particles
+            if (p.fading) {
+              p.alpha = Math.max(0, (p.alpha ?? 1) - 0.03);
+              if (p.alpha === 0) {
+                p.r = 0;
+              }
             }
           }
           // Spherical to Cartesian for position
           const x = Math.sin(p.phi) * Math.cos(p.theta) * p.r;
           const y = Math.cos(p.phi) * p.r;
           const z = Math.sin(p.phi) * Math.sin(p.theta) * p.r;
+          
           pos[i * 3] = x;
           pos[i * 3 + 1] = y;
           pos[i * 3 + 2] = z;
+          alphaArr[i] = p.alpha ?? 1;
+          
+          // Color particles red if they're within gravity radius during black hole phase
+          if (phase === 'blackhole' && p.r < GRAVITY_RADIUS) {
+            colorArr[i * 3] = 1;     // Red
+            colorArr[i * 3 + 1] = 0; // Green
+            colorArr[i * 3 + 2] = 0; // Blue
+          } else {
+            colorArr[i * 3] = 1;     // White
+            colorArr[i * 3 + 1] = 1; // White
+            colorArr[i * 3 + 2] = 1; // White
+          }
         }
         particleGeometry.attributes.position.needsUpdate = true;
+        particleGeometry.attributes.alpha.needsUpdate = true;
+        particleGeometry.attributes.color.needsUpdate = true;
         renderer.render(scene, camera);
         frameId = requestAnimationFrame(animate);
       }
@@ -130,11 +240,14 @@ export const SupernovaAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = -1 
       cleanup = () => {
         cancelAnimationFrame(frameId);
         window.removeEventListener('resize', handleResize);
+        clearTimeout(phaseTimer);
         renderer.dispose();
         particleGeometry.dispose();
         particleMaterial.dispose();
         quasarGeometry.dispose();
         quasarMaterial.dispose();
+        blackHoleGeometry.dispose();
+        blackHoleMaterial.dispose();
         scene.clear();
       };
     });
