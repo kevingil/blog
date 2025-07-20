@@ -27,7 +27,6 @@ interface GalaxyParams {
   orientation: number;
   particleCount: number;
   rotationSpeed: number;
-  timeScale: number;
 }
 
 // WebGL shader sources
@@ -82,6 +81,7 @@ const vertexShaderSource = `
     bool isNebula = v_brightness > 0.15 && (v_color.r > 0.7 && v_color.g > 0.7); // Detect yellow nebula
     bool isSpiralArm = v_spiralArm > 0.5; // Detect spiral arm particles
     bool isBrightBlue = v_brightness > 0.6 && v_color.b > 0.6; // Bright blue stars
+    bool isColorfulDust = v_brightness > 0.05 && v_brightness < 0.25 && (v_color.r > 0.4 || v_color.g > 0.3); // Colorful inter-arm regions
     
     float alpha;
     if (isNebula) {
@@ -111,6 +111,17 @@ const vertexShaderSource = `
       if (isBrightBlue) {
         alpha *= 1.2; // Extra boost for blue stars
       }
+    } else if (isColorfulDust) {
+      // Enhanced rendering for colorful inter-arm dust/nebula
+      alpha = exp(-dist * dist * 1.5) * v_brightness * 1.5; // Softer, more diffuse
+      
+      // Extended glow for dust clouds
+      float dustGlow = exp(-dist * dist * 0.6) * v_brightness * 1.2;
+      alpha += dustGlow;
+      
+      // Very soft halo for atmospheric effect
+      float softHalo = exp(-dist * dist * 0.25) * v_brightness * 0.8;
+      alpha += softHalo;
     } else if (v_brightness < 0.3) {
       // Dim inter-arm stars and dust
       alpha = exp(-dist * dist * 4.0) * v_brightness * 0.6; // Much dimmer
@@ -217,17 +228,17 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
   const zoom = 1.2; // Fixed zoom level
   const [rotation, setRotation] = useState(0);
   const timeRef = useRef(0);
+  const lastFrameTimeRef = useRef(0);
 
   // Galaxy parameters based on Andromeda M31
   const galaxyParams: GalaxyParams = {
     coreRadius: 50, // Scaled for viewport
     diskRadius: 350, // Slightly smaller main disk for better spiral definition
     armPitch: Math.PI / 6, // Much tighter spiral arms - increased from π/18 to π/6
-    inclination: 10 * Math.PI / 180, // 77° from face-on
-    orientation: 20 * Math.PI / 180, // Position angle
-    particleCount: 2000, // Adjusted for extended distribution
-    rotationSpeed: 0.00001,
-    timeScale: 10000000 // 1 sim second = 10 million years
+    inclination: 80 * Math.PI / 180, // 77° from face-on
+    orientation: 10 * Math.PI / 180, // Position angle
+    particleCount: 3000, // Adjusted for extended distribution
+    rotationSpeed: 0.000125,
   };
 
   // Generate spiral galaxy structure with natural distribution and realistic colors
@@ -400,8 +411,15 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
       const spiralFalloff = Math.exp(-Math.pow(r / (galaxyParams.diskRadius * 1.1), 1.8));
       maxArmStrength *= spiralFalloff;
       
-      // Nebula threshold - more permissive to fill spiral structures
-      const nebulaThreshold = 0.75 + maxArmStrength * 0.25;
+      // Nebula threshold - more permissive for inter-arm colorful regions
+      let nebulaThreshold: number;
+      if (maxArmStrength < 0.2) {
+        // More permissive for inter-arm colorful dust/nebula
+        nebulaThreshold = 0.65 + maxArmStrength * 0.2;
+      } else {
+        // Standard threshold for spiral arm nebula
+        nebulaThreshold = 0.75 + maxArmStrength * 0.25;
+      }
       if (Math.random() > nebulaThreshold) continue;
       
       const perturbation = (Math.random() - 0.5) * 20;
@@ -413,7 +431,7 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
       const nebulaHeight = 18 * Math.exp(-r / (galaxyParams.diskRadius * 0.8));
       const z = (Math.random() - 0.5) * Math.max(nebulaHeight, 2);
       
-      // Nebula colors based on spiral strength
+      // Nebula colors based on spiral strength and location
       let nebulaColor: string;
       let temperature: number;
       
@@ -425,8 +443,33 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
         // Blue reflection nebulae
         nebulaColor = `rgb(${Math.floor(70 + Math.random() * 130)}, ${Math.floor(120 + Math.random() * 110)}, ${255})`;
         temperature = 8000;
+      } else if (maxArmStrength < 0.2) {
+        // Inter-arm colorful regions (like Andromeda's dust lanes)
+        const colorType = Math.random();
+        if (colorType < 0.4) {
+          // Reddish-brown dust clouds
+          const red = Math.floor(120 + Math.random() * 80);
+          const green = Math.floor(60 + Math.random() * 60);
+          const blue = Math.floor(30 + Math.random() * 50);
+          nebulaColor = `rgb(${red}, ${green}, ${blue})`;
+          temperature = 800;
+        } else if (colorType < 0.7) {
+          // Orange/amber nebular regions
+          const red = Math.floor(180 + Math.random() * 60);
+          const green = Math.floor(100 + Math.random() * 80);
+          const blue = Math.floor(40 + Math.random() * 60);
+          nebulaColor = `rgb(${red}, ${green}, ${blue})`;
+          temperature = 1200;
+        } else {
+          // Yellowish dust lanes
+          const red = Math.floor(140 + Math.random() * 70);
+          const green = Math.floor(120 + Math.random() * 60);
+          const blue = Math.floor(60 + Math.random() * 70);
+          nebulaColor = `rgb(${red}, ${green}, ${blue})`;
+          temperature = 1000;
+        }
       } else {
-        // Dust lanes and dark nebulae
+        // Standard dust lanes and dark nebulae
         const dustRed = Math.floor(60 + Math.random() * 90);
         const dustGreen = Math.floor(25 + Math.random() * 55);
         const dustBlue = Math.floor(10 + Math.random() * 40);
@@ -622,9 +665,20 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
         temperature = 6000 + Math.random() * 8000;
         brightness = 0.5 + Math.random() * 0.3;
       } else if (r <= galaxyParams.diskRadius) {
-        // Inter-arm regions - EXTREMELY dim red dwarfs
-        temperature = 2800 + Math.random() * 1500;
-        brightness = 0.02 + Math.random() * 0.08; // Almost invisible
+        // Inter-arm regions - mix of dim stars and colorful dust/nebula
+        if (Math.random() < 0.3) {
+          // Reddish-brown dust lanes (like in Andromeda)
+          temperature = 1500 + Math.random() * 1000; // Very cool dust
+          brightness = 0.08 + Math.random() * 0.12;
+        } else if (Math.random() < 0.5) {
+          // Orange/amber older stellar populations
+          temperature = 3500 + Math.random() * 1500; // K-type orange stars
+          brightness = 0.04 + Math.random() * 0.08;
+        } else {
+          // Dim red dwarfs
+          temperature = 2800 + Math.random() * 1200;
+          brightness = 0.02 + Math.random() * 0.06;
+        }
       } else {
         // Halo - virtually invisible
         temperature = 2500 + Math.random() * 1000;
@@ -781,7 +835,15 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     if (isPlaying) {
-      timeRef.current += 16; // ~60fps
+      const currentTime = performance.now();
+      if (lastFrameTimeRef.current === 0) {
+        lastFrameTimeRef.current = currentTime;
+      }
+      const deltaTime = currentTime - lastFrameTimeRef.current;
+      lastFrameTimeRef.current = currentTime;
+      
+      // Use smooth delta time instead of fixed increment
+      timeRef.current += deltaTime * 0.16; // Match the original 16ms increment scaling
     }
 
     // Project particles
