@@ -74,16 +74,20 @@ const vertexShaderSource = `
     }
     
     // Determine particle type based on brightness and color
-    bool isNebula = v_brightness > 0.25 && (v_color.r > 0.8 && v_color.g > 0.8); // Detect yellow nebula
+    bool isNebula = v_brightness > 0.15 && (v_color.r > 0.7 && v_color.g > 0.7); // Detect yellow nebula
     
     float alpha;
     if (isNebula) {
-      // Soft, glowing nebula effect that blends well
-      alpha = exp(-dist * dist * 3.0) * v_brightness;
+      // Very soft, diffuse nebula effect for better blending
+      alpha = exp(-dist * dist * 2.0) * v_brightness;
       
-      // Add gentle outer glow
-      float outerGlow = exp(-dist * dist * 1.0) * v_brightness * 0.4;
+      // Add extended outer glow for smoother edges
+      float outerGlow = exp(-dist * dist * 0.8) * v_brightness * 0.6;
       alpha += outerGlow;
+      
+      // Add very soft halo for seamless blending
+      float halo = exp(-dist * dist * 0.3) * v_brightness * 0.3;
+      alpha += halo;
     } else if (v_brightness < 0.3) {
       // Standard dust particles
       alpha = exp(-dist * dist * 2.0) * v_brightness;
@@ -209,25 +213,35 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     const totalParticles = galaxyParams.particleCount * 2;
     
         // Generate central gas cloud - bright yellow
-    const centralCloudParticles = 300;
-    const cloudRadius = galaxyParams.coreRadius * 0.8;
+    const centralCloudParticles = 500;
+    const cloudRadius = galaxyParams.coreRadius * 2.5; // Larger radius
     
     for (let i = 0; i < centralCloudParticles; i++) {
-      // Create spherical distribution around center
-      const r = Math.random() * cloudRadius;
+      // Create spherical distribution with softer edges
+      const u = Math.random();
+      const r = cloudRadius * Math.pow(u, 0.6); // Power distribution for softer edges
       const theta = Math.random() * 2 * Math.PI;
       const phi = Math.acos(2 * Math.random() - 1); // Uniform distribution on sphere
       
       const x = r * Math.sin(phi) * Math.cos(theta);
       const y = r * Math.sin(phi) * Math.sin(theta);
       const z = r * Math.cos(phi) * 0.3; // Flatten slightly for disk-like appearance
-      
-      // Bright yellow gas cloud colors
+      // Distance-based color and brightness for softer edges, denser at the core
+      // Use a steeper falloff for higher core density
+      const distanceFromCenter = r / cloudRadius;
+      const edgeFalloff = 1.0 - Math.pow(distanceFromCenter, 3); // Cubic falloff for denser core
+      // Bright yellow gas cloud colors with edge variation
       const yellowVariation = Math.random() * 50;
-      const nebulaColor = `rgb(${Math.floor(255 - yellowVariation)}, ${Math.floor(255 - yellowVariation * 0.3)}, ${Math.floor(100 + yellowVariation)})`;
+      const edgeColorShift = distanceFromCenter * 30; // Shift toward orange at edges
+      const nebulaColor = `rgb(${Math.floor(255 - yellowVariation - edgeColorShift)}, ${Math.floor(255 - yellowVariation * 0.3 - edgeColorShift * 0.5)}, ${Math.floor(100 + yellowVariation - edgeColorShift * 0.3)})`;
       
-      const brightness = 0.3 + Math.random() * 0.4;
-      const size = 1.5 + Math.random() * 3.0;
+      // Brightness fades toward edges
+      const baseBrightness = 0.2 + Math.random() * 0.3;
+      const brightness = baseBrightness * (0.3 + edgeFalloff * 0.7);
+      
+      // Size varies with distance for smoother blending
+      const baseSize = 1.2 + Math.random() * 2.5;
+      const size = baseSize * (0.8 + edgeFalloff * 0.4);
       
       particles.push({
         x,
