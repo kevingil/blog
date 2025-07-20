@@ -183,8 +183,8 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     coreRadius: 50, // Scaled for viewport
     diskRadius: 350, // Slightly smaller main disk for better spiral definition
     armPitch: Math.PI / 18, // Slightly tighter spiral arms
-    inclination: 77 * Math.PI / 180, // 77° from face-on
-    orientation: 35 * Math.PI / 180, // Position angle
+    inclination: 80 * Math.PI / 180, // 87° from face-on (more tilted/flatter)
+    orientation: 20 * Math.PI / 180, // Position angle
     particleCount: 5000, // Adjusted for extended distribution
     rotationSpeed: 0.00001,
     timeScale: 10000000 // 1 sim second = 10 million years
