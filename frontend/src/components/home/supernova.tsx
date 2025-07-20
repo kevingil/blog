@@ -247,9 +247,14 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
       const distanceFromCenter = r / cloudRadius;
       const edgeFalloff = 1.0 - Math.pow(distanceFromCenter, 3); // Cubic falloff for denser core
       // Bright yellow gas cloud colors with edge variation
-      const yellowVariation = Math.random() * 50;
-      const edgeColorShift = distanceFromCenter * 30; // Shift toward orange at edges
-      const nebulaColor = `rgb(${Math.floor(255 - yellowVariation - edgeColorShift)}, ${Math.floor(255 - yellowVariation * 0.3 - edgeColorShift * 0.5)}, ${Math.floor(100 + yellowVariation - edgeColorShift * 0.3)})`;
+      const yellowVariation = Math.random() * 20;
+      const edgeColorShift = distanceFromCenter * 20;
+      // Blend from bright yellow at edge to almost white at center
+      const t = 1.0 - edgeFalloff; // 0 at center, 1 at edge
+      const coreR = 255;
+      const coreG = Math.floor(242 * t + 255 * (1 - t) - yellowVariation - edgeColorShift);
+      const coreB = Math.floor(0 * t + 220 * (1 - t));
+      const nebulaColor = `rgb(${coreR}, ${coreG}, ${coreB})`;
       
       // Brightness fades toward edges
       const baseBrightness = 0.2 + Math.random() * 0.3;
