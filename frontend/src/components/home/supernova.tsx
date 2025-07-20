@@ -13,6 +13,7 @@ interface StarParticle {
   isDust?: boolean;
   isHII?: boolean;
   isNebula?: boolean;
+  isSpiralArm?: boolean; // Flag for spiral arm particles
   orbitRadius?: number;
   orbitAngle?: number;
   orbitSpeed?: number;
@@ -35,12 +36,14 @@ const vertexShaderSource = `
   attribute float a_size;
   attribute vec3 a_color;
   attribute float a_brightness;
+  attribute float a_spiralArm; // New attribute for spiral arm detection
   
   uniform mat3 u_transform;
   uniform vec2 u_resolution;
   
   varying vec3 v_color;
   varying float v_brightness;
+  varying float v_spiralArm;
   
   void main() {
     vec3 transformed = u_transform * vec3(a_position, 1.0);
@@ -56,6 +59,7 @@ const vertexShaderSource = `
     gl_PointSize = a_size;
     v_color = a_color;
     v_brightness = a_brightness;
+    v_spiralArm = a_spiralArm;
   }
 `;
 
@@ -64,6 +68,7 @@ const vertexShaderSource = `
   
   varying vec3 v_color;
   varying float v_brightness;
+  varying float v_spiralArm;
   
   void main() {
     vec2 center = gl_PointCoord - 0.5;
@@ -75,6 +80,8 @@ const vertexShaderSource = `
     
     // Determine particle type based on brightness and color
     bool isNebula = v_brightness > 0.15 && (v_color.r > 0.7 && v_color.g > 0.7); // Detect yellow nebula
+    bool isSpiralArm = v_spiralArm > 0.5; // Detect spiral arm particles
+    bool isBrightBlue = v_brightness > 0.6 && v_color.b > 0.6; // Bright blue stars
     
     float alpha;
     if (isNebula) {
@@ -88,19 +95,35 @@ const vertexShaderSource = `
       // Add very soft halo for seamless blending
       float halo = exp(-dist * dist * 0.3) * v_brightness * 0.3;
       alpha += halo;
-    } else if (v_brightness < 0.3) {
-      // Standard dust particles
-      alpha = exp(-dist * dist * 2.0) * v_brightness;
+    } else if (isSpiralArm) {
+      // Enhanced rendering for spiral arm stars
+      alpha = exp(-dist * dist * 6.0) * v_brightness * 1.3; // Brighter core
       
-      // Add soft glow for dust effect
-      float softGlow = exp(-dist * dist * 0.5) * v_brightness * 0.8;
+      // Strong stellar glow for spiral arms
+      float spiralGlow = exp(-dist * dist * 1.5) * v_brightness * 0.9;
+      alpha += spiralGlow;
+      
+      // Extended halo for prominence
+      float halo = exp(-dist * dist * 0.4) * v_brightness * 0.6;
+      alpha += halo;
+      
+      // Blue tint for hot spiral arm stars
+      if (isBrightBlue) {
+        alpha *= 1.2; // Extra boost for blue stars
+      }
+    } else if (v_brightness < 0.3) {
+      // Dim inter-arm stars and dust
+      alpha = exp(-dist * dist * 4.0) * v_brightness * 0.6; // Much dimmer
+      
+      // Reduced glow for dim stars
+      float softGlow = exp(-dist * dist * 1.0) * v_brightness * 0.3;
       alpha += softGlow;
     } else {
-      // Sharp, bright falloff for stars
-      alpha = exp(-dist * dist * 8.0) * v_brightness;
+      // Standard stars (non-spiral arm)
+      alpha = exp(-dist * dist * 5.0) * v_brightness;
       
-      // Add stellar glow
-      float glow = exp(-dist * dist * 2.0) * v_brightness * 0.3;
+      // Standard stellar glow
+      float glow = exp(-dist * dist * 2.0) * v_brightness * 0.4;
       alpha += glow;
     }
     
@@ -181,11 +204,13 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     size: WebGLBuffer | null;
     color: WebGLBuffer | null;
     brightness: WebGLBuffer | null;
+    spiralArm: WebGLBuffer | null;
   }>({
     position: null,
     size: null,
     color: null,
-    brightness: null
+    brightness: null,
+    spiralArm: null
   });
   const [isPlaying] = useState(true);
   const timeSpeed = 3; // Fixed 3x speed
@@ -198,7 +223,7 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     coreRadius: 50, // Scaled for viewport
     diskRadius: 350, // Slightly smaller main disk for better spiral definition
     armPitch: Math.PI / 6, // Much tighter spiral arms - increased from π/18 to π/6
-    inclination: 80 * Math.PI / 180, // 77° from face-on
+    inclination: 10 * Math.PI / 180, // 77° from face-on
     orientation: 20 * Math.PI / 180, // Position angle
     particleCount: 2000, // Adjusted for extended distribution
     rotationSpeed: 0.00001,
@@ -283,62 +308,96 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
       
       const baseTheta = Math.random() * 2 * Math.PI;
       
-      // Multiple spiral arm systems like real Andromeda
+      // PROPER Andromeda-style logarithmic spiral arms with multiple turns
       let maxArmStrength = 0;
       
-             // First pair of spiral arms (2 arms)
-       const arm1SpiralFactor = 2;
-       const arm1SpiralAngle = arm1SpiralFactor * (baseTheta + galaxyParams.armPitch * 2.0 * Math.log(Math.max(r, galaxyParams.coreRadius) / galaxyParams.coreRadius));
-       const arm1ArmAngle = arm1SpiralAngle % (2 * Math.PI / arm1SpiralFactor);
-       const arm1DistanceToArm = Math.min(arm1ArmAngle, (2 * Math.PI / arm1SpiralFactor) - arm1ArmAngle);
-       const arm1ArmWidth = Math.PI / 4;
-       const arm1ArmStrength = Math.exp(-Math.pow(arm1DistanceToArm / arm1ArmWidth, 2)) * 1.0;
-       maxArmStrength = Math.max(maxArmStrength, arm1ArmStrength);
-       
-       // Second pair of spiral arms (2 arms, offset)
-       const arm2SpiralFactor = 2;
-       const arm2SpiralAngle = arm2SpiralFactor * (baseTheta + Math.PI/3 + galaxyParams.armPitch * 2.3 * Math.log(Math.max(r, galaxyParams.coreRadius) / galaxyParams.coreRadius));
-       const arm2ArmAngle = arm2SpiralAngle % (2 * Math.PI / arm2SpiralFactor);
-       const arm2DistanceToArm = Math.min(arm2ArmAngle, (2 * Math.PI / arm2SpiralFactor) - arm2ArmAngle);
-       const arm2ArmWidth = Math.PI / 4;
-       const arm2ArmStrength = Math.exp(-Math.pow(arm2DistanceToArm / arm2ArmWidth, 2)) * 0.8;
-       maxArmStrength = Math.max(maxArmStrength, arm2ArmStrength);
-       
-       // Third pair of spiral arms (2 arms, different offset)
-       const arm3SpiralFactor = 2;
-       const arm3SpiralAngle = arm3SpiralFactor * (baseTheta + 2*Math.PI/3 + galaxyParams.armPitch * 2.6 * Math.log(Math.max(r, galaxyParams.coreRadius) / galaxyParams.coreRadius));
-       const arm3ArmAngle = arm3SpiralAngle % (2 * Math.PI / arm3SpiralFactor);
-       const arm3DistanceToArm = Math.min(arm3ArmAngle, (2 * Math.PI / arm3SpiralFactor) - arm3ArmAngle);
-       const arm3ArmWidth = Math.PI / 4;
-       const arm3ArmStrength = Math.exp(-Math.pow(arm3DistanceToArm / arm3ArmWidth, 2)) * 0.7;
-       maxArmStrength = Math.max(maxArmStrength, arm3ArmStrength);
+      // Main spiral arm parameters (like real Andromeda)
+      const numMainArms = 2; // Andromeda has 2 prominent arms
+      const armTightness = 0.25; // Controls how tightly wound the spiral is (smaller = tighter)
       
-      // Ring-like structures (common in real galaxies)
-      const ringRadius1 = galaxyParams.diskRadius * 0.3;
-      const ringRadius2 = galaxyParams.diskRadius * 0.6;
-      const ringRadius3 = galaxyParams.diskRadius * 0.85;
+      for (let armIndex = 0; armIndex < numMainArms; armIndex++) {
+        // Each arm starts at a different angle
+        const armStartAngle = (armIndex * Math.PI); // 180° apart
+        
+        // Logarithmic spiral: r = a * exp(b * theta)
+        // Rearranged: theta = (1/b) * ln(r/a) 
+        const spiralConstant = galaxyParams.coreRadius * 0.8;
+        
+        // Calculate the theoretical angle for this radius on this spiral arm (reverse direction)
+        const theoreticalTheta = -(1 / armTightness) * Math.log(Math.max(r, spiralConstant) / spiralConstant);
+        const spiralAngle = theoreticalTheta + armStartAngle;
+        
+        // Find angular distance from particle to spiral arm
+        let angleDiff = baseTheta - spiralAngle;
+        
+        // Normalize to [-π, π] and handle multiple turns
+        angleDiff = ((angleDiff % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+        
+        // Convert to arm strength
+        const armWidth = 0.4; // Arm width in radians
+        const armStrength = Math.exp(-Math.pow(angleDiff / armWidth, 2)) * 5.0;
+        maxArmStrength = Math.max(maxArmStrength, armStrength);
+      }
       
-      const ringStrength1 = Math.exp(-Math.pow((r - ringRadius1) / 20, 2)) * 0.4;
-      const ringStrength2 = Math.exp(-Math.pow((r - ringRadius2) / 25, 2)) * 0.3;
-      const ringStrength3 = Math.exp(-Math.pow((r - ringRadius3) / 30, 2)) * 0.25;
+      // Secondary inner spiral structure
+      const numSecondaryArms = 2;
+      const secondaryTightness = 0.18; // Tighter winding for inner structure
       
-      maxArmStrength = Math.max(maxArmStrength, ringStrength1, ringStrength2, ringStrength3);
+      for (let armIndex = 0; armIndex < numSecondaryArms; armIndex++) {
+        const armStartAngle = (armIndex * Math.PI) + Math.PI/2; // 90° offset from main arms
+        const spiralConstant = galaxyParams.coreRadius * 0.4;
+        
+        const theoreticalTheta = -(1 / secondaryTightness) * Math.log(Math.max(r, spiralConstant) / spiralConstant);
+        const spiralAngle = theoreticalTheta + armStartAngle;
+        
+        let angleDiff = baseTheta - spiralAngle;
+        angleDiff = ((angleDiff % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+        
+        const armWidth = 0.3;
+        const armStrength = Math.exp(-Math.pow(angleDiff / armWidth, 2)) * 3.0;
+        maxArmStrength = Math.max(maxArmStrength, armStrength);
+      }
       
-             // Random spiral spurs and fragments - with more curvature, clockwise
-       for (let spurIndex = 0; spurIndex < 6; spurIndex++) {
-         const spurOffset = (spurIndex / 6) * 2 * Math.PI + Math.random() * Math.PI/3;
-         const spurPitch = galaxyParams.armPitch * (1.5 + Math.random() * 2.0); // Much more curved spurs
-         const spurFactor = 1 + Math.random() * 2;
-         const spurSpiralAngle = spurFactor * (baseTheta + spurOffset + spurPitch * Math.log(Math.max(r, galaxyParams.coreRadius) / galaxyParams.coreRadius));
-         const spurArmAngle = spurSpiralAngle % (2 * Math.PI / spurFactor);
-         const spurDistanceToArm = Math.min(spurArmAngle, (2 * Math.PI / spurFactor) - spurArmAngle);
-         const spurArmWidth = Math.PI / (10 + Math.random() * 5);
-         const spurStrength = Math.exp(-Math.pow(spurDistanceToArm / spurArmWidth, 2)) * (0.2 + Math.random() * 0.3);
-         maxArmStrength = Math.max(maxArmStrength, spurStrength);
-       }
+      // Outer spiral structure (like Andromeda's extended arms)
+      const numOuterArms = 2;
+      const outerTightness = 0.35; // Looser winding for outer regions
+      
+      if (r > galaxyParams.coreRadius * 1.5) {
+        for (let armIndex = 0; armIndex < numOuterArms; armIndex++) {
+          const armStartAngle = (armIndex * Math.PI) + Math.PI/4;
+          const spiralConstant = galaxyParams.coreRadius * 1.2;
+          
+          const theoreticalTheta = -(1 / outerTightness) * Math.log(Math.max(r, spiralConstant) / spiralConstant);
+          const spiralAngle = theoreticalTheta + armStartAngle;
+          
+          let angleDiff = baseTheta - spiralAngle;
+          angleDiff = ((angleDiff % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+          
+          const armWidth = 0.5;
+          const armStrength = Math.exp(-Math.pow(angleDiff / armWidth, 2)) * 2.0;
+          maxArmStrength = Math.max(maxArmStrength, armStrength);
+        }
+      }
+      
+      // Add spiral spurs and fragments
+      for (let spurIndex = 0; spurIndex < 12; spurIndex++) {
+        const spurStartAngle = (spurIndex / 12) * 2 * Math.PI;
+        const spurTightness = 0.15 + Math.random() * 0.25;
+        const spurConstant = galaxyParams.coreRadius * (0.3 + Math.random() * 0.6);
+        
+        const theoreticalTheta = -(1 / spurTightness) * Math.log(Math.max(r, spurConstant) / spurConstant);
+        const spiralAngle = theoreticalTheta + spurStartAngle;
+        
+        let angleDiff = baseTheta - spiralAngle;
+        angleDiff = ((angleDiff % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+        
+        const spurWidth = 0.2 + Math.random() * 0.15;
+        const spurStrength = Math.exp(-Math.pow(angleDiff / spurWidth, 2)) * (1.0 + Math.random() * 1.0);
+        maxArmStrength = Math.max(maxArmStrength, spurStrength);
+      }
       
       // Spiral structure fades with radius
-      const spiralFalloff = Math.exp(-r / (galaxyParams.diskRadius * 1.3));
+      const spiralFalloff = Math.exp(-Math.pow(r / (galaxyParams.diskRadius * 1.1), 1.8));
       maxArmStrength *= spiralFalloff;
       
       // Nebula threshold - more permissive to fill spiral structures
@@ -409,86 +468,110 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
       
       const baseTheta = Math.random() * 2 * Math.PI;
       
-      // Calculate spiral arm strength using multiple arm systems
+      // PROPER Andromeda-style logarithmic spiral arms (matching nebula generation)
       let totalSpiralStrength = 0;
       
-             // First pair of spiral arms (2 arms)
-       const arm1SpiralFactor = 2;
-       const arm1SpiralAngle = arm1SpiralFactor * (baseTheta + galaxyParams.armPitch * 2.0 * Math.log(Math.max(r, galaxyParams.coreRadius) / galaxyParams.coreRadius));
-       const arm1NormalizedAngle = arm1SpiralAngle % (2 * Math.PI / arm1SpiralFactor);
-       const arm1DistanceToArm = Math.min(arm1NormalizedAngle, (2 * Math.PI / arm1SpiralFactor) - arm1NormalizedAngle);
-       const arm1ArmWidth = Math.PI / 8;
-       const arm1ArmStrength = Math.exp(-Math.pow(arm1DistanceToArm / arm1ArmWidth, 2)) * 1.0;
-       totalSpiralStrength += arm1ArmStrength;
-       
-       // Second pair of spiral arms (2 arms, offset)
-       const arm2SpiralFactor = 2;
-       const arm2SpiralAngle = arm2SpiralFactor * (baseTheta + Math.PI/3 + galaxyParams.armPitch * 2.3 * Math.log(Math.max(r, galaxyParams.coreRadius) / galaxyParams.coreRadius));
-       const arm2NormalizedAngle = arm2SpiralAngle % (2 * Math.PI / arm2SpiralFactor);
-       const arm2DistanceToArm = Math.min(arm2NormalizedAngle, (2 * Math.PI / arm2SpiralFactor) - arm2NormalizedAngle);
-       const arm2ArmWidth = Math.PI / 8;
-       const arm2ArmStrength = Math.exp(-Math.pow(arm2DistanceToArm / arm2ArmWidth, 2)) * 0.9;
-       totalSpiralStrength += arm2ArmStrength;
-       
-       // Third pair of spiral arms (2 arms, different offset)
-       const arm3SpiralFactor = 2;
-       const arm3SpiralAngle = arm3SpiralFactor * (baseTheta + 2*Math.PI/3 + galaxyParams.armPitch * 2.6 * Math.log(Math.max(r, galaxyParams.coreRadius) / galaxyParams.coreRadius));
-       const arm3NormalizedAngle = arm3SpiralAngle % (2 * Math.PI / arm3SpiralFactor);
-       const arm3DistanceToArm = Math.min(arm3NormalizedAngle, (2 * Math.PI / arm3SpiralFactor) - arm3NormalizedAngle);
-       const arm3ArmWidth = Math.PI / 8;
-       const arm3ArmStrength = Math.exp(-Math.pow(arm3DistanceToArm / arm3ArmWidth, 2)) * 0.8;
-       totalSpiralStrength += arm3ArmStrength;
+      // Main spiral arms
+      const numMainArms = 2;
+      const armTightness = 0.25;
       
-      // Multiple ring structures
-      const ringRadius1 = galaxyParams.diskRadius * 0.25;
-      const ringRadius2 = galaxyParams.diskRadius * 0.5;
-      const ringRadius3 = galaxyParams.diskRadius * 0.75;
-      const ringRadius4 = galaxyParams.diskRadius * 0.95;
+      for (let armIndex = 0; armIndex < numMainArms; armIndex++) {
+        const armStartAngle = (armIndex * Math.PI);
+        const spiralConstant = galaxyParams.coreRadius * 0.8;
+        
+        const theoreticalTheta = -(1 / armTightness) * Math.log(Math.max(r, spiralConstant) / spiralConstant);
+        const spiralAngle = theoreticalTheta + armStartAngle;
+        
+        let angleDiff = baseTheta - spiralAngle;
+        angleDiff = ((angleDiff % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+        
+        const armWidth = 0.3; // Slightly narrower for stars
+        const armStrength = Math.exp(-Math.pow(angleDiff / armWidth, 2)) * 5.0;
+        totalSpiralStrength += armStrength;
+      }
       
-      const ringStrength1 = Math.exp(-Math.pow((r - ringRadius1) / 15, 2)) * 0.5;
-      const ringStrength2 = Math.exp(-Math.pow((r - ringRadius2) / 20, 2)) * 0.4;
-      const ringStrength3 = Math.exp(-Math.pow((r - ringRadius3) / 25, 2)) * 0.35;
-      const ringStrength4 = Math.exp(-Math.pow((r - ringRadius4) / 30, 2)) * 0.3;
+      // Secondary inner spiral structure
+      const numSecondaryArms = 2;
+      const secondaryTightness = 0.18;
       
-      totalSpiralStrength += ringStrength1 + ringStrength2 + ringStrength3 + ringStrength4;
+      for (let armIndex = 0; armIndex < numSecondaryArms; armIndex++) {
+        const armStartAngle = (armIndex * Math.PI) + Math.PI/2;
+        const spiralConstant = galaxyParams.coreRadius * 0.4;
+        
+        const theoreticalTheta = -(1 / secondaryTightness) * Math.log(Math.max(r, spiralConstant) / spiralConstant);
+        const spiralAngle = theoreticalTheta + armStartAngle;
+        
+        let angleDiff = baseTheta - spiralAngle;
+        angleDiff = ((angleDiff % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+        
+        const armWidth = 0.25;
+        const armStrength = Math.exp(-Math.pow(angleDiff / armWidth, 2)) * 3.0;
+        totalSpiralStrength += armStrength;
+      }
       
-             // Random spiral spurs and substructure (like real Andromeda) - with more curvature, clockwise
-       for (let spurIndex = 0; spurIndex < 8; spurIndex++) {
-         const spurOffset = (spurIndex / 8) * 2 * Math.PI + (Math.random() - 0.5) * Math.PI/2;
-         const spurPitch = galaxyParams.armPitch * (1.5 + Math.random() * 2.5); // Much more curved spurs
-         const spurFactor = 1 + Math.random() * 3;
-         const spurRadius = Math.max(r, galaxyParams.coreRadius);
-         const spurSpiralAngle = spurFactor * (baseTheta + spurOffset + spurPitch * Math.log(spurRadius / galaxyParams.coreRadius));
-         const spurNormalizedAngle = spurSpiralAngle % (2 * Math.PI / spurFactor);
-         const spurDistanceToArm = Math.min(spurNormalizedAngle, (2 * Math.PI / spurFactor) - spurNormalizedAngle);
-         const spurArmWidth = Math.PI / (12 + Math.random() * 8);
-         const spurStrength = Math.exp(-Math.pow(spurDistanceToArm / spurArmWidth, 2)) * (0.15 + Math.random() * 0.4);
-         totalSpiralStrength += spurStrength;
-       }
+      // Outer spiral structure
+      const numOuterArms = 2;
+      const outerTightness = 0.35;
       
-      // Spiral structure fades with radius
-      const spiralFalloff = Math.exp(-r / (galaxyParams.diskRadius * 1.4));
+      if (r > galaxyParams.coreRadius * 1.5) {
+        for (let armIndex = 0; armIndex < numOuterArms; armIndex++) {
+          const armStartAngle = (armIndex * Math.PI) + Math.PI/4;
+          const spiralConstant = galaxyParams.coreRadius * 1.2;
+          
+          const theoreticalTheta = -(1 / outerTightness) * Math.log(Math.max(r, spiralConstant) / spiralConstant);
+          const spiralAngle = theoreticalTheta + armStartAngle;
+          
+          let angleDiff = baseTheta - spiralAngle;
+          angleDiff = ((angleDiff % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+          
+          const armWidth = 0.4;
+          const armStrength = Math.exp(-Math.pow(angleDiff / armWidth, 2)) * 2.0;
+          totalSpiralStrength += armStrength;
+        }
+      }
+      
+      // Add spiral spurs and fragments (matching nebula generation)
+      for (let spurIndex = 0; spurIndex < 12; spurIndex++) {
+        const spurStartAngle = (spurIndex / 12) * 2 * Math.PI;
+        const spurTightness = 0.15 + Math.random() * 0.25;
+        const spurConstant = galaxyParams.coreRadius * (0.3 + Math.random() * 0.6);
+        
+        const theoreticalTheta = -(1 / spurTightness) * Math.log(Math.max(r, spurConstant) / spurConstant);
+        const spiralAngle = theoreticalTheta + spurStartAngle;
+        
+        let angleDiff = baseTheta - spiralAngle;
+        angleDiff = ((angleDiff % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+        
+        const spurWidth = 0.15 + Math.random() * 0.1;
+        const spurStrength = Math.exp(-Math.pow(angleDiff / spurWidth, 2)) * (1.0 + Math.random() * 1.0);
+        totalSpiralStrength += spurStrength;
+      }
+      
+
+      
+      // Spiral structure fades with radius (matching nebula generation)
+      const spiralFalloff = Math.exp(-Math.pow(r / (galaxyParams.diskRadius * 1.1), 1.8));
       totalSpiralStrength *= spiralFalloff;
       
-      // Density thresholding with much lower base density
+      // Density thresholding with EXTREME spiral contrast
       let densityThreshold: number;
       if (r <= galaxyParams.coreRadius) {
         // Core region
-        const baseDensity = 0.45;
-        const spiralBoost = totalSpiralStrength * 0.4;
+        const baseDensity = 0.6;
+        const spiralBoost = totalSpiralStrength * 0.3;
         densityThreshold = baseDensity + spiralBoost;
       } else if (r <= galaxyParams.diskRadius) {
-        // Main disk - very low base, high spiral enhancement
+        // Main disk - MASSIVE spiral enhancement, tiny base
         const radialFalloff = Math.exp(-Math.pow((r - galaxyParams.coreRadius) / (galaxyParams.diskRadius - galaxyParams.coreRadius), 1.2));
-        const baseDensity = 0.04 * radialFalloff; // Even lower base density
-        const spiralBoost = totalSpiralStrength * 1.5 * radialFalloff; // Stronger spiral enhancement
+        const baseDensity = 0.005 * radialFalloff; // Extremely tiny base density
+        const spiralBoost = totalSpiralStrength * 8.0 * radialFalloff; // MASSIVE spiral enhancement
         densityThreshold = baseDensity + spiralBoost;
       } else {
         // Extended regions - extremely sparse
         const extendedDistance = r - galaxyParams.diskRadius;
         const extendedFactor = Math.exp(-Math.pow(extendedDistance / (galaxyParams.diskRadius * 0.15), 2));
-        const baseDensity = 0.01 * extendedFactor;
-        const spiralBoost = totalSpiralStrength * 0.05 * extendedFactor;
+        const baseDensity = 0.002 * extendedFactor;
+        const spiralBoost = totalSpiralStrength * 2.0 * extendedFactor;
         densityThreshold = baseDensity + spiralBoost;
       }
       
@@ -513,41 +596,40 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
       const scaleHeight = baseScaleHeight * Math.exp(-r / (galaxyParams.diskRadius * 0.4));
       const z = (Math.random() - 0.5) * Math.max(scaleHeight, 1);
       
-      // Stellar populations based on spiral strength
+      // Stellar populations with EXTREME spiral contrast
       let temperature: number;
       let brightness: number;
       
       if (r <= galaxyParams.coreRadius * 2) {
         // Core region
-        if (Math.random() < 0.8) {
+        if (Math.random() < 0.7) {
           temperature = 3000 + Math.random() * 2000;
-          brightness = 0.6 + Math.random() * 0.4;
+          brightness = 0.7 + Math.random() * 0.3;
         } else {
           temperature = 15000 + Math.random() * 15000;
-          brightness = 0.8 + Math.random() * 0.2;
+          brightness = 0.9 + Math.random() * 0.1;
         }
+      } else if (r <= galaxyParams.diskRadius && totalSpiralStrength > 2.0) {
+        // VERY strong spiral arms - brilliant blue supergiants
+        temperature = 15000 + Math.random() * 20000; // Very hot blue stars
+        brightness = 0.9 + Math.random() * 0.1; // Extremely bright
+      } else if (r <= galaxyParams.diskRadius && totalSpiralStrength > 1.0) {
+        // Strong spiral features - blue giants
+        temperature = 10000 + Math.random() * 15000;
+        brightness = 0.7 + Math.random() * 0.2;
       } else if (r <= galaxyParams.diskRadius && totalSpiralStrength > 0.3) {
-        // Strong spiral features - young hot stars
-        if (Math.random() < 0.8) {
-          temperature = 8000 + Math.random() * 15000;
-          brightness = 0.6 + Math.random() * 0.4;
-        } else {
-          temperature = 4000 + Math.random() * 4000;
-          brightness = 0.4 + Math.random() * 0.4;
-        }
-      } else if (r <= galaxyParams.diskRadius && totalSpiralStrength > 0.1) {
-        // Moderate spiral features
-        temperature = 4000 + Math.random() * 6000;
-        brightness = 0.3 + Math.random() * 0.4;
+        // Moderate spiral features - white stars
+        temperature = 6000 + Math.random() * 8000;
+        brightness = 0.5 + Math.random() * 0.3;
       } else if (r <= galaxyParams.diskRadius) {
-        // Inter-arm regions - very dim
-        temperature = 3500 + Math.random() * 2500;
-        brightness = 0.15 + Math.random() * 0.25;
+        // Inter-arm regions - EXTREMELY dim red dwarfs
+        temperature = 2800 + Math.random() * 1500;
+        brightness = 0.02 + Math.random() * 0.08; // Almost invisible
       } else {
-        // Halo - extremely dim
-        temperature = 3000 + Math.random() * 1500;
+        // Halo - virtually invisible
+        temperature = 2500 + Math.random() * 1000;
         const haloDistance = r - galaxyParams.diskRadius;
-        brightness = Math.exp(-haloDistance / (galaxyParams.diskRadius * 0.1)) * (0.01 + Math.random() * 0.05);
+        brightness = Math.exp(-haloDistance / (galaxyParams.diskRadius * 0.1)) * (0.001 + Math.random() * 0.01);
       }
       
       // Apply brightness falloff
@@ -563,6 +645,9 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
       const [r_color, g_color, b_color] = temperatureToColor(temperature);
       const color = `rgb(${Math.round(r_color * 255)}, ${Math.round(g_color * 255)}, ${Math.round(b_color * 255)})`;
       
+      // Determine if this is a spiral arm particle
+      const isSpiralArm = totalSpiralStrength > 0.3;
+      
       particles.push({
         x,
         y,
@@ -571,8 +656,11 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
         color,
         size: Math.max(size, 0.05),
         temperature,
+        isSpiralArm,
       });
     }
+
+
 
     return particles;
   };
@@ -612,7 +700,8 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
       position: gl.createBuffer(),
       size: gl.createBuffer(),
       color: gl.createBuffer(),
-      brightness: gl.createBuffer()
+      brightness: gl.createBuffer(),
+      spiralArm: gl.createBuffer()
     };
 
     // Enable blending for transparency
@@ -710,6 +799,7 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     const sizes: number[] = [];
     const colors: number[] = [];
     const brightnesses: number[] = [];
+    const spiralArmFlags: number[] = [];
 
     projectedParticles.forEach(({ particle, projected }) => {
       positions.push(projected.x, projected.y);
@@ -752,6 +842,9 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
       }
       
       brightnesses.push(alpha);
+      
+      // Add spiral arm flag (1.0 for spiral arm, 0.0 for non-spiral arm)
+      spiralArmFlags.push(particle.isSpiralArm ? 1.0 : 0.0);
     });
 
     // Upload data to GPU
@@ -784,6 +877,13 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     const brightnessLocation = gl.getAttribLocation(program, 'a_brightness');
     gl.enableVertexAttribArray(brightnessLocation);
     gl.vertexAttribPointer(brightnessLocation, 1, gl.FLOAT, false, 0, 0);
+
+    // Spiral arm buffer
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffersRef.current.spiralArm);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(spiralArmFlags), gl.DYNAMIC_DRAW);
+    const spiralArmLocation = gl.getAttribLocation(program, 'a_spiralArm');
+    gl.enableVertexAttribArray(spiralArmLocation);
+    gl.vertexAttribPointer(spiralArmLocation, 1, gl.FLOAT, false, 0, 0);
 
     // Set uniforms
     const transformLocation = gl.getUniformLocation(program, 'u_transform');
