@@ -80,65 +80,45 @@ const vertexShaderSource = `
     // Determine particle type based on brightness and color
     bool isNebula = v_brightness > 0.15 && (v_color.r > 0.7 && v_color.g > 0.7); // Detect yellow nebula
     bool isSpiralArm = v_spiralArm > 0.5; // Detect spiral arm particles
+    bool isCore = v_color.r > 0.95 && v_color.g > 0.8 && v_color.b < 0.7; // Detect core (deep yellow/orange)
     bool isBrightBlue = v_brightness > 0.6 && v_color.b > 0.6; // Bright blue stars
     bool isColorfulDust = v_brightness > 0.05 && v_brightness < 0.25 && (v_color.r > 0.4 || v_color.g > 0.3); // Colorful inter-arm regions
     
     float alpha;
+    vec3 outColor = v_color;
     if (isNebula) {
       // Very soft, diffuse nebula effect for better blending
       alpha = exp(-dist * dist * 2.0) * v_brightness;
-      
-      // Add extended outer glow for smoother edges
       float outerGlow = exp(-dist * dist * 0.8) * v_brightness * 0.6;
       alpha += outerGlow;
-      
-      // Add very soft halo for seamless blending
       float halo = exp(-dist * dist * 0.3) * v_brightness * 0.3;
       alpha += halo;
-    } else if (isSpiralArm) {
-      // Enhanced rendering for spiral arm stars
-      alpha = exp(-dist * dist * 6.0) * v_brightness * 1.3; // Brighter core
-      
-      // Strong stellar glow for spiral arms
+    } else if (isSpiralArm || isCore) {
+      // Enhanced rendering for spiral arm and core stars: warm glow
+      alpha = exp(-dist * dist * 6.0) * v_brightness * 1.3;
       float spiralGlow = exp(-dist * dist * 1.5) * v_brightness * 0.9;
       alpha += spiralGlow;
-      
-      // Extended halo for prominence
       float halo = exp(-dist * dist * 0.4) * v_brightness * 0.6;
       alpha += halo;
-      
-      // Blue tint for hot spiral arm stars
-      if (isBrightBlue) {
-        alpha *= 1.2; // Extra boost for blue stars
-      }
+      // Add warm tint to the glow/halo
+      float warmth = isCore ? 0.4 : 0.25;
+      outColor = mix(v_color, vec3(1.0, 0.85, 0.3), warmth * (1.0 - dist));
     } else if (isColorfulDust) {
-      // Enhanced rendering for colorful inter-arm dust/nebula
-      alpha = exp(-dist * dist * 1.5) * v_brightness * 1.5; // Softer, more diffuse
-      
-      // Extended glow for dust clouds
+      alpha = exp(-dist * dist * 1.5) * v_brightness * 1.5;
       float dustGlow = exp(-dist * dist * 0.6) * v_brightness * 1.2;
       alpha += dustGlow;
-      
-      // Very soft halo for atmospheric effect
       float softHalo = exp(-dist * dist * 0.25) * v_brightness * 0.8;
       alpha += softHalo;
     } else if (v_brightness < 0.3) {
-      // Dim inter-arm stars and dust
-      alpha = exp(-dist * dist * 4.0) * v_brightness * 0.6; // Much dimmer
-      
-      // Reduced glow for dim stars
+      alpha = exp(-dist * dist * 4.0) * v_brightness * 0.6;
       float softGlow = exp(-dist * dist * 1.0) * v_brightness * 0.3;
       alpha += softGlow;
     } else {
-      // Standard stars (non-spiral arm)
       alpha = exp(-dist * dist * 5.0) * v_brightness;
-      
-      // Standard stellar glow
       float glow = exp(-dist * dist * 2.0) * v_brightness * 0.4;
       alpha += glow;
     }
-    
-    gl_FragColor = vec4(v_color, alpha);
+    gl_FragColor = vec4(outColor, alpha);
   }
 `;
 
@@ -237,8 +217,8 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     armPitch: Math.PI / 6, // Much tighter spiral arms - increased from π/18 to π/6
     inclination: 80 * Math.PI / 180, // 77° from face-on
     orientation: 10 * Math.PI / 180, // Position angle
-    particleCount: 3000, // Adjusted for extended distribution
-    rotationSpeed: 0.000125,
+    particleCount: 1000, // Adjusted for extended distribution
+    rotationSpeed: 0.0001,
   };
 
   // Generate spiral galaxy structure with natural distribution and realistic colors
@@ -431,43 +411,57 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
       const nebulaHeight = 18 * Math.exp(-r / (galaxyParams.diskRadius * 0.8));
       const z = (Math.random() - 0.5) * Math.max(nebulaHeight, 2);
       
-      // Nebula colors based on spiral strength and location
+      // Nebula colors based on spiral strength and location (Andromeda palette, warmer)
       let nebulaColor: string;
       let temperature: number;
-      
-      if (maxArmStrength > 0.5 && Math.random() < 0.6) {
-        // Bright HII regions in strong spiral features
-        nebulaColor = `rgb(${255}, ${Math.floor(70 + Math.random() * 130)}, ${Math.floor(90 + Math.random() * 110)})`;
-        temperature = 12000;
-      } else if (maxArmStrength > 0.3 && Math.random() < 0.4) {
-        // Blue reflection nebulae
-        nebulaColor = `rgb(${Math.floor(70 + Math.random() * 130)}, ${Math.floor(120 + Math.random() * 110)}, ${255})`;
-        temperature = 8000;
-      } else if (maxArmStrength < 0.2) {
-        // Inter-arm colorful regions (like Andromeda's dust lanes)
-        const colorType = Math.random();
-        if (colorType < 0.4) {
-          // Reddish-brown dust clouds
-          const red = Math.floor(120 + Math.random() * 80);
-          const green = Math.floor(60 + Math.random() * 60);
-          const blue = Math.floor(30 + Math.random() * 50);
-          nebulaColor = `rgb(${red}, ${green}, ${blue})`;
-          temperature = 800;
-        } else if (colorType < 0.7) {
-          // Orange/amber nebular regions
-          const red = Math.floor(180 + Math.random() * 60);
-          const green = Math.floor(100 + Math.random() * 80);
-          const blue = Math.floor(40 + Math.random() * 60);
-          nebulaColor = `rgb(${red}, ${green}, ${blue})`;
-          temperature = 1200;
+      if (r <= galaxyParams.coreRadius * 1.5) {
+        // Core: deep yellow/orange
+        const g = 210 + Math.floor(Math.random() * 16);
+        const b = 80 + Math.floor(Math.random() * 61);
+        nebulaColor = `rgb(255,${g},${b})`;
+        temperature = 6000;
+      } else if (maxArmStrength > 1.0) {
+        // Spiral arms: mostly warm yellow/orange, some yellow-white, rare blue-white/pink
+        const rand = Math.random();
+        if (rand < 0.7) {
+          // Warm yellow/orange
+          const g = 210 + Math.floor(Math.random() * 31);
+          const b = 100 + Math.floor(Math.random() * 81);
+          nebulaColor = `rgb(255,${g},${b})`;
+          temperature = 7000;
+        } else if (rand < 0.9) {
+          // Yellow-white
+          const g = 240 + Math.floor(Math.random() * 6);
+          const b = 180 + Math.floor(Math.random() * 41);
+          nebulaColor = `rgb(255,${g},${b})`;
+          temperature = 9000;
+        } else if (rand < 0.95) {
+          // Blue-white (rare)
+          const rVal = 180 + Math.floor(Math.random() * 41);
+          const gVal = 210 + Math.floor(Math.random() * 31);
+          nebulaColor = `rgb(${rVal},${gVal},255)`;
+          temperature = 12000;
         } else {
-          // Yellowish dust lanes
-          const red = Math.floor(140 + Math.random() * 70);
-          const green = Math.floor(120 + Math.random() * 60);
-          const blue = Math.floor(60 + Math.random() * 70);
-          nebulaColor = `rgb(${red}, ${green}, ${blue})`;
-          temperature = 1000;
+          // Pink HII region (very rare)
+          const g = 180 + Math.floor(Math.random() * 41);
+          const b = 220 + Math.floor(Math.random() * 36);
+          nebulaColor = `rgb(255,${g},${b})`;
+          temperature = 10000;
         }
+      } else if (r > galaxyParams.diskRadius * 0.9) {
+        // Outer halo: faint, redder
+        const rVal = 150 + Math.floor(Math.random() * 51);
+        const gVal = 120 + Math.floor(Math.random() * 61);
+        const bVal = 120 + Math.floor(Math.random() * 61);
+        nebulaColor = `rgb(${rVal},${gVal},${bVal})`;
+        temperature = 4000;
+      } else if (maxArmStrength < 0.3 && r > galaxyParams.coreRadius * 1.5) {
+        // Inter-arm/dust lanes: brown/tan
+        const rVal = 120 + Math.floor(Math.random() * 61);
+        const gVal = 90 + Math.floor(Math.random() * 51);
+        const bVal = 60 + Math.floor(Math.random() * 41);
+        nebulaColor = `rgb(${rVal},${gVal},${bVal})`;
+        temperature = 1200;
       } else {
         // Standard dust lanes and dark nebulae
         const dustRed = Math.floor(60 + Math.random() * 90);
@@ -696,8 +690,54 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
       const tempFactor = Math.max(0.3, Math.min(2.2, temperature / 6000));
       const size = baseSize * (0.2 + brightness * 1.8) * tempFactor;
       
-      const [r_color, g_color, b_color] = temperatureToColor(temperature);
-      const color = `rgb(${Math.round(r_color * 255)}, ${Math.round(g_color * 255)}, ${Math.round(b_color * 255)})`;
+      // Star color based on spiral strength and location (Andromeda palette, warmer)
+      let color: string;
+      if (r <= galaxyParams.coreRadius * 1.5) {
+        // Core: deep yellow/orange
+        const g = 210 + Math.floor(Math.random() * 16);
+        const b = 80 + Math.floor(Math.random() * 61);
+        color = `rgb(255,${g},${b})`;
+      } else if (totalSpiralStrength > 1.0) {
+        // Spiral arms: mostly warm yellow/orange, some yellow-white, rare blue-white/pink
+        const rand = Math.random();
+        if (rand < 0.7) {
+          // Warm yellow/orange
+          const g = 210 + Math.floor(Math.random() * 31);
+          const b = 100 + Math.floor(Math.random() * 81);
+          color = `rgb(255,${g},${b})`;
+        } else if (rand < 0.9) {
+          // Yellow-white
+          const g = 240 + Math.floor(Math.random() * 6);
+          const b = 180 + Math.floor(Math.random() * 41);
+          color = `rgb(255,${g},${b})`;
+        } else if (rand < 0.95) {
+          // Blue-white (rare)
+          const rVal = 180 + Math.floor(Math.random() * 41);
+          const gVal = 210 + Math.floor(Math.random() * 31);
+          color = `rgb(${rVal},${gVal},255)`;
+        } else {
+          // Pink HII region (very rare)
+          const g = 180 + Math.floor(Math.random() * 41);
+          const b = 220 + Math.floor(Math.random() * 36);
+          color = `rgb(255,${g},${b})`;
+        }
+      } else if (r > galaxyParams.diskRadius * 0.9) {
+        // Outer halo: faint, redder
+        const rVal = 150 + Math.floor(Math.random() * 51);
+        const gVal = 120 + Math.floor(Math.random() * 61);
+        const bVal = 120 + Math.floor(Math.random() * 61);
+        color = `rgb(${rVal},${gVal},${bVal})`;
+      } else if (totalSpiralStrength < 0.3 && r > galaxyParams.coreRadius * 1.5) {
+        // Inter-arm/dust lanes: brown/tan
+        const rVal = 120 + Math.floor(Math.random() * 61);
+        const gVal = 90 + Math.floor(Math.random() * 51);
+        const bVal = 60 + Math.floor(Math.random() * 41);
+        color = `rgb(${rVal},${gVal},${bVal})`;
+      } else {
+        // Standard faint star
+        const [r_color, g_color, b_color] = temperatureToColor(temperature);
+        color = `rgb(${Math.round(r_color * 255)}, ${Math.round(g_color * 255)}, ${Math.round(b_color * 255)})`;
+      }
       
       // Determine if this is a spiral arm particle
       const isSpiralArm = totalSpiralStrength > 0.3;
