@@ -18,7 +18,6 @@ function HomePage() {
   const isAuthenticated = useAtomValue(isAuthenticatedAtom);
   return (
     <div className="relative">
-        <SpiralGalaxyAnimation />
         <div className="relative z-10">
           <HeroSection />
           {/* {token && (

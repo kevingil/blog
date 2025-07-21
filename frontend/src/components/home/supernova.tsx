@@ -232,17 +232,17 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
       if (width <= 640) { // sm
         setZoom(0.6);
         zoomRef.current = 0.6;
-        setCenterOffset({ x: 40, y: -70 });
-        centerOffsetRef.current = { x: 40, y: -70 };
+        setCenterOffset({ x: 40, y: -100 });
+        centerOffsetRef.current = { x: 40, y: -100 };
       } else if (width <= 1024) { // md
         setZoom(0.7);
         zoomRef.current = 0.8;
-        setCenterOffset({ x: 40, y: -50 });
-        centerOffsetRef.current = { x: 100, y: -70 };
+        setCenterOffset({ x: 40, y: -80 });
+        centerOffsetRef.current = { x: 100, y: -80 };
       } else {
         setZoom(1.0);
         zoomRef.current = 1.0;
-        setCenterOffset({ x: 120, y: -60 });
+        setCenterOffset({ x: 120, y: -70 });
         centerOffsetRef.current = { x: 150, y: -70 };
       }
     }
