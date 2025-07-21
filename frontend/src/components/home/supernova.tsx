@@ -205,7 +205,11 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
   });
   const [isPlaying] = useState(true);
   const timeSpeed = 3; // Fixed 3x speed
-  const zoom = 1.2; // Fixed zoom level
+  // Responsive zoom and offsets
+  const [zoom, setZoom] = useState(1.2);
+  const zoomRef = useRef(1.2);
+  const [centerOffset, setCenterOffset] = useState({ x: 175, y: -100 });
+  const centerOffsetRef = useRef({ x: 175, y: -100 });
   const [rotation, setRotation] = useState(0);
   const timeRef = useRef(0);
   const lastFrameTimeRef = useRef(0);
@@ -220,6 +224,32 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     particleCount: 1000, // Adjusted for extended distribution
     rotationSpeed: 0.0001,
   };
+
+  // Responsive effect for zoom and centering
+  useEffect(() => {
+    function handleResize() {
+      const width = window.innerWidth;
+      if (width <= 640) { // sm
+        setZoom(0.6);
+        zoomRef.current = 0.6;
+        setCenterOffset({ x: 40, y: -70 });
+        centerOffsetRef.current = { x: 40, y: -70 };
+      } else if (width <= 1024) { // md
+        setZoom(0.7);
+        zoomRef.current = 0.8;
+        setCenterOffset({ x: 40, y: -50 });
+        centerOffsetRef.current = { x: 100, y: -70 };
+      } else {
+        setZoom(1.0);
+        zoomRef.current = 1.0;
+        setCenterOffset({ x: 120, y: -60 });
+        centerOffsetRef.current = { x: 150, y: -70 };
+      }
+    }
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Generate spiral galaxy structure with natural distribution and realistic colors
   const generateGalaxyParticles = (): StarParticle[] => {
@@ -850,10 +880,11 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
 
     // Perspective projection
     const cameraDistance = 10000; // Camera distance from galaxy center
-    const scale = cameraDistance / (cameraDistance + inclinedZ) * zoom;
+    const scale = cameraDistance / (cameraDistance + inclinedZ) * zoomRef.current;
     
-    const screenX = canvasWidth / 2 - orientedX * scale + 175; // Mirror X axis + move camera 100px left
-    const screenY = canvasHeight / 2 + orientedY * scale - 100;
+    // Responsive centering
+    const screenX = canvasWidth / 2 - orientedX * scale + centerOffsetRef.current.x;
+    const screenY = canvasHeight / 2 + orientedY * scale + centerOffsetRef.current.y;
     
     return {
       x: screenX,
@@ -1052,25 +1083,13 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
 
   return (
     <div
-      className="spiral-galaxy-animation"
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100vw',
-        height: '100vh',
-        zIndex,
-        pointerEvents: 'none',
-        overflow: 'hidden',
-      }}
+      className="spiral-galaxy-animation fixed top-0 left-0 w-full h-full pointer-events-none overflow-hidden z-[-1]"
+      style={{ zIndex }}
     >
       <canvas
         ref={canvasRef}
-        style={{
-          width: '100%',
-          height: '100%',
-          pointerEvents: 'auto',
-        }}
+        className="w-full h-full pointer-events-auto"
+        style={{ width: '100%', height: '100%' }}
       />
     </div>
   );
