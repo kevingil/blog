@@ -205,10 +205,22 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
   });
   const [isPlaying] = useState(true);
   const timeSpeed = 3; // Fixed 3x speed
-  const zoom = 1.2; // Fixed zoom level
+  
+  // Fixed positioning for hero section (500px height)
+  const [zoom, setZoom] = useState(1.2);
+  const zoomRef = useRef(1.2);
+  
+  // Fixed pixel offsets for hero section positioning
+  const [centerOffset, setCenterOffset] = useState({ x: 175, y: 250 }); // y: 250px centers in 500px hero
+  const centerOffsetRef = useRef({ x: 175, y: 250 });
+  
   const [rotation, setRotation] = useState(0);
   const timeRef = useRef(0);
   const lastFrameTimeRef = useRef(0);
+  
+  // Add mouse tilt state
+  const mouseTiltRef = useRef({ x: 0, y: 0 });
+  const targetTiltRef = useRef({ x: 0, y: 0 });
 
   // Galaxy parameters based on Andromeda M31
   const galaxyParams: GalaxyParams = {
@@ -220,6 +232,33 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     particleCount: 1000, // Adjusted for extended distribution
     rotationSpeed: 0.0001,
   };
+
+  // Responsive effect for zoom and centering - only width-based, height-independent
+  useEffect(() => {
+    function handleResize() {
+      const width = window.innerWidth;
+      
+      if (width <= 640) { // sm
+        setZoom(0.6);
+        zoomRef.current = 0.6;
+        setCenterOffset({ x: 40, y: 350 }); // Fixed y position for hero section
+        centerOffsetRef.current = { x: 40, y: 350 };
+      } else if (width <= 1024) { // md
+        setZoom(0.8);
+        zoomRef.current = 0.8;
+        setCenterOffset({ x: 100, y: 345 }); // Fixed y position for hero section
+        centerOffsetRef.current = { x: 100, y: 345 };
+      } else {
+        setZoom(1.0);
+        zoomRef.current = 1.0;
+        setCenterOffset({ x: 175, y: 340 }); // Fixed y position for hero section
+        centerOffsetRef.current = { x: 175, y: 340 };
+      }
+    }
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Generate spiral galaxy structure with natural distribution and realistic colors
   const generateGalaxyParticles = (): StarParticle[] => {
@@ -756,10 +795,46 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
         size: Math.max(size, 0.05),
         temperature,
         isSpiralArm,
-      });
+            });
     }
 
-
+    // Add simple background stars - separate from galaxy logic
+    const backgroundStarCount = 2000;
+    for (let i = 0; i < backgroundStarCount; i++) {
+      // Random distribution across a large area
+      const x = (Math.random() - 0.5) * 3000; // Large spread
+      const y = (Math.random() - 0.5) * 2000; // Large spread
+      const z = (Math.random() - 0.5) * 1000; // Some depth
+      
+      // Brighter background stars
+      const brightness = 0.08 + Math.random() * 0.15; // Much brighter and more visible
+      const size = 0.8 + Math.random() * 1.5; // Slightly larger for better visibility
+      
+      // Simple star colors - mostly white/yellow with some variation
+      const colorVariation = Math.random();
+      let color: string;
+      if (colorVariation < 0.6) {
+        // White stars
+        color = `rgb(255, 255, 255)`;
+      } else if (colorVariation < 0.8) {
+        // Slightly yellow
+        color = `rgb(255, 250, 200)`;
+      } else {
+        // Slightly blue
+        color = `rgb(200, 220, 255)`;
+      }
+      
+      particles.push({
+        x,
+        y,
+        z,
+        brightness,
+        color,
+        size,
+        temperature: 5500, // Sun-like
+        isSpiralArm: false,
+      });
+    }
 
     return particles;
   };
@@ -840,20 +915,37 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
       rotatedY += turbulenceY;
     }
 
-    // Apply inclination (77° from face-on, flipped)
-    const inclinedY = rotatedY * Math.cos(-galaxyParams.inclination) - rotatedZ * Math.sin(-galaxyParams.inclination);
-    const inclinedZ = rotatedY * Math.sin(-galaxyParams.inclination) + rotatedZ * Math.cos(-galaxyParams.inclination);
+    // Apply mouse transformations first (absolute from original position)
+    const mouseTiltX = mouseTiltRef.current.x; // X-axis tilt (pitch) from up/down mouse
+    const mouseRotationZ = mouseTiltRef.current.y; // Z-axis rotation from left/right mouse
+    
+    // Apply X-axis tilt (pitch - up/down mouse movement)
+    const pitchTiltedY = rotatedY * Math.cos(mouseTiltX) - rotatedZ * Math.sin(mouseTiltX);
+    const pitchTiltedZ = rotatedY * Math.sin(mouseTiltX) + rotatedZ * Math.cos(mouseTiltX);
+    
+    // Apply Z-axis rotation (yaw - left/right mouse movement)
+    const finalRotatedX = rotatedX * Math.cos(mouseRotationZ) - pitchTiltedY * Math.sin(mouseRotationZ);
+    const finalRotatedY = rotatedX * Math.sin(mouseRotationZ) + pitchTiltedY * Math.cos(mouseRotationZ);
+    const finalRotatedZ = pitchTiltedZ;
+
+    // Apply inclination (77° from face-on, flipped) to mouse-transformed coordinates
+    const inclinedY = finalRotatedY * Math.cos(-galaxyParams.inclination) - finalRotatedZ * Math.sin(-galaxyParams.inclination);
+    const inclinedZ = finalRotatedY * Math.sin(-galaxyParams.inclination) + finalRotatedZ * Math.cos(-galaxyParams.inclination);
 
     // Apply orientation (35° position angle)
-    const orientedX = rotatedX * Math.cos(galaxyParams.orientation + rotation) - inclinedY * Math.sin(galaxyParams.orientation + rotation);
-    const orientedY = rotatedX * Math.sin(galaxyParams.orientation + rotation) + inclinedY * Math.cos(galaxyParams.orientation + rotation);
+    const orientedX = finalRotatedX * Math.cos(galaxyParams.orientation + rotation) - inclinedY * Math.sin(galaxyParams.orientation + rotation);
+    const orientedY = finalRotatedX * Math.sin(galaxyParams.orientation + rotation) + inclinedY * Math.cos(galaxyParams.orientation + rotation);
 
     // Perspective projection
     const cameraDistance = 10000; // Camera distance from galaxy center
-    const scale = cameraDistance / (cameraDistance + inclinedZ) * zoom;
+    const scale = cameraDistance / (cameraDistance + inclinedZ) * zoomRef.current;
     
-    const screenX = canvasWidth / 2 - orientedX * scale + 175; // Mirror X axis + move camera 100px left
-    const screenY = canvasHeight / 2 + orientedY * scale - 100;
+    // Fixed positioning for hero section - no dependency on viewport height
+    const centerOffsetX = centerOffsetRef.current.x;
+    const centerOffsetY = centerOffsetRef.current.y;
+    
+    const screenX = canvasWidth / 2 - orientedX * scale + centerOffsetX;
+    const screenY = centerOffsetY + orientedY * scale; // Position relative to fixed hero section
     
     return {
       x: screenX,
@@ -890,6 +982,11 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
       // Use smooth delta time instead of fixed increment
       timeRef.current += deltaTime * 0.16; // Match the original 16ms increment scaling
     }
+
+    // Smooth tilt interpolation
+    const lerpFactor = 0.005; // Adjust for smoother/faster transitions
+    mouseTiltRef.current.x += (targetTiltRef.current.x - mouseTiltRef.current.x) * lerpFactor;
+    mouseTiltRef.current.y += (targetTiltRef.current.y - mouseTiltRef.current.y) * lerpFactor;
 
     // Project particles
     const projectedParticles = particles
@@ -1050,27 +1147,54 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     };
   }, []);
 
+  // Mouse movement for galaxy tilt
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      // Skip if left mouse button is pressed (for rotation)
+      if (e.buttons === 1) return;
+      
+      const centerX = window.innerWidth / 2;
+      const centerY = window.innerHeight / 2;
+      
+      // Calculate normalized mouse position relative to center (-1 to 1)
+      const normalizedX = (e.clientX - centerX) / (window.innerWidth / 2);
+      const normalizedY = (e.clientY - centerY) / (window.innerHeight / 2);
+      
+      // Convert to angles (max 5 degrees = ~0.087 radians)
+      const maxAngleRadians = 2.5 * Math.PI / 180;
+      const targetTiltX = normalizedY * maxAngleRadians; // Up/down mouse for X-axis tilt (pitch)
+      const targetRotationZ = normalizedX * maxAngleRadians; // Left/right mouse for Z-axis rotation (yaw)
+      
+      // Update target values - absolute positioning, not cumulative
+      targetTiltRef.current = {
+        x: targetTiltX, // X-axis tilt (pitch) - up/down movement
+        y: targetRotationZ // Z-axis rotation (yaw) - left/right movement
+      };
+    };
+
+    const handleMouseLeave = () => {
+      // Reset to original position when mouse leaves the window
+      targetTiltRef.current = { x: 0, y: 0 };
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseleave', handleMouseLeave);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseleave', handleMouseLeave);
+    };
+  }, []);
+
   return (
     <div
-      className="spiral-galaxy-animation"
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100vw',
-        height: '100vh',
-        zIndex,
-        pointerEvents: 'none',
-        overflow: 'hidden',
-      }}
+      className="spiral-galaxy-animation fixed top-0 left-0 w-full h-full pointer-events-none overflow-hidden z-[-1]"
+      style={{ zIndex }}
     >
       <canvas
         ref={canvasRef}
-        style={{
-          width: '100%',
-          height: '100%',
-          pointerEvents: 'auto',
-        }}
+        className="w-full h-full pointer-events-auto"
+        style={{ width: '100%', height: '100%' }}
       />
     </div>
   );

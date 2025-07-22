@@ -7,7 +7,7 @@ import LinkedInIcon from "@/components/icons/linkedin-icon";
 import { createFileRoute } from '@tanstack/react-router';
 import { useAtomValue } from 'jotai';
 import { tokenAtom, isAuthenticatedAtom } from '@/services/auth/auth';
-import { SupernovaAnimation } from "@/components/home/supernova";
+import { SpiralGalaxyAnimation } from "@/components/home/supernova";
 
 export const Route = createFileRoute('/_publicLayout/')({
   component: HomePage,
@@ -18,7 +18,6 @@ function HomePage() {
   const isAuthenticated = useAtomValue(isAuthenticatedAtom);
   return (
     <div className="relative">
-        {/* <SupernovaAnimation /> */}
         <div className="relative z-10">
           <HeroSection />
           {/* {token && (
