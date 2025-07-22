@@ -205,11 +205,18 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
   });
   const [isPlaying] = useState(true);
   const timeSpeed = 3; // Fixed 3x speed
-  // Responsive zoom and offsets
+  
+  // Use viewport-relative positioning instead of absolute pixel offsets
   const [zoom, setZoom] = useState(1.2);
   const zoomRef = useRef(1.2);
-  const [centerOffset, setCenterOffset] = useState({ x: 175, y: -100 });
-  const centerOffsetRef = useRef({ x: 175, y: -100 });
+  
+  // Store center offset as viewport percentages instead of absolute pixels
+  const [centerOffsetPercent, setCenterOffsetPercent] = useState({ x: 0.15, y: -0.08 });
+  const centerOffsetPercentRef = useRef({ x: 0.15, y: -0.08 });
+  
+  // Store initial viewport dimensions for stable reference
+  const initialViewportRef = useRef({ width: 0, height: 0 });
+  
   const [rotation, setRotation] = useState(0);
   const timeRef = useRef(0);
   const lastFrameTimeRef = useRef(0);
@@ -225,25 +232,32 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     rotationSpeed: 0.0001,
   };
 
-  // Responsive effect for zoom and centering
+  // Responsive effect for zoom and centering using viewport percentages
   useEffect(() => {
     function handleResize() {
       const width = window.innerWidth;
+      const height = window.innerHeight;
+      
+      // Store initial viewport if not set
+      if (initialViewportRef.current.width === 0) {
+        initialViewportRef.current = { width, height };
+      }
+      
       if (width <= 640) { // sm
         setZoom(0.6);
         zoomRef.current = 0.6;
-        setCenterOffset({ x: 40, y: -50 });
-        centerOffsetRef.current = { x: 40, y: -50 };
+        setCenterOffsetPercent({ x: 0.08, y: -0.05 });
+        centerOffsetPercentRef.current = { x: 0.08, y: -0.05 };
       } else if (width <= 1024) { // md
-        setZoom(0.7);
+        setZoom(0.8);
         zoomRef.current = 0.8;
-        setCenterOffset({ x: 40, y: -60 });
-        centerOffsetRef.current = { x: 100, y: -60 };
+        setCenterOffsetPercent({ x: 0.10, y: -0.06 });
+        centerOffsetPercentRef.current = { x: 0.10, y: -0.06 };
       } else {
         setZoom(1.0);
         zoomRef.current = 1.0;
-        setCenterOffset({ x: 120, y: -70 });
-        centerOffsetRef.current = { x: 150, y: -70 };
+        setCenterOffsetPercent({ x: 0.15, y: -0.08 });
+        centerOffsetPercentRef.current = { x: 0.15, y: -0.08 };
       }
     }
     handleResize();
@@ -882,9 +896,12 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     const cameraDistance = 10000; // Camera distance from galaxy center
     const scale = cameraDistance / (cameraDistance + inclinedZ) * zoomRef.current;
     
-    // Responsive centering
-    const screenX = canvasWidth / 2 - orientedX * scale + centerOffsetRef.current.x;
-    const screenY = canvasHeight / 2 + orientedY * scale + centerOffsetRef.current.y;
+    // Responsive centering using viewport percentages for iOS stability
+    const centerOffsetX = centerOffsetPercentRef.current.x * canvasWidth;
+    const centerOffsetY = centerOffsetPercentRef.current.y * canvasHeight;
+    
+    const screenX = canvasWidth / 2 - orientedX * scale + centerOffsetX;
+    const screenY = canvasHeight / 2 + orientedY * scale + centerOffsetY;
     
     return {
       x: screenX,
@@ -1047,12 +1064,21 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     if (!canvas) return;
 
     const resizeCanvas = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      // Use visual viewport API if available (better for iOS)
+      const width = window.visualViewport?.width || window.innerWidth;
+      const height = window.visualViewport?.height || window.innerHeight;
+      
+      canvas.width = width;
+      canvas.height = height;
     };
 
     resizeCanvas();
+    
+    // Listen to both resize and visual viewport changes for iOS
     window.addEventListener('resize', resizeCanvas);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', resizeCanvas);
+    }
 
     if (initWebGL()) {
       animate();
@@ -1060,6 +1086,9 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
 
     return () => {
       window.removeEventListener('resize', resizeCanvas);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', resizeCanvas);
+      }
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
@@ -1081,15 +1110,52 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     };
   }, []);
 
+  // Set CSS custom properties for stable viewport handling on iOS
+  useEffect(() => {
+    let timeoutId: number;
+    
+    const updateViewportHeight = () => {
+      // Debounce to prevent excessive updates on iOS
+      clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+      }, 100);
+    };
+
+    // Set initial value immediately
+    const vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
+
+    window.addEventListener('resize', updateViewportHeight);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', updateViewportHeight);
+    }
+
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('resize', updateViewportHeight);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', updateViewportHeight);
+      }
+    };
+  }, []);
+
   return (
     <div
-      className="spiral-galaxy-animation fixed top-0 left-0 w-full h-full pointer-events-none overflow-hidden z-[-1]"
-      style={{ zIndex }}
+      className="spiral-galaxy-animation fixed top-0 left-0 w-full pointer-events-none overflow-hidden z-[-1]"
+      style={{ 
+        zIndex,
+        height: 'calc(var(--vh, 1vh) * 100)'
+      }}
     >
       <canvas
         ref={canvasRef}
-        className="w-full h-full pointer-events-auto"
-        style={{ width: '100%', height: '100%' }}
+        className="w-full pointer-events-auto"
+        style={{ 
+          width: '100%', 
+          height: 'calc(var(--vh, 1vh) * 100)'
+        }}
       />
     </div>
   );
