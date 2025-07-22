@@ -217,6 +217,10 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
   const [rotation, setRotation] = useState(0);
   const timeRef = useRef(0);
   const lastFrameTimeRef = useRef(0);
+  
+  // Add mouse tilt state
+  const mouseTiltRef = useRef({ x: 0, y: 0 });
+  const targetTiltRef = useRef({ x: 0, y: 0 });
 
   // Galaxy parameters based on Andromeda M31
   const galaxyParams: GalaxyParams = {
@@ -226,7 +230,7 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     inclination: 80 * Math.PI / 180, // 77° from face-on
     orientation: 10 * Math.PI / 180, // Position angle
     particleCount: 1000, // Adjusted for extended distribution
-    rotationSpeed: 0.000075,
+    rotationSpeed: 0.0001,
   };
 
   // Responsive effect for zoom and centering - only width-based, height-independent
@@ -911,13 +915,26 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
       rotatedY += turbulenceY;
     }
 
-    // Apply inclination (77° from face-on, flipped)
-    const inclinedY = rotatedY * Math.cos(-galaxyParams.inclination) - rotatedZ * Math.sin(-galaxyParams.inclination);
-    const inclinedZ = rotatedY * Math.sin(-galaxyParams.inclination) + rotatedZ * Math.cos(-galaxyParams.inclination);
+    // Apply mouse transformations first (absolute from original position)
+    const mouseTiltX = mouseTiltRef.current.x; // X-axis tilt (pitch) from up/down mouse
+    const mouseRotationZ = mouseTiltRef.current.y; // Z-axis rotation from left/right mouse
+    
+    // Apply X-axis tilt (pitch - up/down mouse movement)
+    const pitchTiltedY = rotatedY * Math.cos(mouseTiltX) - rotatedZ * Math.sin(mouseTiltX);
+    const pitchTiltedZ = rotatedY * Math.sin(mouseTiltX) + rotatedZ * Math.cos(mouseTiltX);
+    
+    // Apply Z-axis rotation (yaw - left/right mouse movement)
+    const finalRotatedX = rotatedX * Math.cos(mouseRotationZ) - pitchTiltedY * Math.sin(mouseRotationZ);
+    const finalRotatedY = rotatedX * Math.sin(mouseRotationZ) + pitchTiltedY * Math.cos(mouseRotationZ);
+    const finalRotatedZ = pitchTiltedZ;
+
+    // Apply inclination (77° from face-on, flipped) to mouse-transformed coordinates
+    const inclinedY = finalRotatedY * Math.cos(-galaxyParams.inclination) - finalRotatedZ * Math.sin(-galaxyParams.inclination);
+    const inclinedZ = finalRotatedY * Math.sin(-galaxyParams.inclination) + finalRotatedZ * Math.cos(-galaxyParams.inclination);
 
     // Apply orientation (35° position angle)
-    const orientedX = rotatedX * Math.cos(galaxyParams.orientation + rotation) - inclinedY * Math.sin(galaxyParams.orientation + rotation);
-    const orientedY = rotatedX * Math.sin(galaxyParams.orientation + rotation) + inclinedY * Math.cos(galaxyParams.orientation + rotation);
+    const orientedX = finalRotatedX * Math.cos(galaxyParams.orientation + rotation) - inclinedY * Math.sin(galaxyParams.orientation + rotation);
+    const orientedY = finalRotatedX * Math.sin(galaxyParams.orientation + rotation) + inclinedY * Math.cos(galaxyParams.orientation + rotation);
 
     // Perspective projection
     const cameraDistance = 10000; // Camera distance from galaxy center
@@ -965,6 +982,11 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
       // Use smooth delta time instead of fixed increment
       timeRef.current += deltaTime * 0.16; // Match the original 16ms increment scaling
     }
+
+    // Smooth tilt interpolation
+    const lerpFactor = 0.005; // Adjust for smoother/faster transitions
+    mouseTiltRef.current.x += (targetTiltRef.current.x - mouseTiltRef.current.x) * lerpFactor;
+    mouseTiltRef.current.y += (targetTiltRef.current.y - mouseTiltRef.current.y) * lerpFactor;
 
     // Project particles
     const projectedParticles = particles
@@ -1122,6 +1144,45 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
 
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, []);
+
+  // Mouse movement for galaxy tilt
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      // Skip if left mouse button is pressed (for rotation)
+      if (e.buttons === 1) return;
+      
+      const centerX = window.innerWidth / 2;
+      const centerY = window.innerHeight / 2;
+      
+      // Calculate normalized mouse position relative to center (-1 to 1)
+      const normalizedX = (e.clientX - centerX) / (window.innerWidth / 2);
+      const normalizedY = (e.clientY - centerY) / (window.innerHeight / 2);
+      
+      // Convert to angles (max 5 degrees = ~0.087 radians)
+      const maxAngleRadians = 2.5 * Math.PI / 180;
+      const targetTiltX = normalizedY * maxAngleRadians; // Up/down mouse for X-axis tilt (pitch)
+      const targetRotationZ = normalizedX * maxAngleRadians; // Left/right mouse for Z-axis rotation (yaw)
+      
+      // Update target values - absolute positioning, not cumulative
+      targetTiltRef.current = {
+        x: targetTiltX, // X-axis tilt (pitch) - up/down movement
+        y: targetRotationZ // Z-axis rotation (yaw) - left/right movement
+      };
+    };
+
+    const handleMouseLeave = () => {
+      // Reset to original position when mouse leaves the window
+      targetTiltRef.current = { x: 0, y: 0 };
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseleave', handleMouseLeave);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseleave', handleMouseLeave);
     };
   }, []);
 
