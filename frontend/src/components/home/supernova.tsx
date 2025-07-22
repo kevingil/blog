@@ -1056,16 +1056,49 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
           const originalG = parseInt(colorMatch[2]);
           const originalB = parseInt(colorMatch[3]);
           
-          // If it's a very bright color (like white stars), make it black
+          // If it's a very bright color (like white stars), add some cosmic colors
           if (originalR > 200 && originalG > 200 && originalB > 200) {
-            r = 0.0; // Pure black
-            g = 0.0;
-            b = 0.0;
+            // Mix of black with some cosmic colors (purple, yellow, dark blue)
+            const colorVariation = Math.random();
+            if (colorVariation < 0.5) {
+              // Pure black
+              r = 0.0;
+              g = 0.0;
+              b = 0.0;
+            } else if (colorVariation < 0.7) {
+              // Dark purple
+              r = 0.2;
+              g = 0.0;
+              b = 0.3;
+            } else if (colorVariation < 0.85) {
+              // Dark yellow/amber
+              r = 0.3;
+              g = 0.2;
+              b = 0.0;
+            } else {
+              // Dark blue
+              r = 0.0;
+              g = 0.1;
+              b = 0.3;
+            }
           } else {
-            // For colored stars, make them very dark but preserve some hue
-            r = r * 0.1; // Make colors very dark
-            g = g * 0.1;
-            b = b * 0.1;
+            // For colored stars, make them darker but with enhanced cosmic colors
+            if (originalR > originalG && originalR > originalB) {
+              // Red-ish stars -> Dark red/purple
+              r = r * 0.3;
+              g = g * 0.1;
+              b = Math.min(0.3, b * 0.2 + 0.1); // Add some blue for purple tint
+            } else if (originalB > originalR && originalB > originalG) {
+              // Blue-ish stars -> Dark blue/purple
+              r = Math.min(0.2, r * 0.1 + 0.05); // Add slight red for purple
+              g = g * 0.1;
+              b = b * 0.4;
+            } else {
+              // Yellow/green-ish stars -> Dark yellow/amber
+              r = r * 0.4;
+              g = g * 0.3;
+              b = b * 0.1;
+            }
           }
         }
         
@@ -1073,7 +1106,17 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
       } else {
         // Default color based on theme
         if (themeRef.current === 'light') {
-          colors.push(0.0, 0.0, 0.0); // Pure black for light mode
+          // Random cosmic colors for light mode
+          const colorVariation = Math.random();
+          if (colorVariation < 0.4) {
+            colors.push(0.0, 0.0, 0.0); // Black
+          } else if (colorVariation < 0.6) {
+            colors.push(0.2, 0.0, 0.3); // Dark purple
+          } else if (colorVariation < 0.8) {
+            colors.push(0.3, 0.2, 0.0); // Dark yellow
+          } else {
+            colors.push(0.0, 0.1, 0.3); // Dark blue
+          }
         } else {
           colors.push(1, 1, 1); // White for dark mode
         }
