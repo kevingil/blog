@@ -226,7 +226,7 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     inclination: 80 * Math.PI / 180, // 77° from face-on
     orientation: 10 * Math.PI / 180, // Position angle
     particleCount: 1000, // Adjusted for extended distribution
-    rotationSpeed: 0.0001,
+    rotationSpeed: 0.000075,
   };
 
   // Responsive effect for zoom and centering - only width-based, height-independent
@@ -791,10 +791,46 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
         size: Math.max(size, 0.05),
         temperature,
         isSpiralArm,
-      });
+            });
     }
 
-
+    // Add simple background stars - separate from galaxy logic
+    const backgroundStarCount = 2000;
+    for (let i = 0; i < backgroundStarCount; i++) {
+      // Random distribution across a large area
+      const x = (Math.random() - 0.5) * 3000; // Large spread
+      const y = (Math.random() - 0.5) * 2000; // Large spread
+      const z = (Math.random() - 0.5) * 1000; // Some depth
+      
+      // Brighter background stars
+      const brightness = 0.08 + Math.random() * 0.15; // Much brighter and more visible
+      const size = 0.8 + Math.random() * 1.5; // Slightly larger for better visibility
+      
+      // Simple star colors - mostly white/yellow with some variation
+      const colorVariation = Math.random();
+      let color: string;
+      if (colorVariation < 0.6) {
+        // White stars
+        color = `rgb(255, 255, 255)`;
+      } else if (colorVariation < 0.8) {
+        // Slightly yellow
+        color = `rgb(255, 250, 200)`;
+      } else {
+        // Slightly blue
+        color = `rgb(200, 220, 255)`;
+      }
+      
+      particles.push({
+        x,
+        y,
+        z,
+        brightness,
+        color,
+        size,
+        temperature: 5500, // Sun-like
+        isSpiralArm: false,
+      });
+    }
 
     return particles;
   };
