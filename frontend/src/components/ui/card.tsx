@@ -18,7 +18,7 @@ function Card({ className, animationDelay = 0, ...props }: React.ComponentProps<
     <div
       data-slot="card"
       className={cn(
-        "bg-card/20 text-card-foreground flex flex-col gap-6 rounded-xl border border-white/20 py-6 shadow-lg",
+        "bg-card/20 text-card-foreground flex flex-col gap-6 rounded-xl border border-gray-200/10 py-6 shadow-lg",
         isAnimated ? "card-animated" : "card-hidden",
         className
       )}

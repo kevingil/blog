@@ -1,7 +1,7 @@
 "use client";
 import { Terminal, Menu } from "lucide-react";
 import React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Sheet,
   SheetContent,
@@ -36,6 +36,7 @@ import { getAboutPage } from '@/services/user';
 import { useQuery } from '@tanstack/react-query';
 import { useAtomValue } from 'jotai';
 import { tokenAtom, isAuthenticatedAtom } from '@/services/auth/auth';
+import { cn } from "@/lib/utils";
 
 interface RouteProps {
   href: string;
@@ -62,8 +63,17 @@ const routeList: RouteProps[] = [
 export const Navbar = () => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isAnimated, setIsAnimated] = useState(false);
   const { user, token, signOut } = useAuth();
   const isAuthenticated = useAtomValue(isAuthenticatedAtom);
+
+  useEffect(() => {
+    // Trigger animation with a delay
+    const timer = setTimeout(() => {
+      setIsAnimated(true);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   const { data: pageData, isLoading: aboutPageLoading } = useQuery({
     queryKey: ['aboutPage'],
@@ -75,8 +85,10 @@ export const Navbar = () => {
 
 
   return (
-    <header className="transition-all duration-300 shadow-nav border backdrop-blur-xl w-full sm:w-[95%] max-w-6xl top-0 sm:top-2 mx-auto
-      sticky border border-indigo-600/10 dark:border-indigo-600/10 z-10 rounded-b-xl sm:rounded-2xl flex justify-between items-center p-4 bg-card/50 dark:bg-stone-800/40 mb-6">
+    <header className={cn(
+      "transition-all duration-300 shadow-lg border border-gray-200/10 w-full sm:w-[95%] max-w-6xl top-0 sm:top-2 mx-auto sticky z-10 rounded-b-xl sm:rounded-2xl flex justify-between items-center p-4 bg-card/20 text-card-foreground mb-6",
+      isAnimated ? "card-animated" : "card-hidden"
+    )}>
       <Link to="/" className="flex items-center">
         <span className={'text-xl'}>{title}</span>
       </Link>
@@ -92,7 +104,10 @@ export const Navbar = () => {
 
           <SheetContent
             side="right"
-            className="flex flex-col justify-between rounded-tr-2xl rounded-br-2xl bg-card border-secondary"
+            className={cn(
+              "flex flex-col justify-between rounded-tr-2xl rounded-br-2xl bg-card/20 text-card-foreground border border-gray-200/10 shadow-lg",
+              "card-animated"
+            )}
           >
             <div>
               <SheetHeader className="mb-4 ml-4">
