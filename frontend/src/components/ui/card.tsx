@@ -1,13 +1,25 @@
 import * as React from "react"
+import { useState, useEffect } from "react"
 
 import { cn } from "@/lib/utils"
 
-function Card({ className, ...props }: React.ComponentProps<"div">) {
+function Card({ className, animationDelay = 0, ...props }: React.ComponentProps<"div"> & { animationDelay?: number }) {
+  const [isAnimated, setIsAnimated] = useState(false);
+
+  useEffect(() => {
+    // Trigger animation with optional delay based on index
+    const timer = setTimeout(() => {
+      setIsAnimated(true);
+    }, 100 + animationDelay);
+    return () => clearTimeout(timer);
+  }, [animationDelay]);
+
   return (
     <div
       data-slot="card"
       className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
+        "bg-card/20 text-card-foreground flex flex-col gap-6 rounded-xl border border-white/20 py-6 shadow-lg",
+        isAnimated ? "card-animated" : "card-hidden",
         className
       )}
       {...props}

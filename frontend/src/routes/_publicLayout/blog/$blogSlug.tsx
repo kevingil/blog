@@ -65,13 +65,9 @@ export default function Page() {
   const searchParams = new URLSearchParams(window.location.search);
   const previewDraft = searchParams.get('previewDraft');
 
-  // State to control the animation
   const articleRef = useRef<HTMLDivElement | null>(null);
-  const [animate, setAnimate] = useState(false);
 
-  // Intersection Observer
   useEffect(() => {
-    setAnimate(true);
     window.scrollTo(0, 0);
   }, []);
 
@@ -92,7 +88,7 @@ export default function Page() {
   }, [blogSlug]);
 
   return (
-    <div className={`container mx-auto py-8 delay-1000 ${animate ? 'animate' : 'hide-down'}`} ref={articleRef}>
+    <div className="container mx-auto py-8" ref={articleRef}>
       <Suspense fallback={<ArticleSkeleton />}>
         <ArticleContent slug={blogSlug} articleData={articleData} />
       </Suspense>
