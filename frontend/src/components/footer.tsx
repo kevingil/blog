@@ -1,12 +1,25 @@
 import { Separator } from "../components/ui/separator";
 import { Link } from "@tanstack/react-router";
-
-
+import { useState, useEffect } from "react";
+import { cn } from "@/lib/utils";
 
 export const FooterSection = () => {
+  const [isAnimated, setIsAnimated] = useState(false);
+
+  useEffect(() => {
+    // Trigger animation with a delay
+    const timer = setTimeout(() => {
+      setIsAnimated(true);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <footer id="footer" className="container max-w-7xl pt-24 mt-auto xl:py-32 mx-auto z-10">
-      <div className="p-10 bg-card border border-secondary xl:rounded-b-2xl  rounded-2xl rounded-b-none shadow-nav">
+      <div className={cn(
+        "p-10 bg-card/20 text-card-foreground border border-gray-200/10 xl:rounded-b-2xl rounded-2xl rounded-b-none shadow-lg",
+        isAnimated ? "card-animated" : "card-hidden"
+      )}>
         <div className="flex flex-col gap-6 md:flex-row md:justify-between w-full">
           <div className="col-span-full md:col-span-1">
             <a href="#" className="flex font-bold items-center">

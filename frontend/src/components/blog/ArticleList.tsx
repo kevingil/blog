@@ -230,7 +230,7 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
       )}
 
 
-    <div ref={containerRef} className={`${animate ? 'animate-card-home' : 'hide-card-home'}`}>
+    <div ref={containerRef}>
 
       {!pagination && (
         <div className="flex justify-between p-4 items-center">
@@ -256,8 +256,8 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
         </div>
       ) : (
         <div className={`grid grid-cols-1 gap-4 w-full`}>
-          {articles.map((article: ArticleListItem) => (
-            <Card key={article.article.id}>
+          {articles.map((article: ArticleListItem, index) => (
+            <Card key={article.article.id} animationDelay={index * 100}>
               <CardContent className="p-0">
                 <Link to="/blog/$blogSlug" params={{ blogSlug: article.article.slug as string }} search={{ page: undefined, tag: undefined, search: undefined }}
                   className='w-full h-full flex flex-row justify-between'>

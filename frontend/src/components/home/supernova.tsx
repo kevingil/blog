@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTheme } from "@/components/theme-provider";
 
 interface StarParticle {
   x: number;
@@ -186,6 +187,8 @@ function temperatureToColor(temp: number): [number, number, number] {
 }
 
 export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = -1 }) => {
+  const { theme } = useTheme();
+  const themeRef = useRef(theme);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
   const glRef = useRef<WebGLRenderingContext | null>(null);
@@ -880,7 +883,7 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
 
     // Enable blending for transparency
     gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE); // Additive blending for glow effect
+    // Note: Blending mode will be set per frame based on theme
 
     return true;
   };
@@ -958,6 +961,11 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
 
   const [particles] = useState(() => generateGalaxyParticles());
 
+  // Update theme ref when theme changes
+  useEffect(() => {
+    themeRef.current = theme;
+  }, [theme]);
+
   const animate = () => {
     const canvas = canvasRef.current;
     const gl = glRef.current;
@@ -968,7 +976,16 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     const { width, height } = canvas;
     
     gl.viewport(0, 0, width, height);
-    gl.clearColor(0.02, 0.02, 0.06, 1.0); // Dark space background
+    
+    // Set background color and blending mode based on theme
+    if (themeRef.current === 'light') {
+      gl.clearColor(0.98, 0.98, 1.0, 1.0); // Light background (almost white with slight blue tint)
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); // Normal alpha blending for dark stars
+    } else {
+      gl.clearColor(0.02, 0.02, 0.06, 1.0); // Dark space background
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE); // Additive blending for glow effect
+    }
+    
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     if (isPlaying) {
@@ -1032,12 +1049,85 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
           b = Math.max(0, Math.min(1, b + colorShift * 0.8));
         }
         
+        // Generate appropriate colors based on theme
+        if (themeRef.current === 'light') {
+          // For light mode, use darker colors that will show up against white background
+          const originalR = parseInt(colorMatch[1]);
+          const originalG = parseInt(colorMatch[2]);
+          const originalB = parseInt(colorMatch[3]);
+          
+          // If it's a very bright color (like white stars), add some cosmic colors
+          if (originalR > 200 && originalG > 200 && originalB > 200) {
+            // Mix of black with some cosmic colors (purple, yellow, dark blue)
+            const colorVariation = Math.random();
+            if (colorVariation < 0.5) {
+              // Pure black
+              r = 0.0;
+              g = 0.0;
+              b = 0.0;
+            } else if (colorVariation < 0.7) {
+              // Dark purple
+              r = 0.2;
+              g = 0.0;
+              b = 0.3;
+            } else if (colorVariation < 0.85) {
+              // Dark yellow/amber
+              r = 0.3;
+              g = 0.2;
+              b = 0.0;
+            } else {
+              // Dark blue
+              r = 0.0;
+              g = 0.1;
+              b = 0.3;
+            }
+          } else {
+            // For colored stars, make them darker but with enhanced cosmic colors
+            if (originalR > originalG && originalR > originalB) {
+              // Red-ish stars -> Dark red/purple
+              r = r * 0.3;
+              g = g * 0.1;
+              b = Math.min(0.3, b * 0.2 + 0.1); // Add some blue for purple tint
+            } else if (originalB > originalR && originalB > originalG) {
+              // Blue-ish stars -> Dark blue/purple
+              r = Math.min(0.2, r * 0.1 + 0.05); // Add slight red for purple
+              g = g * 0.1;
+              b = b * 0.4;
+            } else {
+              // Yellow/green-ish stars -> Dark yellow/amber
+              r = r * 0.4;
+              g = g * 0.3;
+              b = b * 0.1;
+            }
+          }
+        }
+        
         colors.push(r, g, b);
       } else {
-        colors.push(1, 1, 1); // Default white
+        // Default color based on theme
+        if (themeRef.current === 'light') {
+          // Random cosmic colors for light mode
+          const colorVariation = Math.random();
+          if (colorVariation < 0.4) {
+            colors.push(0.0, 0.0, 0.0); // Black
+          } else if (colorVariation < 0.6) {
+            colors.push(0.2, 0.0, 0.3); // Dark purple
+          } else if (colorVariation < 0.8) {
+            colors.push(0.3, 0.2, 0.0); // Dark yellow
+          } else {
+            colors.push(0.0, 0.1, 0.3); // Dark blue
+          }
+        } else {
+          colors.push(1, 1, 1); // White for dark mode
+        }
       }
       
       let alpha = particle.brightness * Math.min(1, projected.scale);
+      
+      // Boost brightness in light mode to make stars more visible
+      if (themeRef.current === 'light') {
+        alpha = Math.min(1.0, alpha * 2.0); // Double the brightness in light mode
+      }
       
       // Add pulsing effect for nebula
       if (particle.isNebula) {

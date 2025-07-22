@@ -17,37 +17,10 @@ function AboutPage() {
     staleTime: 5000,
   });
 
-  // State to control the animation
   const aboutPageRef = useRef<HTMLDivElement | null>(null);
-  const [animate, setAnimate] = useState(false);
-
-  // Intersection Observer
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setAnimate(true);
-          observer.unobserve(entry.target); 
-        }
-      },
-      {
-        threshold: 0.1, 
-      }
-    );
-
-    if (aboutPageRef.current) {
-      observer.observe(aboutPageRef.current);
-    }
-
-    return () => {
-      if (observer && aboutPageRef.current) {
-        observer.unobserve(aboutPageRef.current);
-      }
-    };
-  }, []);
 
   return (
-    <div className={`container w-full mx-auto py-8 ${animate ? 'animate' : 'hide-down'}`} ref={aboutPageRef}>
+    <div className="container w-full mx-auto py-8" ref={aboutPageRef}>
       {isLoading ? (
         <>
           <div className="container mx-auto py-8 w-full">

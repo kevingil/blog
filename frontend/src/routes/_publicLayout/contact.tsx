@@ -25,37 +25,10 @@ function ContactPage() {
     }
   }, [pageData]);
 
-  // State to control the animation
   const contactPageRef = useRef<HTMLDivElement | null>(null);
-  const [animate, setAnimate] = useState(false);
-
-  // Intersection Observer
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setAnimate(true);
-          observer.unobserve(entry.target); 
-        }
-      },
-      {
-        threshold: 0.1, 
-      }
-    );
-
-    if (contactPageRef.current) {
-      observer.observe(contactPageRef.current);
-    }
-
-    return () => {
-      if (observer && contactPageRef.current) {
-        observer.unobserve(contactPageRef.current);
-      }
-    };
-  }, []);
 
   return (
-    <div className={`container w-full mx-auto py-8 ${animate ? 'animate' : 'hide-down'}`} ref={contactPageRef}>
+    <div className="container w-full mx-auto py-8" ref={contactPageRef}>
       {isLoading ? (
         <div className="container mx-auto py-8">
           <Skeleton className="h-12 w-48 mb-8" />

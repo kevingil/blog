@@ -11,6 +11,7 @@ import hljs from 'highlight.js';
 import { createFileRoute } from '@tanstack/react-router';
 import { ArticleData, RecommendedArticle } from '@/services/types';
 import { Link } from "@tanstack/react-router"
+import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute('/_publicLayout/blog/$blogSlug')({
   component: Page,
@@ -64,14 +65,11 @@ export default function Page() {
   const [articleData, setArticleData] = useState<ArticleData | null>(null);
   const searchParams = new URLSearchParams(window.location.search);
   const previewDraft = searchParams.get('previewDraft');
+  const [isRecommendedAnimated, setIsRecommendedAnimated] = useState(false);
 
-  // State to control the animation
   const articleRef = useRef<HTMLDivElement | null>(null);
-  const [animate, setAnimate] = useState(false);
 
-  // Intersection Observer
   useEffect(() => {
-    setAnimate(true);
     window.scrollTo(0, 0);
   }, []);
 
@@ -91,15 +89,26 @@ export default function Page() {
     loadData();
   }, [blogSlug]);
 
+  useEffect(() => {
+    // Trigger recommended articles animation after main article loads
+    const timer = setTimeout(() => {
+      setIsRecommendedAnimated(true);
+    }, 500); // Delay after main article animation
+    return () => clearTimeout(timer);
+  }, [articleData]);
+
   return (
-    <div className={`container mx-auto py-8 delay-1000 ${animate ? 'animate' : 'hide-down'}`} ref={articleRef}>
+    <div className="container mx-auto py-8" ref={articleRef}>
       <Suspense fallback={<ArticleSkeleton />}>
         <ArticleContent slug={blogSlug} articleData={articleData} />
       </Suspense>
 
       <Separator className="my-12" />
 
-      <section className="max-w-4xl mx-auto">
+      <section className={cn(
+        "max-w-4xl mx-auto bg-card/20 text-card-foreground rounded-xl border border-gray-200/10 p-8 shadow-lg",
+        isRecommendedAnimated ? "card-animated" : "card-hidden"
+      )}>
         <h2 className="text-2xl font-bold mb-6">Other Articles</h2>
         <Suspense fallback={<RecommendedArticlesSkeleton />}>
           <RecommendedArticles slug={blogSlug} articleData={articleData} />
@@ -111,6 +120,15 @@ export default function Page() {
 
 function ArticleContent({ slug, articleData }: { slug: string, articleData: ArticleData | null }) {
   const content = articleData?.article;
+  const [isAnimated, setIsAnimated] = useState(false);
+
+  useEffect(() => {
+    // Trigger animation with a delay
+    const timer = setTimeout(() => {
+      setIsAnimated(true);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   marked.use({
     renderer: {
@@ -124,7 +142,10 @@ function ArticleContent({ slug, articleData }: { slug: string, articleData: Arti
   });
 
   return (
-    <article className="max-w-4xl mx-auto">
+    <article className={cn(
+      "max-w-4xl mx-auto bg-card/20 text-card-foreground rounded-xl border border-gray-200/10 p-8 shadow-lg",
+      isAnimated ? "card-animated" : "card-hidden"
+    )}>
       <h1 className="text-4xl font-bold mb-4">{content?.title}</h1>
       {content?.image && (
         <img
@@ -172,9 +193,9 @@ function RecommendedArticles({ slug, articleData }: { slug: string, articleData:
   
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      {recommendedArticles?.map((article: RecommendedArticle) => (
-        <Link to="/blog/$blogSlug" params={{ blogSlug: article.slug }} >
-        <Card className="p-0">
+      {recommendedArticles?.map((article: RecommendedArticle, index: number) => (
+        <Link key={article.slug} to="/blog/$blogSlug" params={{ blogSlug: article.slug }} >
+        <Card className="p-0" animationDelay={index * 100}>
           {article.image && (
             <img
               src={article.image}
