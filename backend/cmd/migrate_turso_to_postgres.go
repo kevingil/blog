@@ -3,11 +3,14 @@ package main
 import (
 	"bufio"
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/lib/pq"
 	_ "github.com/lib/pq"                                // Postgres driver
@@ -200,6 +203,36 @@ func valueOrErr(val bool, err error) string {
 	return "NO"
 }
 
+func nullableString(ns sql.NullString) interface{} {
+	if ns.Valid {
+		return ns.String
+	}
+	return nil
+}
+
+func unixToTime(val interface{}) interface{} {
+	switch v := val.(type) {
+	case int64:
+		return time.Unix(v, 0)
+	case int:
+		return time.Unix(int64(v), 0)
+	case int32:
+		return time.Unix(int64(v), 0)
+	case float64:
+		return time.Unix(int64(v), 0)
+	case nil:
+		return nil
+	}
+	return nil
+}
+
+func generateSlug(title string) string {
+	slug := strings.ToLower(title)
+	slug = regexp.MustCompile(`[^a-z0-9]+`).ReplaceAllString(slug, "-")
+	slug = strings.Trim(slug, "-")
+	return slug
+}
+
 func migrateUsers(tursoDB, pgDB *sql.DB) (inserted, skipped, errored int, userIDMap map[int]string) {
 	fmt.Println("\nMigrating users...")
 	userIDMap = make(map[int]string) // Turso id -> Postgres UUID
@@ -268,25 +301,27 @@ func migrateTags(tursoDB, pgDB *sql.DB) (inserted, skipped, errored int, tagIDMa
 			continue
 		}
 
-		// Check for duplicate by name
+		tagNameLower := strings.ToLower(tagName)
+
+		// Check for duplicate by name (lowercase)
 		var newID int
-		err = pgDB.QueryRow("SELECT id FROM tag WHERE name = $1", tagName).Scan(&newID)
+		err = pgDB.QueryRow("SELECT id FROM tag WHERE LOWER(name) = $1", tagNameLower).Scan(&newID)
 		if err == sql.ErrNoRows {
-			// Insert
-			err = pgDB.QueryRow("INSERT INTO tag (name) VALUES ($1) RETURNING id", tagName).Scan(&newID)
+			// Insert (lowercase)
+			err = pgDB.QueryRow("INSERT INTO tag (name) VALUES ($1) RETURNING id", tagNameLower).Scan(&newID)
 			if err != nil {
-				fmt.Printf("  Error inserting tag %s: %v\n", tagName, err)
+				fmt.Printf("  Error inserting tag %s: %v\n", tagNameLower, err)
 				errored++
 				continue
 			}
-			fmt.Printf("  Inserted: %s\n", tagName)
+			fmt.Printf("  Inserted: %s\n", tagNameLower)
 			inserted++
 		} else if err != nil {
 			fmt.Printf("  Error checking Postgres tag: %v\n", err)
 			errored++
 			continue
 		} else {
-			fmt.Printf("  Skipped (exists): %s\n", tagName)
+			fmt.Printf("  Skipped (exists): %s\n", tagNameLower)
 			skipped++
 		}
 		tagIDMap[tagID] = newID
@@ -306,7 +341,8 @@ func migrateArticles(tursoDB, pgDB *sql.DB, userIDMap map[int]string, tagIDMap m
 
 	for rows.Next() {
 		var id, author int
-		var slug, title, content, image, imageGenReqID string
+		var slug, title, content string
+		var image, imageGenReqID sql.NullString
 		var isDraft bool
 		var embedding, chatHistory []byte
 		var publishedAt, createdAt, updatedAt interface{}
@@ -321,9 +357,29 @@ func migrateArticles(tursoDB, pgDB *sql.DB, userIDMap map[int]string, tagIDMap m
 		pgAuthorID := userIDMap[author]
 		// Map image_generation_request_id if possible
 		var pgImageGenReqID interface{} = nil
-		if imageGenReqID != "" && reqIDMap != nil {
-			if newReqID, ok := reqIDMap[imageGenReqID]; ok {
+		if imageGenReqID.Valid && imageGenReqID.String != "" && reqIDMap != nil {
+			if newReqID, ok := reqIDMap[imageGenReqID.String]; ok {
 				pgImageGenReqID = newReqID
+			}
+		}
+
+		// Handle embedding (vector)
+		var pgEmbedding interface{} = nil
+		if len(embedding) > 0 {
+			pgEmbedding = embedding
+		}
+
+		// Convert times
+		pgPublishedAt := unixToTime(publishedAt)
+		pgCreatedAt := unixToTime(createdAt)
+		pgUpdatedAt := unixToTime(updatedAt)
+
+		// Handle session_memory (chat_history)
+		var pgSessionMemory interface{} = "{}"
+		if len(chatHistory) > 0 {
+			s := strings.TrimSpace(string(chatHistory))
+			if s != "" && (strings.HasPrefix(s, "{") || strings.HasPrefix(s, "[")) {
+				pgSessionMemory = s
 			}
 		}
 
@@ -333,7 +389,7 @@ func migrateArticles(tursoDB, pgDB *sql.DB, userIDMap map[int]string, tagIDMap m
 		if err == sql.ErrNoRows {
 			// Insert
 			err = pgDB.QueryRow(`INSERT INTO article (slug, title, content, image_url, author_id, is_draft, embedding, imagen_request_id, published_at, session_memory, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
-				slug, title, content, image, pgAuthorID, isDraft, embedding, pgImageGenReqID, publishedAt, chatHistory, createdAt, updatedAt).Scan(&newID)
+				slug, title, content, nullableString(image), pgAuthorID, isDraft, pgEmbedding, pgImageGenReqID, pgPublishedAt, pgSessionMemory, pgCreatedAt, pgUpdatedAt).Scan(&newID)
 			if err != nil {
 				fmt.Printf("  Error inserting article %s: %v\n", slug, err)
 				errored++
@@ -403,7 +459,16 @@ func migrateArticleTags(tursoDB, pgDB *sql.DB, articleIDMap map[int]string, tagI
 
 func migratePages(tursoDB, pgDB *sql.DB, tableName string) (inserted, skipped, errored int) {
 	fmt.Printf("\nMigrating %s...\n", tableName)
-	rows, err := tursoDB.Query(fmt.Sprintf("SELECT title, content, meta_description, profile_image, last_updated FROM %s", tableName))
+	var rows *sql.Rows
+	var err error
+	if tableName == "about_page" {
+		rows, err = tursoDB.Query("SELECT title, content, meta_description, profile_image, last_updated FROM about_page")
+	} else if tableName == "contact_page" {
+		rows, err = tursoDB.Query("SELECT title, content, email_address, social_links, meta_description, last_updated FROM contact_page")
+	} else {
+		fmt.Printf("  Unknown page table: %s\n", tableName)
+		return 0, 0, 1
+	}
 	if err != nil {
 		fmt.Printf("  Error querying Turso %s: %v\n", tableName, err)
 		return 0, 0, 1
@@ -411,35 +476,82 @@ func migratePages(tursoDB, pgDB *sql.DB, tableName string) (inserted, skipped, e
 	defer rows.Close()
 
 	for rows.Next() {
-		var title, content, metaDescription, profileImage, lastUpdated string
-		err := rows.Scan(&title, &content, &metaDescription, &profileImage, &lastUpdated)
-		if err != nil {
-			fmt.Printf("  Error scanning %s: %v\n", tableName, err)
-			errored++
-			continue
+		if tableName == "about_page" {
+			var title, content, metaDescription, profileImage, lastUpdated string
+			err := rows.Scan(&title, &content, &metaDescription, &profileImage, &lastUpdated)
+			if err != nil {
+				fmt.Printf("  Error scanning %s: %v\n", tableName, err)
+				errored++
+				continue
+			}
+			slug := generateSlug(title)
+			if slug == "" {
+				fmt.Printf("  Skipping page with empty slug: %s\n", title)
+				skipped++
+				continue
+			}
+			pgUpdatedAt := unixToTime(lastUpdated)
+			var exists bool
+			err = pgDB.QueryRow("SELECT EXISTS (SELECT 1 FROM page WHERE slug = $1)", slug).Scan(&exists)
+			if err != nil {
+				fmt.Printf("  Error checking Postgres page: %v\n", err)
+				errored++
+				continue
+			}
+			if exists {
+				fmt.Printf("  Skipped (exists): %s\n", slug)
+				skipped++
+				continue
+			}
+			_, err = pgDB.Exec(`INSERT INTO page (slug, title, content, description, image_url, updated_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+				slug, title, content, metaDescription, profileImage, pgUpdatedAt)
+			if err != nil {
+				fmt.Printf("  Error inserting page %s: %v\n", title, err)
+				errored++
+				continue
+			}
+			fmt.Printf("  Inserted: %s\n", title)
+			inserted++
+		} else if tableName == "contact_page" {
+			var title, content, emailAddress, socialLinks, metaDescription, lastUpdated string
+			err := rows.Scan(&title, &content, &emailAddress, &socialLinks, &metaDescription, &lastUpdated)
+			if err != nil {
+				fmt.Printf("  Error scanning %s: %v\n", tableName, err)
+				errored++
+				continue
+			}
+			slug := generateSlug(title)
+			if slug == "" {
+				fmt.Printf("  Skipping page with empty slug: %s\n", title)
+				skipped++
+				continue
+			}
+			pgUpdatedAt := unixToTime(lastUpdated)
+			var exists bool
+			err = pgDB.QueryRow("SELECT EXISTS (SELECT 1 FROM page WHERE slug = $1)", slug).Scan(&exists)
+			if err != nil {
+				fmt.Printf("  Error checking Postgres page: %v\n", err)
+				errored++
+				continue
+			}
+			if exists {
+				fmt.Printf("  Skipped (exists): %s\n", slug)
+				skipped++
+				continue
+			}
+			// Store email_address and social_links in meta_data JSON
+			metaData := map[string]string{"email_address": emailAddress, "social_links": socialLinks}
+			metaDataJSON, _ := json.Marshal(metaData)
+			_, err = pgDB.Exec(`INSERT INTO page (slug, title, content, description, meta_data, updated_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+				slug, title, content, metaDescription, string(metaDataJSON), pgUpdatedAt)
+			if err != nil {
+				fmt.Printf("  Error inserting page %s: %v\n", title, err)
+				errored++
+				continue
+			}
+			fmt.Printf("  Inserted: %s\n", title)
+			inserted++
 		}
-		// Check for duplicate by title
-		var exists bool
-		err = pgDB.QueryRow("SELECT EXISTS (SELECT 1 FROM page WHERE title = $1)", title).Scan(&exists)
-		if err != nil {
-			fmt.Printf("  Error checking Postgres page: %v\n", err)
-			errored++
-			continue
-		}
-		if exists {
-			fmt.Printf("  Skipped (exists): %s\n", title)
-			skipped++
-			continue
-		}
-		_, err = pgDB.Exec(`INSERT INTO page (title, content, description, image_url, updated_at) VALUES ($1, $2, $3, $4, $5)`,
-			title, content, metaDescription, profileImage, lastUpdated)
-		if err != nil {
-			fmt.Printf("  Error inserting page %s: %v\n", title, err)
-			errored++
-			continue
-		}
-		fmt.Printf("  Inserted: %s\n", title)
-		inserted++
 	}
 	return
 }
@@ -497,7 +609,8 @@ func migrateImageGeneration(tursoDB, pgDB *sql.DB) (inserted, skipped, errored i
 	defer rows.Close()
 
 	for rows.Next() {
-		var prompt, provider, model, requestID, outputURL, storageKey string
+		var prompt, provider, model, requestID string
+		var outputURL, storageKey sql.NullString
 		var createdAt interface{}
 		err := rows.Scan(&prompt, &provider, &model, &requestID, &outputURL, &storageKey, &createdAt)
 		if err != nil {
@@ -505,6 +618,8 @@ func migrateImageGeneration(tursoDB, pgDB *sql.DB) (inserted, skipped, errored i
 			errored++
 			continue
 		}
+		// Convert createdAt
+		pgCreatedAt := unixToTime(createdAt)
 		// Check for duplicate by request_id
 		var exists bool
 		err = pgDB.QueryRow("SELECT EXISTS (SELECT 1 FROM imagen_request WHERE request_id = $1)", requestID).Scan(&exists)
@@ -518,8 +633,8 @@ func migrateImageGeneration(tursoDB, pgDB *sql.DB) (inserted, skipped, errored i
 			skipped++
 			continue
 		}
-		_, err = pgDB.Exec(`INSERT INTO imagen_request (prompt, provider, model_name, request_id, output_url, created_at) VALUES ($1, $2, $3, $4, $5, $6)`,
-			prompt, provider, model, requestID, outputURL, createdAt)
+		_, err = pgDB.Exec(`INSERT INTO imagen_request (prompt, provider, model_name, request_id, output_url, file_index_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			prompt, provider, model, requestID, nullableString(outputURL), nullableString(storageKey), pgCreatedAt)
 		if err != nil {
 			fmt.Printf("  Error inserting imagen_request %s: %v\n", requestID, err)
 			errored++
