@@ -7,8 +7,7 @@ import (
 
 	"blog-agent-go/backend/models"
 
-	libsql "github.com/ekristen/gorm-libsql"
-	_ "github.com/tursodatabase/libsql-client-go/libsql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -25,8 +24,8 @@ type Service interface {
 	GetDB() *gorm.DB
 
 	// User operations
-	GetUserByEmail(email string) (*models.User, error)
-	CreateUser(user *models.User) error
+	GetAccountByEmail(email string) (*models.Account, error)
+	CreateAccount(account *models.Account) error
 }
 
 type service struct {
@@ -43,22 +42,21 @@ func New() Service {
 		return dbInstance
 	}
 
-	dburl := os.Getenv("DB_URL")
+	dburl := os.Getenv("DATABASE_URL")
 
-	// Require DB_URL for libsql connection
 	if dburl == "" {
-		log.Fatal("DB_URL environment variable is required for libsql connection")
+		log.Fatal("DATABASE_URL environment variable is required for PostgreSQL connection")
 	}
 
 	// Configure GORM logger
 	gormLogger := logger.Default.LogMode(logger.Info)
 
-	// Connect using libsql driver
-	db, err := gorm.Open(libsql.Open(dburl), &gorm.Config{
+	// Connect using PostgreSQL driver
+	db, err := gorm.Open(postgres.Open(dburl), &gorm.Config{
 		Logger: gormLogger,
 	})
 	if err != nil {
-		log.Fatalf("Failed to connect to libsql database '%s': %v", dburl, err)
+		log.Fatalf("Failed to connect to PostgreSQL database '%s': %v", dburl, err)
 	}
 
 	// Get underlying sql.DB for health checks and connection pool configuration
@@ -67,27 +65,11 @@ func New() Service {
 		log.Fatal("Failed to get underlying sql.DB:", err)
 	}
 
-	// Configure connection pool (conservative settings for Turso)
-	sqlDB.SetMaxOpenConns(5)
-	sqlDB.SetMaxIdleConns(5)
+	// Configure connection pool (adjust as needed for Postgres)
+	sqlDB.SetMaxOpenConns(10)
+	sqlDB.SetMaxIdleConns(10)
 
-	// Auto-migrate all models (commented out - models now match existing schema)
-	// log.Println("Running database migrations...")
-	// err = db.AutoMigrate(
-	// 	&models.User{},
-	// 	&models.Article{},
-	// 	&models.Tag{},
-	// 	&models.ArticleTag{},
-	// 	&models.ImageGeneration{},
-	// 	&models.AboutPage{},
-	// 	&models.ContactPage{},
-	// 	&models.Project{},
-	// )
-	// if err != nil {
-	// 	log.Fatal("Failed to auto-migrate models:", err)
-	// }
-
-	log.Printf("Successfully connected to libsql database")
+	log.Printf("Successfully connected to PostgreSQL database")
 	dbInstance = &service{
 		db: db,
 	}
@@ -137,22 +119,20 @@ func (s *service) Close() error {
 	return sqlDB.Close()
 }
 
-func (s *service) GetUserByEmail(email string) (*models.User, error) {
-	var user models.User
-
-	result := s.db.Where("email = ?", email).First(&user)
+func (s *service) GetAccountByEmail(email string) (*models.Account, error) {
+	var account models.Account
+	result := s.db.Where("email = ?", email).First(&account)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
 		return nil, result.Error
 	}
-
-	return &user, nil
+	return &account, nil
 }
 
-func (s *service) CreateUser(user *models.User) error {
-	result := s.db.Create(user)
+func (s *service) CreateAccount(account *models.Account) error {
+	result := s.db.Create(account)
 	return result.Error
 }
 
