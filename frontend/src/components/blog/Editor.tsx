@@ -57,7 +57,7 @@ const DEFAULT_IMAGE_PROMPT = [
 const articleSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   content: z.string().min(1, 'Content is required'),
-  image: z.union([z.string().url(), z.literal('')]).optional(),
+  image_url: z.union([z.string().url(), z.literal('')]).optional(),
   tags: z.array(z.string()),
   isDraft: z.boolean(),
 });
@@ -292,8 +292,8 @@ export function ImageLoader({ article, newImageGenerationRequestId, stagedImageU
 
     if (stagedImageUrl !== undefined) {
       setImageUrl(stagedImageUrl);
-    } else if (article && article.article.image) {
-      setImageUrl(article.article.image);
+    } else if (article && article.article.image_url) {
+      setImageUrl(article.article.image_url);
     }
   }, [article, stagedImageUrl, newImageGenerationRequestId]);
 
@@ -359,7 +359,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     defaultValues: {
       title: '',
       content: '',
-      image: '',
+      image_url: '',
       tags: [],
       isDraft: false,
     }
@@ -425,7 +425,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   // Consume from ImageLoader
   useEffect(() => {
     if (stagedImageUrl) {
-      setValue('image', stagedImageUrl);
+      setValue('image_url', stagedImageUrl);
     }
   }, [stagedImageUrl, setValue]);
 
@@ -438,7 +438,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       const newValues = {
         title: article.article.title || '',
         content: article.article.content || '',
-        image: article.article.image || '',
+        image_url: article.article.image_url || '',
         tags: tagNames,
         isDraft: article.article.is_draft,
       } as ArticleFormData;
@@ -452,7 +452,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       const blank: ArticleFormData = {
         title: '',
         content: '',
-        image: '',
+        image_url: '',
         tags: [],
         isDraft: false,
       };
@@ -486,7 +486,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         const newArticle = await createArticle({
           title: data.title,
           content: data.content,
-          image: data.image,
+          image_url: data.image_url,
           tags: data.tags,
           isDraft: data.isDraft,
           authorId: user.id,
@@ -499,22 +499,17 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         const updateData = {
           title: data.title,
           content: data.content, // HTML content from Tiptap editor
-          image: data.image,
+          image_url: data.image_url,
           tags: data.tags,
           is_draft: data.isDraft,
           published_at: (() => {
-            // If it's a draft, don't set a published date
-            if (data.isDraft) {
-              return null;
+            if (data.isDraft) return null;
+            if (article?.article.published_at && article.article.published_at !== '') {
+              return typeof article.article.published_at === 'string'
+                ? new Date(article.article.published_at).getTime()
+                : article.article.published_at;
             }
-            
-            // If article has a valid published_at date (not 0, null, undefined), use it
-            if (article?.article.published_at && article.article.published_at > 0) {
-              return article.article.published_at;
-            }
-            
-            // Otherwise, use current time for newly published articles
-            return new Date().getTime();
+            return Date.now();
           })(),
         };
         
@@ -530,7 +525,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           // If we are *not* navigating away, refresh local state:
           setValue('title', data.title);
           setValue('content', data.content);
-          setValue('image', data.image || '');
+          setValue('image_url', data.image_url || '');
           setValue('tags', data.tags);
           setValue('isDraft', data.isDraft);
         }
@@ -942,7 +937,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         stagedImageUrl={stagedImageUrl}
                         setStagedImageUrl={setStagedImageUrl}
                       />
-                      {(!stagedImageUrl && !article?.article.image) && (
+                      {(!stagedImageUrl && !article?.article.image_url) && (
                         <div className="text-center">
                           <UploadIcon className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
                           <span className="text-sm text-muted-foreground">Click to add image</span>
@@ -962,15 +957,15 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         <label className="block text-md font-medium leading-6 text-gray-900 dark:text-white">Image URL</label>
                         <Input
                           className="w-full"
-                          {...register('image')}
-                          value={watchedValues.image}
+                          {...register('image_url')}
+                          value={watchedValues.image_url}
                           onChange={(e) => {
-                            setValue('image', e.target.value);
+                            setValue('image_url', e.target.value);
                             setStagedImageUrl(e.target.value);
                           }}
                           placeholder="Optional, for header"
                         />
-                        {errors.image && <p className="text-red-500">{errors.image.message}</p>}
+                        {errors.image_url && <p className="text-red-500">{errors.image_url.message}</p>}
                       </div>
                       <div className="flex items-center gap-2">
                         <Dialog open={generateImageOpen} onOpenChange={setGenerateImageOpen}>

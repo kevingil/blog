@@ -249,7 +249,7 @@ func (s *ArticleService) GetArticles(page int, tag string, status string, articl
 		// Find tag ID by name
 		var tagModel models.Tag
 		if err := db.Where("LOWER(name) = ?", strings.ToLower(tag)).First(&tagModel).Error; err == nil {
-			query = query.Where("tag_ids::jsonb @> ?", fmt.Sprintf("[%d]", tagModel.ID))
+			query = query.Where("tag_ids @> ARRAY[?]::integer[]", tagModel.ID)
 		}
 	}
 
@@ -318,7 +318,7 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string) (*Ar
 	if tag != "" {
 		var tagModel models.Tag
 		if err := db.Where("LOWER(name) = ?", strings.ToLower(tag)).First(&tagModel).Error; err == nil {
-			searchQuery = searchQuery.Where("tag_ids::jsonb @> ?", fmt.Sprintf("[%d]", tagModel.ID))
+			searchQuery = searchQuery.Where("tag_ids @> ARRAY[?]::integer[]", tagModel.ID)
 		}
 	}
 

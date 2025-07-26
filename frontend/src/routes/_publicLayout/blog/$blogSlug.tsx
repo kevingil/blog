@@ -199,9 +199,9 @@ function RecommendedArticles({ slug, articleData }: { slug: string, articleData:
       {recommendedArticles?.map((article: RecommendedArticle, index: number) => (
         <Link key={article.slug} to="/blog/$blogSlug" params={{ blogSlug: article.slug }} >
         <Card className="p-0" animationDelay={index * 100}>
-          {article.image && (
+          {article.image_url && (
             <img
-              src={article.image}
+              src={article.image_url}
               alt={article.title}
               className="rounded-t-lg object-cover h-48 w-full"
             />

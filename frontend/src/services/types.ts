@@ -145,7 +145,7 @@ export type RecommendedArticle = {
   id: number;
   title: string;
   slug: string;
-  image: string | null;
+  image_url: string | null;
   published_at: string | null;
   created_at: string;
   author: string | null;
@@ -160,5 +160,5 @@ export type ArticleRow = {
   is_draft: boolean;
   slug: string | null;
   tags: string[];
-  image: string | null;
+  image_url: string | null;
 } 

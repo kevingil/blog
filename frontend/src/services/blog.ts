@@ -86,7 +86,7 @@ export async function getArticleById(blogId: string): Promise<ArticleListItem | 
 export async function createArticle(article: {
   title: string;
   content: string;
-  image?: string;
+  image_url?: string;
   tags: string[];
   isDraft: boolean;
   authorId: number;
