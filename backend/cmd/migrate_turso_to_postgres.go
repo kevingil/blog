@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"database/sql"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -198,6 +200,32 @@ func valueOrErr(val bool, err error) string {
 }
 
 func main() {
+	checkFlag := flag.Bool("check", false, "Print migration plan and check (default)")
+	runFlag := flag.Bool("run", false, "Run the migration (will prompt for confirmation)")
+	flag.Parse()
+
+	if !*checkFlag && !*runFlag {
+		fmt.Println("\nUsage: go run migrate_turso_to_postgres.go [flags]\n")
+		fmt.Println("Flags:")
+		fmt.Println("  -check   Print migration plan and check (default)")
+		fmt.Println("  -run     Run the migration (will prompt for confirmation)")
+		os.Exit(0)
+	}
+
+	if *runFlag {
+		fmt.Println("\nWARNING: You are about to run the migration. This will modify your Postgres database.")
+		fmt.Print("Are you sure you want to continue? (y/N): ")
+		reader := bufio.NewReader(os.Stdin)
+		resp, _ := reader.ReadString('\n')
+		if resp != "y\n" && resp != "Y\n" {
+			fmt.Println("Aborted.")
+			os.Exit(0)
+		}
+		fmt.Println("\n[Migration logic would run here]")
+		os.Exit(0)
+	}
+
+	// Default: check
 	fmt.Println("\n===== Turso to Postgres Migration Plan & Check =====\n")
 
 	tursoDB, err := connectTurso()
