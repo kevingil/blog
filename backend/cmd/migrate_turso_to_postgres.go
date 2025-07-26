@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/lib/pq"
 	_ "github.com/lib/pq"                                // Postgres driver
 	_ "github.com/tursodatabase/libsql-client-go/libsql" // Turso driver
 )
@@ -199,6 +200,337 @@ func valueOrErr(val bool, err error) string {
 	return "NO"
 }
 
+func migrateUsers(tursoDB, pgDB *sql.DB) (inserted, skipped, errored int, userIDMap map[int]string) {
+	fmt.Println("\nMigrating users...")
+	userIDMap = make(map[int]string) // Turso id -> Postgres UUID
+	rows, err := tursoDB.Query("SELECT id, name, email, passwordHash, role, created_at, updated_at FROM users")
+	if err != nil {
+		fmt.Printf("  Error querying Turso users: %v\n", err)
+		return 0, 0, 1, userIDMap
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var name, email, passwordHash, role string
+		var createdAt, updatedAt interface{}
+		var pgID string
+		err := rows.Scan(&id, &name, &email, &passwordHash, &role, &createdAt, &updatedAt)
+		if err != nil {
+			fmt.Printf("  Error scanning Turso user: %v\n", err)
+			errored++
+			continue
+		}
+
+		// Check for duplicate by email
+		err = pgDB.QueryRow("SELECT id FROM account WHERE email = $1", email).Scan(&pgID)
+		if err == sql.ErrNoRows {
+			// Insert
+			err = pgDB.QueryRow(`INSERT INTO account (name, email, password_hash, role, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+				name, email, passwordHash, role, createdAt, updatedAt).Scan(&pgID)
+			if err != nil {
+				fmt.Printf("  Error inserting user %s: %v\n", email, err)
+				errored++
+				continue
+			}
+			fmt.Printf("  Inserted: %s\n", email)
+			inserted++
+		} else if err != nil {
+			fmt.Printf("  Error checking Postgres user: %v\n", err)
+			errored++
+			continue
+		} else {
+			fmt.Printf("  Skipped (exists): %s\n", email)
+			skipped++
+		}
+		userIDMap[id] = pgID
+	}
+	return
+}
+
+func migrateTags(tursoDB, pgDB *sql.DB) (inserted, skipped, errored int, tagIDMap map[int]int) {
+	fmt.Println("\nMigrating tags...")
+	tagIDMap = make(map[int]int)
+	rows, err := tursoDB.Query("SELECT tag_id, tag_name FROM tags")
+	if err != nil {
+		fmt.Printf("  Error querying Turso tags: %v\n", err)
+		return 0, 0, 1, tagIDMap
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var tagID int
+		var tagName string
+		err := rows.Scan(&tagID, &tagName)
+		if err != nil {
+			fmt.Printf("  Error scanning Turso tag: %v\n", err)
+			errored++
+			continue
+		}
+
+		// Check for duplicate by name
+		var newID int
+		err = pgDB.QueryRow("SELECT id FROM tag WHERE name = $1", tagName).Scan(&newID)
+		if err == sql.ErrNoRows {
+			// Insert
+			err = pgDB.QueryRow("INSERT INTO tag (name) VALUES ($1) RETURNING id", tagName).Scan(&newID)
+			if err != nil {
+				fmt.Printf("  Error inserting tag %s: %v\n", tagName, err)
+				errored++
+				continue
+			}
+			fmt.Printf("  Inserted: %s\n", tagName)
+			inserted++
+		} else if err != nil {
+			fmt.Printf("  Error checking Postgres tag: %v\n", err)
+			errored++
+			continue
+		} else {
+			fmt.Printf("  Skipped (exists): %s\n", tagName)
+			skipped++
+		}
+		tagIDMap[tagID] = newID
+	}
+	return
+}
+
+func migrateArticles(tursoDB, pgDB *sql.DB, userIDMap map[int]string, tagIDMap map[int]int, reqIDMap map[string]string) (inserted, skipped, errored int, articleIDMap map[int]string) {
+	fmt.Println("\nMigrating articles...")
+	articleIDMap = make(map[int]string)
+	rows, err := tursoDB.Query(`SELECT id, slug, title, content, image, author, is_draft, embedding, image_generation_request_id, published_at, chat_history, created_at, updated_at FROM articles`)
+	if err != nil {
+		fmt.Printf("  Error querying Turso articles: %v\n", err)
+		return 0, 0, 1, articleIDMap
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id, author int
+		var slug, title, content, image, imageGenReqID string
+		var isDraft bool
+		var embedding, chatHistory []byte
+		var publishedAt, createdAt, updatedAt interface{}
+		err := rows.Scan(&id, &slug, &title, &content, &image, &author, &isDraft, &embedding, &imageGenReqID, &publishedAt, &chatHistory, &createdAt, &updatedAt)
+		if err != nil {
+			fmt.Printf("  Error scanning Turso article: %v\n", err)
+			errored++
+			continue
+		}
+
+		// Map author_id
+		pgAuthorID := userIDMap[author]
+		// Map image_generation_request_id if possible
+		var pgImageGenReqID interface{} = nil
+		if imageGenReqID != "" && reqIDMap != nil {
+			if newReqID, ok := reqIDMap[imageGenReqID]; ok {
+				pgImageGenReqID = newReqID
+			}
+		}
+
+		// Check for duplicate by slug
+		var newID string
+		err = pgDB.QueryRow("SELECT id FROM article WHERE slug = $1", slug).Scan(&newID)
+		if err == sql.ErrNoRows {
+			// Insert
+			err = pgDB.QueryRow(`INSERT INTO article (slug, title, content, image_url, author_id, is_draft, embedding, imagen_request_id, published_at, session_memory, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+				slug, title, content, image, pgAuthorID, isDraft, embedding, pgImageGenReqID, publishedAt, chatHistory, createdAt, updatedAt).Scan(&newID)
+			if err != nil {
+				fmt.Printf("  Error inserting article %s: %v\n", slug, err)
+				errored++
+				continue
+			}
+			fmt.Printf("  Inserted: %s\n", slug)
+			inserted++
+		} else if err != nil {
+			fmt.Printf("  Error checking Postgres article: %v\n", err)
+			errored++
+			continue
+		} else {
+			fmt.Printf("  Skipped (exists): %s\n", slug)
+			skipped++
+		}
+		articleIDMap[id] = newID
+	}
+	return
+}
+
+func migrateArticleTags(tursoDB, pgDB *sql.DB, articleIDMap map[int]string, tagIDMap map[int]int) (updated, errored int) {
+	fmt.Println("\nMigrating article_tags to article.tag_ids array...")
+	// For each article, collect tag_ids and update article.tag_ids
+	rows, err := tursoDB.Query("SELECT article_id, tag_id FROM article_tags")
+	if err != nil {
+		fmt.Printf("  Error querying Turso article_tags: %v\n", err)
+		return 0, 1
+	}
+	defer rows.Close()
+
+	articleTags := make(map[int][]int)
+	for rows.Next() {
+		var articleID, tagID int
+		err := rows.Scan(&articleID, &tagID)
+		if err != nil {
+			fmt.Printf("  Error scanning article_tag: %v\n", err)
+			errored++
+			continue
+		}
+		articleTags[articleID] = append(articleTags[articleID], tagID)
+	}
+
+	for oldArticleID, tagIDs := range articleTags {
+		newArticleID, ok := articleIDMap[oldArticleID]
+		if !ok {
+			continue // Article not migrated
+		}
+		var newTagIDs []int
+		for _, oldTagID := range tagIDs {
+			if newTagID, ok := tagIDMap[oldTagID]; ok {
+				newTagIDs = append(newTagIDs, newTagID)
+			}
+		}
+		if len(newTagIDs) == 0 {
+			continue
+		}
+		_, err := pgDB.Exec("UPDATE article SET tag_ids = $1 WHERE id = $2", pq.Array(newTagIDs), newArticleID)
+		if err != nil {
+			fmt.Printf("  Error updating article %s tag_ids: %v\n", newArticleID, err)
+			errored++
+			continue
+		}
+		updated++
+	}
+	return
+}
+
+func migratePages(tursoDB, pgDB *sql.DB, tableName string) (inserted, skipped, errored int) {
+	fmt.Printf("\nMigrating %s...\n", tableName)
+	rows, err := tursoDB.Query(fmt.Sprintf("SELECT title, content, meta_description, profile_image, last_updated FROM %s", tableName))
+	if err != nil {
+		fmt.Printf("  Error querying Turso %s: %v\n", tableName, err)
+		return 0, 0, 1
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var title, content, metaDescription, profileImage, lastUpdated string
+		err := rows.Scan(&title, &content, &metaDescription, &profileImage, &lastUpdated)
+		if err != nil {
+			fmt.Printf("  Error scanning %s: %v\n", tableName, err)
+			errored++
+			continue
+		}
+		// Check for duplicate by title
+		var exists bool
+		err = pgDB.QueryRow("SELECT EXISTS (SELECT 1 FROM page WHERE title = $1)", title).Scan(&exists)
+		if err != nil {
+			fmt.Printf("  Error checking Postgres page: %v\n", err)
+			errored++
+			continue
+		}
+		if exists {
+			fmt.Printf("  Skipped (exists): %s\n", title)
+			skipped++
+			continue
+		}
+		_, err = pgDB.Exec(`INSERT INTO page (title, content, description, image_url, updated_at) VALUES ($1, $2, $3, $4, $5)`,
+			title, content, metaDescription, profileImage, lastUpdated)
+		if err != nil {
+			fmt.Printf("  Error inserting page %s: %v\n", title, err)
+			errored++
+			continue
+		}
+		fmt.Printf("  Inserted: %s\n", title)
+		inserted++
+	}
+	return
+}
+
+func migrateProjects(tursoDB, pgDB *sql.DB) (inserted, skipped, errored int) {
+	fmt.Println("\nMigrating projects...")
+	rows, err := tursoDB.Query("SELECT title, description, url, image FROM projects")
+	if err != nil {
+		fmt.Printf("  Error querying Turso projects: %v\n", err)
+		return 0, 0, 1
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var title, description, url, image string
+		err := rows.Scan(&title, &description, &url, &image)
+		if err != nil {
+			fmt.Printf("  Error scanning project: %v\n", err)
+			errored++
+			continue
+		}
+		// Check for duplicate by title
+		var exists bool
+		err = pgDB.QueryRow("SELECT EXISTS (SELECT 1 FROM project WHERE title = $1)", title).Scan(&exists)
+		if err != nil {
+			fmt.Printf("  Error checking Postgres project: %v\n", err)
+			errored++
+			continue
+		}
+		if exists {
+			fmt.Printf("  Skipped (exists): %s\n", title)
+			skipped++
+			continue
+		}
+		_, err = pgDB.Exec(`INSERT INTO project (title, description, url, image_url) VALUES ($1, $2, $3, $4)`,
+			title, description, url, image)
+		if err != nil {
+			fmt.Printf("  Error inserting project %s: %v\n", title, err)
+			errored++
+			continue
+		}
+		fmt.Printf("  Inserted: %s\n", title)
+		inserted++
+	}
+	return
+}
+
+func migrateImageGeneration(tursoDB, pgDB *sql.DB) (inserted, skipped, errored int) {
+	fmt.Println("\nMigrating image_generation...")
+	rows, err := tursoDB.Query("SELECT prompt, provider, model, request_id, output_url, storage_key, created_at FROM image_generation")
+	if err != nil {
+		fmt.Printf("  Error querying Turso image_generation: %v\n", err)
+		return 0, 0, 1
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var prompt, provider, model, requestID, outputURL, storageKey string
+		var createdAt interface{}
+		err := rows.Scan(&prompt, &provider, &model, &requestID, &outputURL, &storageKey, &createdAt)
+		if err != nil {
+			fmt.Printf("  Error scanning image_generation: %v\n", err)
+			errored++
+			continue
+		}
+		// Check for duplicate by request_id
+		var exists bool
+		err = pgDB.QueryRow("SELECT EXISTS (SELECT 1 FROM imagen_request WHERE request_id = $1)", requestID).Scan(&exists)
+		if err != nil {
+			fmt.Printf("  Error checking Postgres imagen_request: %v\n", err)
+			errored++
+			continue
+		}
+		if exists {
+			fmt.Printf("  Skipped (exists): %s\n", requestID)
+			skipped++
+			continue
+		}
+		_, err = pgDB.Exec(`INSERT INTO imagen_request (prompt, provider, model_name, request_id, output_url, created_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+			prompt, provider, model, requestID, outputURL, createdAt)
+		if err != nil {
+			fmt.Printf("  Error inserting imagen_request %s: %v\n", requestID, err)
+			errored++
+			continue
+		}
+		fmt.Printf("  Inserted: %s\n", requestID)
+		inserted++
+	}
+	return
+}
+
 func main() {
 	checkFlag := flag.Bool("check", false, "Print migration plan and check (default)")
 	runFlag := flag.Bool("run", false, "Run the migration (will prompt for confirmation)")
@@ -221,7 +553,79 @@ func main() {
 			fmt.Println("Aborted.")
 			os.Exit(0)
 		}
-		fmt.Println("\n[Migration logic would run here]")
+
+		fmt.Println("\n===== Running Turso to Postgres Migration =====\n")
+
+		tursoDB, err := connectTurso()
+		if err != nil {
+			log.Fatalf("failed to connect to Turso: %v", err)
+		}
+		defer tursoDB.Close()
+
+		pgDB, err := connectPostgres()
+		if err != nil {
+			log.Fatalf("failed to connect to Postgres: %v", err)
+		}
+		defer pgDB.Close()
+
+		// USERS
+		uInserted, uSkipped, uErrored, userIDMap := migrateUsers(tursoDB, pgDB)
+		fmt.Printf("\nUsers: %d inserted, %d skipped, %d errored\n", uInserted, uSkipped, uErrored)
+
+		// TAGS
+		tInserted, tSkipped, tErrored, tagIDMap := migrateTags(tursoDB, pgDB)
+		fmt.Printf("\nTags: %d inserted, %d skipped, %d errored\n", tInserted, tSkipped, tErrored)
+
+		// IMAGE_GENERATION (for mapping request_id)
+		var rows *sql.Rows
+		var reqIDMap map[string]string
+		igInserted, igSkipped, igErrored := migrateImageGeneration(tursoDB, pgDB)
+		fmt.Printf("\nImage Generation: %d inserted, %d skipped, %d errored\n", igInserted, igSkipped, igErrored)
+		// Build reqIDMap for articles
+		reqIDMap = make(map[string]string)
+		rows, err = pgDB.Query("SELECT request_id, id FROM imagen_request")
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var reqID, pgID string
+				_ = rows.Scan(&reqID, &pgID)
+				if reqID != "" {
+					reqIDMap[reqID] = pgID
+				}
+			}
+		}
+
+		// ARTICLES
+		var aInserted, aSkipped, aErrored int
+		var articleIDMap map[int]string
+		aInserted, aSkipped, aErrored, articleIDMap = migrateArticles(tursoDB, pgDB, userIDMap, tagIDMap, reqIDMap)
+		fmt.Printf("\nArticles: %d inserted, %d skipped, %d errored\n", aInserted, aSkipped, aErrored)
+
+		// ARTICLE_TAGS
+		var atUpdated, atErrored int
+		atUpdated, atErrored = migrateArticleTags(tursoDB, pgDB, articleIDMap, tagIDMap)
+		fmt.Printf("\nArticle Tags: %d updated, %d errored\n", atUpdated, atErrored)
+
+		// ABOUT_PAGE
+		var abInserted, abSkipped, abErrored int
+		abInserted, abSkipped, abErrored = migratePages(tursoDB, pgDB, "about_page")
+		fmt.Printf("\nAbout Page: %d inserted, %d skipped, %d errored\n", abInserted, abSkipped, abErrored)
+
+		// CONTACT_PAGE
+		var coInserted, coSkipped, coErrored int
+		coInserted, coSkipped, coErrored = migratePages(tursoDB, pgDB, "contact_page")
+		fmt.Printf("\nContact Page: %d inserted, %d skipped, %d errored\n", coInserted, coSkipped, coErrored)
+
+		// PROJECTS
+		var pInserted, pSkipped, pErrored int
+		pInserted, pSkipped, pErrored = migrateProjects(tursoDB, pgDB)
+		fmt.Printf("\nProjects: %d inserted, %d skipped, %d errored\n", pInserted, pSkipped, pErrored)
+
+		// IMAGE_GENERATION
+		igInserted, igSkipped, igErrored := migrateImageGeneration(tursoDB, pgDB)
+		fmt.Printf("\nImage Generation: %d inserted, %d skipped, %d errored\n", igInserted, igSkipped, igErrored)
+
+		fmt.Println("\nMigration complete.")
 		os.Exit(0)
 	}
 
