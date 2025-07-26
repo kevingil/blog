@@ -622,7 +622,7 @@ func main() {
 		fmt.Printf("\nProjects: %d inserted, %d skipped, %d errored\n", pInserted, pSkipped, pErrored)
 
 		// IMAGE_GENERATION
-		igInserted, igSkipped, igErrored := migrateImageGeneration(tursoDB, pgDB)
+		igInserted, igSkipped, igErrored = migrateImageGeneration(tursoDB, pgDB)
 		fmt.Printf("\nImage Generation: %d inserted, %d skipped, %d errored\n", igInserted, igSkipped, igErrored)
 
 		fmt.Println("\nMigration complete.")
