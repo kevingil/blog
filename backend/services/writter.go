@@ -2,13 +2,13 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/google/uuid"
 
 	"blog-agent-go/backend/models"
 )
@@ -39,7 +39,7 @@ The hike on the first day did not take long, I started around noon, and finished
 One of the great things about Perl is that it ships with Linux out of the box. It's so well integrated with Unix, it can serve as a wrapper around system tools. Its strong support for text manipulation and data processing makes it very valuable when building distributed systems. When deploying complex Docker applications, there might be some pre-processing during the build process that can take advantage of Perl's many strong suits.
 `
 
-func (w *WriterAgent) GenerateArticle(ctx context.Context, prompt, title string, authorID int64) (*models.Article, error) {
+func (w *WriterAgent) GenerateArticle(ctx context.Context, prompt, title string, authorID uuid.UUID) (*models.Article, error) {
 	// First draft with writer system message
 	writerSystemMsg := fmt.Sprintf(`You are a ghostwriter. Draft a compelling blog article based on the given prompt for the author's provider title and prompt.
 
@@ -123,57 +123,13 @@ func (w *WriterAgent) GenerateArticle(ctx context.Context, prompt, title string,
 		return nil, fmt.Errorf("error refining article: %w", err)
 	}
 
-	// Create chat history
-	chatHistory := ArticleChatHistory{
-		Messages: []ArticleChatHistoryMessage{
-			{
-				Role:      "system",
-				Content:   writerSystemMsg,
-				CreatedAt: 0,
-				Metadata:  map[string]interface{}{},
-			},
-			{
-				Role:      "user",
-				Content:   fmt.Sprintf("Title: %q\nPrompt: %s", title, prompt),
-				CreatedAt: 1,
-				Metadata:  map[string]interface{}{},
-			},
-			{
-				Role:      "assistant",
-				Content:   draftMsg.Content[0].Text,
-				CreatedAt: 2,
-				Metadata:  map[string]interface{}{},
-			},
-			{
-				Role:      "system",
-				Content:   editorSystemMsg,
-				CreatedAt: 3,
-				Metadata:  map[string]interface{}{},
-			},
-			{
-				Role:      "assistant",
-				Content:   finalMsg.Content[0].Text,
-				CreatedAt: 4,
-				Metadata:  map[string]interface{}{},
-			},
-		},
-		Metadata: map[string]interface{}{},
-	}
-
-	chatHistoryJSON, err := json.Marshal(chatHistory)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling chat history: %w", err)
-	}
-
 	// Create article
 	article := &models.Article{
-		Title:       title,
-		Content:     finalMsg.Content[0].Text,
-		AuthorID:    uint(authorID),
-		IsDraft:     true,
-		ChatHistory: chatHistoryJSON,
+		Title:    title,
+		Content:  finalMsg.Content[0].Text,
+		AuthorID: authorID,
+		IsDraft:  true,
 	}
-
 	return article, nil
 }
 
