@@ -213,13 +213,28 @@ func nullableString(ns sql.NullString) interface{} {
 func unixToTime(val interface{}) interface{} {
 	switch v := val.(type) {
 	case int64:
+		if v > 1e12 { // likely ms
+			return time.Unix(v/1000, 0)
+		}
 		return time.Unix(v, 0)
 	case int:
-		return time.Unix(int64(v), 0)
+		iv := int64(v)
+		if iv > 1e12 {
+			return time.Unix(iv/1000, 0)
+		}
+		return time.Unix(iv, 0)
 	case int32:
-		return time.Unix(int64(v), 0)
+		iv := int64(v)
+		if iv > 1e12 {
+			return time.Unix(iv/1000, 0)
+		}
+		return time.Unix(iv, 0)
 	case float64:
-		return time.Unix(int64(v), 0)
+		iv := int64(v)
+		if iv > 1e12 {
+			return time.Unix(iv/1000, 0)
+		}
+		return time.Unix(iv, 0)
 	case nil:
 		return nil
 	}
@@ -273,7 +288,15 @@ func migrateUsers(tursoDB, pgDB *sql.DB) (inserted, skipped, errored int, userID
 			errored++
 			continue
 		} else {
-			fmt.Printf("  Skipped (exists): %s\n", email)
+			// Update existing
+			_, err = pgDB.Exec(`UPDATE account SET name=$1, password_hash=$2, role=$3, created_at=$4, updated_at=$5 WHERE email=$6`,
+				name, passwordHash, role, createdAt, updatedAt, email)
+			if err != nil {
+				fmt.Printf("  Error updating user %s: %v\n", email, err)
+				errored++
+				continue
+			}
+			fmt.Printf("  Updated (overwrite): %s\n", email)
 			skipped++
 		}
 		userIDMap[id] = pgID
@@ -321,7 +344,14 @@ func migrateTags(tursoDB, pgDB *sql.DB) (inserted, skipped, errored int, tagIDMa
 			errored++
 			continue
 		} else {
-			fmt.Printf("  Skipped (exists): %s\n", tagNameLower)
+			// Update existing
+			_, err = pgDB.Exec("UPDATE tag SET name=$1 WHERE id=$2", tagNameLower, newID)
+			if err != nil {
+				fmt.Printf("  Error updating tag %s: %v\n", tagNameLower, err)
+				errored++
+				continue
+			}
+			fmt.Printf("  Updated (overwrite): %s\n", tagNameLower)
 			skipped++
 		}
 		tagIDMap[tagID] = newID
@@ -402,7 +432,15 @@ func migrateArticles(tursoDB, pgDB *sql.DB, userIDMap map[int]string, tagIDMap m
 			errored++
 			continue
 		} else {
-			fmt.Printf("  Skipped (exists): %s\n", slug)
+			// Update existing
+			_, err = pgDB.Exec(`UPDATE article SET title=$1, content=$2, image_url=$3, author_id=$4, is_draft=$5, embedding=$6, imagen_request_id=$7, published_at=$8, session_memory=$9, created_at=$10, updated_at=$11 WHERE slug=$12`,
+				title, content, nullableString(image), pgAuthorID, isDraft, pgEmbedding, pgImageGenReqID, pgPublishedAt, pgSessionMemory, pgCreatedAt, pgUpdatedAt, slug)
+			if err != nil {
+				fmt.Printf("  Error updating article %s: %v\n", slug, err)
+				errored++
+				continue
+			}
+			fmt.Printf("  Updated (overwrite): %s\n", slug)
 			skipped++
 		}
 		articleIDMap[id] = newID
@@ -499,7 +537,15 @@ func migratePages(tursoDB, pgDB *sql.DB, tableName string) (inserted, skipped, e
 				continue
 			}
 			if exists {
-				fmt.Printf("  Skipped (exists): %s\n", slug)
+				// Update existing
+				_, err = pgDB.Exec(`UPDATE page SET title=$1, content=$2, description=$3, image_url=$4, updated_at=$5 WHERE slug=$6`,
+					title, content, metaDescription, profileImage, pgUpdatedAt, slug)
+				if err != nil {
+					fmt.Printf("  Error updating page %s: %v\n", title, err)
+					errored++
+					continue
+				}
+				fmt.Printf("  Updated (overwrite): %s\n", title)
 				skipped++
 				continue
 			}
@@ -527,6 +573,9 @@ func migratePages(tursoDB, pgDB *sql.DB, tableName string) (inserted, skipped, e
 				continue
 			}
 			pgUpdatedAt := unixToTime(lastUpdated)
+			// Store email_address and social_links in meta_data JSON
+			metaData := map[string]string{"email_address": emailAddress, "social_links": socialLinks}
+			metaDataJSON, _ := json.Marshal(metaData)
 			var exists bool
 			err = pgDB.QueryRow("SELECT EXISTS (SELECT 1 FROM page WHERE slug = $1)", slug).Scan(&exists)
 			if err != nil {
@@ -535,13 +584,18 @@ func migratePages(tursoDB, pgDB *sql.DB, tableName string) (inserted, skipped, e
 				continue
 			}
 			if exists {
-				fmt.Printf("  Skipped (exists): %s\n", slug)
+				// Update existing
+				_, err = pgDB.Exec(`UPDATE page SET title=$1, content=$2, description=$3, meta_data=$4, updated_at=$5 WHERE slug=$6`,
+					title, content, metaDescription, string(metaDataJSON), pgUpdatedAt, slug)
+				if err != nil {
+					fmt.Printf("  Error updating page %s: %v\n", title, err)
+					errored++
+					continue
+				}
+				fmt.Printf("  Updated (overwrite): %s\n", title)
 				skipped++
 				continue
 			}
-			// Store email_address and social_links in meta_data JSON
-			metaData := map[string]string{"email_address": emailAddress, "social_links": socialLinks}
-			metaDataJSON, _ := json.Marshal(metaData)
 			_, err = pgDB.Exec(`INSERT INTO page (slug, title, content, description, meta_data, updated_at) VALUES ($1, $2, $3, $4, $5, $6)`,
 				slug, title, content, metaDescription, string(metaDataJSON), pgUpdatedAt)
 			if err != nil {
@@ -582,7 +636,15 @@ func migrateProjects(tursoDB, pgDB *sql.DB) (inserted, skipped, errored int) {
 			continue
 		}
 		if exists {
-			fmt.Printf("  Skipped (exists): %s\n", title)
+			// Update existing
+			_, err = pgDB.Exec(`UPDATE project SET description=$1, url=$2, image_url=$3 WHERE title=$4`,
+				description, url, image, title)
+			if err != nil {
+				fmt.Printf("  Error updating project %s: %v\n", title, err)
+				errored++
+				continue
+			}
+			fmt.Printf("  Updated (overwrite): %s\n", title)
 			skipped++
 			continue
 		}
@@ -629,7 +691,15 @@ func migrateImageGeneration(tursoDB, pgDB *sql.DB) (inserted, skipped, errored i
 			continue
 		}
 		if exists {
-			fmt.Printf("  Skipped (exists): %s\n", requestID)
+			// Update existing
+			_, err = pgDB.Exec(`UPDATE imagen_request SET prompt=$1, provider=$2, model_name=$3, output_url=$4, file_index_id=$5, created_at=$6 WHERE request_id=$7`,
+				prompt, provider, model, nullableString(outputURL), nullableString(storageKey), pgCreatedAt, requestID)
+			if err != nil {
+				fmt.Printf("  Error updating imagen_request %s: %v\n", requestID, err)
+				errored++
+				continue
+			}
+			fmt.Printf("  Updated (overwrite): %s\n", requestID)
 			skipped++
 			continue
 		}
