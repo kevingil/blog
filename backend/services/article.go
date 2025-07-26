@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -11,7 +10,6 @@ import (
 	"blog-agent-go/backend/models"
 
 	"github.com/google/uuid"
-	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -100,7 +98,7 @@ func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uuid.UUID,
 	}
 
 	// Process tags: ensure all exist, collect their IDs
-	var tagIDs []int
+	var tagIDs []int64
 	for _, tagName := range req.Tags {
 		tagName = strings.ToLower(strings.TrimSpace(tagName))
 		if tagName == "" {
@@ -116,7 +114,7 @@ func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uuid.UUID,
 		} else if result.Error != nil {
 			return nil, fmt.Errorf("failed to check tag existence: %w", result.Error)
 		}
-		tagIDs = append(tagIDs, tag.ID)
+		tagIDs = append(tagIDs, int64(tag.ID))
 	}
 
 	updates := map[string]interface{}{
@@ -127,8 +125,7 @@ func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uuid.UUID,
 		"published_at": req.PublishedAt,
 	}
 	if len(tagIDs) > 0 {
-		b, _ := json.Marshal(tagIDs)
-		updates["tag_ids"] = datatypes.JSON(b)
+		updates["tag_ids"] = tagIDs
 	}
 
 	result = db.Model(&article).Updates(updates)
@@ -191,10 +188,8 @@ func (s *ArticleService) GetArticle(id uuid.UUID) (*ArticleListItem, error) {
 	}
 
 	// Parse tag IDs
-	var tagIDs []int
-	if err := json.Unmarshal(article.TagIDs, &tagIDs); err != nil {
-		tagIDs = []int{}
-	}
+	var tagIDs []int64
+	tagIDs = article.TagIDs
 
 	// Fetch tag names
 	var tags []TagData
@@ -204,7 +199,7 @@ func (s *ArticleService) GetArticle(id uuid.UUID) (*ArticleListItem, error) {
 			for _, t := range dbTags {
 				tags = append(tags, TagData{
 					ArticleID: article.ID,
-					TagID:     t.ID,
+					TagID:     int(t.ID),
 					TagName:   t.Name,
 				})
 			}
@@ -272,10 +267,8 @@ func (s *ArticleService) GetArticles(page int, tag string, status string, articl
 	var articleItems []ArticleListItem
 	for _, article := range articles {
 		// Parse tag IDs
-		var tagIDs []int
-		if err := json.Unmarshal(article.TagIDs, &tagIDs); err != nil {
-			tagIDs = []int{}
-		}
+		var tagIDs []int64
+		tagIDs = article.TagIDs
 		// Fetch tag names
 		var tags []TagData
 		if len(tagIDs) > 0 {
@@ -284,7 +277,7 @@ func (s *ArticleService) GetArticles(page int, tag string, status string, articl
 				for _, t := range dbTags {
 					tags = append(tags, TagData{
 						ArticleID: article.ID,
-						TagID:     t.ID,
+						TagID:     int(t.ID),
 						TagName:   t.Name,
 					})
 				}
@@ -342,10 +335,8 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string) (*Ar
 
 	var articleItems []ArticleListItem
 	for _, article := range articles {
-		var tagIDs []int
-		if err := json.Unmarshal(article.TagIDs, &tagIDs); err != nil {
-			tagIDs = []int{}
-		}
+		var tagIDs []int64
+		tagIDs = article.TagIDs
 		var tags []TagData
 		if len(tagIDs) > 0 {
 			var dbTags []models.Tag
@@ -353,7 +344,7 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string) (*Ar
 				for _, t := range dbTags {
 					tags = append(tags, TagData{
 						ArticleID: article.ID,
-						TagID:     t.ID,
+						TagID:     int(t.ID),
 						TagName:   t.Name,
 					})
 				}
@@ -389,13 +380,13 @@ func (s *ArticleService) GetPopularTags() ([]string, error) {
 		Count   int
 	}
 	sql := `
-	SELECT tag.name AS tag_name, COUNT(*) AS count
-	FROM article, unnest((tag_ids::jsonb)::int[]) AS tag_id
-	JOIN tag ON tag.id = tag_id
-	WHERE article.is_draft = false
-	GROUP BY tag.name
-	ORDER BY count DESC
-	LIMIT 10`
+SELECT tag.name AS tag_name, COUNT(*) AS count
+FROM article, unnest(tag_ids) AS tag_id
+JOIN tag ON tag.id = tag_id
+WHERE article.is_draft = false
+GROUP BY tag.name
+ORDER BY count DESC
+LIMIT 10`
 	if err := db.Raw(sql).Scan(&results).Error; err != nil {
 		return nil, err
 	}
@@ -458,10 +449,8 @@ func (s *ArticleService) GetArticleData(slug string) (*ArticleData, error) {
 		return nil, err
 	}
 
-	var tagIDs []int
-	if err := json.Unmarshal(article.TagIDs, &tagIDs); err != nil {
-		tagIDs = []int{}
-	}
+	var tagIDs []int64
+	tagIDs = article.TagIDs
 
 	var tags []TagData
 	if len(tagIDs) > 0 {
@@ -470,7 +459,7 @@ func (s *ArticleService) GetArticleData(slug string) (*ArticleData, error) {
 			for _, t := range dbTags {
 				tags = append(tags, TagData{
 					ArticleID: article.ID,
-					TagID:     t.ID,
+					TagID:     int(t.ID),
 					TagName:   t.Name,
 				})
 			}
@@ -551,7 +540,7 @@ func (s *ArticleService) CreateArticle(ctx context.Context, req ArticleCreateReq
 	db := s.db.GetDB()
 
 	// Process tags: ensure all exist, collect their IDs
-	var tagIDs []int
+	var tagIDs []int64
 	for _, tagName := range req.Tags {
 		tagName = strings.ToLower(strings.TrimSpace(tagName))
 		if tagName == "" {
@@ -567,7 +556,7 @@ func (s *ArticleService) CreateArticle(ctx context.Context, req ArticleCreateReq
 		} else if result.Error != nil {
 			return nil, fmt.Errorf("failed to check tag existence: %w", result.Error)
 		}
-		tagIDs = append(tagIDs, tag.ID)
+		tagIDs = append(tagIDs, int64(tag.ID))
 	}
 
 	// Create article
@@ -580,8 +569,7 @@ func (s *ArticleService) CreateArticle(ctx context.Context, req ArticleCreateReq
 		Slug:     generateSlug(req.Title),
 	}
 	if len(tagIDs) > 0 {
-		b, _ := json.Marshal(tagIDs)
-		article.TagIDs = datatypes.JSON(b)
+		article.TagIDs = tagIDs
 	}
 
 	result := db.Create(&article)

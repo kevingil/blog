@@ -271,8 +271,8 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
                         {markdownToPlainText(article.article.content?.substring(0, 160) || '' )}
                       </p>
                       <div className='items-start flex sm:hidden w-full min-w-[40%]'>
-                        {article.article.image !== null && article.article.image !== '' ? (
-                          <img src={article.article.image} alt={article.article.title ? article.article.title : ''}
+                        {article.article.image_url !== null && article.article.image_url !== '' ? (
+                          <img src={article.article.image_url} alt={article.article.title ? article.article.title : ''}
                             className="rounded-lg object-cover aspect-square h-full w-full bg-gray-300/10 dark:bg-gray-100/10" />
                         ) : (
                           <ImageIcon className='h-2/3 w-full text-zinc-200 dark:text-zinc-600' />
@@ -280,17 +280,22 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
                       </div>
                     </div>
                     <p className="text-sm text-muted-foreground mb-4">
-                      {article.article.published_at ? format(new Date(article.article.published_at), 'MMMM d, yyyy') : 'Unknown'}
+                      {(() => {
+                        const date = article.article.published_at ? new Date(article.article.published_at) : null;
+                        return date && !isNaN(date.getTime()) ? format(date, 'MMMM d, yyyy') : 'Unknown';
+                      })()}
                     </p>
                     <div className="flex flex-wrap gap-2 mb-4">
                       {article.tags?.map((tag: { tag_name: string }) => (
-                        <Badge key={tag.tag_name} variant="secondary" className="text-primary">{tag.tag_name.toUpperCase()}</Badge>
+                        tag.tag_name ? (
+                          <Badge key={tag.tag_name} variant="secondary" className="text-primary">{tag.tag_name.toUpperCase()}</Badge>
+                        ) : null
                       ))}
                     </div>
                   </div>
                   <div className='max-w-[30%] p-4 items-center hidden sm:flex aspect-square'>
-                    {article.article.image !== null && article.article.image !== '' ? (
-                      <img src={article.article.image} alt={article.article.title ? article.article.title : ''}
+                    {article.article.image_url !== null && article.article.image_url !== '' ? (
+                      <img src={article.article.image_url} alt={article.article.title ? article.article.title : ''}
                         className="rounded-lg object-cover h-full w-full bg-gray-300/10 dark:bg-gray-100/10" />
                     ) : (
                       <ImageIcon className='h-2/3 w-full text-zinc-200 dark:text-zinc-600' />
