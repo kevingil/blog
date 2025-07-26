@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"blog-agent-go/backend/database"
 	"blog-agent-go/backend/models"
@@ -513,7 +514,7 @@ func (s *ArticleService) GetRecommendedArticles(currentArticleID uuid.UUID) ([]R
 			Title:       article.Title,
 			Slug:        article.Slug,
 			ImageURL:    image,
-			PublishedAt: article.PublishedAt,
+			PublishedAt: safeTimeToString(article.PublishedAt),
 			CreatedAt:   article.CreatedAt,
 			Author:      authorName,
 		})
@@ -587,4 +588,16 @@ func generateSlug(title string) string {
 	slug = strings.ReplaceAll(slug, " ", "-")
 	// Remove special characters (basic implementation)
 	return slug
+}
+
+func safeTimeToString(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	year := t.Year()
+	if year < 0 || year > 9999 {
+		return nil
+	}
+	s := t.UTC().Format(time.RFC3339)
+	return &s
 }

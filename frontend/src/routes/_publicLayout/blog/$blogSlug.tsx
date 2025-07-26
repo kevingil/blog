@@ -160,7 +160,10 @@ function ArticleContent({ slug, articleData }: { slug: string, articleData: Arti
           <p className="text-sm text-muted-foreground">
             {(() => {
               const date = content?.published_at ? new Date(content.published_at) : null;
-              return date && !isNaN(date.getTime()) ? format(date, 'MMMM d, yyyy') : 'Unknown';
+              if (!date || isNaN(date.getTime())) return 'Unknown';
+              const year = date.getFullYear();
+              if (year > 2100) return 'Unknown';
+              return format(date, 'MMMM d, yyyy');
             })()}
           </p>
         </div>
@@ -211,7 +214,10 @@ function RecommendedArticles({ slug, articleData }: { slug: string, articleData:
             <p className="text-sm text-muted-foreground mb-4">
               {(() => {
                 const date = article.published_at ? new Date(article.published_at) : null;
-                return date && !isNaN(date.getTime()) ? format(date, 'MMMM d, yyyy') : 'Unknown';
+                if (!date || isNaN(date.getTime())) return 'Unknown';
+                const year = date.getFullYear();
+                if (year > 2100) return 'Unknown';
+                return format(date, 'MMMM d, yyyy');
               })()}
             </p>
           </CardContent>

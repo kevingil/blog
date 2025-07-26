@@ -1,6 +1,9 @@
 package models
 
 import (
+	"encoding/json"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"gorm.io/datatypes"
@@ -17,7 +20,7 @@ type Article struct {
 	IsDraft         bool           `json:"is_draft" gorm:"default:true"`
 	CreatedAt       string         `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt       string         `json:"updated_at" gorm:"autoUpdateTime"`
-	PublishedAt     *string        `json:"published_at,omitempty"`
+	PublishedAt     *time.Time     `json:"published_at,omitempty"`
 	ImagenRequestID *uuid.UUID     `json:"imagen_request_id" gorm:"type:uuid"`
 	Embedding       []float32      `json:"embedding" gorm:"type:vector(1536)"`
 	SessionMemory   datatypes.JSON `json:"session_memory" gorm:"type:jsonb;default:'{}'"`
@@ -25,6 +28,26 @@ type Article struct {
 
 func (Article) TableName() string {
 	return "article"
+}
+
+func (a Article) MarshalJSON() ([]byte, error) {
+	type Alias Article
+	aux := struct {
+		PublishedAt *string `json:"published_at,omitempty"`
+		Alias
+	}{
+		Alias: (Alias)(a),
+	}
+	if a.PublishedAt != nil {
+		year := a.PublishedAt.Year()
+		if year >= 0 && year <= 9999 {
+			s := a.PublishedAt.UTC().Format(time.RFC3339)
+			aux.PublishedAt = &s
+		} else {
+			aux.PublishedAt = nil
+		}
+	}
+	return json.Marshal(aux)
 }
 
 type Tag struct {
