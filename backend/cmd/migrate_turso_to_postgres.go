@@ -156,216 +156,163 @@ func tableHasData(db *sql.DB, table string) (bool, error) {
 	return count > 0, nil
 }
 
-func checkMigrationNeeded() error {
+func printTableReport(tursoTable, pgTable string, tursoCols, pgCols []string, colMapping [][2]string, tursoDB, pgDB *sql.DB) {
+	fmt.Printf("\n====================\nTurso: %-15s → Postgres: %-15s\n====================\n", tursoTable, pgTable)
+	fmt.Printf("%-22s | %-22s\n", "Turso Column", "Postgres Column")
+	fmt.Println(strings.Repeat("-", 47))
+	for _, pair := range colMapping {
+		fmt.Printf("%-22s | %-22s\n", pair[0], pair[1])
+	}
+
+	fmt.Println("\nTable Data Check:")
+	tursoHasData, tursoErr := tableHasData(tursoDB, tursoTable)
+	pgHasData, pgErr := tableHasData(pgDB, pgTable)
+	fmt.Printf("  Turso table '%s' has data: %v\n", tursoTable, valueOrErr(tursoHasData, tursoErr))
+	fmt.Printf("  Postgres table '%s' has data: %v\n", pgTable, valueOrErr(pgHasData, pgErr))
+	if tursoErr == nil && pgErr == nil {
+		if tursoHasData && !pgHasData {
+			fmt.Println("  → Migration needed.")
+		} else {
+			fmt.Println("  → No migration needed.")
+		}
+	}
+}
+
+func printArticleTagsReport() {
+	fmt.Printf("\n====================\nTurso: %-15s → Postgres: %-15s\n====================\n", "article_tags", "article.tag_ids (array)")
+	fmt.Printf("%-22s | %-22s\n", "Turso Column", "Postgres Column")
+	fmt.Println(strings.Repeat("-", 47))
+	fmt.Printf("%-22s | %-22s\n", "article_id", "article.id (links)")
+	fmt.Printf("%-22s | %-22s\n", "tag_id", "article.tag_ids (array of tag.id)")
+	fmt.Println("\n  This join table is migrated by collecting all tag_ids for each article and storing them in the tag_ids array in the article table.")
+}
+
+func valueOrErr(val bool, err error) string {
+	if err != nil {
+		return "ERR: " + err.Error()
+	}
+	if val {
+		return "YES"
+	}
+	return "NO"
+}
+
+func main() {
+	fmt.Println("\n===== Turso to Postgres Migration Plan & Check =====\n")
+
 	tursoDB, err := connectTurso()
 	if err != nil {
-		return fmt.Errorf("failed to connect to Turso: %w", err)
+		log.Fatalf("failed to connect to Turso: %v", err)
 	}
 	defer tursoDB.Close()
 
 	pgDB, err := connectPostgres()
 	if err != nil {
-		return fmt.Errorf("failed to connect to Postgres: %w", err)
+		log.Fatalf("failed to connect to Postgres: %v", err)
 	}
 	defer pgDB.Close()
 
-	tursoTables, err := listTables(tursoDB, "turso")
-	if err != nil {
-		return fmt.Errorf("failed to list tables in Turso: %w", err)
-	}
-	fmt.Println("Turso tables:", tursoTables)
+	// users → account
+	printTableReport(
+		"users", "account",
+		[]string{"name", "email", "passwordHash", "role", "created_at", "updated_at"},
+		[]string{"name", "email", "password_hash", "role", "created_at", "updated_at"},
+		[][2]string{
+			{"name", "name"},
+			{"email", "email"},
+			{"passwordHash", "password_hash"},
+			{"role", "role"},
+			{"created_at", "created_at"},
+			{"updated_at", "updated_at"},
+		}, tursoDB, pgDB)
 
-	pgTables, err := listTables(pgDB, "postgres")
-	if err != nil {
-		return fmt.Errorf("failed to list tables in Postgres: %w", err)
-	}
-	fmt.Println("Postgres tables:", pgTables)
+	// tags → tag
+	printTableReport(
+		"tags", "tag",
+		[]string{"tag_name", "created_at"},
+		[]string{"name", "created_at"},
+		[][2]string{
+			{"tag_name", "name"},
+			{"created_at", "created_at"},
+		}, tursoDB, pgDB)
 
-	pgTableSet := make(map[string]bool)
-	for _, t := range pgTables {
-		pgTableSet[t] = true
-	}
+	// articles → article
+	printTableReport(
+		"articles", "article",
+		[]string{"slug", "title", "content", "image", "author", "is_draft", "embedding", "image_generation_request_id", "published_at", "chat_history", "created_at", "updated_at"},
+		[]string{"slug", "title", "content", "image_url", "author_id", "is_draft", "embedding", "imagen_request_id", "published_at", "session_memory", "created_at", "updated_at"},
+		[][2]string{
+			{"slug", "slug"},
+			{"title", "title"},
+			{"content", "content"},
+			{"image", "image_url"},
+			{"author", "author_id"},
+			{"is_draft", "is_draft"},
+			{"embedding", "embedding"},
+			{"image_generation_request_id", "imagen_request_id"},
+			{"published_at", "published_at"},
+			{"chat_history", "session_memory"},
+			{"created_at", "created_at"},
+			{"updated_at", "updated_at"},
+		}, tursoDB, pgDB)
 
-	// Mapping from Turso table to Postgres table
-	tableMap := map[string]string{
-		"users":            "account",
-		"tags":             "tag",
-		"articles":         "article",
-		"article_tags":     "article", // tags are now an array in article
-		"about_page":       "page",
-		"contact_page":     "page",
-		"projects":         "project",
-		"image_generation": "imagen_request",
-	}
+	// article_tags → article.tag_ids (array)
+	printArticleTagsReport()
 
-	type tableCheck struct {
-		TursoTable    string
-		PGTable       string
-		ExistsInPG    bool
-		TursoHasData  string
-		PGHasData     string
-		MigrationNeed string
-		Error         string
-	}
+	// about_page → page
+	printTableReport(
+		"about_page", "page",
+		[]string{"title", "content", "meta_description", "profile_image", "last_updated"},
+		[]string{"title", "content", "description", "image_url", "updated_at"},
+		[][2]string{
+			{"title", "title"},
+			{"content", "content"},
+			{"meta_description", "description"},
+			{"profile_image", "image_url"},
+			{"last_updated", "updated_at"},
+		}, tursoDB, pgDB)
 
-	var checks []tableCheck
-	migrationNeeded := false
-	for _, tursoTable := range tursoTables {
-		if tursoTable == "__drizzle_migrations" || tursoTable == "goose_db_version" {
-			continue // skip migration/meta tables
-		}
-		chk := tableCheck{TursoTable: tursoTable}
-		pgTable, ok := tableMap[tursoTable]
-		if !ok {
-			chk.PGTable = "(no mapping)"
-			chk.ExistsInPG = false
-			chk.MigrationNeed = "NO"
-			chk.Error = "No PG mapping"
-			checks = append(checks, chk)
-			continue
-		}
-		chk.PGTable = pgTable
-		chk.ExistsInPG = pgTableSet[pgTable]
+	// contact_page → page
+	printTableReport(
+		"contact_page", "page",
+		[]string{"title", "content", "email_address", "social_links", "meta_description", "last_updated"},
+		[]string{"title", "content", "description", "image_url", "updated_at"},
+		[][2]string{
+			{"title", "title"},
+			{"content", "content"},
+			{"email_address", "(custom: JSON/meta_data)"},
+			{"social_links", "(custom: JSON/meta_data)"},
+			{"meta_description", "description"},
+			{"last_updated", "updated_at"},
+		}, tursoDB, pgDB)
 
-		hasData, err := tableHasData(tursoDB, tursoTable)
-		if err != nil {
-			chk.TursoHasData = "ERR"
-			chk.Error = "Turso: " + err.Error()
-		} else if hasData {
-			chk.TursoHasData = "YES"
-		} else {
-			chk.TursoHasData = "NO"
-		}
+	// projects → project
+	printTableReport(
+		"projects", "project",
+		[]string{"title", "description", "url", "image"},
+		[]string{"title", "description", "url", "image_url"},
+		[][2]string{
+			{"title", "title"},
+			{"description", "description"},
+			{"url", "url"},
+			{"image", "image_url"},
+		}, tursoDB, pgDB)
 
-		if chk.ExistsInPG {
-			pgHasData, err := tableHasData(pgDB, pgTable)
-			if err != nil {
-				chk.PGHasData = "ERR"
-				chk.Error += " | PG: " + err.Error()
-			} else if pgHasData {
-				chk.PGHasData = "YES"
-			} else {
-				chk.PGHasData = "NO"
-			}
-		} else {
-			chk.PGHasData = "N/A"
-		}
+	// image_generation → imagen_request
+	printTableReport(
+		"image_generation", "imagen_request",
+		[]string{"prompt", "provider", "model", "request_id", "output_url", "storage_key", "created_at"},
+		[]string{"prompt", "provider", "model_name", "request_id", "output_url", "file_index_id", "created_at"},
+		[][2]string{
+			{"prompt", "prompt"},
+			{"provider", "provider"},
+			{"model", "model_name"},
+			{"request_id", "request_id"},
+			{"output_url", "output_url"},
+			{"storage_key", "(custom: file_index_id)"},
+			{"created_at", "created_at"},
+		}, tursoDB, pgDB)
 
-		if chk.TursoHasData == "YES" && (chk.PGHasData == "NO" || chk.PGHasData == "N/A") {
-			chk.MigrationNeed = "YES"
-			migrationNeeded = true
-		} else if chk.MigrationNeed == "" {
-			chk.MigrationNeed = "NO"
-		}
-
-		checks = append(checks, chk)
-	}
-
-	// Print table header
-	fmt.Printf("\n%-15s %-15s %-12s %-14s %-14s %-10s %-s\n", "Turso Table", "PG Table", "In Postgres", "Turso Has Data", "PG Has Data", "Migrate?", "Error")
-	fmt.Println(strings.Repeat("-", 100))
-	for _, chk := range checks {
-		fmt.Printf("%-15s %-15s %-12v %-14s %-14s %-10s %-s\n", chk.TursoTable, chk.PGTable, chk.ExistsInPG, chk.TursoHasData, chk.PGHasData, chk.MigrationNeed, chk.Error)
-	}
-
-	if migrationNeeded {
-		fmt.Println("\nMigration is needed.")
-	} else {
-		fmt.Println("\nNo migration needed.")
-	}
-	return nil
-}
-
-func printColumnMappings() {
-	fmt.Println("\n==== Turso → Postgres Column Mappings ====")
-
-	// Table: users → account
-	fmt.Println("\nTurso: users  →  Postgres: account")
-	fmt.Printf("%-22s %-22s\n", "Turso Column", "Postgres Column")
-	fmt.Println(strings.Repeat("-", 44))
-	fmt.Printf("%-22s %-22s\n", "name", "name")
-	fmt.Printf("%-22s %-22s\n", "email", "email")
-	fmt.Printf("%-22s %-22s\n", "passwordHash", "password_hash")
-	fmt.Printf("%-22s %-22s\n", "role", "role")
-	fmt.Printf("%-22s %-22s\n", "created_at", "created_at")
-	fmt.Printf("%-22s %-22s\n", "updated_at", "updated_at")
-
-	// Table: tags → tag
-	fmt.Println("\nTurso: tags  →  Postgres: tag")
-	fmt.Printf("%-22s %-22s\n", "Turso Column", "Postgres Column")
-	fmt.Println(strings.Repeat("-", 44))
-	fmt.Printf("%-22s %-22s\n", "tag_name", "name")
-	fmt.Printf("%-22s %-22s\n", "created_at", "created_at")
-
-	// Table: articles → article
-	fmt.Println("\nTurso: articles  →  Postgres: article")
-	fmt.Printf("%-30s %-22s\n", "Turso Column", "Postgres Column")
-	fmt.Println(strings.Repeat("-", 52))
-	fmt.Printf("%-30s %-22s\n", "slug", "slug")
-	fmt.Printf("%-30s %-22s\n", "title", "title")
-	fmt.Printf("%-30s %-22s\n", "content", "content")
-	fmt.Printf("%-30s %-22s\n", "image", "image_url")
-	fmt.Printf("%-30s %-22s\n", "author", "author_id")
-	fmt.Printf("%-30s %-22s\n", "is_draft", "is_draft")
-	fmt.Printf("%-30s %-22s\n", "embedding", "embedding")
-	fmt.Printf("%-30s %-22s\n", "image_generation_request_id", "imagen_request_id")
-	fmt.Printf("%-30s %-22s\n", "published_at", "published_at")
-	fmt.Printf("%-30s %-22s\n", "chat_history", "session_memory")
-	fmt.Printf("%-30s %-22s\n", "created_at", "created_at")
-	fmt.Printf("%-30s %-22s\n", "updated_at", "updated_at")
-
-	// Table: about_page/contact_page → page
-	fmt.Println("\nTurso: about_page/contact_page  →  Postgres: page")
-	fmt.Printf("%-22s %-22s\n", "Turso Column", "Postgres Column")
-	fmt.Println(strings.Repeat("-", 44))
-	fmt.Printf("%-22s %-22s\n", "title", "title")
-	fmt.Printf("%-22s %-22s\n", "content", "content")
-	fmt.Printf("%-22s %-22s\n", "meta_description", "description")
-	fmt.Printf("%-22s %-22s\n", "profile_image", "image_url")
-	fmt.Printf("%-22s %-22s\n", "last_updated", "updated_at")
-	fmt.Printf("%-22s %-22s\n", "email_address", "(custom: JSON/meta_data)")
-	fmt.Printf("%-22s %-22s\n", "social_links", "(custom: JSON/meta_data)")
-
-	// Table: projects → project
-	fmt.Println("\nTurso: projects  →  Postgres: project")
-	fmt.Printf("%-22s %-22s\n", "Turso Column", "Postgres Column")
-	fmt.Println(strings.Repeat("-", 44))
-	fmt.Printf("%-22s %-22s\n", "title", "title")
-	fmt.Printf("%-22s %-22s\n", "description", "description")
-	fmt.Printf("%-22s %-22s\n", "url", "url")
-	fmt.Printf("%-22s %-22s\n", "image", "image_url")
-	fmt.Printf("%-22s %-22s\n", "created_at", "created_at")
-	fmt.Printf("%-22s %-22s\n", "updated_at", "updated_at")
-
-	// Table: image_generation → imagen_request
-	fmt.Println("\nTurso: image_generation  →  Postgres: imagen_request")
-	fmt.Printf("%-22s %-22s\n", "Turso Column", "Postgres Column")
-	fmt.Println(strings.Repeat("-", 44))
-	fmt.Printf("%-22s %-22s\n", "prompt", "prompt")
-	fmt.Printf("%-22s %-22s\n", "provider", "provider")
-	fmt.Printf("%-22s %-22s\n", "model", "model_name")
-	fmt.Printf("%-22s %-22s\n", "request_id", "request_id")
-	fmt.Printf("%-22s %-22s\n", "output_url", "output_url")
-	fmt.Printf("%-22s %-22s\n", "storage_key", "(custom: file_index_id)")
-	fmt.Printf("%-22s %-22s\n", "created_at", "created_at")
-
-	// Table: article_tags → article.tag_ids
-	fmt.Println("\nTurso: article_tags  →  Postgres: article.tag_ids (array)")
-	fmt.Printf("%-22s %-22s\n", "Turso Column", "Postgres Column")
-	fmt.Println(strings.Repeat("-", 44))
-	fmt.Printf("%-22s %-22s\n", "article_id", "article.id (links)")
-	fmt.Printf("%-22s %-22s\n", "tag_id", "article.tag_ids (array of tag.id)")
-}
-
-func main() {
-	fmt.Println("Starting Turso to Postgres migration...")
-
-	printColumnMappings()
-
-	if err := checkMigrationNeeded(); err != nil {
-		log.Fatalf("Check failed: %v", err)
-	}
-
-	fmt.Println("Migration check complete.")
+	fmt.Println("\nMigration check complete.")
 	os.Exit(0)
 }
