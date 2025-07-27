@@ -434,7 +434,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     if (article && !isNew) {
       console.log("Populating form with article data:", article);
       // Extract tag names from the server response format
-      const tagNames = article.tags ? article.tags.map((tag: any) => tag?.tag_name?.toUpperCase() || tag) : [];
+      const tagNames = article.tags ? article.tags
+        .map((tag: any) => tag?.name?.toUpperCase())
+        .filter((name: string | undefined) => !!name && name !== '') : [];
       const newValues = {
         title: article.article.title || '',
         content: article.article.content || '',
@@ -998,7 +1000,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                   type="submit"
                                   className="w-full"
                                   onClick={async () => {
-                                    const result = await generateArticleImage(imagePrompt || '', article?.article.id || 0);
+                                    const result = await generateArticleImage(imagePrompt || '', article?.article.id || '');
                                     if (result.success) {
                                       setNewImageGenerationRequestId(result.generationRequestId);
                                       toast({ title: 'Success', description: 'Image generated successfully.' });
@@ -1019,7 +1021,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                           onClick={async (e) => {
                             setGeneratingImage(true);
                             e.preventDefault();
-                            const result = await generateArticleImage(article?.article.title || '', article?.article.id || 0);
+                            const result = await generateArticleImage(article?.article.title || '', article?.article.id || '');
                             if (result.success) {
                               setNewImageGenerationRequestId(result.generationRequestId);
                               toast({ title: 'Success', description: 'Image generated successfully.' });
