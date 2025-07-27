@@ -101,7 +101,7 @@ export const ITEMS_PER_PAGE = 6;
 
 export type ArticleListItem = {
   article: {
-    id: number;
+    id: string;
     title: string;
     slug: string;
     content: string;
@@ -111,17 +111,21 @@ export type ArticleListItem = {
     published_at: string | null;
     is_draft: boolean;
     image_generation_request_id?: string | null;
-    author: number | null;
+    author_id: string | null;
     chat_history?: any | null;
+    tag_ids?: number[];
+    imagen_request_id?: string | null;
+    embedding?: any | null;
+    session_memory?: Record<string, any>;
   };
   author: {
-    id: number;
+    id: string;
     name: string;
   };
   tags: {
-    article_id: number;
+    article_id: string;
     tag_id: number;
-    tag_name: string;
+    name: string;
   }[] | null;
 };
 

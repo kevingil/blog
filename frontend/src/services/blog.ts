@@ -126,7 +126,7 @@ export async function updateArticle(slug: string, article: {
 }
 
 // Article image operations
-export async function generateArticleImage(prompt: string, articleId: number): Promise<{ success: boolean; generationRequestId: string }> {
+export async function generateArticleImage(prompt: string, articleId: string): Promise<{ success: boolean; generationRequestId: string }> {
   const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${articleId}/image`, {
     method: 'POST',
     headers: {
@@ -157,7 +157,7 @@ export async function getImageGenerationStatus(requestId: string): Promise<{ out
 }
 
 // Article context operations
-export async function updateArticleWithContext(articleId: number): Promise<{ content: string; success: boolean }> {
+export async function updateArticleWithContext(articleId: string): Promise<{ content: string; success: boolean }> {
   const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${articleId}/context`, {
     method: 'PUT',
   });

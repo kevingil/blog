@@ -286,9 +286,9 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
                       })()}
                     </p>
                     <div className="flex flex-wrap gap-2 mb-4">
-                      {article.tags?.map((tag: { tag_name: string }) => (
-                        tag.tag_name ? (
-                          <Badge key={tag.tag_name} variant="secondary" className="text-primary">{tag.tag_name.toUpperCase()}</Badge>
+                      {article.tags?.map((tag) => (
+                        tag.name ? (
+                          <Badge key={tag.tag_id} variant="secondary" className="text-primary">{tag.name.toUpperCase()}</Badge>
                         ) : null
                       ))}
                     </div>
