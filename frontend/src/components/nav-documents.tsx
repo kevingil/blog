@@ -78,6 +78,14 @@ export function NavDocuments({
           })),
         };
       });
+      if (
+        articleToDelete &&
+        articleToDelete.article.slug &&
+        location.pathname.includes(articleToDelete.article.slug)
+      ) {
+        navigate({ to: "/dashboard/blog" });
+      }
+      // Do NOT call setArticleToDelete(null) here!
     },
   })
 
@@ -106,41 +114,6 @@ export function NavDocuments({
 
   return (
     <>
-      <AlertDialog open={!!articleToDelete} onOpenChange={open => { if (!open) setArticleToDelete(null) }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Article?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete the article <b>{articleToDelete?.article.title}</b>? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel asChild>
-              <button type="button">Cancel</button>
-            </AlertDialogCancel>
-            <AlertDialogAction asChild>
-              <button
-                type="button"
-                onClick={() => {
-                  if (articleToDelete) {
-                    deleteMutation.mutate(articleToDelete.article.id, {
-                      onSuccess: () => {
-                        if (articleToDelete.article.slug && location.pathname.includes(articleToDelete.article.slug)) {
-                          navigate({ to: "/dashboard/blog" })
-                        }
-                      }
-                    })
-                  }
-                  setArticleToDelete(null)
-                }}
-                disabled={deleteMutation.isPending}
-              >
-                {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
-              </button>
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
       <SidebarGroup className="group-data-[collapsible=icon]:hidden">
         <div className="flex flex-row justify-between gap-2">
         <SidebarGroupLabel>Recent Articles</SidebarGroupLabel>
@@ -205,14 +178,46 @@ export function NavDocuments({
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem 
-                        variant="destructive" 
-                        onClick={() => setArticleToDelete(articleItem)}
-                        disabled={deleteMutation.isPending}
-                      >
-                        <IconTrash />
-                        <span>Delete</span>
-                      </DropdownMenuItem>
+                      {/* AlertDialog is now inside DropdownMenuContent for each article */}
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={e => {
+                              e.preventDefault();
+                              setArticleToDelete(articleItem);
+                            }}
+                            disabled={deleteMutation.isPending}
+                          >
+                            <IconTrash />
+                            <span>Delete</span>
+                          </DropdownMenuItem>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Article?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete the article <b>{articleItem.article.title}</b>? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel asChild>
+                              <button type="button">Cancel</button>
+                            </AlertDialogCancel>
+                            <AlertDialogAction asChild>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  deleteMutation.mutate(articleItem.article.id);
+                                }}
+                                disabled={deleteMutation.isPending}
+                              >
+                                {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+                              </button>
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </SidebarMenuItem>
