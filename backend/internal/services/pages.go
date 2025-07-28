@@ -1,8 +1,8 @@
 package services
 
 import (
-	"blog-agent-go/backend/database"
-	"blog-agent-go/backend/models"
+	"blog-agent-go/backend/internal/database"
+	"blog-agent-go/backend/internal/models"
 
 	"gorm.io/gorm"
 )

@@ -10,7 +10,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/google/uuid"
 
-	"blog-agent-go/backend/models"
+	"blog-agent-go/backend/internal/models"
 )
 
 type WriterAgent struct {

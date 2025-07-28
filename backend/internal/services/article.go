@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"blog-agent-go/backend/database"
-	"blog-agent-go/backend/models"
+	"blog-agent-go/backend/internal/database"
+	"blog-agent-go/backend/internal/models"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"

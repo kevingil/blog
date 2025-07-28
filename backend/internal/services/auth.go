@@ -9,8 +9,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"blog-agent-go/backend/database"
-	"blog-agent-go/backend/models"
+	"blog-agent-go/backend/internal/database"
+	"blog-agent-go/backend/internal/models"
 
 	"github.com/google/uuid"
 )
