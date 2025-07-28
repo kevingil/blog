@@ -67,8 +67,17 @@ export function NavDocuments({
     mutationFn: async (id: string) => {
       return await deleteArticle(id)
     },
-    onSuccess: () => {
-      setArticleToDelete(null);
+    onSuccess: (_, id: string) => {
+      queryClient.setQueryData(['sidebar-articles', 'all'], (oldData: any) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: any) => ({
+            ...page,
+            articles: page.articles.filter((a: any) => a.article.id !== id),
+          })),
+        };
+      });
     },
   })
 
@@ -116,16 +125,13 @@ export function NavDocuments({
                   if (articleToDelete) {
                     deleteMutation.mutate(articleToDelete.article.id, {
                       onSuccess: () => {
-                        if (
-                          articleToDelete.article.slug &&
-                          location.pathname.includes(articleToDelete.article.slug)
-                        ) {
-                          navigate({ to: "/dashboard/blog" });
+                        if (articleToDelete.article.slug && location.pathname.includes(articleToDelete.article.slug)) {
+                          navigate({ to: "/dashboard/blog" })
                         }
-                        setArticleToDelete(null);
-                      },
-                    });
+                      }
+                    })
                   }
+                  setArticleToDelete(null)
                 }}
                 disabled={deleteMutation.isPending}
               >
