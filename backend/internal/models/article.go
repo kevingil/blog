@@ -59,3 +59,22 @@ type Tag struct {
 func (Tag) TableName() string {
 	return "tag"
 }
+
+// ArticleSource represents a source/citation for an article
+// Matches the article_source table
+
+type ArticleSource struct {
+	ID         uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ArticleID  uuid.UUID      `json:"article_id" gorm:"type:uuid;not null;index"`
+	Title      string         `json:"title"`
+	Content    string         `json:"content" gorm:"type:text;not null"`
+	URL        string         `json:"url"`
+	SourceType string         `json:"source_type" gorm:"default:web"`
+	Embedding  []float32      `json:"embedding" gorm:"type:vector(1536)"`
+	MetaData   datatypes.JSON `json:"meta_data" gorm:"type:jsonb;default:'{}'"`
+	CreatedAt  string         `json:"created_at" gorm:"autoCreateTime"`
+}
+
+func (ArticleSource) TableName() string {
+	return "article_source"
+}

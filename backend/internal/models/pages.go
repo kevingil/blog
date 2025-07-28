@@ -21,11 +21,3 @@ type Page struct {
 func (Page) TableName() string {
 	return "page"
 }
-
-type Project struct {
-	ID          uint   `json:"id" gorm:"primaryKey"`
-	Title       string `json:"title" gorm:"not null"`
-	Description string `json:"description" gorm:"type:text"`
-	URL         string `json:"url"`
-	Image       string `json:"image"`
-}
