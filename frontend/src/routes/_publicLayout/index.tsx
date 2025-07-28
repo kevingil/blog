@@ -7,7 +7,7 @@ import LinkedInIcon from "@/components/icons/linkedin-icon";
 import { createFileRoute } from '@tanstack/react-router';
 import { useAtomValue } from 'jotai';
 import { tokenAtom, isAuthenticatedAtom } from '@/services/auth/auth';
-import { SpiralGalaxyAnimation } from "@/components/home/supernova";
+import { SpiralGalaxyAnimation } from "@/components/home/galaxy";
 
 export const Route = createFileRoute('/_publicLayout/')({
   component: HomePage,
