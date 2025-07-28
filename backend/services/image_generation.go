@@ -10,6 +10,7 @@ import (
 	"blog-agent-go/backend/database"
 	"blog-agent-go/backend/models"
 
+	"github.com/google/uuid"
 	"github.com/openai/openai-go"
 )
 
@@ -28,8 +29,8 @@ type ImageGenerationStatus struct {
 	OutputURL string `json:"output_url"`
 }
 
-func (s *ImageGenerationService) GenerateArticleImage(ctx context.Context, prompt string, articleID uint, generatePrompt bool) (*models.ImageGeneration, error) {
-	if articleID == 0 {
+func (s *ImageGenerationService) GenerateArticleImage(ctx context.Context, prompt string, articleID uuid.UUID, generatePrompt bool) (*models.ImageGeneration, error) {
+	if articleID == uuid.Nil {
 		return nil, nil
 	}
 
@@ -79,7 +80,7 @@ func (s *ImageGenerationService) GenerateArticleImage(ctx context.Context, promp
 
 	// Build storage key and upload
 	timestamp := time.Now().Unix()
-	key := fmt.Sprintf("images/articles/%d/%d.png", articleID, timestamp)
+	key := fmt.Sprintf("images/articles/%s/%d.png", articleID, timestamp)
 	if err := s.storage.UploadFile(ctx, key, imgBytes); err != nil {
 		return nil, err
 	}
@@ -88,19 +89,18 @@ func (s *ImageGenerationService) GenerateArticleImage(ctx context.Context, promp
 
 	// Update article with new image URL
 	result := db.Model(&models.Article{}).Where("id = ?", articleID).Updates(map[string]interface{}{
-		"image":                       imageURL,
-		"image_generation_request_id": nil,
+		"image_url":         imageURL,
+		"imagen_request_id": nil,
 	})
 	if result.Error != nil {
 		return nil, result.Error
 	}
 
 	imageGen := &models.ImageGeneration{
-		Prompt:     prompt,
-		Provider:   "openai",
-		ModelName:  "gpt-image-1",
-		OutputURL:  imageURL,
-		StorageKey: key,
+		Prompt:    prompt,
+		Provider:  "openai",
+		ModelName: "gpt-image-1",
+		OutputURL: imageURL,
 	}
 
 	// Save to database

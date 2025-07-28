@@ -11,6 +11,8 @@ import (
 
 	"blog-agent-go/backend/database"
 	"blog-agent-go/backend/models"
+
+	"github.com/google/uuid"
 )
 
 type AuthService struct {
@@ -57,7 +59,7 @@ type SessionData struct {
 }
 
 type UserData struct {
-	ID    uint   `json:"id"`
+	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Email string `json:"email"`
 	Role  string `json:"role"`
@@ -65,20 +67,20 @@ type UserData struct {
 
 func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
 	fmt.Printf("Login request received for email:'%s'\n", req.Email)
-	user, err := s.db.GetUserByEmail(req.Email)
+	account, err := s.db.GetAccountByEmail(req.Email)
 	if err != nil {
 		return nil, errors.New("invalid account credentials")
 	}
-	if user == nil {
+	if account == nil {
 		return nil, errors.New("invalid account credentials")
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(req.Password)); err != nil {
 		return nil, errors.New("invalid user credentials")
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": user.ID,
+		"sub": account.ID,
 		"exp": time.Now().Add(time.Hour * 24).Unix(),
 	})
 
@@ -90,10 +92,10 @@ func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
 	return &LoginResponse{
 		Token: tokenString,
 		User: UserData{
-			ID:    user.ID,
-			Name:  user.Name,
-			Email: user.Email,
-			Role:  user.Role,
+			ID:    account.ID.String(),
+			Name:  account.Name,
+			Email: account.Email,
+			Role:  account.Role,
 		},
 	}, nil
 }
@@ -104,14 +106,14 @@ func (s *AuthService) Register(req RegisterRequest) error {
 		return err
 	}
 
-	user := models.User{
+	account := models.Account{
 		Name:         req.Name,
 		Email:        req.Email,
 		PasswordHash: string(hashedPassword),
 		Role:         "user",
 	}
 
-	return s.db.CreateUser(&user)
+	return s.db.CreateAccount(&account)
 }
 
 func (s *AuthService) ValidateToken(tokenString string) (*jwt.Token, error) {
@@ -133,51 +135,51 @@ func (s *AuthService) ValidateToken(tokenString string) (*jwt.Token, error) {
 	return token, nil
 }
 
-func (s *AuthService) UpdateAccount(userID uint, req UpdateAccountRequest) error {
+func (s *AuthService) UpdateAccount(accountID uuid.UUID, req UpdateAccountRequest) error {
 	db := s.db.GetDB()
 
-	// Check if user exists
-	var user models.User
-	result := db.First(&user, userID)
+	// Check if account exists
+	var account models.Account
+	result := db.First(&account, accountID)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			return errors.New("user not found")
+			return errors.New("account not found")
 		}
 		return result.Error
 	}
 
-	// Check if email is already taken by another user
-	if req.Email != user.Email {
+	// Check if email is already taken by another account
+	if req.Email != account.Email {
 		var count int64
-		db.Model(&models.User{}).Where("email = ? AND id != ?", req.Email, userID).Count(&count)
+		db.Model(&models.Account{}).Where("email = ? AND id != ?", req.Email, accountID).Count(&count)
 		if count > 0 {
 			return errors.New("email already taken")
 		}
 	}
 
-	// Update user
-	result = db.Model(&user).Updates(models.User{
+	// Update account
+	result = db.Model(&account).Updates(models.Account{
 		Name:  req.Name,
 		Email: req.Email,
 	})
 	return result.Error
 }
 
-func (s *AuthService) UpdatePassword(userID uint, req UpdatePasswordRequest) error {
+func (s *AuthService) UpdatePassword(accountID uuid.UUID, req UpdatePasswordRequest) error {
 	db := s.db.GetDB()
 
-	// Get user
-	var user models.User
-	result := db.First(&user, userID)
+	// Get account
+	var account models.Account
+	result := db.First(&account, accountID)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			return errors.New("user not found")
+			return errors.New("account not found")
 		}
 		return result.Error
 	}
 
 	// Verify current password
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(req.CurrentPassword)); err != nil {
 		return errors.New("current password is incorrect")
 	}
 
@@ -188,30 +190,30 @@ func (s *AuthService) UpdatePassword(userID uint, req UpdatePasswordRequest) err
 	}
 
 	// Update password
-	result = db.Model(&user).Update("password_hash", string(hashedPassword))
+	result = db.Model(&account).Update("password_hash", string(hashedPassword))
 	return result.Error
 }
 
-func (s *AuthService) DeleteAccount(userID uint, password string) error {
+func (s *AuthService) DeleteAccount(accountID uuid.UUID, password string) error {
 	db := s.db.GetDB()
 
-	// Get user
-	var user models.User
-	result := db.First(&user, userID)
+	// Get account
+	var account models.Account
+	result := db.First(&account, accountID)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			return errors.New("user not found")
+			return errors.New("account not found")
 		}
 		return result.Error
 	}
 
 	// Verify password
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(password)); err != nil {
 		return errors.New("password is incorrect")
 	}
 
-	// Delete user
-	result = db.Delete(&user)
+	// Delete account
+	result = db.Delete(&account)
 	return result.Error
 }
 
@@ -265,13 +267,13 @@ func (s *AuthService) VerifyToken(tokenString string) (*SessionData, error) {
 	}, nil
 }
 
-func (s *AuthService) SetSession(user *models.User) (*SessionData, error) {
+func (s *AuthService) SetSession(account *models.Account) (*SessionData, error) {
 	sessionData := &SessionData{
 		User: UserData{
-			ID:    user.ID,
-			Name:  user.Name,
-			Email: user.Email,
-			Role:  user.Role,
+			ID:    account.ID.String(),
+			Name:  account.Name,
+			Email: account.Email,
+			Role:  account.Role,
 		},
 		Expires: time.Now().Add(time.Hour * 24).Format(time.RFC3339),
 	}

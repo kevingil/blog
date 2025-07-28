@@ -1,32 +1,61 @@
 package models
 
+import (
+	"encoding/json"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/lib/pq"
+	"gorm.io/datatypes"
+)
+
 type Article struct {
-	ID                       uint   `json:"id" gorm:"primaryKey"`
-	CreatedAt                int64  `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt                int64  `json:"updated_at" gorm:"autoUpdateTime"`
-	Image                    string `json:"image"`
-	Slug                     string `json:"slug" gorm:"uniqueIndex;not null"`
-	Title                    string `json:"title" gorm:"not null"`
-	Content                  string `json:"content" gorm:"type:text"`
-	AuthorID                 uint   `json:"author" gorm:"not null;column:author"`
-	Author                   User   `json:"author_data" gorm:"foreignKey:AuthorID"`
-	IsDraft                  bool   `json:"is_draft" gorm:"default:true"`
-	Embedding                []byte `json:"-" gorm:"type:blob"`
-	ImageGenerationRequestID string `json:"image_generation_request_id"`
-	PublishedAt              *int64 `json:"published_at,omitempty"`
-	ChatHistory              []byte `json:"chat_history" gorm:"type:blob"`
-	Tags                     []Tag  `json:"tags" gorm:"many2many:article_tags;joinForeignKey:article_id;joinReferences:tag_id"`
+	ID              uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	Slug            string         `json:"slug" gorm:"uniqueIndex;not null"`
+	Title           string         `json:"title" gorm:"not null"`
+	Content         string         `json:"content" gorm:"type:text"`
+	ImageURL        string         `json:"image_url"`
+	AuthorID        uuid.UUID      `json:"author_id" gorm:"type:uuid;not null"`
+	TagIDs          pq.Int64Array  `json:"tag_ids" gorm:"type:integer[]"`
+	IsDraft         bool           `json:"is_draft" gorm:"default:true"`
+	CreatedAt       string         `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt       string         `json:"updated_at" gorm:"autoUpdateTime"`
+	PublishedAt     *time.Time     `json:"published_at,omitempty"`
+	ImagenRequestID *uuid.UUID     `json:"imagen_request_id" gorm:"type:uuid"`
+	Embedding       []float32      `json:"embedding" gorm:"type:vector(1536)"`
+	SessionMemory   datatypes.JSON `json:"session_memory" gorm:"type:jsonb;default:'{}'"`
+}
+
+func (Article) TableName() string {
+	return "article"
+}
+
+func (a Article) MarshalJSON() ([]byte, error) {
+	type Alias Article
+	aux := struct {
+		PublishedAt *string `json:"published_at,omitempty"`
+		Alias
+	}{
+		Alias: (Alias)(a),
+	}
+	if a.PublishedAt != nil {
+		year := a.PublishedAt.Year()
+		if year >= 0 && year <= 9999 {
+			s := a.PublishedAt.UTC().Format(time.RFC3339)
+			aux.PublishedAt = &s
+		} else {
+			aux.PublishedAt = nil
+		}
+	}
+	return json.Marshal(aux)
 }
 
 type Tag struct {
-	TagID    uint      `json:"id" gorm:"primaryKey;column:tag_id"`
-	TagName  string    `json:"tag_name" gorm:"uniqueIndex;not null;column:tag_name"`
-	Articles []Article `json:"articles" gorm:"many2many:article_tags;joinForeignKey:tag_id;joinReferences:article_id"`
+	ID        int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	Name      string `json:"name" gorm:"uniqueIndex;not null"`
+	CreatedAt string `json:"created_at" gorm:"autoCreateTime"`
 }
 
-type ArticleTag struct {
-	ArticleID uint    `json:"article_id" gorm:"primaryKey"`
-	TagID     uint    `json:"tag_id" gorm:"primaryKey"`
-	Article   Article `gorm:"foreignKey:ArticleID"`
-	Tag       Tag     `gorm:"foreignKey:TagID;references:TagID"`
+func (Tag) TableName() string {
+	return "tag"
 }

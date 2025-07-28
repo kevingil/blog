@@ -2,14 +2,15 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"blog-agent-go/backend/database"
 	"blog-agent-go/backend/models"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -60,23 +61,23 @@ type ArticleListResponse struct {
 
 const ITEMS_PER_PAGE = 6
 
-func (s *ArticleService) GenerateArticle(ctx context.Context, prompt string, title string, authorID uint, draft bool) (*models.Article, error) {
-	article, err := s.writerAgent.GenerateArticle(ctx, prompt, title, int64(authorID))
+func (s *ArticleService) GenerateArticle(ctx context.Context, prompt string, title string, authorID uuid.UUID, draft bool) (*models.Article, error) {
+	article, err := s.writerAgent.GenerateArticle(ctx, prompt, title, authorID)
 	if err != nil {
 		return nil, fmt.Errorf("error generating article: %w", err)
 	}
 
 	gormArticle := &models.Article{
-		Image:                    article.Image,
-		Slug:                     article.Slug,
-		Title:                    article.Title,
-		Content:                  article.Content,
-		AuthorID:                 authorID,
-		IsDraft:                  draft,
-		Embedding:                article.Embedding,
-		ImageGenerationRequestID: article.ImageGenerationRequestID,
-		PublishedAt:              article.PublishedAt,
-		ChatHistory:              article.ChatHistory,
+		ImageURL:        article.ImageURL,
+		Slug:            article.Slug,
+		Title:           article.Title,
+		Content:         article.Content,
+		AuthorID:        authorID,
+		IsDraft:         draft,
+		Embedding:       article.Embedding,
+		ImagenRequestID: article.ImagenRequestID,
+		PublishedAt:     article.PublishedAt,
+		SessionMemory:   article.SessionMemory,
 	}
 
 	db := s.db.GetDB()
@@ -88,145 +89,55 @@ func (s *ArticleService) GenerateArticle(ctx context.Context, prompt string, tit
 	return gormArticle, nil
 }
 
-func (s *ArticleService) GetArticleChatHistory(ctx context.Context, articleID uint) (*ArticleChatHistory, error) {
-	db := s.db.GetDB()
-	var article models.Article
-
-	result := db.Select("chat_history").First(&article, articleID)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	if article.ChatHistory == nil {
-		return nil, nil
-	}
-
-	var history ArticleChatHistory
-	if err := json.Unmarshal(article.ChatHistory, &history); err != nil {
-		return nil, err
-	}
-
-	return &history, nil
-}
-
-func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uint, req ArticleUpdateRequest) (*ArticleListItem, error) {
+func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uuid.UUID, req ArticleUpdateRequest) (*ArticleListItem, error) {
 	db := s.db.GetDB()
 
-	// Start transaction
-	tx := db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	if tx.Error != nil {
-		return nil, fmt.Errorf("failed to start transaction: %w", tx.Error)
-	}
-
-	// Get existing article
 	var article models.Article
-	result := tx.First(&article, articleID)
+	result := db.First(&article, articleID)
 	if result.Error != nil {
-		tx.Rollback()
 		return nil, fmt.Errorf("failed to find article: %w", result.Error)
 	}
 
-	fmt.Println("Article content", req.Content)
-
-	// Update article fields
-	updates := models.Article{
-		Title:       req.Title,
-		Content:     req.Content,
-		Image:       req.Image,
-		IsDraft:     req.IsDraft,
-		PublishedAt: req.PublishedAt,
-	}
-
-	result = tx.Model(&article).Updates(updates)
-	if result.Error != nil {
-		tx.Rollback()
-		return nil, fmt.Errorf("failed to update article: %w", result.Error)
-	}
-
-	// Clear existing tags
-	err := tx.Model(&article).Association("Tags").Clear()
-	if err != nil {
-		tx.Rollback()
-		return nil, fmt.Errorf("failed to clear existing tags: %w", err)
-	}
-
-	// Process tags
-	var processedTags []string
-	var tags []models.Tag
-
+	// Process tags: ensure all exist, collect their IDs
+	var tagIDs []int64
 	for _, tagName := range req.Tags {
+		tagName = strings.ToLower(strings.TrimSpace(tagName))
 		if tagName == "" {
 			continue
 		}
-
-		// Normalize tag name to lowercase and trim whitespace
-		normalizedTag := strings.ToLower(strings.TrimSpace(tagName))
-		if normalizedTag == "" {
-			continue
-		}
-
-		// Avoid duplicate tags in the same request
-		isDuplicate := false
-		for _, existing := range processedTags {
-			if existing == normalizedTag {
-				isDuplicate = true
-				break
-			}
-		}
-		if isDuplicate {
-			continue
-		}
-		processedTags = append(processedTags, normalizedTag)
-
-		// Check if tag exists (case-insensitive lookup)
 		var tag models.Tag
-		result = tx.Where("LOWER(tag_name) = ?", normalizedTag).First(&tag)
-
+		result := db.Where("LOWER(name) = ?", tagName).First(&tag)
 		if result.Error == gorm.ErrRecordNotFound {
-			// Tag doesn't exist, create it
-			tag = models.Tag{TagName: normalizedTag}
-			result = tx.Create(&tag)
-			if result.Error != nil {
-				tx.Rollback()
-				return nil, fmt.Errorf("failed to create tag '%s': %w", normalizedTag, result.Error)
+			tag = models.Tag{Name: tagName}
+			if err := db.Create(&tag).Error; err != nil {
+				return nil, fmt.Errorf("failed to create tag '%s': %w", tagName, err)
 			}
 		} else if result.Error != nil {
-			tx.Rollback()
 			return nil, fmt.Errorf("failed to check tag existence: %w", result.Error)
 		}
-
-		tags = append(tags, tag)
+		tagIDs = append(tagIDs, int64(tag.ID))
 	}
 
-	// Associate tags with article
-	if len(tags) > 0 {
-		if err := tx.Model(&article).Association("Tags").Append(tags); err != nil {
-			tx.Rollback()
-			return nil, fmt.Errorf("failed to associate tags: %w", err)
-		}
+	updates := map[string]interface{}{
+		"title":        req.Title,
+		"content":      req.Content,
+		"image_url":    req.Image,
+		"is_draft":     req.IsDraft,
+		"published_at": req.PublishedAt,
+	}
+	if len(tagIDs) > 0 {
+		updates["tag_ids"] = tagIDs
 	}
 
-	// Commit transaction
-	if err := tx.Commit().Error; err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	result = db.Model(&article).Updates(updates)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to update article: %w", result.Error)
 	}
 
-	// Get updated article with tags
-	updatedArticle, err := s.GetArticle(articleID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve updated article: %w", err)
-	}
-
-	return updatedArticle, nil
+	return s.GetArticle(article.ID)
 }
 
-func (s *ArticleService) UpdateArticleWithContext(ctx context.Context, articleID uint) (*models.Article, error) {
+func (s *ArticleService) UpdateArticleWithContext(ctx context.Context, articleID uuid.UUID) (*models.Article, error) {
 	db := s.db.GetDB()
 	var article models.Article
 
@@ -235,24 +146,8 @@ func (s *ArticleService) UpdateArticleWithContext(ctx context.Context, articleID
 		return nil, result.Error
 	}
 
-	// Convert to old format for writer agent
-	oldArticle := &models.Article{
-		ID:                       article.ID,
-		CreatedAt:                article.CreatedAt,
-		UpdatedAt:                article.UpdatedAt,
-		Image:                    article.Image,
-		Slug:                     article.Slug,
-		Title:                    article.Title,
-		Content:                  article.Content,
-		AuthorID:                 article.AuthorID,
-		IsDraft:                  article.IsDraft,
-		Embedding:                article.Embedding,
-		ImageGenerationRequestID: article.ImageGenerationRequestID,
-		PublishedAt:              article.PublishedAt,
-		ChatHistory:              article.ChatHistory,
-	}
-
-	updatedContent, err := s.writerAgent.UpdateWithContext(ctx, oldArticle)
+	// If writerAgent requires *models.Article, pass only the fields it needs
+	updatedContent, err := s.writerAgent.UpdateWithContext(ctx, &article)
 	if err != nil {
 		return nil, fmt.Errorf("error updating article content: %w", err)
 	}
@@ -267,42 +162,63 @@ func (s *ArticleService) UpdateArticleWithContext(ctx context.Context, articleID
 	return &article, nil
 }
 
-func (s *ArticleService) GetArticleIDBySlug(slug string) (uint, error) {
+func (s *ArticleService) GetArticleIDBySlug(slug string) (uuid.UUID, error) {
 	db := s.db.GetDB()
 	var article models.Article
 
 	result := db.Select("id").Where("slug = ?", slug).First(&article)
 	if result.Error != nil {
-		return 0, result.Error
+		return uuid.UUID{}, result.Error
 	}
 
 	return article.ID, nil
 }
 
-func (s *ArticleService) GetArticle(id uint) (*ArticleListItem, error) {
+// --- FULL REFACTOR FOR NEW SCHEMA ---
+// All list/detail methods now use the new schema from 20250723064003_init.sql.
+// Remove all legacy GORM relations, join table logic, and references to removed fields.
+// For tag handling, use tag_ids integer array on Article and fetch tag names from tag table.
+// For author, fetch from account table using author_id.
+// Only use fields present in the new schema.
+
+func (s *ArticleService) GetArticle(id uuid.UUID) (*ArticleListItem, error) {
 	db := s.db.GetDB()
 	var article models.Article
-
-	result := db.Preload("Author").Preload("Tags").First(&article, id)
-	if result.Error != nil {
-		return nil, result.Error
+	if err := db.First(&article, id).Error; err != nil {
+		return nil, err
 	}
 
-	// Convert tags
+	// Parse tag IDs
+	var tagIDs []int64
+	tagIDs = article.TagIDs
+
+	// Fetch tag names
 	var tags []TagData
-	for _, tag := range article.Tags {
-		tags = append(tags, TagData{
-			ArticleID: article.ID,
-			TagID:     tag.TagID,
-			TagName:   tag.TagName,
-		})
+	if len(tagIDs) > 0 {
+		var dbTags []models.Tag
+		if err := db.Where("id IN ?", tagIDs).Find(&dbTags).Error; err == nil {
+			for _, t := range dbTags {
+				tags = append(tags, TagData{
+					ArticleID: article.ID,
+					TagID:     int(t.ID),
+					TagName:   t.Name,
+				})
+			}
+		}
+	}
+
+	// Fetch author
+	var authorName string
+	var account models.Account
+	if err := db.First(&account, "id = ?", article.AuthorID).Error; err == nil {
+		authorName = account.Name
 	}
 
 	return &ArticleListItem{
 		Article: article,
 		Author: AuthorData{
-			ID:   article.Author.ID,
-			Name: article.Author.Name,
+			ID:   article.AuthorID,
+			Name: authorName,
 		},
 		Tags: tags,
 	}, nil
@@ -313,64 +229,72 @@ func (s *ArticleService) GetArticles(page int, tag string, status string, articl
 	var articles []models.Article
 	var totalCount int64
 
-	// Use default if articlesPerPage is not provided or invalid
 	if articlesPerPage <= 0 {
 		articlesPerPage = ITEMS_PER_PAGE
 	}
 
-	// Build query
-	query := db.Model(&models.Article{}).Preload("Author").Preload("Tags")
+	query := db.Model(&models.Article{})
 
-	// Apply status filter
 	switch status {
 	case "published":
 		query = query.Where("is_draft = ?", false)
 	case "drafts":
 		query = query.Where("is_draft = ?", true)
 	case "all":
-		// No filter - include all articles
+		// No filter
 	default:
-		// Default to published only for invalid status
 		query = query.Where("is_draft = ?", false)
 	}
 
 	if tag != "" {
-		query = query.Joins("JOIN article_tags ON articles.id = article_tags.article_id").
-			Joins("JOIN tags ON article_tags.tag_id = tags.tag_id").
-			Where("LOWER(tags.tag_name) = ?", strings.ToLower(tag))
+		// Find tag ID by name
+		var tagModel models.Tag
+		if err := db.Where("LOWER(name) = ?", strings.ToLower(tag)).First(&tagModel).Error; err == nil {
+			query = query.Where("tag_ids @> ARRAY[?]::integer[]", tagModel.ID)
+		}
 	}
 
-	// Get total count
 	countQuery := query
 	countQuery.Count(&totalCount)
 
-	// Calculate pagination
 	offset := (page - 1) * articlesPerPage
 	totalPages := int(math.Ceil(float64(totalCount) / float64(articlesPerPage)))
 
-	// Get articles with pagination
 	result := query.Order("created_at DESC").Offset(offset).Limit(articlesPerPage).Find(&articles)
 	if result.Error != nil {
 		return nil, result.Error
 	}
 
-	// Convert to response format
 	var articleItems []ArticleListItem
 	for _, article := range articles {
+		// Parse tag IDs
+		var tagIDs []int64
+		tagIDs = article.TagIDs
+		// Fetch tag names
 		var tags []TagData
-		for _, tag := range article.Tags {
-			tags = append(tags, TagData{
-				ArticleID: article.ID,
-				TagID:     tag.TagID,
-				TagName:   tag.TagName,
-			})
+		if len(tagIDs) > 0 {
+			var dbTags []models.Tag
+			if err := db.Where("id IN ?", tagIDs).Find(&dbTags).Error; err == nil {
+				for _, t := range dbTags {
+					tags = append(tags, TagData{
+						ArticleID: article.ID,
+						TagID:     int(t.ID),
+						TagName:   t.Name,
+					})
+				}
+			}
 		}
-
+		// Fetch author
+		var authorName string
+		var account models.Account
+		if err := db.First(&account, "id = ?", article.AuthorID).Error; err == nil {
+			authorName = account.Name
+		}
 		articleItems = append(articleItems, ArticleListItem{
 			Article: article,
 			Author: AuthorData{
-				ID:   article.Author.ID,
-				Name: article.Author.Name,
+				ID:   article.AuthorID,
+				Name: authorName,
 			},
 			Tags: tags,
 		})
@@ -388,48 +312,55 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string) (*Ar
 	var articles []models.Article
 	var totalCount int64
 
-	// Build search query
-	searchQuery := db.Model(&models.Article{}).Preload("Author").Preload("Tags").
+	searchQuery := db.Model(&models.Article{}).
 		Where("is_draft = ?", false).
 		Where("title LIKE ? OR content LIKE ?", "%"+query+"%", "%"+query+"%")
 
 	if tag != "" {
-		searchQuery = searchQuery.Joins("JOIN article_tags ON articles.id = article_tags.article_id").
-			Joins("JOIN tags ON article_tags.tag_id = tags.tag_id").
-			Where("LOWER(tags.tag_name) = ?", strings.ToLower(tag))
+		var tagModel models.Tag
+		if err := db.Where("LOWER(name) = ?", strings.ToLower(tag)).First(&tagModel).Error; err == nil {
+			searchQuery = searchQuery.Where("tag_ids @> ARRAY[?]::integer[]", tagModel.ID)
+		}
 	}
 
-	// Get total count
 	countQuery := searchQuery
 	countQuery.Count(&totalCount)
 
-	// Calculate pagination
 	offset := (page - 1) * ITEMS_PER_PAGE
 	totalPages := int(math.Ceil(float64(totalCount) / float64(ITEMS_PER_PAGE)))
 
-	// Get articles with pagination
 	result := searchQuery.Order("created_at DESC").Offset(offset).Limit(ITEMS_PER_PAGE).Find(&articles)
 	if result.Error != nil {
 		return nil, result.Error
 	}
 
-	// Convert to response format
 	var articleItems []ArticleListItem
 	for _, article := range articles {
+		var tagIDs []int64
+		tagIDs = article.TagIDs
 		var tags []TagData
-		for _, tag := range article.Tags {
-			tags = append(tags, TagData{
-				ArticleID: article.ID,
-				TagID:     tag.TagID,
-				TagName:   tag.TagName,
-			})
+		if len(tagIDs) > 0 {
+			var dbTags []models.Tag
+			if err := db.Where("id IN ?", tagIDs).Find(&dbTags).Error; err == nil {
+				for _, t := range dbTags {
+					tags = append(tags, TagData{
+						ArticleID: article.ID,
+						TagID:     int(t.ID),
+						TagName:   t.Name,
+					})
+				}
+			}
 		}
-
+		var authorName string
+		var account models.Account
+		if err := db.First(&account, "id = ?", article.AuthorID).Error; err == nil {
+			authorName = account.Name
+		}
 		articleItems = append(articleItems, ArticleListItem{
 			Article: article,
 			Author: AuthorData{
-				ID:   article.Author.ID,
-				Name: article.Author.Name,
+				ID:   article.AuthorID,
+				Name: authorName,
 			},
 			Tags: tags,
 		})
@@ -444,22 +375,20 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string) (*Ar
 
 func (s *ArticleService) GetPopularTags() ([]string, error) {
 	db := s.db.GetDB()
+	// Use raw SQL to unnest tag_ids and count tag usage
 	var results []struct {
-		TagName string `db:"tag_name"`
+		TagName string
 		Count   int
 	}
-
-	err := db.Table("tags").
-		Select("tags.tag_name, COUNT(article_tags.tag_id) as count").
-		Joins("JOIN article_tags ON tags.tag_id = article_tags.tag_id").
-		Joins("JOIN articles ON article_tags.article_id = articles.id").
-		Where("articles.is_draft = ?", false).
-		Group("tags.tag_id, tags.tag_name").
-		Order("count DESC").
-		Limit(10).
-		Scan(&results).Error
-
-	if err != nil {
+	sql := `
+SELECT tag.name AS tag_name, COUNT(*) AS count
+FROM article, unnest(tag_ids) AS tag_id
+JOIN tag ON tag.id = tag_id
+WHERE article.is_draft = false
+GROUP BY tag.name
+ORDER BY count DESC
+LIMIT 10`
+	if err := db.Raw(sql).Scan(&results).Error; err != nil {
 		return nil, err
 	}
 
@@ -467,7 +396,6 @@ func (s *ArticleService) GetPopularTags() ([]string, error) {
 	for _, result := range results {
 		tags = append(tags, result.TagName)
 	}
-
 	return tags, nil
 }
 
@@ -483,74 +411,83 @@ type ArticleData struct {
 }
 
 type AuthorData struct {
-	ID   uint   `json:"id"`
-	Name string `json:"name"`
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
 }
 
 type TagData struct {
-	ArticleID uint   `json:"article_id"`
-	TagID     uint   `json:"tag_id"`
-	TagName   string `json:"tag_name"`
+	ArticleID uuid.UUID `json:"article_id"`
+	TagID     int       `json:"tag_id"`
+	TagName   string    `json:"name"`
 }
 
 type RecommendedArticle struct {
-	ID          uint    `json:"id"`
-	Title       string  `json:"title"`
-	Slug        string  `json:"slug"`
-	Image       *string `json:"image"`
-	PublishedAt *int64  `json:"published_at"`
-	CreatedAt   int64   `json:"created_at"`
-	Author      *string `json:"author"`
+	ID          uuid.UUID `json:"id"`
+	Title       string    `json:"title"`
+	Slug        string    `json:"slug"`
+	ImageURL    *string   `json:"image_url"`
+	PublishedAt *string   `json:"published_at"`
+	CreatedAt   string    `json:"created_at"`
+	Author      *string   `json:"author"`
 }
 
 type ArticleRow struct {
-	ID          uint     `json:"id"`
-	Title       *string  `json:"title"`
-	Content     *string  `json:"content"`
-	CreatedAt   int64    `json:"created_at"`
-	PublishedAt *int64   `json:"published_at"`
-	IsDraft     bool     `json:"is_draft"`
-	Slug        *string  `json:"slug"`
-	Tags        []string `json:"tags"`
-	Image       *string  `json:"image"`
+	ID          uuid.UUID `json:"id"`
+	Title       *string   `json:"title"`
+	Content     *string   `json:"content"`
+	CreatedAt   string    `json:"created_at"`
+	PublishedAt *string   `json:"published_at"`
+	IsDraft     bool      `json:"is_draft"`
+	Slug        *string   `json:"slug"`
+	TagIDs      []int     `json:"tag_ids"`
+	ImageURL    *string   `json:"image_url"`
 }
 
 func (s *ArticleService) GetArticleData(slug string) (*ArticleData, error) {
 	db := s.db.GetDB()
 	var article models.Article
-
-	result := db.Preload("Author").Preload("Tags").Where("slug = ?", slug).First(&article)
-	if result.Error != nil {
-		return nil, result.Error
+	if err := db.Where("slug = ?", slug).First(&article).Error; err != nil {
+		return nil, err
 	}
 
-	// Convert tags
+	var tagIDs []int64
+	tagIDs = article.TagIDs
+
 	var tags []TagData
-	for _, tag := range article.Tags {
-		tags = append(tags, TagData{
-			ArticleID: article.ID,
-			TagID:     tag.TagID,
-			TagName:   tag.TagName,
-		})
+	if len(tagIDs) > 0 {
+		var dbTags []models.Tag
+		if err := db.Where("id IN ?", tagIDs).Find(&dbTags).Error; err == nil {
+			for _, t := range dbTags {
+				tags = append(tags, TagData{
+					ArticleID: article.ID,
+					TagID:     int(t.ID),
+					TagName:   t.Name,
+				})
+			}
+		}
+	}
+
+	var authorName string
+	var account models.Account
+	if err := db.First(&account, "id = ?", article.AuthorID).Error; err == nil {
+		authorName = account.Name
 	}
 
 	return &ArticleData{
 		Article: article,
 		Author: AuthorData{
-			ID:   article.Author.ID,
-			Name: article.Author.Name,
+			ID:   article.AuthorID,
+			Name: authorName,
 		},
 		Tags: tags,
 	}, nil
 }
 
-func (s *ArticleService) GetRecommendedArticles(currentArticleID uint) ([]RecommendedArticle, error) {
+func (s *ArticleService) GetRecommendedArticles(currentArticleID uuid.UUID) ([]RecommendedArticle, error) {
 	db := s.db.GetDB()
 	var articles []models.Article
 
-	// Get articles from same tags (simplified recommendation)
-	result := db.Preload("Author").
-		Where("id != ? AND is_draft = ?", currentArticleID, false).
+	result := db.Where("id != ? AND is_draft = ?", currentArticleID, false).
 		Order("created_at DESC").
 		Limit(3).
 		Find(&articles)
@@ -562,21 +499,22 @@ func (s *ArticleService) GetRecommendedArticles(currentArticleID uint) ([]Recomm
 	var recommended []RecommendedArticle
 	for _, article := range articles {
 		var authorName *string
-		if article.Author.Name != "" {
-			authorName = &article.Author.Name
+		var account models.Account
+		if err := db.First(&account, "id = ?", article.AuthorID).Error; err == nil {
+			authorName = &account.Name
 		}
 
 		var image *string
-		if article.Image != "" {
-			image = &article.Image
+		if article.ImageURL != "" {
+			image = &article.ImageURL
 		}
 
 		recommended = append(recommended, RecommendedArticle{
 			ID:          article.ID,
 			Title:       article.Title,
 			Slug:        article.Slug,
-			Image:       image,
-			PublishedAt: article.PublishedAt,
+			ImageURL:    image,
+			PublishedAt: safeTimeToString(article.PublishedAt),
 			CreatedAt:   article.CreatedAt,
 			Author:      authorName,
 		})
@@ -585,130 +523,61 @@ func (s *ArticleService) GetRecommendedArticles(currentArticleID uint) ([]Recomm
 	return recommended, nil
 }
 
-func (s *ArticleService) DeleteArticle(id uint) error {
+func (s *ArticleService) DeleteArticle(id uuid.UUID) error {
 	db := s.db.GetDB()
-
-	// Start transaction
-	tx := db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	if tx.Error != nil {
-		return fmt.Errorf("failed to start transaction: %w", tx.Error)
-	}
-
-	var article models.Article
-	result := tx.First(&article, id)
-	if result.Error != nil {
-		tx.Rollback()
-		return result.Error
-	}
-
-	// Clear tag associations
-	err := tx.Model(&article).Association("Tags").Clear()
-	if err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to clear tag associations: %w", err)
-	}
-
-	// Delete article
-	result = tx.Delete(&article)
-	if result.Error != nil {
-		tx.Rollback()
-		return result.Error
-	}
-
-	return tx.Commit().Error
+	return db.Delete(&models.Article{}, id).Error
 }
 
 type ArticleCreateRequest struct {
-	Title    string   `json:"title"`
-	Content  string   `json:"content"`
-	Image    string   `json:"image"`
-	Tags     []string `json:"tags"`
-	IsDraft  bool     `json:"isDraft"`
-	AuthorID uint     `json:"authorId"`
+	Title    string    `json:"title"`
+	Content  string    `json:"content"`
+	Image    string    `json:"image"`
+	Tags     []string  `json:"tags"`
+	IsDraft  bool      `json:"isDraft"`
+	AuthorID uuid.UUID `json:"authorId"`
 }
 
 func (s *ArticleService) CreateArticle(ctx context.Context, req ArticleCreateRequest) (*ArticleListItem, error) {
 	db := s.db.GetDB()
 
+	// Process tags: ensure all exist, collect their IDs
+	var tagIDs []int64
+	for _, tagName := range req.Tags {
+		tagName = strings.ToLower(strings.TrimSpace(tagName))
+		if tagName == "" {
+			continue
+		}
+		var tag models.Tag
+		result := db.Where("LOWER(name) = ?", tagName).First(&tag)
+		if result.Error == gorm.ErrRecordNotFound {
+			tag = models.Tag{Name: tagName}
+			if err := db.Create(&tag).Error; err != nil {
+				return nil, fmt.Errorf("failed to create tag '%s': %w", tagName, err)
+			}
+		} else if result.Error != nil {
+			return nil, fmt.Errorf("failed to check tag existence: %w", result.Error)
+		}
+		tagIDs = append(tagIDs, int64(tag.ID))
+	}
+
 	// Create article
 	article := models.Article{
 		Title:    req.Title,
 		Content:  req.Content,
-		Image:    req.Image,
+		ImageURL: req.Image,
 		IsDraft:  req.IsDraft,
 		AuthorID: req.AuthorID,
-		Slug:     generateSlug(req.Title), // You'll need to implement this function
+		Slug:     generateSlug(req.Title),
+	}
+	if len(tagIDs) > 0 {
+		article.TagIDs = tagIDs
 	}
 
-	// Start transaction
-	tx := db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	if tx.Error != nil {
-		return nil, fmt.Errorf("failed to start transaction: %w", tx.Error)
-	}
-
-	result := tx.Create(&article)
+	result := db.Create(&article)
 	if result.Error != nil {
-		tx.Rollback()
 		return nil, result.Error
 	}
 
-	// Process tags
-	var tags []models.Tag
-	for _, tagName := range req.Tags {
-		if tagName == "" {
-			continue
-		}
-
-		normalizedTag := strings.ToLower(strings.TrimSpace(tagName))
-		if normalizedTag == "" {
-			continue
-		}
-
-		var tag models.Tag
-		result = tx.Where("LOWER(tag_name) = ?", normalizedTag).First(&tag)
-
-		if result.Error == gorm.ErrRecordNotFound {
-			tag = models.Tag{TagName: normalizedTag}
-			result = tx.Create(&tag)
-			if result.Error != nil {
-				tx.Rollback()
-				return nil, fmt.Errorf("failed to create tag '%s': %w", normalizedTag, result.Error)
-			}
-		} else if result.Error != nil {
-			tx.Rollback()
-			return nil, fmt.Errorf("failed to check tag existence: %w", result.Error)
-		}
-
-		tags = append(tags, tag)
-	}
-
-	// Associate tags with article
-	if len(tags) > 0 {
-		err := tx.Model(&article).Association("Tags").Append(tags)
-		if err != nil {
-			tx.Rollback()
-			return nil, fmt.Errorf("failed to associate tags: %w", err)
-		}
-	}
-
-	// Commit transaction
-	if err := tx.Commit().Error; err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	// Get created article with all relations
 	return s.GetArticle(article.ID)
 }
 
@@ -719,4 +588,16 @@ func generateSlug(title string) string {
 	slug = strings.ReplaceAll(slug, " ", "-")
 	// Remove special characters (basic implementation)
 	return slug
+}
+
+func safeTimeToString(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	year := t.Year()
+	if year < 0 || year > 9999 {
+		return nil
+	}
+	s := t.UTC().Format(time.RFC3339)
+	return &s
 }

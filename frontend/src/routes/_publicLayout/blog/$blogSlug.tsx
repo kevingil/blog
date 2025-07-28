@@ -147,9 +147,9 @@ function ArticleContent({ slug, articleData }: { slug: string, articleData: Arti
       isAnimated ? "card-animated" : "card-hidden"
     )}>
       <h1 className="text-4xl font-bold mb-4">{content?.title}</h1>
-      {content?.image && (
+      {content?.image_url && (
         <img
-          src={content.image}
+          src={content.image_url}
           alt={content.title}
           className="rounded-2xl mb-6 object-cover aspect-video"
         />
@@ -158,7 +158,13 @@ function ArticleContent({ slug, articleData }: { slug: string, articleData: Arti
         <div>
           <p className="font-semibold">{articleData?.author?.name}</p>
           <p className="text-sm text-muted-foreground">
-            { content?.published_at ? format(new Date(content?.published_at), 'MMMM d, yyyy') : 'Unknown'}
+            {(() => {
+              const date = content?.published_at ? new Date(content.published_at) : null;
+              if (!date || isNaN(date.getTime())) return 'Unknown';
+              const year = date.getFullYear();
+              if (year > 2100) return 'Unknown';
+              return format(date, 'MMMM d, yyyy');
+            })()}
           </p>
         </div>
       </div>
@@ -196,9 +202,9 @@ function RecommendedArticles({ slug, articleData }: { slug: string, articleData:
       {recommendedArticles?.map((article: RecommendedArticle, index: number) => (
         <Link key={article.slug} to="/blog/$blogSlug" params={{ blogSlug: article.slug }} >
         <Card className="p-0" animationDelay={index * 100}>
-          {article.image && (
+          {article.image_url && (
             <img
-              src={article.image}
+              src={article.image_url}
               alt={article.title}
               className="rounded-t-lg object-cover h-48 w-full"
             />
@@ -206,7 +212,13 @@ function RecommendedArticles({ slug, articleData }: { slug: string, articleData:
           <CardContent className="p-4">
             <h3 className="text-lg font-semibold mb-2">{article.title}</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              {article.published_at ? format(new Date(article.published_at), 'MMMM d, yyyy') : 'Unknown'}
+              {(() => {
+                const date = article.published_at ? new Date(article.published_at) : null;
+                if (!date || isNaN(date.getTime())) return 'Unknown';
+                const year = date.getFullYear();
+                if (year > 2100) return 'Unknown';
+                return format(date, 'MMMM d, yyyy');
+              })()}
             </p>
           </CardContent>
         </Card>

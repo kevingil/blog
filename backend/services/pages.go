@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// PagesService provides methods to interact with the Page table
 type PagesService struct {
 	db database.Service
 }
@@ -15,11 +16,10 @@ func NewPagesService(db database.Service) *PagesService {
 	return &PagesService{db: db}
 }
 
-func (s *PagesService) GetAboutPage() (*models.AboutPage, error) {
+func (s *PagesService) GetPageBySlug(slug string) (*models.Page, error) {
 	db := s.db.GetDB()
-	var page models.AboutPage
-
-	result := db.First(&page)
+	var page models.Page
+	result := db.Where("slug = ?", slug).First(&page)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -29,16 +29,12 @@ func (s *PagesService) GetAboutPage() (*models.AboutPage, error) {
 	return &page, nil
 }
 
-func (s *PagesService) GetContactPage() (*models.ContactPage, error) {
+func (s *PagesService) GetAllPages() ([]models.Page, error) {
 	db := s.db.GetDB()
-	var page models.ContactPage
-
-	result := db.First(&page)
+	var pages []models.Page
+	result := db.Find(&pages)
 	if result.Error != nil {
-		if result.Error == gorm.ErrRecordNotFound {
-			return nil, nil
-		}
 		return nil, result.Error
 	}
-	return &page, nil
+	return pages, nil
 }

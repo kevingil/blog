@@ -12,6 +12,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -30,8 +31,7 @@ func (s *FiberServer) RegisterRoutes() {
 
 	// Pages routes
 	pages := s.App.Group("/pages")
-	pages.Get("/about", s.GetAboutPageHandler)
-	pages.Get("/contact", s.GetContactPageHandler)
+	pages.Get("/:slug", s.GetPageBySlugHandler)
 
 	// Auth routes
 	auth := s.App.Group("/auth")
@@ -48,7 +48,6 @@ func (s *FiberServer) RegisterRoutes() {
 	// Blog routes
 	blog := s.App.Group("/blog")
 	blog.Post("/generate", s.GenerateArticleHandler)
-	blog.Get("/:id/chat-history", s.GetArticleChatHistoryHandler)
 	blog.Put("/:id/update", s.UpdateArticleWithContextHandler)
 	blog.Get("/articles/:slug", s.GetArticleDataHandler)
 	blog.Post("/articles/:slug/update", s.UpdateArticleHandler)
@@ -257,58 +256,40 @@ func (s *FiberServer) LogoutHandler(c *fiber.Ctx) error {
 }
 
 func (s *FiberServer) UpdateAccountHandler(c *fiber.Ctx) error {
-	userID, ok := c.Locals("userID").(uint)
-	if !ok {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Not authenticated"})
-	}
-
+	userID := c.Locals("userID").(uuid.UUID)
 	var req services.UpdateAccountRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
-
 	if err := s.authService.UpdateAccount(userID, req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
-
 	return c.JSON(fiber.Map{"message": "Account updated successfully"})
 }
 
 func (s *FiberServer) UpdatePasswordHandler(c *fiber.Ctx) error {
-	userID, ok := c.Locals("userID").(uint)
-	if !ok {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Not authenticated"})
-	}
-
+	userID := c.Locals("userID").(uuid.UUID)
 	var req services.UpdatePasswordRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
-
 	if err := s.authService.UpdatePassword(userID, req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
-
 	return c.JSON(fiber.Map{"message": "Password updated successfully"})
 }
 
 func (s *FiberServer) DeleteAccountHandler(c *fiber.Ctx) error {
-	userID, ok := c.Locals("userID").(uint)
-	if !ok {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Not authenticated"})
-	}
-
+	userID := c.Locals("userID").(uuid.UUID)
 	var req struct {
 		Password string `json:"password"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
-
 	if err := s.authService.DeleteAccount(userID, req.Password); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
-
 	return c.JSON(fiber.Map{"message": "Account deleted successfully"})
 }
 
@@ -327,7 +308,11 @@ func (s *FiberServer) GenerateArticleHandler(c *fiber.Ctx) error {
 	}
 
 	// Get user ID from session
-	userID := c.Locals("userID").(uint)
+	userIDStr := c.Locals("userID").(string)
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid user ID"})
+	}
 
 	article, err := s.blogService.GenerateArticle(c.Context(), req.Prompt, req.Title, userID, req.IsDraft)
 	if err != nil {
@@ -337,24 +322,6 @@ func (s *FiberServer) GenerateArticleHandler(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(article)
-}
-
-func (s *FiberServer) GetArticleChatHistoryHandler(c *fiber.Ctx) error {
-	articleID, err := c.ParamsInt("id")
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid article ID",
-		})
-	}
-
-	history, err := s.blogService.GetArticleChatHistory(c.Context(), uint(articleID))
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(history)
 }
 
 func (s *FiberServer) UpdateArticleHandler(c *fiber.Ctx) error {
@@ -414,14 +381,15 @@ func (s *FiberServer) CreateArticleHandler(c *fiber.Ctx) error {
 }
 
 func (s *FiberServer) UpdateArticleWithContextHandler(c *fiber.Ctx) error {
-	articleID, err := c.ParamsInt("id")
+	articleIDStr := c.Params("id")
+	articleID, err := uuid.Parse(articleIDStr)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid article ID",
 		})
 	}
 
-	article, err := s.blogService.UpdateArticleWithContext(c.Context(), uint(articleID))
+	article, err := s.blogService.UpdateArticleWithContext(c.Context(), articleID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
@@ -434,9 +402,9 @@ func (s *FiberServer) UpdateArticleWithContextHandler(c *fiber.Ctx) error {
 // Image generation handlers
 func (s *FiberServer) GenerateArticleImageHandler(c *fiber.Ctx) error {
 	var req struct {
-		Prompt         string `json:"prompt"`
-		ArticleID      uint   `json:"article_id"`
-		GeneratePrompt bool   `json:"generate_prompt"`
+		Prompt         string    `json:"prompt"`
+		ArticleID      uuid.UUID `json:"article_id"`
+		GeneratePrompt bool      `json:"generate_prompt"`
 	}
 
 	if err := c.BodyParser(&req); err != nil {
@@ -687,14 +655,15 @@ func (s *FiberServer) GetArticleDataHandler(c *fiber.Ctx) error {
 }
 
 func (s *FiberServer) GetRecommendedArticlesHandler(c *fiber.Ctx) error {
-	id, err := c.ParamsInt("id")
+	idStr := c.Params("id")
+	id, err := uuid.Parse(idStr)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid article ID",
 		})
 	}
 
-	articles, err := s.blogService.GetRecommendedArticles(uint(id))
+	articles, err := s.blogService.GetRecommendedArticles(id)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
@@ -705,14 +674,15 @@ func (s *FiberServer) GetRecommendedArticlesHandler(c *fiber.Ctx) error {
 }
 
 func (s *FiberServer) DeleteArticleHandler(c *fiber.Ctx) error {
-	id, err := c.ParamsInt("id")
+	idStr := c.Params("id")
+	id, err := uuid.Parse(idStr)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid article ID",
 		})
 	}
 
-	if err := s.blogService.DeleteArticle(uint(id)); err != nil {
+	if err := s.blogService.DeleteArticle(id); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
@@ -723,37 +693,18 @@ func (s *FiberServer) DeleteArticleHandler(c *fiber.Ctx) error {
 	})
 }
 
-func (s *FiberServer) GetAboutPageHandler(c *fiber.Ctx) error {
-	page, err := s.pagesService.GetAboutPage()
+func (s *FiberServer) GetPageBySlugHandler(c *fiber.Ctx) error {
+	slug := c.Params("slug")
+	if slug == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Page slug is required"})
+	}
+	page, err := s.pagesService.GetPageBySlug(slug)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
-
 	if page == nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "About page not found",
-		})
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Page not found"})
 	}
-
-	return c.JSON(page)
-}
-
-func (s *FiberServer) GetContactPageHandler(c *fiber.Ctx) error {
-	page, err := s.pagesService.GetContactPage()
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	if page == nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Contact page not found",
-		})
-	}
-
 	return c.JSON(page)
 }
 
@@ -772,7 +723,7 @@ func (s *FiberServer) AuthMiddleware() fiber.Handler {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
 		}
 		claims := validToken.Claims.(jwt.MapClaims)
-		c.Locals("userID", uint(claims["sub"].(float64)))
+		c.Locals("userID", uuid.MustParse(claims["sub"].(string)))
 		return c.Next()
 	}
 }

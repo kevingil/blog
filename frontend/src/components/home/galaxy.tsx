@@ -1222,21 +1222,6 @@ export const SpiralGalaxyAnimation: React.FC<{ zIndex?: number }> = ({ zIndex = 
     };
   }, [rotation]);
 
-  // Mouse controls for camera rotation only
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (e.buttons === 1) { // Left mouse button
-        setRotation(prev => prev + e.movementX * 0.01);
-      }
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-    };
-  }, []);
-
   // Mouse movement for galaxy tilt
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {

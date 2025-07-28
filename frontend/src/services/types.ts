@@ -1,15 +1,15 @@
 export interface Article {
   id: number;
-  image: string;
+  image_url: string;
   slug: string;
   title: string;
   content: string;
   author: number;
-  created_at: number;
-  updated_at: number;
+  created_at: string;
+  updated_at: string;
   is_draft: boolean;
   image_generation_request_id: string;
-  published_at?: number;
+  published_at?: string | null;
   chat_history: string;
 }
 
@@ -101,27 +101,31 @@ export const ITEMS_PER_PAGE = 6;
 
 export type ArticleListItem = {
   article: {
-    id: number;
+    id: string;
     title: string;
     slug: string;
     content: string;
-    image: string;
-    created_at: number;
-    updated_at: number;
-    published_at: number | null;
+    image_url: string;
+    created_at: string;
+    updated_at: string;
+    published_at: string | null;
     is_draft: boolean;
     image_generation_request_id?: string | null;
-    author: number | null;
+    author_id: string | null;
     chat_history?: any | null;
+    tag_ids?: number[];
+    imagen_request_id?: string | null;
+    embedding?: any | null;
+    session_memory?: Record<string, any>;
   };
   author: {
-    id: number;
+    id: string;
     name: string;
   };
   tags: {
-    article_id: number;
+    article_id: string;
     tag_id: number;
-    tag_name: string;
+    name: string;
   }[] | null;
 };
 
@@ -145,9 +149,9 @@ export type RecommendedArticle = {
   id: number;
   title: string;
   slug: string;
-  image: string | null;
-  published_at: number | null;
-  created_at: number;
+  image_url: string | null;
+  published_at: string | null;
+  created_at: string;
   author: string | null;
 }
 
@@ -155,10 +159,10 @@ export type ArticleRow = {
   id: number;
   title: string | null;
   content: string | null;
-  created_at: number;
-  published_at: number | null;
+  created_at: string;
+  published_at: string | null;
   is_draft: boolean;
   slug: string | null;
   tags: string[];
-  image: string | null;
+  image_url: string | null;
 } 

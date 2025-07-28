@@ -39,9 +39,9 @@ export function ArticlesTable({ articles, onArticleDeleted }: ArticlesTableProps
               <TableCell className="w-full flex flex-col gap-1">
                 <div className="flex items-start gap-2">
                   <div className="flex items-start flex-wrap">
-                    {article.article.image && (
+                    {article.article.image_url && (
                       <img 
-                        src={article.article.image} 
+                        src={article.article.image_url} 
                         className="rounded-md mt-1 w-10 h-10 min-w-10 min-h-10 object-cover" 
                         alt={article.article.title}
                       />
@@ -61,15 +61,17 @@ export function ArticlesTable({ articles, onArticleDeleted }: ArticlesTableProps
                         : 'Not published'}
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      {article.tags?.map((tag: { tag_name: string }) => (
-                        <Badge 
-                          key={tag.tag_name}
-                          className="text-[0.6rem]" 
-                          variant="outline"
-                        >
-                          {tag.tag_name.toUpperCase()}
-                        </Badge>
-                      ))}
+                      {article.tags
+                        ?.filter((tag) => tag.name !== null && tag.name !== '')
+                        .map((tag) => (
+                          <Badge 
+                            key={tag.tag_id}
+                            className="text-[0.6rem]" 
+                            variant="outline"
+                          >
+                            {tag.name.toUpperCase()}
+                          </Badge>
+                        ))}
                     </div>
                     <p className="text-gray-500 text-xs">
                       {article.article.content 
@@ -111,7 +113,7 @@ export function ArticlesTable({ articles, onArticleDeleted }: ArticlesTableProps
                         Edit
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleDelete(article.article.id)}>
+                    <DropdownMenuItem onClick={() => handleDelete(Number(article.article.id))}>
                       <Trash2 className="mr-2 h-4 w-4" />
                       Delete
                     </DropdownMenuItem>

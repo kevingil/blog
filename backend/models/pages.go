@@ -1,30 +1,25 @@
 package models
 
-type AboutPage struct {
-	ID              uint   `json:"id" gorm:"primaryKey"`
-	Title           string `json:"title" gorm:"not null"`
-	Content         string `json:"content" gorm:"type:text"`
-	ProfileImage    string `json:"profile_image"`
-	MetaDescription string `json:"meta_description"`
-	LastUpdated     string `json:"last_updated"`
+import (
+	"github.com/google/uuid"
+	"gorm.io/datatypes"
+)
+
+type Page struct {
+	ID          uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	Slug        string         `json:"slug" gorm:"not null;uniqueIndex"`
+	Title       string         `json:"title" gorm:"not null"`
+	Content     string         `json:"content" gorm:"type:text"`
+	Description string         `json:"description"`
+	ImageURL    string         `json:"image_url"`
+	MetaData    datatypes.JSON `json:"meta_data" gorm:"type:jsonb;default:'{}'"`
+	IsPublished bool           `json:"is_published" gorm:"default:true"`
+	CreatedAt   string         `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt   string         `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
-func (AboutPage) TableName() string {
-	return "about_page"
-}
-
-type ContactPage struct {
-	ID              uint   `json:"id" gorm:"primaryKey"`
-	Title           string `json:"title" gorm:"not null"`
-	Content         string `json:"content" gorm:"type:text"`
-	EmailAddress    string `json:"email_address" gorm:"not null"`
-	SocialLinks     string `json:"social_links" gorm:"type:text"`
-	MetaDescription string `json:"meta_description"`
-	LastUpdated     string `json:"last_updated"`
-}
-
-func (ContactPage) TableName() string {
-	return "contact_page"
+func (Page) TableName() string {
+	return "page"
 }
 
 type Project struct {
