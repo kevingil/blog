@@ -1,24 +1,25 @@
-package server
+package router
 
 import (
-	"blog-agent-go/backend/services"
-	"context"
-	"database/sql"
-	"encoding/json"
-	"fmt"
-	"log"
+	"blog-agent-go/backend/internal/controller"
+	"blog-agent-go/backend/internal/services"
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
-func (s *FiberServer) RegisterRoutes() {
-	// Apply CORS middleware
-	s.App.Use(cors.New(cors.Config{
+type RouteDeps struct {
+	AuthService     *services.AuthService
+	BlogService     *services.ArticleService
+	ImageService    *services.ImageGenerationService
+	StorageService  *services.StorageService
+	PagesService    *services.PagesService
+	AsyncCopilotMgr *services.AsyncCopilotManager
+}
+
+func RegisterRoutes(app *fiber.App, deps RouteDeps) {
+	app.Use(cors.New(cors.Config{
 		AllowOrigins:     "*",
 		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS,PATCH",
 		AllowHeaders:     "Accept,Authorization,Content-Type",
@@ -26,704 +27,53 @@ func (s *FiberServer) RegisterRoutes() {
 		MaxAge:           300,
 	}))
 
-	// Writing Copilot runtime (agentic document editor)
-	s.App.Post("/agent/writing_copilot", s.WritingCopilotHandler)
-
-	// Pages routes
-	pages := s.App.Group("/pages")
-	pages.Get("/:slug", s.GetPageBySlugHandler)
-
-	// Auth routes
-	auth := s.App.Group("/auth")
-	auth.Post("/login", s.LoginHandler)
-	auth.Post("/register", s.RegisterHandler)
-	auth.Post("/logout", s.LogoutHandler)
-
-	// Protected routes using auth middleware
-	protected := auth.Group("", s.AuthMiddleware())
-	protected.Put("/account", s.UpdateAccountHandler)
-	protected.Put("/password", s.UpdatePasswordHandler)
-	protected.Delete("/account", s.DeleteAccountHandler)
-
-	// Blog routes
-	blog := s.App.Group("/blog")
-	blog.Post("/generate", s.GenerateArticleHandler)
-	blog.Put("/:id/update", s.UpdateArticleWithContextHandler)
-	blog.Get("/articles/:slug", s.GetArticleDataHandler)
-	blog.Post("/articles/:slug/update", s.UpdateArticleHandler)
-	blog.Post("/articles", s.CreateArticleHandler)
-	blog.Get("/articles/:id/recommended", s.GetRecommendedArticlesHandler)
-	blog.Delete("/articles/:id", s.DeleteArticleHandler)
-
-	// Add new blog routes
-	blog.Get("/articles", s.GetArticlesHandler)
-	blog.Get("/articles/search", s.SearchArticlesHandler)
-	blog.Get("/tags/popular", s.GetPopularTagsHandler)
-
-	// Image generation routes
-	images := s.App.Group("/images")
-	images.Post("/generate", s.GenerateArticleImageHandler)
-	images.Get("/:requestId", s.GetImageGenerationHandler)
-	images.Get("/:requestId/status", s.GetImageGenerationStatusHandler)
-
-	// Storage routes
-	storage := s.App.Group("/storage")
-	storage.Get("/files", s.ListFilesHandler)
-	storage.Post("/upload", s.UploadFileHandler)
-	storage.Delete("/:key", s.DeleteFileHandler)
-	storage.Post("/folders", s.CreateFolderHandler)
-	storage.Put("/folders", s.UpdateFolderHandler)
-
-	s.App.Get("/", s.HelloWorldHandler)
-
-	s.App.Get("/health", s.healthHandler)
-
-	s.App.Get("/websocket", websocket.New(s.websocketHandler))
-}
-
-func (s *FiberServer) HelloWorldHandler(c *fiber.Ctx) error {
-	resp := fiber.Map{
-		"message": "Hello World",
-	}
-
-	return c.JSON(resp)
-}
-
-func (s *FiberServer) healthHandler(c *fiber.Ctx) error {
-	// TODO: Implement proper health check
-	return c.JSON(fiber.Map{
-		"status": "ok",
-	})
-}
-
-func (s *FiberServer) websocketHandler(con *websocket.Conn) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	log.Printf("WebSocket: New connection established")
-
-	// Handle incoming messages to subscribe to request streams
-	go func() {
-		defer cancel()
-		for {
-			messageType, message, err := con.ReadMessage()
-			if err != nil {
-				log.Printf("WebSocket read error: %v", err)
-				break
-			}
-
-			if messageType == websocket.TextMessage {
-				// Parse the message to get request ID
-				var msg struct {
-					RequestID string `json:"requestId"`
-					Action    string `json:"action"`
-				}
-
-				if err := json.Unmarshal(message, &msg); err != nil {
-					log.Printf("WebSocket message parse error: %v", err)
-					continue
-				}
-
-				if msg.Action == "subscribe" && msg.RequestID != "" {
-					log.Printf("WebSocket: Subscribing to request %s", msg.RequestID)
-					s.handleCopilotStreaming(ctx, con, msg.RequestID)
-				}
-			}
-		}
-	}()
-
-	// Keep connection alive until context is cancelled
-	<-ctx.Done()
-	log.Println("WebSocket connection closed")
-}
-
-func (s *FiberServer) handleCopilotStreaming(ctx context.Context, con *websocket.Conn, requestID string) {
-	manager := services.GetAsyncCopilotManager()
-	responseChan, exists := manager.GetResponseChannel(requestID)
-	if !exists {
-		log.Printf("WebSocket: Request ID %s not found", requestID)
-		// Send error message to client
-		errorMsg := services.StreamResponse{
-			RequestID: requestID,
-			Type:      "error",
-			Error:     "Request not found",
-			Done:      true,
-		}
-		if msgBytes, err := json.Marshal(errorMsg); err == nil {
-			con.WriteMessage(websocket.TextMessage, msgBytes)
-		}
-		return
-	}
-
-	log.Printf("WebSocket: Starting stream for request %s", requestID)
-
-	for {
-		select {
-		case response, ok := <-responseChan:
-			if !ok {
-				log.Printf("WebSocket: Response channel closed for request %s", requestID)
-				return
-			}
-
-			// Add request ID to response
-			response.RequestID = requestID
-
-			// Log different message types for debugging
-			switch response.Type {
-			case "plan":
-				log.Printf("WebSocket: Sending plan for request %s", requestID)
-			case "artifact":
-				log.Printf("WebSocket: Sending artifact update for request %s", requestID)
-			case "chat":
-				log.Printf("WebSocket: Sending chat message for request %s", requestID)
-			case "error":
-				log.Printf("WebSocket: Sending error for request %s: %s", requestID, response.Error)
-			case "done":
-				log.Printf("WebSocket: Sending completion signal for request %s", requestID)
-			}
-
-			// Send response as JSON message
-			responseBytes, err := json.Marshal(response)
-			if err != nil {
-				log.Printf("WebSocket: Failed to marshal response: %v", err)
-				continue
-			}
-
-			if err := con.WriteMessage(websocket.TextMessage, responseBytes); err != nil {
-				log.Printf("WebSocket: Failed to write message: %v", err)
-				return
-			}
-
-			// If response is done or has error, we can stop streaming
-			if response.Done || response.Error != "" {
-				log.Printf("WebSocket: Stream completed for request %s", requestID)
-				return
-			}
-
-		case <-ctx.Done():
-			log.Printf("WebSocket: Context cancelled for request %s", requestID)
-			return
-		}
-	}
-}
-
-func (s *FiberServer) LoginHandler(c *fiber.Ctx) error {
-	var req services.LoginRequest
-	if err := c.BodyParser(&req); err != nil {
-		fmt.Println("Error parsing request body:", err)
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request body",
-		})
-	}
-
-	resp, err := s.authService.Login(req)
-	if err != nil {
-		fmt.Println("Error logging in:", err)
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	//fmt.Println("Login response:", resp)
-	return c.JSON(resp)
-}
-
-func (s *FiberServer) RegisterHandler(c *fiber.Ctx) error {
-	var req services.RegisterRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request body",
-		})
-	}
-
-	if err := s.authService.Register(req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
-		"message": "User registered successfully",
-	})
-}
-
-func (s *FiberServer) LogoutHandler(c *fiber.Ctx) error {
-	// Since we're using JWT tokens, we don't need to do anything on the server side
-	// The client should remove the token from their storage
-	return c.JSON(fiber.Map{
-		"message": "Logged out successfully",
-	})
-}
-
-func (s *FiberServer) UpdateAccountHandler(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
-	var req services.UpdateAccountRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
-	}
-	if err := s.authService.UpdateAccount(userID, req); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-	return c.JSON(fiber.Map{"message": "Account updated successfully"})
-}
-
-func (s *FiberServer) UpdatePasswordHandler(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
-	var req services.UpdatePasswordRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
-	}
-	if err := s.authService.UpdatePassword(userID, req); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-	return c.JSON(fiber.Map{"message": "Password updated successfully"})
-}
-
-func (s *FiberServer) DeleteAccountHandler(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(uuid.UUID)
-	var req struct {
-		Password string `json:"password"`
-	}
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
-	}
-	if err := s.authService.DeleteAccount(userID, req.Password); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-	return c.JSON(fiber.Map{"message": "Account deleted successfully"})
-}
-
-// Blog handlers
-func (s *FiberServer) GenerateArticleHandler(c *fiber.Ctx) error {
-	var req struct {
-		Prompt  string `json:"prompt"`
-		Title   string `json:"title"`
-		IsDraft bool   `json:"is_draft"`
-	}
-
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request body",
-		})
-	}
-
-	// Get user ID from session
-	userIDStr := c.Locals("userID").(string)
-	userID, err := uuid.Parse(userIDStr)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid user ID"})
-	}
-
-	article, err := s.blogService.GenerateArticle(c.Context(), req.Prompt, req.Title, userID, req.IsDraft)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(article)
-}
-
-func (s *FiberServer) UpdateArticleHandler(c *fiber.Ctx) error {
-	slug := c.Params("slug")
-	if slug == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Article slug is required",
-		})
-	}
-
-	// Get article ID from slug
-	articleID, err := s.blogService.GetArticleIDBySlug(slug)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": "Article not found",
-			})
-		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to find article",
-		})
-	}
-
-	var req services.ArticleUpdateRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request body",
-		})
-	}
-
-	article, err := s.blogService.UpdateArticle(c.Context(), articleID, req)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(article)
-}
-
-func (s *FiberServer) CreateArticleHandler(c *fiber.Ctx) error {
-	var req services.ArticleCreateRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request body",
-		})
-	}
-
-	article, err := s.blogService.CreateArticle(c.Context(), req)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(article)
-}
-
-func (s *FiberServer) UpdateArticleWithContextHandler(c *fiber.Ctx) error {
-	articleIDStr := c.Params("id")
-	articleID, err := uuid.Parse(articleIDStr)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid article ID",
-		})
-	}
-
-	article, err := s.blogService.UpdateArticleWithContext(c.Context(), articleID)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(article)
-}
-
-// Image generation handlers
-func (s *FiberServer) GenerateArticleImageHandler(c *fiber.Ctx) error {
-	var req struct {
-		Prompt         string    `json:"prompt"`
-		ArticleID      uuid.UUID `json:"article_id"`
-		GeneratePrompt bool      `json:"generate_prompt"`
-	}
-
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request body",
-		})
-	}
-
-	imageGen, err := s.imageService.GenerateArticleImage(c.Context(), req.Prompt, req.ArticleID, req.GeneratePrompt)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(imageGen)
-}
-
-func (s *FiberServer) GetImageGenerationHandler(c *fiber.Ctx) error {
-	requestID := c.Params("requestId")
-	if requestID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request ID",
-		})
-	}
-
-	imageGen, err := s.imageService.GetImageGeneration(c.Context(), requestID)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(imageGen)
-}
-
-func (s *FiberServer) GetImageGenerationStatusHandler(c *fiber.Ctx) error {
-	requestID := c.Params("requestId")
-	if requestID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request ID",
-		})
-	}
-
-	status, err := s.imageService.GetImageGenerationStatus(c.Context(), requestID)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(status)
-}
-
-// Storage handlers
-func (s *FiberServer) ListFilesHandler(c *fiber.Ctx) error {
-	prefix := c.Query("prefix")
-	files, folders, err := s.storageService.ListFiles(c.Context(), prefix)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"files":   files,
-		"folders": folders,
-	})
-}
-
-func (s *FiberServer) UploadFileHandler(c *fiber.Ctx) error {
-	file, err := c.FormFile("file")
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid file upload",
-		})
-	}
-
-	key := c.FormValue("key")
-	if key == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Key is required",
-		})
-	}
-
-	data, err := file.Open()
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-	defer data.Close()
-
-	buf := make([]byte, file.Size)
-	_, err = data.Read(buf)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	if err := s.storageService.UploadFile(c.Context(), key, buf); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"message": "File uploaded successfully",
-	})
-}
-
-func (s *FiberServer) DeleteFileHandler(c *fiber.Ctx) error {
-	key := c.Params("key")
-	if key == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Key is required",
-		})
-	}
-
-	if err := s.storageService.DeleteFile(c.Context(), key); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"message": "File deleted successfully",
-	})
-}
-
-func (s *FiberServer) CreateFolderHandler(c *fiber.Ctx) error {
-	var req struct {
-		Path string `json:"path"`
-	}
-
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request body",
-		})
-	}
-
-	if err := s.storageService.CreateFolder(c.Context(), req.Path); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"message": "Folder created successfully",
-	})
-}
-
-func (s *FiberServer) UpdateFolderHandler(c *fiber.Ctx) error {
-	var req struct {
-		OldPath string `json:"old_path"`
-		NewPath string `json:"new_path"`
-	}
-
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request body",
-		})
-	}
-
-	if err := s.storageService.UpdateFolder(c.Context(), req.OldPath, req.NewPath); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"message": "Folder updated successfully",
-	})
-}
-
-func (s *FiberServer) GetArticlesHandler(c *fiber.Ctx) error {
-	page := c.QueryInt("page", 1)
-	tag := c.Query("tag", "")
-	status := c.Query("status", "published")            // Default to published only
-	articlesPerPage := c.QueryInt("articlesPerPage", 6) // Default to ITEMS_PER_PAGE (6)
-
-	response, err := s.blogService.GetArticles(page, tag, status, articlesPerPage)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(response)
-}
-
-func (s *FiberServer) SearchArticlesHandler(c *fiber.Ctx) error {
-	query := c.Query("query")
-	if query == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Query parameter is required",
-		})
-	}
-
-	page := c.QueryInt("page", 1)
-	tag := c.Query("tag", "")
-
-	response, err := s.blogService.SearchArticles(query, page, tag)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(response)
-}
-
-func (s *FiberServer) GetPopularTagsHandler(c *fiber.Ctx) error {
-	tags, err := s.blogService.GetPopularTags()
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"tags": tags,
-	})
-}
-
-func (s *FiberServer) GetArticleDataHandler(c *fiber.Ctx) error {
-	slug := c.Params("slug")
-	if slug == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Slug is required",
-		})
-	}
-
-	data, err := s.blogService.GetArticleData(slug)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": "Article not found",
-			})
-		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(data)
-}
-
-func (s *FiberServer) GetRecommendedArticlesHandler(c *fiber.Ctx) error {
-	idStr := c.Params("id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid article ID",
-		})
-	}
-
-	articles, err := s.blogService.GetRecommendedArticles(id)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(articles)
-}
-
-func (s *FiberServer) DeleteArticleHandler(c *fiber.Ctx) error {
-	idStr := c.Params("id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid article ID",
-		})
-	}
-
-	if err := s.blogService.DeleteArticle(id); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-	})
-}
-
-func (s *FiberServer) GetPageBySlugHandler(c *fiber.Ctx) error {
-	slug := c.Params("slug")
-	if slug == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Page slug is required"})
-	}
-	page, err := s.pagesService.GetPageBySlug(slug)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-	if page == nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Page not found"})
-	}
-	return c.JSON(page)
-}
-
-func (s *FiberServer) AuthMiddleware() fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		token := c.Get("Authorization")
-		if token == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Not authenticated"})
-		}
-		if len(token) < 7 || token[:7] != "Bearer " {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token format"})
-		}
-		token = token[7:]
-		validToken, err := s.authService.ValidateToken(token)
-		if err != nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
-		}
-		claims := validToken.Claims.(jwt.MapClaims)
-		c.Locals("userID", uuid.MustParse(claims["sub"].(string)))
-		return c.Next()
-	}
+	// Copilot
+	app.Post("/agent/writing_copilot", controller.WritingCopilotHandler())
+	app.Get("/websocket", websocket.New(controller.WebsocketHandler(deps.AsyncCopilotMgr)))
+
+	// Pages
+	pages := app.Group("/pages")
+	pages.Get(":slug", controller.GetPageBySlugHandler(deps.PagesService))
+
+	// Auth
+	auth := app.Group("/auth")
+	auth.Post("/login", controller.LoginHandler(deps.AuthService))
+	auth.Post("/register", controller.RegisterHandler(deps.AuthService))
+	auth.Post("/logout", controller.LogoutHandler())
+
+	protected := auth.Group("", controller.AuthMiddleware(deps.AuthService))
+	protected.Put("/account", controller.UpdateAccountHandler(deps.AuthService))
+	protected.Put("/password", controller.UpdatePasswordHandler(deps.AuthService))
+	protected.Delete("/account", controller.DeleteAccountHandler(deps.AuthService))
+
+	// Blog
+	blog := app.Group("/blog")
+	blog.Post("/generate", controller.GenerateArticleHandler(deps.BlogService))
+	blog.Put(":id/update", controller.UpdateArticleWithContextHandler(deps.BlogService))
+	blog.Get("/articles/:slug", controller.GetArticleDataHandler(deps.BlogService))
+	blog.Post("/articles/:slug/update", controller.UpdateArticleHandler(deps.BlogService))
+	blog.Post("/articles", controller.CreateArticleHandler(deps.BlogService))
+	blog.Get("/articles/:id/recommended", controller.GetRecommendedArticlesHandler(deps.BlogService))
+	blog.Delete("/articles/:id", controller.DeleteArticleHandler(deps.BlogService))
+	blog.Get("/articles", controller.GetArticlesHandler(deps.BlogService))
+	blog.Get("/articles/search", controller.SearchArticlesHandler(deps.BlogService))
+	blog.Get("/tags/popular", controller.GetPopularTagsHandler(deps.BlogService))
+
+	// Images
+	images := app.Group("/images")
+	images.Post("/generate", controller.GenerateArticleImageHandler(deps.ImageService))
+	images.Get(":requestId", controller.GetImageGenerationHandler(deps.ImageService))
+	images.Get(":requestId/status", controller.GetImageGenerationStatusHandler(deps.ImageService))
+
+	// Storage
+	storage := app.Group("/storage")
+	storage.Get("/files", controller.ListFilesHandler(deps.StorageService))
+	storage.Post("/upload", controller.UploadFileHandler(deps.StorageService))
+	storage.Delete(":key", controller.DeleteFileHandler(deps.StorageService))
+	storage.Post("/folders", controller.CreateFolderHandler(deps.StorageService))
+	storage.Put("/folders", controller.UpdateFolderHandler(deps.StorageService))
+
+	// Base
+	app.Get("/", controller.HelloWorldHandler())
+	app.Get("/health", controller.HealthHandler())
 }

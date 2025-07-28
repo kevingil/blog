@@ -35,7 +35,5 @@ func NewFiberServer(
 		pagesService:   pagesService,
 	}
 
-	server.RegisterRoutes()
-
 	return server
 }

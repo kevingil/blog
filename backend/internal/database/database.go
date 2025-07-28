@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"blog-agent-go/backend/models"
+	"blog-agent-go/backend/internal/models"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
