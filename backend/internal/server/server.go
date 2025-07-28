@@ -1,8 +1,8 @@
 package server
 
 import (
-	"blog-agent-go/backend/database"
-	"blog-agent-go/backend/services"
+	"blog-agent-go/backend/internal/database"
+	"blog-agent-go/backend/internal/services"
 
 	"github.com/gofiber/fiber/v2"
 )
