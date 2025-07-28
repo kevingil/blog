@@ -13,7 +13,7 @@ interface ArticlesTableProps {
 }
 
 export function ArticlesTable({ articles, onArticleDeleted }: ArticlesTableProps) {
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     const result = await deleteArticle(id);
     if (result.success) {
       onArticleDeleted?.(); // Callback to refresh data
@@ -113,7 +113,7 @@ export function ArticlesTable({ articles, onArticleDeleted }: ArticlesTableProps
                         Edit
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleDelete(Number(article.article.id))}>
+                    <DropdownMenuItem onClick={() => handleDelete(article.article.id)}>
                       <Trash2 className="mr-2 h-4 w-4" />
                       Delete
                     </DropdownMenuItem>

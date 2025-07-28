@@ -186,7 +186,7 @@ export async function getRecommendedArticles(currentArticleId: number): Promise<
   return response.json();
 }
 
-export async function deleteArticle(id: number): Promise<{ success: boolean }> {
+export async function deleteArticle(id: string): Promise<{ success: boolean }> {
   const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${id}`, {
     method: 'DELETE',
   });

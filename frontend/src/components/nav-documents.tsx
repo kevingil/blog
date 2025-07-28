@@ -1,3 +1,4 @@
+import React from "react"
 import {
   IconDots,
   IconFolder,
@@ -28,6 +29,8 @@ import { ArticleListItem } from "@/services/types"
 import { useEffect, useRef } from "react"
 import { FetchNextPageOptions, InfiniteQueryObserverResult, InfiniteData, useQueryClient } from "@tanstack/react-query"
 import { GetArticlesResponse } from "@/routes/dashboard/blog/index"
+import { useMutation } from "@tanstack/react-query"
+import { deleteArticle } from "@/services/blog"
 
 interface NavDocumentsProps {
   articles: ArticleListItem[]
@@ -47,9 +50,23 @@ export function NavDocuments({
   const loadMoreRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
 
-  // Sort articles by created date, most recent first
-  const sortedArticles = articles
-    .sort((a, b) => new Date(b.article.created_at || 0).getTime() - new Date(a.article.created_at || 0).getTime())
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await deleteArticle(id)
+    },
+    onSuccess: (_, id: string) => {
+      queryClient.setQueryData(['sidebar-articles', 'all'], (oldData: any) => {
+        if (!oldData) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: any) => ({
+            ...page,
+            articles: page.articles.filter((a: any) => a.article.id !== id),
+          })),
+        };
+      });
+    },
+  })
 
   // Intersection Observer for infinite scrolling
   useEffect(() => {
@@ -80,67 +97,78 @@ export function NavDocuments({
       <SidebarGroupLabel>Recent Articles</SidebarGroupLabel>
       </div>
       <SidebarMenu className="h-[calc(100vh-400px)] overflow-y-auto">
-        {sortedArticles.map((articleItem) => {
-          const editUrl = `/dashboard/blog/edit/${articleItem.article.slug || ''}`
-          return (
-            <SidebarMenuItem key={articleItem.article.id}>
-              <SidebarMenuButton isActive={location.pathname === editUrl} asChild>
-                <Link 
-                  to={editUrl} 
-                  className="flex flex-col items-start gap-1 p-2"
-                  onClick={() => {
-                    queryClient.invalidateQueries({ queryKey: ['article', articleItem.article.slug] })
-                  }}
-                >
-                  <div className="flex items-center gap-2 w-full">
-                    <span className="text-sm font-medium truncate flex-1">{articleItem.article.title}</span>
-                    <Badge 
-                      className={`text-[0.6rem] ${
-                        articleItem.article.is_draft 
-                          ? "bg-indigo-50 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300" 
-                          : "bg-green-50 dark:bg-green-900 text-green-700 dark:text-green-300"
-                      }`} 
-                      variant="outline"
-                    >
-                      {articleItem.article.is_draft ? 'Draft' : 'Published'}
-                    </Badge>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(articleItem.article.created_at).toLocaleDateString()}
-                  </span>
-                </Link>
-              </SidebarMenuButton>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <SidebarMenuAction
-                    showOnHover
-                    className="data-[state=open]:bg-accent rounded-sm"
+        {articles
+          .slice()
+          .sort((a, b) => {
+            const dateA = a.article.created_at ? new Date(a.article.created_at).getTime() : 0;
+            const dateB = b.article.created_at ? new Date(b.article.created_at).getTime() : 0;
+            return dateB - dateA;
+          })
+          .map((articleItem) => {
+            const editUrl = `/dashboard/blog/edit/${articleItem.article.slug || ''}`
+            return (
+              <SidebarMenuItem key={articleItem.article.id}>
+                <SidebarMenuButton isActive={location.pathname === editUrl} asChild>
+                  <Link 
+                    to={editUrl} 
+                    className="flex flex-col items-start gap-1 p-2"
+                    onClick={() => {
+                      queryClient.invalidateQueries({ queryKey: ['article', articleItem.article.slug] })
+                    }}
                   >
-                    <IconDots />
-                    <span className="sr-only">More</span>
-                  </SidebarMenuAction>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  className="w-24 rounded-lg"
-                  side={isMobile ? "bottom" : "right"}
-                  align={isMobile ? "end" : "start"}
-                >
-                  <DropdownMenuItem asChild>
-                    <Link to={editUrl}>
-                      <IconFolder />
-                      <span>Edit</span>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem variant="destructive">
-                    <IconTrash />
-                    <span>Delete</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </SidebarMenuItem>
-          )
-        })}
+                    <div className="flex items-center gap-2 w-full">
+                      <span className="text-sm font-medium truncate flex-1">{articleItem.article.title}</span>
+                      <Badge 
+                        className={`text-[0.6rem] ${
+                          articleItem.article.is_draft 
+                            ? "bg-indigo-50 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300" 
+                            : "bg-green-50 dark:bg-green-900 text-green-700 dark:text-green-300"
+                        }`} 
+                        variant="outline"
+                      >
+                        {articleItem.article.is_draft ? 'Draft' : 'Published'}
+                      </Badge>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(articleItem.article.created_at).toLocaleDateString()}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <SidebarMenuAction
+                      showOnHover
+                      className="data-[state=open]:bg-accent rounded-sm"
+                    >
+                      <IconDots />
+                      <span className="sr-only">More</span>
+                    </SidebarMenuAction>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    className="w-24 rounded-lg"
+                    side={isMobile ? "bottom" : "right"}
+                    align={isMobile ? "end" : "start"}
+                  >
+                    <DropdownMenuItem asChild>
+                      <Link to={editUrl}>
+                        <IconFolder />
+                        <span>Edit</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem 
+                      variant="destructive" 
+                      onClick={() => deleteMutation.mutate(articleItem.article.id)}
+                      disabled={deleteMutation.isPending}
+                    >
+                      <IconTrash />
+                      <span>{deleteMutation.isPending ? 'Deleting...' : 'Delete'}</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </SidebarMenuItem>
+            )
+          })}
         
         {/* Loading indicator for infinite scroll */}
         {hasNextPage && (
