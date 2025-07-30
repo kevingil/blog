@@ -8,14 +8,15 @@ import (
 	"io"
 	"time"
 
+	"blog-agent-go/backend/internal/llm/config"
+	"blog-agent-go/backend/internal/llm/logging"
+	"blog-agent-go/backend/internal/llm/message"
+	"blog-agent-go/backend/internal/llm/models"
+	"blog-agent-go/backend/internal/llm/tools"
+
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/shared"
-	"github.com/opencode-ai/opencode/internal/config"
-	"github.com/opencode-ai/opencode/internal/llm/models"
-	"github.com/opencode-ai/opencode/internal/llm/tools"
-	"github.com/opencode-ai/opencode/internal/logging"
-	"github.com/opencode-ai/opencode/internal/message"
 )
 
 type openaiOptions struct {
@@ -76,7 +77,7 @@ func (o *openaiClient) convertMessages(messages []message.Message) (openaiMessag
 			textBlock := openai.ChatCompletionContentPartTextParam{Text: msg.Content().String()}
 			content = append(content, openai.ChatCompletionContentPartUnionParam{OfText: &textBlock})
 			for _, binaryContent := range msg.BinaryContent() {
-				imageURL := openai.ChatCompletionContentPartImageImageURLParam{URL: binaryContent.String(models.ProviderOpenAI)}
+				imageURL := openai.ChatCompletionContentPartImageImageURLParam{URL: binaryContent.String(string(models.ProviderOpenAI))}
 				imageBlock := openai.ChatCompletionContentPartImageParam{ImageURL: imageURL}
 
 				content = append(content, openai.ChatCompletionContentPartUnionParam{OfImageURL: &imageBlock})

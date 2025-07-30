@@ -9,14 +9,16 @@ import (
 	"strings"
 	"time"
 
+	"blog-agent-go/backend/internal/llm/logging"
+	"blog-agent-go/backend/internal/llm/message"
+	"blog-agent-go/backend/internal/llm/models"
+	toolsPkg "blog-agent-go/backend/internal/llm/tools"
+
+	"blog-agent-go/backend/internal/llm/config"
+
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/bedrock"
 	"github.com/anthropics/anthropic-sdk-go/option"
-	"github.com/opencode-ai/opencode/internal/config"
-	"github.com/opencode-ai/opencode/internal/llm/models"
-	toolsPkg "github.com/opencode-ai/opencode/internal/llm/tools"
-	"github.com/opencode-ai/opencode/internal/logging"
-	"github.com/opencode-ai/opencode/internal/message"
 )
 
 type anthropicOptions struct {
@@ -74,7 +76,7 @@ func (a *anthropicClient) convertMessages(messages []message.Message) (anthropic
 			var contentBlocks []anthropic.ContentBlockParamUnion
 			contentBlocks = append(contentBlocks, content)
 			for _, binaryContent := range msg.BinaryContent() {
-				base64Image := binaryContent.String(models.ProviderAnthropic)
+				base64Image := binaryContent.String(string(models.ProviderAnthropic))
 				imageBlock := anthropic.NewImageBlockBase64(binaryContent.MIMEType, base64Image)
 				contentBlocks = append(contentBlocks, imageBlock)
 			}

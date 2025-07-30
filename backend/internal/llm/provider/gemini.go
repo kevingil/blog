@@ -9,11 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"blog-agent-go/backend/internal/llm/config"
+	"blog-agent-go/backend/internal/llm/logging"
+	"blog-agent-go/backend/internal/llm/message"
+	"blog-agent-go/backend/internal/llm/tools"
+
 	"github.com/google/uuid"
-	"github.com/opencode-ai/opencode/internal/config"
-	"github.com/opencode-ai/opencode/internal/llm/tools"
-	"github.com/opencode-ai/opencode/internal/logging"
-	"github.com/opencode-ai/opencode/internal/message"
 	"google.golang.org/genai"
 )
 
