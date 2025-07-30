@@ -5,21 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/opencode-ai/opencode/internal/config"
-	"github.com/opencode-ai/opencode/internal/llm/tools"
-	"github.com/opencode-ai/opencode/internal/logging"
-	"github.com/opencode-ai/opencode/internal/permission"
-	"github.com/opencode-ai/opencode/internal/version"
+	"blog-agent-go/backend/internal/llm/config"
+	"blog-agent-go/backend/internal/llm/logging"
+	"blog-agent-go/backend/internal/llm/tools"
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
+	"honnef.co/go/tools/lintcmd/version"
 )
 
 type mcpTool struct {
-	mcpName     string
-	tool        mcp.Tool
-	mcpConfig   config.MCPServer
-	permissions permission.Service
+	mcpName   string
+	tool      mcp.Tool
+	mcpConfig config.MCPServer
 }
 
 type MCPClient interface {
@@ -84,25 +82,6 @@ func runTool(ctx context.Context, c MCPClient, toolName string, input string) (t
 }
 
 func (b *mcpTool) Run(ctx context.Context, params tools.ToolCall) (tools.ToolResponse, error) {
-	sessionID, messageID := tools.GetContextValues(ctx)
-	if sessionID == "" || messageID == "" {
-		return tools.ToolResponse{}, fmt.Errorf("session ID and message ID are required for creating a new file")
-	}
-	permissionDescription := fmt.Sprintf("execute %s with the following parameters: %s", b.Info().Name, params.Input)
-	p := b.permissions.Request(
-		permission.CreatePermissionRequest{
-			SessionID:   sessionID,
-			Path:        config.WorkingDirectory(),
-			ToolName:    b.Info().Name,
-			Action:      "execute",
-			Description: permissionDescription,
-			Params:      params.Input,
-		},
-	)
-	if !p {
-		return tools.NewTextErrorResponse("permission denied"), nil
-	}
-
 	switch b.mcpConfig.Type {
 	case config.MCPStdio:
 		c, err := client.NewStdioMCPClient(
@@ -128,18 +107,17 @@ func (b *mcpTool) Run(ctx context.Context, params tools.ToolCall) (tools.ToolRes
 	return tools.NewTextErrorResponse("invalid mcp type"), nil
 }
 
-func NewMcpTool(name string, tool mcp.Tool, permissions permission.Service, mcpConfig config.MCPServer) tools.BaseTool {
+func NewMcpTool(name string, tool mcp.Tool, mcpConfig config.MCPServer) tools.BaseTool {
 	return &mcpTool{
-		mcpName:     name,
-		tool:        tool,
-		mcpConfig:   mcpConfig,
-		permissions: permissions,
+		mcpName:   name,
+		tool:      tool,
+		mcpConfig: mcpConfig,
 	}
 }
 
 var mcpTools []tools.BaseTool
 
-func getTools(ctx context.Context, name string, m config.MCPServer, permissions permission.Service, c MCPClient) []tools.BaseTool {
+func getTools(ctx context.Context, name string, m config.MCPServer, c MCPClient) []tools.BaseTool {
 	var stdioTools []tools.BaseTool
 	initRequest := mcp.InitializeRequest{}
 	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
@@ -160,13 +138,13 @@ func getTools(ctx context.Context, name string, m config.MCPServer, permissions 
 		return stdioTools
 	}
 	for _, t := range tools.Tools {
-		stdioTools = append(stdioTools, NewMcpTool(name, t, permissions, m))
+		stdioTools = append(stdioTools, NewMcpTool(name, t, m))
 	}
 	defer c.Close()
 	return stdioTools
 }
 
-func GetMcpTools(ctx context.Context, permissions permission.Service) []tools.BaseTool {
+func GetMcpTools(ctx context.Context) []tools.BaseTool {
 	if len(mcpTools) > 0 {
 		return mcpTools
 	}
@@ -183,7 +161,7 @@ func GetMcpTools(ctx context.Context, permissions permission.Service) []tools.Ba
 				continue
 			}
 
-			mcpTools = append(mcpTools, getTools(ctx, name, m, permissions, c)...)
+			mcpTools = append(mcpTools, getTools(ctx, name, m, c)...)
 		case config.MCPSse:
 			c, err := client.NewSSEMCPClient(
 				m.URL,
@@ -193,7 +171,7 @@ func GetMcpTools(ctx context.Context, permissions permission.Service) []tools.Ba
 				logging.Error("error creating mcp client", "error", err)
 				continue
 			}
-			mcpTools = append(mcpTools, getTools(ctx, name, m, permissions, c)...)
+			mcpTools = append(mcpTools, getTools(ctx, name, m, c)...)
 		}
 	}
 
