@@ -1,6 +1,7 @@
 package models
 
 import (
+	"blog-agent-go/backend/internal/llm/logging"
 	"cmp"
 	"encoding/json"
 	"net/http"
@@ -10,7 +11,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/opencode-ai/opencode/internal/logging"
 	"github.com/spf13/viper"
 )
 

@@ -8,16 +8,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/opencode-ai/opencode/internal/config"
-	"github.com/opencode-ai/opencode/internal/llm/models"
-	"github.com/opencode-ai/opencode/internal/llm/prompt"
-	"github.com/opencode-ai/opencode/internal/llm/provider"
-	"github.com/opencode-ai/opencode/internal/llm/tools"
-	"github.com/opencode-ai/opencode/internal/logging"
-	"github.com/opencode-ai/opencode/internal/message"
-	"github.com/opencode-ai/opencode/internal/permission"
-	"github.com/opencode-ai/opencode/internal/pubsub"
-	"github.com/opencode-ai/opencode/internal/session"
+	"blog-agent-go/backend/internal/llm/config"
+	"blog-agent-go/backend/internal/llm/logging"
+	"blog-agent-go/backend/internal/llm/message"
+	"blog-agent-go/backend/internal/llm/models"
+	"blog-agent-go/backend/internal/llm/prompt"
+	"blog-agent-go/backend/internal/llm/provider"
+	"blog-agent-go/backend/internal/llm/pubsub"
+	"blog-agent-go/backend/internal/llm/session"
+	"blog-agent-go/backend/internal/llm/tools"
 )
 
 // Common errors
@@ -393,28 +392,18 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 				Input: toolCall.Input,
 			})
 			if toolErr != nil {
-				if errors.Is(toolErr, permission.ErrorPermissionDenied) {
-					toolResults[i] = message.ToolResult{
-						ToolCallID: toolCall.ID,
-						Content:    "Permission denied",
-						IsError:    true,
-					}
-					for j := i + 1; j < len(toolCalls); j++ {
-						toolResults[j] = message.ToolResult{
-							ToolCallID: toolCalls[j].ID,
-							Content:    "Tool execution canceled by user",
-							IsError:    true,
-						}
-					}
-					a.finishMessage(ctx, &assistantMsg, message.FinishReasonPermissionDenied)
-					break
+				toolResults[i] = message.ToolResult{
+					ToolCallID: toolCall.ID,
+					Content:    fmt.Sprintf("Tool execution error: %v", toolErr),
+					IsError:    true,
 				}
-			}
-			toolResults[i] = message.ToolResult{
-				ToolCallID: toolCall.ID,
-				Content:    toolResult.Content,
-				Metadata:   toolResult.Metadata,
-				IsError:    toolResult.IsError,
+			} else {
+				toolResults[i] = message.ToolResult{
+					ToolCallID: toolCall.ID,
+					Content:    toolResult.Content,
+					Metadata:   toolResult.Metadata,
+					IsError:    toolResult.IsError,
+				}
 			}
 		}
 	}
