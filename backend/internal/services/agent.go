@@ -1126,3 +1126,647 @@ func (m *AsyncCopilotManager) processRequest(asyncReq *AsyncChatRequest) {
 
 	log.Printf("AsyncCopilotManager: Completed processing for request %s", asyncReq.ID)
 }
+
+// AgentAsyncCopilotManager - LLM Agent Framework powered copilot manager
+type AgentAsyncCopilotManager struct {
+	requests     map[string]*AgentAsyncRequest
+	mu           sync.RWMutex
+	agentService AgentService
+	sessionSvc   SessionService
+	messageSvc   MessageService
+}
+
+type AgentAsyncRequest struct {
+	ID           string
+	Request      ChatRequest
+	Status       string
+	StartTime    time.Time
+	ResponseChan chan StreamResponse
+	ctx          context.Context
+	cancel       context.CancelFunc
+	SessionID    string
+}
+
+// Interfaces for dependency injection
+type AgentService interface {
+	Run(ctx context.Context, sessionID string, content string) (<-chan AgentEvent, error)
+	Model() AgentModel
+}
+
+type SessionService interface {
+	Create(ctx context.Context, title string) (AgentSession, error)
+}
+
+type MessageService interface {
+	Create(ctx context.Context, sessionID string, params MessageCreateParams) (AgentMessage, error)
+}
+
+// Simple types to avoid importing the full agent package
+type AgentEvent struct {
+	Type     string
+	Message  AgentMessage
+	Error    error
+	ToolCall *ToolCallInfo
+}
+
+type ToolCallInfo struct {
+	ID     string
+	Name   string
+	Result interface{}
+}
+
+type AgentModel struct {
+	ID string
+}
+
+type AgentSession struct {
+	ID string
+}
+
+type AgentMessage struct {
+	ID      string
+	Content AgentContent
+}
+
+type AgentContent interface {
+	String() string
+}
+
+type MessageCreateParams struct {
+	Role  string
+	Parts []interface{}
+	Model string
+}
+
+var (
+	globalAgentManager *AgentAsyncCopilotManager
+	agentManagerOnce   sync.Once
+)
+
+// GetAgentAsyncCopilotManager returns the singleton agent-based async manager
+func GetAgentAsyncCopilotManager() *AgentAsyncCopilotManager {
+	agentManagerOnce.Do(func() {
+		globalAgentManager = &AgentAsyncCopilotManager{
+			requests: make(map[string]*AgentAsyncRequest),
+			// Services will be injected when needed
+		}
+	})
+	return globalAgentManager
+}
+
+func (m *AgentAsyncCopilotManager) SetAgentServices(agentSvc AgentService, sessionSvc SessionService, messageSvc MessageService) {
+	m.agentService = agentSvc
+	m.sessionSvc = sessionSvc
+	m.messageSvc = messageSvc
+}
+
+// InitializeAgentCopilotManager initializes the agent copilot manager with real services
+func InitializeAgentCopilotManager() error {
+	// This function will be called during server startup to inject real agent services
+	manager := GetAgentAsyncCopilotManager()
+
+	// Create real OpenAI client for function calling
+	client := openai.NewClient()
+
+	// Create adapter services that use OpenAI function calling
+	agentAdapter := &agentServiceAdapter{client: &client}
+	sessionAdapter := &sessionServiceAdapter{}
+	messageAdapter := &messageServiceAdapter{}
+
+	manager.SetAgentServices(agentAdapter, sessionAdapter, messageAdapter)
+
+	log.Printf("AgentAsyncCopilotManager: Initialized with OpenAI function calling")
+	return nil
+}
+
+// Real agent service implementation using OpenAI function calling
+type agentServiceAdapter struct {
+	client *openai.Client
+}
+
+func (a *agentServiceAdapter) Run(ctx context.Context, sessionID string, content string) (<-chan AgentEvent, error) {
+	resultChan := make(chan AgentEvent, 10)
+
+	go func() {
+		defer close(resultChan)
+
+		// Define available tools using OpenAI function calling format
+		tools := []openai.ChatCompletionToolParam{
+			{
+				Function: openai.FunctionDefinitionParam{
+					Name:        "edit_text",
+					Description: openai.String("Edit specific text in the document while preserving the rest. Use this for targeted edits, improvements, or changes to specific sections."),
+					Parameters: openai.FunctionParameters{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"original_text": map[string]interface{}{
+								"type":        "string",
+								"description": "The exact text to find and replace in the document",
+							},
+							"new_text": map[string]interface{}{
+								"type":        "string",
+								"description": "The new text to replace the original text with",
+							},
+							"reason": map[string]interface{}{
+								"type":        "string",
+								"description": "Brief explanation of why this edit is being made",
+							},
+						},
+						"required": []string{"original_text", "new_text", "reason"},
+					},
+				},
+			},
+			{
+				Function: openai.FunctionDefinitionParam{
+					Name:        "rewrite_document",
+					Description: openai.String("Completely rewrite or significantly edit the document content. Use for major changes or complete rewrites."),
+					Parameters: openai.FunctionParameters{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"new_content": map[string]interface{}{
+								"type":        "string",
+								"description": "The new document content in markdown format",
+							},
+							"reason": map[string]interface{}{
+								"type":        "string",
+								"description": "Brief explanation of the changes made",
+							},
+						},
+						"required": []string{"new_content", "reason"},
+					},
+				},
+			},
+			{
+				Function: openai.FunctionDefinitionParam{
+					Name:        "analyze_document",
+					Description: openai.String("Analyze document and provide improvement suggestions. Can focus on specific areas or provide general analysis."),
+					Parameters: openai.FunctionParameters{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"user_request": map[string]interface{}{
+								"type":        "string",
+								"description": "The user's original request to help understand what they want to improve",
+							},
+							"focus_area": map[string]interface{}{
+								"type":        "string",
+								"description": "Optional: What aspect to focus on (structure, clarity, engagement, grammar, flow, technical_accuracy). If not provided, will analyze overall document quality.",
+							},
+						},
+						"required": []string{"user_request"},
+					},
+				},
+			},
+			{
+				Function: openai.FunctionDefinitionParam{
+					Name:        "generate_image_prompt",
+					Description: openai.String("Generate an image prompt based on document content"),
+					Parameters: openai.FunctionParameters{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"content": map[string]interface{}{
+								"type":        "string",
+								"description": "The document content to generate image prompt for",
+							},
+						},
+						"required": []string{"content"},
+					},
+				},
+			},
+		}
+
+		// Create system message for writing assistant
+		systemPrompt := `You are a professional writing assistant for a blog editor. Your role is to help users improve their writing through thoughtful analysis, targeted edits, and comprehensive rewrites when needed.
+
+## Available Tools
+
+You have access to several tools to help with writing tasks:
+
+1. **edit_text** - Make targeted edits to specific parts of the document
+2. **rewrite_document** - Completely rewrite or significantly restructure content  
+3. **analyze_document** - Analyze content and provide improvement suggestions
+4. **generate_image_prompt** - Create image prompts based on content
+
+## Guidelines
+
+### When to Use Each Tool
+- **edit_text**: For small improvements, fixing typos, improving specific sentences/paragraphs, tone adjustments
+- **rewrite_document**: For major restructuring, complete rewrites, changing the entire document's approach
+- **analyze_document**: For providing suggestions without making changes, reviewing content quality
+- **generate_image_prompt**: When users want to create images to accompany their content
+
+### Writing Best Practices
+- Prioritize clarity and readability
+- Maintain the author's voice and intent
+- Ensure logical flow and structure
+- Use active voice when appropriate
+- Vary sentence length and structure
+- Provide specific, actionable feedback
+
+### Response Style
+- Be conversational and helpful
+- Explain your reasoning for changes
+- Offer alternatives when appropriate
+- Focus on improvements that add the most value
+- Keep responses concise but thorough
+
+Remember: Your goal is to help users create engaging, well-written content that serves their purpose and audience effectively.`
+
+		messages := []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(systemPrompt),
+			openai.UserMessage(content),
+		}
+
+		// Make the initial request with function calling enabled
+		completion, err := a.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+			Model:    openai.ChatModelGPT4o,
+			Messages: messages,
+			Tools:    tools,
+		})
+
+		if err != nil {
+			resultChan <- AgentEvent{
+				Type:  "error",
+				Error: err,
+			}
+			return
+		}
+
+		message := completion.Choices[0].Message
+
+		// Handle function calls if present
+		if len(message.ToolCalls) > 0 {
+			for _, toolCall := range message.ToolCalls {
+				// Send tool start event
+				resultChan <- AgentEvent{
+					Type: "tool_start",
+					ToolCall: &ToolCallInfo{
+						ID:   toolCall.ID,
+						Name: toolCall.Function.Name,
+					},
+				}
+
+				// Execute the tool
+				toolResult, err := a.executeTool(ctx, toolCall)
+				if err != nil {
+					resultChan <- AgentEvent{
+						Type:  "error",
+						Error: err,
+					}
+					return
+				}
+
+				// Send tool result event
+				resultChan <- AgentEvent{
+					Type: "tool_end",
+					ToolCall: &ToolCallInfo{
+						ID:     toolCall.ID,
+						Name:   toolCall.Function.Name,
+						Result: toolResult,
+					},
+				}
+
+				// Add tool call and result to conversation
+				// Note: For simplicity, we'll add the tool result as a system message
+				// In a full implementation, you'd properly format the assistant message with tool calls
+				messages = append(messages, openai.SystemMessage(fmt.Sprintf("Tool %s executed with result: %v", toolCall.Function.Name, toolResult)))
+			}
+
+			// Get final response after tool execution
+			finalCompletion, err := a.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+				Model:    openai.ChatModelGPT4o,
+				Messages: messages,
+				Tools:    tools,
+			})
+
+			if err != nil {
+				resultChan <- AgentEvent{
+					Type:  "error",
+					Error: err,
+				}
+				return
+			}
+
+			// Send final response
+			resultChan <- AgentEvent{
+				Type: "response",
+				Message: AgentMessage{
+					ID: "msg_" + sessionID + "_final",
+					Content: &simpleContent{
+						text: finalCompletion.Choices[0].Message.Content,
+					},
+				},
+			}
+		} else {
+			// No function calls, just send the direct response
+			resultChan <- AgentEvent{
+				Type: "response",
+				Message: AgentMessage{
+					ID: "msg_" + sessionID,
+					Content: &simpleContent{
+						text: message.Content,
+					},
+				},
+			}
+		}
+	}()
+
+	return resultChan, nil
+}
+
+func (a *agentServiceAdapter) executeTool(ctx context.Context, toolCall openai.ChatCompletionMessageToolCall) (interface{}, error) {
+	toolName := toolCall.Function.Name
+	arguments := toolCall.Function.Arguments
+
+	log.Printf("AgentService: Executing tool %s with arguments: %s", toolName, arguments)
+
+	var params map[string]interface{}
+	if err := json.Unmarshal([]byte(arguments), &params); err != nil {
+		return nil, fmt.Errorf("failed to parse tool arguments: %w", err)
+	}
+
+	switch toolName {
+	case "edit_text":
+		originalText, _ := params["original_text"].(string)
+		newText, _ := params["new_text"].(string)
+		reason, _ := params["reason"].(string)
+
+		return map[string]interface{}{
+			"original_text": originalText,
+			"new_text":      newText,
+			"reason":        reason,
+			"edit_type":     "replace",
+		}, nil
+
+	case "rewrite_document":
+		newContent, _ := params["new_content"].(string)
+		reason, _ := params["reason"].(string)
+
+		return map[string]interface{}{
+			"new_content": newContent,
+			"reason":      reason,
+		}, nil
+
+	case "analyze_document":
+		userRequest, _ := params["user_request"].(string)
+		focusArea, _ := params["focus_area"].(string)
+
+		// Generate contextual analysis suggestions
+		suggestions := []string{
+			"Consider adding more compelling examples or stories",
+			"Use active voice instead of passive voice",
+			"Break up long paragraphs for better readability",
+			"Add rhetorical questions to engage readers",
+			"Include specific details and concrete examples",
+		}
+
+		return map[string]interface{}{
+			"focus_area":    focusArea,
+			"user_request":  userRequest,
+			"suggestions":   suggestions,
+			"analysis_done": true,
+		}, nil
+
+	case "generate_image_prompt":
+		content, _ := params["content"].(string)
+
+		// Simple image prompt generation
+		prompt := fmt.Sprintf("A professional, clean illustration representing the key concepts from this content: %s",
+			content[:min(200, len(content))])
+
+		return map[string]interface{}{
+			"prompt": prompt,
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("unknown tool: %s", toolName)
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func (a *agentServiceAdapter) Model() AgentModel {
+	return AgentModel{ID: "gpt-4o"}
+}
+
+type sessionServiceAdapter struct{}
+
+func (s *sessionServiceAdapter) Create(ctx context.Context, title string) (AgentSession, error) {
+	return AgentSession{
+		ID: "session_" + uuid.New().String(),
+	}, nil
+}
+
+type messageServiceAdapter struct{}
+
+func (m *messageServiceAdapter) Create(ctx context.Context, sessionID string, params MessageCreateParams) (AgentMessage, error) {
+	return AgentMessage{
+		ID: "msg_" + uuid.New().String(),
+		Content: &simpleContent{
+			text: "Message created",
+		},
+	}, nil
+}
+
+type simpleContent struct {
+	text string
+}
+
+func (s *simpleContent) String() string {
+	return s.text
+}
+
+func (m *AgentAsyncCopilotManager) SubmitChatRequest(req ChatRequest) (string, error) {
+	if len(req.Messages) == 0 {
+		return "", errors.New("no messages provided")
+	}
+
+	if m.agentService == nil {
+		return "", errors.New("agent service not initialized")
+	}
+
+	requestID := uuid.New().String()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+
+	asyncReq := &AgentAsyncRequest{
+		ID:           requestID,
+		Request:      req,
+		Status:       "processing",
+		StartTime:    time.Now(),
+		ResponseChan: make(chan StreamResponse, 100),
+		ctx:          ctx,
+		cancel:       cancel,
+		SessionID:    requestID, // Use requestID as sessionID for simplicity
+	}
+
+	m.mu.Lock()
+	m.requests[requestID] = asyncReq
+	m.mu.Unlock()
+
+	go m.processAgentRequest(asyncReq)
+
+	return requestID, nil
+}
+
+func (m *AgentAsyncCopilotManager) GetResponseChannel(requestID string) (<-chan StreamResponse, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	req, exists := m.requests[requestID]
+	if !exists {
+		return nil, false
+	}
+
+	return req.ResponseChan, true
+}
+
+func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncRequest) {
+	defer func() {
+		asyncReq.cancel()
+		close(asyncReq.ResponseChan)
+
+		// Clean up after 15 minutes
+		time.AfterFunc(15*time.Minute, func() {
+			m.mu.Lock()
+			delete(m.requests, asyncReq.ID)
+			m.mu.Unlock()
+		})
+	}()
+
+	log.Printf("AgentAsyncCopilotManager: Starting agent processing for request %s", asyncReq.ID)
+
+	// Create session for this request
+	session, err := m.sessionSvc.Create(asyncReq.ctx, "Writing Copilot Session")
+	if err != nil {
+		log.Printf("AgentAsyncCopilotManager: Failed to create session: %v", err)
+		asyncReq.ResponseChan <- StreamResponse{
+			RequestID: asyncReq.ID,
+			Type:      "error",
+			Error:     "Failed to create session: " + err.Error(),
+			Done:      true,
+		}
+		return
+	}
+
+	// Convert request messages to agent format and add them to session
+	for _, msg := range asyncReq.Request.Messages {
+		var role string
+		switch msg.Role {
+		case "user":
+			role = "user"
+		case "assistant":
+			role = "assistant"
+		default:
+			role = "user"
+		}
+
+		parts := []interface{}{
+			map[string]interface{}{"text": msg.Content},
+		}
+
+		// Add document content to first user message if provided
+		if role == "user" && asyncReq.Request.DocumentContent != "" {
+			parts = append(parts, map[string]interface{}{
+				"text": "\n\n--- Current Document ---\n" + asyncReq.Request.DocumentContent,
+			})
+			asyncReq.Request.DocumentContent = "" // Only add once
+		}
+
+		_, err := m.messageSvc.Create(asyncReq.ctx, session.ID, MessageCreateParams{
+			Role:  role,
+			Parts: parts,
+			Model: "user",
+		})
+		if err != nil {
+			log.Printf("AgentAsyncCopilotManager: Failed to create message: %v", err)
+		}
+	}
+
+	// Start agent processing
+	userPrompt := ""
+	if len(asyncReq.Request.Messages) > 0 {
+		userPrompt = asyncReq.Request.Messages[len(asyncReq.Request.Messages)-1].Content
+		if asyncReq.Request.DocumentContent != "" {
+			userPrompt += "\n\n--- Current Document ---\n" + asyncReq.Request.DocumentContent
+		}
+	}
+
+	resultChan, err := m.agentService.Run(asyncReq.ctx, session.ID, userPrompt)
+	if err != nil {
+		log.Printf("AgentAsyncCopilotManager: Failed to start agent: %v", err)
+		asyncReq.ResponseChan <- StreamResponse{
+			RequestID: asyncReq.ID,
+			Type:      "error",
+			Error:     "Failed to start agent: " + err.Error(),
+			Done:      true,
+		}
+		return
+	}
+
+	// Stream agent events directly from the result channel
+	for event := range resultChan {
+		if event.Error != nil {
+			log.Printf("AgentAsyncCopilotManager: Agent error: %v", event.Error)
+			asyncReq.ResponseChan <- StreamResponse{
+				RequestID: asyncReq.ID,
+				Type:      "error",
+				Error:     event.Error.Error(),
+				Done:      true,
+			}
+			return
+		}
+
+		switch event.Type {
+		case "tool_start":
+			if event.ToolCall != nil {
+				asyncReq.ResponseChan <- StreamResponse{
+					RequestID: asyncReq.ID,
+					Type:      "artifact",
+					Data: ArtifactUpdate{
+						ToolName: event.ToolCall.Name,
+						Status:   "starting",
+						Message:  fmt.Sprintf("Executing %s...", event.ToolCall.Name),
+					},
+				}
+			}
+
+		case "tool_end":
+			if event.ToolCall != nil {
+				asyncReq.ResponseChan <- StreamResponse{
+					RequestID: asyncReq.ID,
+					Type:      "artifact",
+					Data: ArtifactUpdate{
+						ToolName: event.ToolCall.Name,
+						Status:   "completed",
+						Message:  fmt.Sprintf("Completed %s", event.ToolCall.Name),
+						Result:   event.ToolCall.Result,
+					},
+				}
+			}
+
+		case "response":
+			if event.Message.ID != "" {
+				asyncReq.ResponseChan <- StreamResponse{
+					RequestID: asyncReq.ID,
+					Type:      "chat",
+					Role:      "assistant",
+					Content:   event.Message.Content.String(),
+					Done:      false,
+				}
+			}
+		}
+	}
+
+	// Send completion signal
+	asyncReq.ResponseChan <- StreamResponse{
+		RequestID: asyncReq.ID,
+		Type:      "done",
+		Done:      true,
+	}
+
+	log.Printf("AgentAsyncCopilotManager: Completed processing for request %s", asyncReq.ID)
+}

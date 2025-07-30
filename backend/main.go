@@ -48,7 +48,12 @@ func main() {
 	copilotManager := services.GetAsyncCopilotManager()
 	copilotManager.SetServices(textGenService, writerAgent, imageService, storageService)
 
-	log.Printf("Initialized AsyncCopilotManager with all required services")
+	// Initialize the Agent-powered copilot manager
+	if err := services.InitializeAgentCopilotManager(); err != nil {
+		log.Printf("Warning: Failed to initialize AgentCopilotManager: %v", err)
+	}
+
+	log.Printf("Initialized Agent Services; AsyncCopilotManager and AgentCopilotManager")
 
 	// Initialize and start server
 	srv := server.NewFiberServer(
