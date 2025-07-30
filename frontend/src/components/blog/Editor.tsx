@@ -656,7 +656,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const performChatRequest = async (apiMessages: ChatMessage[], assistantIndex: number, isEditRequest: boolean, originalText: string, documentContent: string) => {
     setChatLoading(true);
     try {
-      const apiUrl = `${VITE_API_BASE_URL}/agent/writing_copilot`;
+      const apiUrl = `${VITE_API_BASE_URL}/agent`;
       console.log('API Base URL:', VITE_API_BASE_URL);
       console.log('Full API URL:', apiUrl);
       console.log('Sending chat request:', { messages: apiMessages, documentContent });

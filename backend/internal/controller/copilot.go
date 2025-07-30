@@ -10,8 +10,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// WritingCopilotHandler handles POST agent/writing_copilot
-//
 // This implementation uses async background processing with WebSocket streaming.
 // The handler returns immediately with a request ID, and the actual processing
 // happens in the background with results streamed via WebSocket.

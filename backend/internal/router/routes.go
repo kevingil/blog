@@ -28,7 +28,7 @@ func RegisterRoutes(app *fiber.App, deps RouteDeps) {
 	}))
 
 	// Copilot
-	app.Post("/agent/writing_copilot", controller.WritingCopilotHandler())
+	app.Post("/agent", controller.WritingCopilotHandler())
 	app.Get("/websocket", websocket.New(controller.WebsocketHandler(deps.AsyncCopilotMgr)))
 
 	// Pages
