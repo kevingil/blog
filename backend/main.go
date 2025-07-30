@@ -1,9 +1,9 @@
 package main
 
 import (
-	"blog-agent-go/backend/database"
-	"blog-agent-go/backend/server"
-	"blog-agent-go/backend/services"
+	"blog-agent-go/backend/internal/database"
+	"blog-agent-go/backend/internal/server"
+	"blog-agent-go/backend/internal/services"
 	"fmt"
 	"log"
 	"os"
@@ -58,6 +58,7 @@ func main() {
 		imageService,
 		storageService,
 		pagesService,
+		copilotManager,
 	)
 
 	port := os.Getenv("PORT")
