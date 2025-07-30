@@ -1,40 +1,28 @@
 package prompt
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
-	"github.com/opencode-ai/opencode/internal/config"
-	"github.com/opencode-ai/opencode/internal/llm/models"
-	"github.com/opencode-ai/opencode/internal/logging"
+	"blog-agent-go/backend/internal/llm/config"
+	"blog-agent-go/backend/internal/llm/models"
 )
 
 func GetAgentPrompt(agentName config.AgentName, provider models.ModelProvider) string {
 	basePrompt := ""
 	switch agentName {
-	case config.AgentCoder:
-		basePrompt = CoderPrompt(provider)
+	case config.AgentWriter:
+		basePrompt = WriterPrompt(provider)
 	case config.AgentTitle:
 		basePrompt = TitlePrompt(provider)
-	case config.AgentTask:
-		basePrompt = TaskPrompt(provider)
 	case config.AgentSummarizer:
 		basePrompt = SummarizerPrompt(provider)
 	default:
-		basePrompt = "You are a helpful assistant"
+		basePrompt = WriterPrompt(provider) // Default to writer for blog agent
 	}
 
-	if agentName == config.AgentCoder || agentName == config.AgentTask {
-		// Add context from project-specific instruction files if they exist
-		contextContent := getContextFromPaths()
-		logging.Debug("Context content", "Context", contextContent)
-		if contextContent != "" {
-			return fmt.Sprintf("%s\n\n# Project-Specific Context\n Make sure to follow the instructions in the context below\n%s", basePrompt, contextContent)
-		}
-	}
 	return basePrompt
 }
 
