@@ -27,9 +27,9 @@ func RegisterRoutes(app *fiber.App, deps RouteDeps) {
 		MaxAge:           300,
 	}))
 
-	// Copilot
+	// Copilot - Agent-powered writing assistant
 	app.Post("/agent", controller.WritingCopilotHandler())
-	app.Get("/websocket", websocket.New(controller.WebsocketHandler(deps.AsyncCopilotMgr)))
+	app.Get("/websocket", websocket.New(controller.WebsocketHandler()))
 
 	// Pages
 	pages := app.Group("/pages")

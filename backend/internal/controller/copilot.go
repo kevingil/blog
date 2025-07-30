@@ -10,9 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// This implementation uses async background processing with WebSocket streaming.
-// The handler returns immediately with a request ID, and the actual processing
-// happens in the background with results streamed via WebSocket.
+// WritingCopilotHandler - Agent-powered writing assistant
 func WritingCopilotHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req services.ChatRequest
@@ -26,15 +24,15 @@ func WritingCopilotHandler() fiber.Handler {
 			log.Printf("WritingCopilotHandler: Document content length: %d", len(req.DocumentContent))
 		}
 
-		// Get the async manager and submit the request
-		manager := services.GetAsyncCopilotManager()
+		// Get the agent async manager and submit the request
+		manager := services.GetAgentAsyncCopilotManager()
 		requestID, err := manager.SubmitChatRequest(req)
 		if err != nil {
 			log.Printf("WritingCopilotHandler: Failed to submit request: %v", err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
 
-		log.Printf("WritingCopilotHandler: Submitted async request with ID: %s", requestID)
+		log.Printf("WritingCopilotHandler: Submitted async agent request with ID: %s", requestID)
 
 		// Return immediately with the request ID
 		return c.JSON(services.ChatRequestResponse{
@@ -44,7 +42,7 @@ func WritingCopilotHandler() fiber.Handler {
 	}
 }
 
-func WebsocketHandler(asyncCopilotManager *services.AsyncCopilotManager) func(*websocket.Conn) {
+func WebsocketHandler() func(*websocket.Conn) {
 	return func(con *websocket.Conn) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -68,7 +66,7 @@ func WebsocketHandler(asyncCopilotManager *services.AsyncCopilotManager) func(*w
 					}
 					if msg.Action == "subscribe" && msg.RequestID != "" {
 						log.Printf("WebSocket: Subscribing to request %s", msg.RequestID)
-						handleCopilotStreaming(ctx, con, msg.RequestID, asyncCopilotManager)
+						handleAgentCopilotStreaming(ctx, con, msg.RequestID)
 					}
 				}
 			}
@@ -78,8 +76,9 @@ func WebsocketHandler(asyncCopilotManager *services.AsyncCopilotManager) func(*w
 	}
 }
 
-func handleCopilotStreaming(ctx context.Context, con *websocket.Conn, requestID string, asyncCopilotManager *services.AsyncCopilotManager) {
-	responseChan, exists := asyncCopilotManager.GetResponseChannel(requestID)
+func handleAgentCopilotStreaming(ctx context.Context, con *websocket.Conn, requestID string) {
+	agentManager := services.GetAgentAsyncCopilotManager()
+	responseChan, exists := agentManager.GetResponseChannel(requestID)
 	if !exists {
 		log.Printf("WebSocket: Request ID %s not found", requestID)
 		errorMsg := services.StreamResponse{
@@ -93,7 +92,7 @@ func handleCopilotStreaming(ctx context.Context, con *websocket.Conn, requestID 
 		}
 		return
 	}
-	log.Printf("WebSocket: Starting stream for request %s", requestID)
+	log.Printf("WebSocket: Starting agent stream for request %s", requestID)
 	for {
 		select {
 		case response, ok := <-responseChan:
