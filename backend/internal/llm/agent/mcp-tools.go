@@ -11,7 +11,6 @@ import (
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
-	"honnef.co/go/tools/lintcmd/version"
 )
 
 type mcpTool struct {
@@ -48,8 +47,8 @@ func runTool(ctx context.Context, c MCPClient, toolName string, input string) (t
 	initRequest := mcp.InitializeRequest{}
 	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 	initRequest.Params.ClientInfo = mcp.Implementation{
-		Name:    "OpenCode",
-		Version: version.Version,
+		Name:    "BlogAgent",
+		Version: "1.0.0",
 	}
 
 	_, err := c.Initialize(ctx, initRequest)
@@ -84,9 +83,13 @@ func runTool(ctx context.Context, c MCPClient, toolName string, input string) (t
 func (b *mcpTool) Run(ctx context.Context, params tools.ToolCall) (tools.ToolResponse, error) {
 	switch b.mcpConfig.Type {
 	case config.MCPStdio:
+		env := make([]string, 0, len(b.mcpConfig.Env))
+		for k, v := range b.mcpConfig.Env {
+			env = append(env, k+"="+v)
+		}
 		c, err := client.NewStdioMCPClient(
 			b.mcpConfig.Command,
-			b.mcpConfig.Env,
+			env,
 			b.mcpConfig.Args...,
 		)
 		if err != nil {
@@ -122,8 +125,8 @@ func getTools(ctx context.Context, name string, m config.MCPServer, c MCPClient)
 	initRequest := mcp.InitializeRequest{}
 	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 	initRequest.Params.ClientInfo = mcp.Implementation{
-		Name:    "OpenCode",
-		Version: version.Version,
+		Name:    "BlogAgent",
+		Version: "1.0.0",
 	}
 
 	_, err := c.Initialize(ctx, initRequest)
@@ -151,9 +154,13 @@ func GetMcpTools(ctx context.Context) []tools.BaseTool {
 	for name, m := range config.Get().MCPServers {
 		switch m.Type {
 		case config.MCPStdio:
+			env := make([]string, 0, len(m.Env))
+			for k, v := range m.Env {
+				env = append(env, k+"="+v)
+			}
 			c, err := client.NewStdioMCPClient(
 				m.Command,
-				m.Env,
+				env,
 				m.Args...,
 			)
 			if err != nil {

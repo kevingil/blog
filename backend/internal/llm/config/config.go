@@ -14,6 +14,22 @@ const (
 	AgentWriter     AgentName = "writer"
 )
 
+type MCPServerType string
+
+const (
+	MCPStdio MCPServerType = "stdio"
+	MCPSse   MCPServerType = "sse"
+)
+
+type MCPServer struct {
+	Type    MCPServerType     `json:"type"`
+	Command string            `json:"command,omitempty"`
+	Args    []string          `json:"args,omitempty"`
+	Env     map[string]string `json:"env,omitempty"`
+	URL     string            `json:"url,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
+}
+
 type AgentConfig struct {
 	Model           models.ModelID `json:"model"`
 	MaxTokens       int64          `json:"max_tokens"`
@@ -31,6 +47,7 @@ type Config struct {
 	ContextPaths []string                                `json:"context_paths"`
 	Agents       map[AgentName]AgentConfig               `json:"agents"`
 	Providers    map[models.ModelProvider]ProviderConfig `json:"providers"`
+	MCPServers   map[string]MCPServer                    `json:"mcp_servers"`
 }
 
 var globalConfig *Config
@@ -68,6 +85,7 @@ func init() {
 				Disabled: true, // Default disabled unless API key is provided
 			},
 		},
+		MCPServers: map[string]MCPServer{}, // Empty by default for blog agent
 	}
 
 	// Enable Anthropic if API key is provided

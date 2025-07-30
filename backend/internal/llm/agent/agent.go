@@ -325,7 +325,7 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 	assistantMsg, err := a.messages.Create(ctx, sessionID, message.CreateMessageParams{
 		Role:  message.Assistant,
 		Parts: []message.ContentPart{},
-		Model: a.provider.Model().ID,
+		Model: string(a.provider.Model().ID),
 	})
 	if err != nil {
 		return assistantMsg, nil, fmt.Errorf("failed to create assistant message: %w", err)
@@ -647,7 +647,7 @@ func (a *agent) Summarize(ctx context.Context, sessionID string) error {
 					Time:   time.Now().Unix(),
 				},
 			},
-			Model: a.summarizeProvider.Model().ID,
+			Model: string(a.summarizeProvider.Model().ID),
 		})
 		if err != nil {
 			event = AgentEvent{
@@ -724,7 +724,7 @@ func createAgentProvider(agentName config.AgentName) (provider.Provider, error) 
 		opts = append(
 			opts,
 			provider.WithOpenAIOptions(
-				provider.WithReasoningEffort(agentConfig.ReasoningEffort),
+				provider.WithReasoningEffort(fmt.Sprintf("%d", agentConfig.ReasoningEffort)),
 			),
 		)
 	} else if model.Provider == models.ProviderAnthropic && model.CanReason && agentName == config.AgentCoder {

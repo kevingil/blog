@@ -9,14 +9,11 @@ import (
 	"blog-agent-go/backend/internal/llm/message"
 	"blog-agent-go/backend/internal/llm/session"
 	"blog-agent-go/backend/internal/llm/tools"
-
-	"github.com/opencode-ai/opencode/internal/lsp"
 )
 
 type agentTool struct {
-	sessions   session.Service
-	messages   message.Service
-	lspClients map[string]*lsp.Client
+	sessions session.Service
+	messages message.Service
 }
 
 const (
@@ -55,12 +52,12 @@ func (b *agentTool) Run(ctx context.Context, call tools.ToolCall) (tools.ToolRes
 		return tools.ToolResponse{}, fmt.Errorf("session_id and message_id are required")
 	}
 
-	agent, err := NewAgent(config.AgentTask, b.sessions, b.messages, TaskAgentTools(b.lspClients))
+	agent, err := NewAgent(config.AgentWriter, b.sessions, b.messages, TaskAgentTools())
 	if err != nil {
 		return tools.ToolResponse{}, fmt.Errorf("error creating agent: %s", err)
 	}
 
-	session, err := b.sessions.CreateTaskSession(ctx, call.ID, sessionID, "New Agent Session")
+	session, err := b.sessions.Create(ctx, "New Agent Session")
 	if err != nil {
 		return tools.ToolResponse{}, fmt.Errorf("error creating session: %s", err)
 	}
@@ -100,11 +97,9 @@ func (b *agentTool) Run(ctx context.Context, call tools.ToolCall) (tools.ToolRes
 func NewAgentTool(
 	Sessions session.Service,
 	Messages message.Service,
-	LspClients map[string]*lsp.Client,
 ) tools.BaseTool {
 	return &agentTool{
-		sessions:   Sessions,
-		messages:   Messages,
-		lspClients: LspClients,
+		sessions: Sessions,
+		messages: Messages,
 	}
 }
