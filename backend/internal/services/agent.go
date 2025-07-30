@@ -469,6 +469,11 @@ Current document:` + req.DocumentContent
 		Model:    model,
 		Messages: messages,
 	})
+
+	content := completion.Choices[0].Message.Content
+
+	log.Printf("WritingCopilot: Planning completion: %+v", content)
+
 	if err != nil {
 		return nil, err
 	}
@@ -871,7 +876,7 @@ func (s *WritingCopilotService) ProcessChatStream(ctx context.Context, req ChatR
 			return
 		}
 
-		log.Printf("WritingCopilot: Plan created - Strategy: %s, Tools: %d", plan.Strategy, len(plan.Tools))
+		log.Printf("WritingCopilot: Plan created - Strategy: %s", plan.Strategy)
 
 		// Send plan to frontend
 		responseChan <- StreamResponse{

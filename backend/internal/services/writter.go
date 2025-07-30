@@ -6,23 +6,22 @@ import (
 	"log"
 	"os"
 
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/google/uuid"
+	openai "github.com/openai/openai-go"
 
 	"blog-agent-go/backend/internal/models"
 )
 
 type WriterAgent struct {
-	client *anthropic.Client
+	client *openai.Client
 }
 
 func NewWriterAgent() *WriterAgent {
-	apiKey := os.Getenv("ANTHROPIC_API_KEY")
+	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
-		log.Fatal("ANTHROPIC_API_KEY environment variable is required")
+		log.Fatal("OPENAI_API_KEY environment variable is required")
 	}
-	client := anthropic.NewClient(option.WithAPIKey(apiKey))
+	client := openai.NewClient()
 	return &WriterAgent{
 		client: &client,
 	}
@@ -50,22 +49,12 @@ func (w *WriterAgent) GenerateArticle(ctx context.Context, prompt, title string,
 	%s
 	Use this as a reference for the author's writing style and tone.`, writingContext)
 
-	draftMsg, err := w.client.Messages.New(ctx, anthropic.MessageNewParams{
-		MaxTokens: 4096,
-		Messages: []anthropic.MessageParam{
-			{
-				Role: anthropic.MessageParamRoleUser,
-				Content: []anthropic.ContentBlockParamUnion{
-					{
-						OfRequestTextBlock: &anthropic.TextBlockParam{Text: writerSystemMsg},
-					},
-					{
-						OfRequestTextBlock: &anthropic.TextBlockParam{Text: fmt.Sprintf("Title: %q\nPrompt: %s", title, prompt)},
-					},
-				},
-			},
+	draftMsg, err := w.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(writerSystemMsg),
+			openai.UserMessage(fmt.Sprintf("Title: %q\nPrompt: %s", title, prompt)),
 		},
-		Model: anthropic.ModelClaude3_7SonnetLatest,
+		Model: openai.ChatModelGPT4o,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error generating draft: %w", err)
@@ -102,22 +91,12 @@ func (w *WriterAgent) GenerateArticle(ctx context.Context, prompt, title string,
 	the article should not start with a title or subheader, the title is saved somewhere else, we just want the content, start with the first paragraph of the article.
 	The voice is the most important, make sure you don't use worlds like ripples or remarkable, just use the words that the author would use.`
 
-	finalMsg, err := w.client.Messages.New(ctx, anthropic.MessageNewParams{
-		MaxTokens: 4096,
-		Messages: []anthropic.MessageParam{
-			{
-				Role: anthropic.MessageParamRoleUser,
-				Content: []anthropic.ContentBlockParamUnion{
-					{
-						OfRequestTextBlock: &anthropic.TextBlockParam{Text: editorSystemMsg},
-					},
-					{
-						OfRequestTextBlock: &anthropic.TextBlockParam{Text: draftMsg.Content[0].Text},
-					},
-				},
-			},
+	finalMsg, err := w.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(editorSystemMsg),
+			openai.UserMessage(draftMsg.Choices[0].Message.Content),
 		},
-		Model: anthropic.ModelClaude3_7SonnetLatest,
+		Model: openai.ChatModelGPT4o,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error refining article: %w", err)
@@ -126,7 +105,7 @@ func (w *WriterAgent) GenerateArticle(ctx context.Context, prompt, title string,
 	// Create article
 	article := &models.Article{
 		Title:    title,
-		Content:  finalMsg.Content[0].Text,
+		Content:  finalMsg.Choices[0].Message.Content,
 		AuthorID: authorID,
 		IsDraft:  true,
 	}
@@ -141,26 +120,16 @@ func (w *WriterAgent) UpdateWithContext(ctx context.Context, article *models.Art
 	editorPrompt := `You are the Editor. Improve and refine the previously drafted content.
 	Use the chat history to understand what the user wants and what the writer has written.`
 
-	msg, err := w.client.Messages.New(ctx, anthropic.MessageNewParams{
-		MaxTokens: 4096,
-		Messages: []anthropic.MessageParam{
-			{
-				Role: anthropic.MessageParamRoleUser,
-				Content: []anthropic.ContentBlockParamUnion{
-					{
-						OfRequestTextBlock: &anthropic.TextBlockParam{Text: editorPrompt},
-					},
-					{
-						OfRequestTextBlock: &anthropic.TextBlockParam{Text: fmt.Sprintf("Title: %q\nPrompt: %s", article.Title, article.Content)},
-					},
-				},
-			},
+	msg, err := w.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(editorPrompt),
+			openai.UserMessage(fmt.Sprintf("Title: %q\nPrompt: %s", article.Title, article.Content)),
 		},
-		Model: anthropic.ModelClaude3_7SonnetLatest,
+		Model: openai.ChatModelGPT4o,
 	})
 	if err != nil {
 		return "", fmt.Errorf("error updating article: %w", err)
 	}
 
-	return msg.Content[0].Text, nil
+	return msg.Choices[0].Message.Content, nil
 }
