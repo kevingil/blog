@@ -434,7 +434,11 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 		}
 	}
 
+	// Run agent request
 	resultChan, err := m.agent.Run(asyncReq.ctx, session.ID, userPrompt)
+
+	log.Printf("AgentAsyncCopilotManager: Agent run result: %v", resultChan)
+
 	if err != nil {
 		log.Printf("AgentAsyncCopilotManager: Failed to start agent: %v", err)
 		asyncReq.ResponseChan <- StreamResponse{
