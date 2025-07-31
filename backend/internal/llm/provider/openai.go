@@ -272,11 +272,15 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 
 				for _, choice := range chunk.Choices {
 					if choice.Delta.Content != "" {
+						//logging.Debug("[OPENAI] Content delta received", "content", choice.Delta.Content)
 						eventChan <- ProviderEvent{
 							Type:    EventContentDelta,
 							Content: choice.Delta.Content,
 						}
 						currentContent += choice.Delta.Content
+					}
+					if len(choice.Delta.ToolCalls) > 0 {
+						logging.Debug("[OPENAI] Tool call delta received", "toolCalls", choice.Delta.ToolCalls)
 					}
 				}
 			}

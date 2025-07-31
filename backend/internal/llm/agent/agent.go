@@ -215,7 +215,7 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 		for _, attachment := range attachments {
 			attachmentParts = append(attachmentParts, message.BinaryContent{Path: attachment.FilePath, MIMEType: attachment.MimeType, Data: attachment.Content})
 		}
-		result := a.processGeneration(genCtx, sessionID, content, attachmentParts)
+		result := a.processGenerationWithEvents(genCtx, sessionID, content, attachmentParts, events)
 		if result.Error != nil && !errors.Is(result.Error, ErrRequestCancelled) && !errors.Is(result.Error, context.Canceled) {
 			logging.ErrorPersist(result.Error.Error())
 		}
@@ -297,6 +297,79 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 			logging.Info("Result", "message", agentMessage.FinishReason(), "toolResults", toolResults)
 		}
 		if (agentMessage.FinishReason() == message.FinishReasonToolUse) && toolResults != nil {
+			// We are not done, we need to respond with the tool response
+			msgHistory = append(msgHistory, agentMessage, *toolResults)
+			continue
+		}
+		return AgentEvent{
+			Type:    AgentEventTypeResponse,
+			Message: agentMessage,
+			Done:    true,
+		}
+	}
+}
+
+func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart, events chan<- AgentEvent) AgentEvent {
+	cfg := config.Get()
+	// List existing messages; if none, start title generation asynchronously.
+	msgs, err := a.messages.List(ctx, sessionID)
+	if err != nil {
+		return a.err(fmt.Errorf("failed to list messages: %w", err))
+	}
+	if len(msgs) == 0 {
+		go func() {
+			titleCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if a.titleProvider != nil {
+				_ = a.generateTitle(titleCtx, sessionID, content)
+			}
+		}()
+	}
+
+	userMsg, err := a.createUserMessage(ctx, sessionID, content, attachmentParts)
+	if err != nil {
+		return a.err(fmt.Errorf("failed to create user message: %w", err))
+	}
+
+	msgHistory := append(msgs, userMsg)
+
+	for {
+		// Check for cancellation before each iteration
+		select {
+		case <-ctx.Done():
+			return a.err(ctx.Err())
+		default:
+			// Continue processing
+		}
+		agentMessage, toolResults, err := a.streamAndHandleEvents(ctx, sessionID, msgHistory)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				agentMessage.AddFinish(message.FinishReasonCanceled)
+				a.messages.Update(context.Background(), agentMessage)
+				return a.err(ErrRequestCancelled)
+			}
+			return a.err(fmt.Errorf("failed to process events: %w", err))
+		}
+		if cfg.Debug {
+			seqId := (len(msgHistory) + 1) / 2
+			toolResultFilepath := logging.WriteToolResultsJson(sessionID, seqId, toolResults)
+			logging.Info("Result", "message", agentMessage.FinishReason(), "toolResults", "{}", "filepath", toolResultFilepath)
+		} else {
+			logging.Info("Result", "message", agentMessage.FinishReason(), "toolResults", toolResults)
+		}
+		if (agentMessage.FinishReason() == message.FinishReasonToolUse) && toolResults != nil {
+			// Stream the acknowledgment message to the user before continuing with tool execution
+			if agentMessage.Content().String() != "" {
+				// Send acknowledgment message directly to the events channel
+				responseEvent := AgentEvent{
+					Type:    AgentEventTypeResponse,
+					Message: agentMessage,
+					Done:    false, // Not done yet, we still have tool results to process
+				}
+				logging.Info("[AGENT] Streaming acknowledgment message", "content", agentMessage.Content().String())
+				events <- responseEvent
+			}
+
 			// We are not done, we need to respond with the tool response
 			msgHistory = append(msgHistory, agentMessage, *toolResults)
 			continue
@@ -441,12 +514,17 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 
 	switch event.Type {
 	case provider.EventThinkingDelta:
+		logging.Debug("[STREAM] Thinking delta", "content", event.Thinking)
 		assistantMsg.AppendReasoningContent(event.Content)
 		return a.messages.Update(ctx, *assistantMsg)
 	case provider.EventContentDelta:
+		//logging.Info("[STREAM] Content delta", "content", event.Content)
 		assistantMsg.AppendContent(event.Content)
 		return a.messages.Update(ctx, *assistantMsg)
+	case provider.EventContentStart:
+		logging.Info("[STREAM] Content block started")
 	case provider.EventToolUseStart:
+		logging.Info("[STREAM] Tool call started", "tool", event.ToolCall.Name, "id", event.ToolCall.ID)
 		assistantMsg.AddToolCall(*event.ToolCall)
 		return a.messages.Update(ctx, *assistantMsg)
 	// TODO: see how to handle this
@@ -459,6 +537,7 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 	// 		return err
 	// 	}
 	case provider.EventToolUseStop:
+		logging.Info("[STREAM] Tool call finished", "id", event.ToolCall.ID)
 		assistantMsg.FinishToolCall(event.ToolCall.ID)
 		return a.messages.Update(ctx, *assistantMsg)
 	case provider.EventError:
@@ -469,12 +548,15 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 		logging.ErrorPersist(event.Error.Error())
 		return event.Error
 	case provider.EventComplete:
+		logging.Info("[STREAM] Stream complete", "finishReason", event.Response.FinishReason, "content", event.Response.Content, "toolCallCount", len(event.Response.ToolCalls))
 		assistantMsg.SetToolCalls(event.Response.ToolCalls)
 		assistantMsg.AddFinish(event.Response.FinishReason)
 		if err := a.messages.Update(ctx, *assistantMsg); err != nil {
 			return fmt.Errorf("failed to update message: %w", err)
 		}
 		return a.TrackUsage(ctx, sessionID, a.provider.Model(), event.Response.Usage)
+	default:
+		logging.Debug("[STREAM] Unknown event type", "type", string(event.Type))
 	}
 
 	return nil
