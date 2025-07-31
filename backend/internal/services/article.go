@@ -11,6 +11,7 @@ import (
 	"blog-agent-go/backend/internal/models"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
 
@@ -118,18 +119,30 @@ func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uuid.UUID,
 		tagIDs = append(tagIDs, int64(tag.ID))
 	}
 
-	updates := map[string]interface{}{
-		"title":        req.Title,
-		"content":      req.Content,
-		"image_url":    req.Image,
-		"is_draft":     req.IsDraft,
-		"published_at": req.PublishedAt,
+	// Update article fields directly
+	article.Title = req.Title
+	article.Content = req.Content
+	article.ImageURL = req.Image
+	article.IsDraft = req.IsDraft
+
+	// Convert Unix timestamp to time.Time if provided
+	if req.PublishedAt != nil {
+		var t time.Time
+		// Check if timestamp is in milliseconds (typical for JavaScript)
+		if *req.PublishedAt > 1e12 {
+			// Timestamp is in milliseconds
+			t = time.Unix(0, *req.PublishedAt*int64(time.Millisecond))
+		} else {
+			// Timestamp is in seconds
+			t = time.Unix(*req.PublishedAt, 0)
+		}
+		article.PublishedAt = &t
 	}
 	if len(tagIDs) > 0 {
-		updates["tag_ids"] = tagIDs
+		article.TagIDs = pq.Int64Array(tagIDs)
 	}
 
-	result = db.Model(&article).Updates(updates)
+	result = db.Save(&article)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to update article: %w", result.Error)
 	}
@@ -515,7 +528,7 @@ func (s *ArticleService) GetRecommendedArticles(currentArticleID uuid.UUID) ([]R
 			Slug:        article.Slug,
 			ImageURL:    image,
 			PublishedAt: safeTimeToString(article.PublishedAt),
-			CreatedAt:   article.CreatedAt,
+			CreatedAt:   article.CreatedAt.UTC().Format(time.RFC3339),
 			Author:      authorName,
 		})
 	}
