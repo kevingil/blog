@@ -10,8 +10,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// WritingCopilotHandler - Agent-powered writing assistant
-func WritingCopilotHandler() fiber.Handler {
+// AgentCopilotHandler - Agent-powered writing assistant
+func AgentCopilotHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req services.ChatRequest
 		if err := c.BodyParser(&req); err != nil {

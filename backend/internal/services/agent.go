@@ -437,10 +437,32 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	// Run agent request
 	resultChan, err := m.agent.Run(asyncReq.ctx, session.ID, userPrompt)
 
-	log.Printf("AgentAsyncCopilotManager: Agent run result: %v", resultChan)
+	startTime := time.Now()
+	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	log.Printf("🚀 [Agent] Starting request %s for session %s", asyncReq.ID, session.ID)
+	log.Printf("   ⏰ Started at: %s", startTime.Format("15:04:05.000"))
+	log.Printf("   👤 Session Title: %s", session.Title)
+	if len(asyncReq.Request.Messages) > 0 {
+		log.Printf("   💬 Message Count: %d", len(asyncReq.Request.Messages))
+	}
+	if asyncReq.Request.DocumentContent != "" {
+		log.Printf("   📄 Document Content: %d characters", len(asyncReq.Request.DocumentContent))
+	}
+	log.Printf("   📝 User prompt: %.100s%s", userPrompt, func() string {
+		if len(userPrompt) > 100 {
+			return "..."
+		}
+		return ""
+	}())
+	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 	if err != nil {
-		log.Printf("AgentAsyncCopilotManager: Failed to start agent: %v", err)
+		duration := time.Since(startTime)
+		log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		log.Printf("❌ [Agent] Failed to start agent for request %s", asyncReq.ID)
+		log.Printf("   🚨 Error: %v", err)
+		log.Printf("   ⏱️  Failed after: %v", duration)
+		log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 		asyncReq.ResponseChan <- StreamResponse{
 			RequestID: asyncReq.ID,
 			Type:      "error",
@@ -453,7 +475,12 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	// Stream agent events directly from the result channel
 	for event := range resultChan {
 		if event.Error != nil {
-			log.Printf("AgentAsyncCopilotManager: Agent error: %v", event.Error)
+			duration := time.Since(startTime)
+			log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+			log.Printf("❌ [Agent] Error during processing for request %s", asyncReq.ID)
+			log.Printf("   🚨 Error: %v", event.Error)
+			log.Printf("   ⏱️  Failed after: %v", duration)
+			log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 			asyncReq.ResponseChan <- StreamResponse{
 				RequestID: asyncReq.ID,
 				Type:      "error",
@@ -466,6 +493,8 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 		switch event.Type {
 		case agent.AgentEventTypeResponse:
 			if event.Message.ID != "" {
+				m.logMessageDetails(event.Message, asyncReq.ID)
+
 				asyncReq.ResponseChan <- StreamResponse{
 					RequestID: asyncReq.ID,
 					Type:      "chat",
@@ -477,8 +506,7 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 		case agent.AgentEventTypeError:
 			// Error is already handled above
 		case agent.AgentEventTypeSummarize:
-			// Handle summarize events if needed
-			log.Printf("AgentAsyncCopilotManager: Summarize event: %s", event.Progress)
+			log.Printf("📊 [Agent] Summarization progress: %s", event.Progress)
 		}
 	}
 
@@ -489,5 +517,84 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 		Done:      true,
 	}
 
-	log.Printf("AgentAsyncCopilotManager: Completed processing for request %s", asyncReq.ID)
+	duration := time.Since(startTime)
+	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	log.Printf("✅ [Agent] Completed processing for request %s", asyncReq.ID)
+	log.Printf("   ⏱️  Total duration: %v", duration)
+	log.Printf("   🏁 Finished at: %s", time.Now().Format("15:04:05.000"))
+	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+}
+
+// logMessageDetails provides comprehensive logging for agent messages
+func (m *AgentAsyncCopilotManager) logMessageDetails(msg message.Message, requestID string) {
+	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	log.Printf("📨 [Agent] Message Details for Request: %s", requestID)
+	log.Printf("   📋 Message ID: %s", msg.ID)
+	log.Printf("   🤖 Model: %s", func() string {
+		if msg.Model != "" {
+			return msg.Model
+		}
+		return "default"
+	}())
+	log.Printf("   🏁 Finish Reason: %s", msg.FinishReason())
+
+	// Log tool calls if present
+	toolCalls := msg.ToolCalls()
+	if len(toolCalls) > 0 {
+		log.Printf("   🔧 Tool Calls (%d):", len(toolCalls))
+		for i, toolCall := range toolCalls {
+			log.Printf("      %d. 🛠️  %s", i+1, toolCall.Name)
+			log.Printf("         📝 ID: %s", toolCall.ID)
+			if len(toolCall.Input) > 200 {
+				log.Printf("         📊 Input: %.200s...", toolCall.Input)
+			} else {
+				log.Printf("         📊 Input: %s", toolCall.Input)
+			}
+			log.Printf("         ✅ Finished: %t", toolCall.Finished)
+		}
+	}
+
+	// Log tool results if present
+	toolResults := msg.ToolResults()
+	if len(toolResults) > 0 {
+		log.Printf("   📋 Tool Results (%d):", len(toolResults))
+		for i, result := range toolResults {
+			status := "✅"
+			if result.IsError {
+				status = "❌"
+			}
+			log.Printf("      %d. %s Tool Call ID: %s", i+1, status, result.ToolCallID)
+			if len(result.Content) > 300 {
+				log.Printf("         📄 Content: %.300s...", result.Content)
+			} else {
+				log.Printf("         📄 Content: %s", result.Content)
+			}
+			if result.Metadata != "" {
+				log.Printf("         🏷️  Metadata: %s", result.Metadata)
+			}
+		}
+	}
+
+	// Log message content
+	content := msg.Content().String()
+	if content != "" {
+		log.Printf("   💬 Response Content:")
+		if len(content) > 500 {
+			log.Printf("      %.500s...", content)
+			log.Printf("      📏 Total length: %d characters", len(content))
+		} else {
+			log.Printf("      %s", content)
+		}
+	}
+
+	// Log binary content if present
+	binaryContent := msg.BinaryContent()
+	if len(binaryContent) > 0 {
+		log.Printf("   📎 Binary Attachments (%d):", len(binaryContent))
+		for i, binary := range binaryContent {
+			log.Printf("      %d. 📁 %s (%s) - %d bytes", i+1, binary.Path, binary.MIMEType, len(binary.Data))
+		}
+	}
+
+	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 }
