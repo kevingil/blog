@@ -16,7 +16,7 @@ type FiberServer struct {
 	imageService    *services.ImageGenerationService
 	storageService  *services.StorageService
 	pagesService    *services.PagesService
-	asyncCopilotMgr *services.AsyncCopilotManager
+	agentCopilotMgr *services.AgentAsyncCopilotManager
 }
 
 func NewFiberServer(
@@ -26,7 +26,7 @@ func NewFiberServer(
 	imageService *services.ImageGenerationService,
 	storageService *services.StorageService,
 	pagesService *services.PagesService,
-	asyncCopilotMgr *services.AsyncCopilotManager,
+	agentCopilotMgr *services.AgentAsyncCopilotManager,
 ) *FiberServer {
 	server := &FiberServer{
 		App:             fiber.New(),
@@ -36,7 +36,7 @@ func NewFiberServer(
 		imageService:    imageService,
 		storageService:  storageService,
 		pagesService:    pagesService,
-		asyncCopilotMgr: asyncCopilotMgr,
+		agentCopilotMgr: agentCopilotMgr,
 	}
 
 	// Register routes
@@ -46,7 +46,7 @@ func NewFiberServer(
 		ImageService:    imageService,
 		StorageService:  storageService,
 		PagesService:    pagesService,
-		AsyncCopilotMgr: asyncCopilotMgr,
+		AgentCopilotMgr: agentCopilotMgr,
 	})
 
 	return server

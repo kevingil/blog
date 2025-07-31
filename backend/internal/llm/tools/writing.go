@@ -27,19 +27,16 @@ func (t *RewriteDocumentTool) Info() ToolInfo {
 		Name:        "rewrite_document",
 		Description: "Completely rewrite or significantly edit the document content",
 		Parameters: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"new_content": map[string]any{
-					"type":        "string",
-					"description": "The new document content in markdown format",
-				},
-				"reason": map[string]any{
-					"type":        "string",
-					"description": "Brief explanation of the changes made",
-				},
+			"new_content": map[string]any{
+				"type":        "string",
+				"description": "The new document content in markdown format",
 			},
-			"required": []string{"new_content", "reason"},
+			"reason": map[string]any{
+				"type":        "string",
+				"description": "Brief explanation of the changes made",
+			},
 		},
+		Required: []string{"new_content", "reason"},
 	}
 }
 
@@ -79,23 +76,20 @@ func (t *EditTextTool) Info() ToolInfo {
 		Name:        "edit_text",
 		Description: "Edit specific text in the document while preserving the rest. Use this for targeted edits, improvements, or changes to specific sections.",
 		Parameters: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"original_text": map[string]any{
-					"type":        "string",
-					"description": "The exact text to find and replace in the document",
-				},
-				"new_text": map[string]any{
-					"type":        "string",
-					"description": "The new text to replace the original text with",
-				},
-				"reason": map[string]any{
-					"type":        "string",
-					"description": "Brief explanation of why this edit is being made",
-				},
+			"original_text": map[string]any{
+				"type":        "string",
+				"description": "The exact text to find and replace in the document",
 			},
-			"required": []string{"original_text", "new_text", "reason"},
+			"new_text": map[string]any{
+				"type":        "string",
+				"description": "The new text to replace the original text with",
+			},
+			"reason": map[string]any{
+				"type":        "string",
+				"description": "Brief explanation of why this edit is being made",
+			},
 		},
+		Required: []string{"original_text", "new_text", "reason"},
 	}
 }
 
@@ -138,19 +132,16 @@ func (t *AnalyzeDocumentTool) Info() ToolInfo {
 		Name:        "analyze_document",
 		Description: "Analyze document and provide improvement suggestions. Can focus on specific areas or provide general analysis.",
 		Parameters: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"focus_area": map[string]any{
-					"type":        "string",
-					"description": "Optional: What aspect to focus on (structure, clarity, engagement, grammar, flow, technical_accuracy). If not provided, will analyze overall document quality.",
-				},
-				"user_request": map[string]any{
-					"type":        "string",
-					"description": "The user's original request to help understand what they want to improve",
-				},
+			"focus_area": map[string]any{
+				"type":        "string",
+				"description": "Optional: What aspect to focus on (structure, clarity, engagement, grammar, flow, technical_accuracy). If not provided, will analyze overall document quality.",
 			},
-			"required": []string{"user_request"},
+			"user_request": map[string]any{
+				"type":        "string",
+				"description": "The user's original request to help understand what they want to improve",
+			},
 		},
+		Required: []string{"user_request"},
 	}
 }
 
@@ -211,15 +202,12 @@ func (t *GenerateImagePromptTool) Info() ToolInfo {
 		Name:        "generate_image_prompt",
 		Description: "Generate an image prompt based on document content",
 		Parameters: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"content": map[string]any{
-					"type":        "string",
-					"description": "The document content to generate image prompt for",
-				},
+			"content": map[string]any{
+				"type":        "string",
+				"description": "The document content to generate image prompt for",
 			},
-			"required": []string{"content"},
 		},
+		Required: []string{"content"},
 	}
 }
 

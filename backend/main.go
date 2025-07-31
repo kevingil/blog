@@ -41,13 +41,6 @@ func main() {
 	imageService := services.NewImageGenerationService(dbService, storageService)
 	pagesService := services.NewPagesService(dbService)
 
-	// Initialize text generation service for the new copilot architecture
-	textGenService := services.NewTextGenerationService()
-
-	// Initialize the AsyncCopilotManager with proper services injection
-	copilotManager := services.GetAsyncCopilotManager()
-	copilotManager.SetServices(textGenService, writerAgent, imageService, storageService)
-
 	// Initialize the Agent-powered copilot manager
 	if err := services.InitializeAgentCopilotManager(); err != nil {
 		log.Printf("Warning: Failed to initialize AgentCopilotManager: %v", err)
@@ -63,7 +56,7 @@ func main() {
 		imageService,
 		storageService,
 		pagesService,
-		copilotManager,
+		services.GetAgentAsyncCopilotManager(),
 	)
 
 	port := os.Getenv("PORT")

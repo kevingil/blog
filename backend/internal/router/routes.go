@@ -15,7 +15,7 @@ type RouteDeps struct {
 	ImageService    *services.ImageGenerationService
 	StorageService  *services.StorageService
 	PagesService    *services.PagesService
-	AsyncCopilotMgr *services.AsyncCopilotManager
+	AgentCopilotMgr *services.AgentAsyncCopilotManager
 }
 
 func RegisterRoutes(app *fiber.App, deps RouteDeps) {
