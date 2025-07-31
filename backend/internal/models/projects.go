@@ -1,6 +1,8 @@
 package models
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 )
 
@@ -10,8 +12,8 @@ type Project struct {
 	Description string    `json:"description" gorm:"type:text;not null"`
 	ImageURL    string    `json:"image_url"`
 	URL         string    `json:"url"`
-	CreatedAt   string    `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt   string    `json:"updated_at" gorm:"autoUpdateTime"`
+	CreatedAt   time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt   time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 func (Project) TableName() string {

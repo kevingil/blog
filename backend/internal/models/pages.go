@@ -1,6 +1,8 @@
 package models
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
 )
@@ -14,8 +16,8 @@ type Page struct {
 	ImageURL    string         `json:"image_url"`
 	MetaData    datatypes.JSON `json:"meta_data" gorm:"type:jsonb;default:'{}'"`
 	IsPublished bool           `json:"is_published" gorm:"default:true"`
-	CreatedAt   string         `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt   string         `json:"updated_at" gorm:"autoUpdateTime"`
+	CreatedAt   time.Time      `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt   time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 func (Page) TableName() string {

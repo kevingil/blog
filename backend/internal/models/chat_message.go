@@ -1,6 +1,8 @@
 package models
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
 )
@@ -14,7 +16,7 @@ type ChatMessage struct {
 	Role      string         `json:"role" gorm:"not null"`
 	Content   string         `json:"content" gorm:"type:text;not null"`
 	MetaData  datatypes.JSON `json:"meta_data" gorm:"type:jsonb;default:'{}'"`
-	CreatedAt string         `json:"created_at" gorm:"autoCreateTime"`
+	CreatedAt time.Time      `json:"created_at" gorm:"autoCreateTime"`
 }
 
 func (ChatMessage) TableName() string {

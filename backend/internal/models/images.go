@@ -1,6 +1,8 @@
 package models
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
 )
@@ -16,7 +18,7 @@ type ImageGeneration struct {
 	FileIndexID  *uuid.UUID     `json:"file_index_id" gorm:"type:uuid"`
 	ErrorMessage string         `json:"error_message"`
 	MetaData     datatypes.JSON `json:"meta_data" gorm:"type:jsonb;default:'{}'"`
-	CreatedAt    string         `json:"created_at" gorm:"autoCreateTime"`
+	CreatedAt    time.Time      `json:"created_at" gorm:"autoCreateTime"`
 	CompletedAt  *string        `json:"completed_at"`
 }
 

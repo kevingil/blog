@@ -18,8 +18,8 @@ type Article struct {
 	AuthorID        uuid.UUID      `json:"author_id" gorm:"type:uuid;not null"`
 	TagIDs          pq.Int64Array  `json:"tag_ids" gorm:"type:integer[]"`
 	IsDraft         bool           `json:"is_draft" gorm:"default:true"`
-	CreatedAt       string         `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt       string         `json:"updated_at" gorm:"autoUpdateTime"`
+	CreatedAt       time.Time      `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt       time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
 	PublishedAt     *time.Time     `json:"published_at,omitempty"`
 	ImagenRequestID *uuid.UUID     `json:"imagen_request_id" gorm:"type:uuid"`
 	Embedding       []float32      `json:"embedding" gorm:"type:vector(1536)"`
@@ -51,9 +51,9 @@ func (a Article) MarshalJSON() ([]byte, error) {
 }
 
 type Tag struct {
-	ID        int    `json:"id" gorm:"primaryKey;autoIncrement"`
-	Name      string `json:"name" gorm:"uniqueIndex;not null"`
-	CreatedAt string `json:"created_at" gorm:"autoCreateTime"`
+	ID        int       `json:"id" gorm:"primaryKey;autoIncrement"`
+	Name      string    `json:"name" gorm:"uniqueIndex;not null"`
+	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 }
 
 func (Tag) TableName() string {
@@ -72,7 +72,7 @@ type ArticleSource struct {
 	SourceType string         `json:"source_type" gorm:"default:web"`
 	Embedding  []float32      `json:"embedding" gorm:"type:vector(1536)"`
 	MetaData   datatypes.JSON `json:"meta_data" gorm:"type:jsonb;default:'{}'"`
-	CreatedAt  string         `json:"created_at" gorm:"autoCreateTime"`
+	CreatedAt  time.Time      `json:"created_at" gorm:"autoCreateTime"`
 }
 
 func (ArticleSource) TableName() string {
