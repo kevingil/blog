@@ -67,7 +67,7 @@ type ArticleFormData = z.infer<typeof articleSchema>;
 // Minimal shape for the conversational side panel. Mirrors what our backend
 // expects/returns.
 type ChatMessage = {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'tool';
   content: string;
 };
 
@@ -107,7 +107,85 @@ function diffPartialText(
   return result;
 }
 
-// Simple overlay component to confirm/reject AI changes
+// DiffViewer component to show patch changes with accept/reject functionality
+function DiffViewer({ patch, onAccept, onReject }: { 
+  patch: any; 
+  onAccept: () => void; 
+  onReject: () => void; 
+}) {
+  const renderDiffContent = () => {
+    if (!patch?.diffs) return null;
+
+    return (
+      <div className="max-h-96 overflow-y-auto border rounded-md p-4 bg-gray-50 dark:bg-gray-900 font-mono text-sm">
+        {patch.diffs.map((diff: any, index: number) => {
+          const { Type, Text } = diff;
+          let className = '';
+          let prefix = '';
+          
+          if (Type === 1) { // Insert
+            className = 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200';
+            prefix = '+ ';
+          } else if (Type === -1) { // Delete
+            className = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200';
+            prefix = '- ';
+          } else { // Equal
+            className = 'text-gray-600 dark:text-gray-400';
+            prefix = '  ';
+          }
+
+          return (
+            <div key={index} className={`whitespace-pre-wrap ${className}`}>
+              {prefix}{Text}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const summary = patch?.summary || {};
+  
+  return (
+    <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-10">
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-200 space-y-4 max-w-4xl w-full mx-4 max-h-[80vh] overflow-hidden">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold">Review AI Changes</h2>
+          <div className="text-sm text-gray-500 space-x-4">
+            {summary.additions > 0 && (
+              <span className="text-green-600">+{summary.additions}</span>
+            )}
+            {summary.deletions > 0 && (
+              <span className="text-red-600">-{summary.deletions}</span>
+            )}
+          </div>
+        </div>
+        
+        {patch.reason && (
+          <p className="text-sm text-gray-600 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
+            <strong>Reason:</strong> {patch.reason}
+          </p>
+        )}
+        
+        <div className="space-y-2">
+          <h3 className="font-medium text-sm">Changes:</h3>
+          {renderDiffContent()}
+        </div>
+        
+        <div className="flex justify-end space-x-4">
+          <Button variant="outline" onClick={onReject}>
+            Reject Changes
+          </Button>
+          <Button onClick={onAccept}>
+            Accept Changes
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Simple overlay component to confirm/reject AI changes (legacy)
 function ConfirmChanges({ onReject, onConfirm }: { onReject: () => void; onConfirm: () => void; }) {
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-10">
@@ -345,6 +423,17 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     newContent: string;
     summary: string;
   } | null>(null);
+  
+  // Patch review state
+  const [pendingPatch, setPendingPatch] = useState<{
+    patch: any;
+    originalText: string;
+    newText: string;
+    reason: string;
+  } | null>(null);
+  
+  // Track processed tool messages to avoid re-applying old patches
+  const [processedToolMessages, setProcessedToolMessages] = useState<Set<string>>(new Set());
 
   // Use React Query to fetch article data
   const { data: article, isLoading: articleLoading, error } = useQuery({
@@ -607,6 +696,51 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     console.log('Text edit applied successfully');
   };
 
+  // Apply patch from AI assistant (new implementation)
+  const applyPatch = (patch: any, originalText: string, newText: string, reason: string) => {
+    if (!editor) return;
+    
+    console.log('Applying patch:', { patch, originalText, newText, reason });
+    
+    // For now, use the same logic as applyTextEdit
+    // In the future, we could implement proper patch application using the unified diff
+    const currentText = editor.getText();
+    
+    // Find the text to replace in the current content
+    const index = currentText.indexOf(originalText);
+    if (index === -1) {
+      console.warn('Original text not found in document for patch:', originalText);
+      toast({
+        title: "Patch Failed",
+        description: "Could not locate the text to edit. The document may have changed.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Calculate the position for replacement
+    const from = index;
+    const to = index + originalText.length;
+    
+    // Replace the text in the editor
+    editor.chain()
+      .focus()
+      .setTextSelection({ from, to })
+      .insertContent(newText)
+      .run();
+    
+    // Update the form value
+    setValue('content', editor.getHTML());
+    
+    // Show success feedback
+    toast({
+      title: "Patch Applied",
+      description: reason || "Changes have been applied successfully",
+    });
+    
+    console.log('Patch applied successfully');
+  };
+
   const sendChatWithMessage = async (message: string) => {
     const text = message.trim();
     console.log("Sending chat with message:", text);
@@ -752,22 +886,44 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             return;
           }
 
-          // Handle artifact updates for tool execution
-          if (msg.type === 'artifact' && msg.data) {
-            const artifact = msg.data;
-            console.log('Received artifact update:', artifact);
+          // Handle tool messages (role "tool") containing artifacts
+          if (msg.role === 'tool' && msg.content) {
+            console.log('Received tool message:', msg);
             
-            // Handle edit_text tool specifically
-            if (artifact.tool_name === 'edit_text') {
-              if (artifact.status === 'completed' && artifact.result) {
-                const editResult = artifact.result;
-                // Apply the edit to the editor
-                applyTextEdit(editResult.original_text, editResult.new_text, editResult.reason);
-                
-                // Insert the completion message at the current position in the stream
-                toolCompletionMessage = `\n\n✅ Text edited: ${editResult.reason}\n\n`;
-                toolCompletionInserted = true;
-                acc += toolCompletionMessage;
+            // Create a unique identifier for this tool message
+            const toolMessageId = `${requestId}-${Date.now()}-${msg.content.slice(0, 50)}`;
+            const isNewMessage = !processedToolMessages.has(toolMessageId);
+            
+            try {
+              // Parse the tool result content to extract artifacts
+              const toolResult = JSON.parse(msg.content);
+              console.log('Parsed tool result:', toolResult);
+              
+              // Handle edit_text tool specifically - only for new messages
+              if (toolResult.tool_name === 'edit_text' && isNewMessage) {
+                // Check if this is a patch-based edit or traditional edit
+                if (toolResult.edit_type === 'patch' && toolResult.patch) {
+                  // Show patch for review instead of applying directly
+                  setPendingPatch({
+                    patch: toolResult.patch,
+                    originalText: toolResult.original_text,
+                    newText: toolResult.new_text,
+                    reason: toolResult.reason
+                  });
+                  
+                  // Insert patch review message at the current position in the stream
+                  toolCompletionMessage = `\n\n📋 Text edit ready for review: ${toolResult.reason}\n\n`;
+                  toolCompletionInserted = true;
+                  acc += toolCompletionMessage;
+                } else {
+                  // Legacy direct application (fallback)
+                  applyTextEdit(toolResult.original_text, toolResult.new_text, toolResult.reason);
+                  
+                  // Insert the completion message at the current position in the stream
+                  toolCompletionMessage = `\n\n✅ Text edited: ${toolResult.reason}\n\n`;
+                  toolCompletionInserted = true;
+                  acc += toolCompletionMessage;
+                }
                 
                 // Update the current assistant message 
                 setChatMessages((prev) => {
@@ -780,36 +936,23 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   }
                   return updated;
                 });
-              } else if (artifact.status === 'error') {
-                // Insert error message at the current position in the stream
-                toolCompletionMessage = `\n\n❌ Edit failed: ${artifact.error || 'Unknown error'}\n\n`;
-                toolCompletionInserted = true;
-                acc += toolCompletionMessage;
                 
-                // Update the current assistant message 
-                setChatMessages((prev) => {
-                  const updated = [...prev];
-                  if (updated[assistantIndex]) {
-                    updated[assistantIndex] = { 
-                      role: 'assistant', 
-                      content: acc 
-                    } as ChatMessage;
-                  }
-                  return updated;
-                });
+                // Mark this tool message as processed
+                setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
               }
-            }
-            
-            // Handle other tool types with generic progress updates (keep existing behavior)
-            else if (artifact.tool_name && artifact.status === 'starting') {
+              
+              // Add the tool message to chat history (always add, regardless of processing)
               setChatMessages((prev) => [
                 ...prev,
-                { role: 'assistant', content: `🔧 ${artifact.message}` }
+                { role: 'tool', content: msg.content }
               ]);
-            } else if (artifact.tool_name && artifact.status === 'completed') {
+              
+            } catch (error) {
+              console.error('Error parsing tool result:', error);
+              // Fallback: add as regular tool message
               setChatMessages((prev) => [
-                ...prev.slice(0, -1), // Remove progress message
-                { role: 'assistant', content: `✅ ${artifact.message}` }
+                ...prev,
+                { role: 'tool', content: msg.content }
               ]);
             }
           }
@@ -1188,6 +1331,33 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     </div>
                   </div>
                 )}
+                {pendingPatch && !diffing && (
+                  <DiffViewer
+                    patch={pendingPatch.patch}
+                    onAccept={() => {
+                      // Apply the patch
+                      applyPatch(
+                        pendingPatch.patch,
+                        pendingPatch.originalText,
+                        pendingPatch.newText,
+                        pendingPatch.reason
+                      );
+                      
+                      // Clear the pending patch
+                      setPendingPatch(null);
+                    }}
+                    onReject={() => {
+                      // Just clear the pending patch without applying
+                      setPendingPatch(null);
+                      
+                      // Show rejection message
+                      toast({
+                        title: "Changes Rejected",
+                        description: "The proposed changes have been discarded.",
+                      });
+                    }}
+                  />
+                )}
               </div>
               <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Tags</label>
               <div className='mb-2'>
@@ -1233,26 +1403,62 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       {/* Chat side-panel */}
       <div className="hidden xl:flex flex-col w-96 border rounded-md">
         <div ref={chatMessagesRef} className="flex-1 overflow-y-auto p-4 space-y-3">
-          {chatMessages.map((m, i) => (
-            <div key={i} className={`w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div
-                className={`max-w-xs whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
-                  m.role === 'user'
-                    ? 'bg-indigo-500 text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 dark:text-white'
-                }`}
-              >
-                {m.content || (m.role === 'assistant' && chatLoading ? (
-                  <div className="flex items-center gap-1">
-                    <div className="flex space-x-1">
-                      <IconLoader2 className="w-4 h-4 text-indigo-500 animate-spin" />
+          {chatMessages.map((m, i) => {
+            // Special rendering for tool messages
+            if (m.role === 'tool') {
+              try {
+                const toolResult = JSON.parse(m.content);
+                if (toolResult.tool_name === 'edit_text') {
+                  return (
+                    <div key={i} className="w-full flex justify-center">
+                      <div className="max-w-xs bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="text-blue-600 dark:text-blue-400">🔧</span>
+                          <span className="text-blue-700 dark:text-blue-300">
+                            {toolResult.edit_type === 'patch' ? 'Patch generated' : 'Text edit completed'}: {toolResult.reason}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <span className="text-xs opacity-75">thinking...</span>
+                  );
+                }
+              } catch (error) {
+                // Fallback for non-JSON tool messages
+                return (
+                  <div key={i} className="w-full flex justify-center">
+                    <div className="max-w-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-600 dark:text-gray-400">⚙️</span>
+                        <span className="text-gray-700 dark:text-gray-300 truncate">Tool executed</span>
+                      </div>
+                    </div>
                   </div>
-                ) : m.content)}
+                );
+              }
+            }
+            
+            // Regular user/assistant message rendering
+            return (
+              <div key={i} className={`w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className={`max-w-xs whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
+                    m.role === 'user'
+                      ? 'bg-indigo-500 text-white'
+                      : 'bg-gray-200 dark:bg-gray-700 dark:text-white'
+                  }`}
+                >
+                  {m.content || (m.role === 'assistant' && chatLoading ? (
+                    <div className="flex items-center gap-1">
+                      <div className="flex space-x-1">
+                        <IconLoader2 className="w-4 h-4 text-indigo-500 animate-spin" />
+                      </div>
+                      <span className="text-xs opacity-75">thinking...</span>
+                    </div>
+                  ) : m.content)}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div className="p-4 border-t space-y-2">
           <div className="flex gap-1 flex-wrap">
