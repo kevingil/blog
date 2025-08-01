@@ -17,7 +17,6 @@ import (
 	"blog-agent-go/backend/internal/llm/pubsub"
 	"blog-agent-go/backend/internal/llm/session"
 	"blog-agent-go/backend/internal/llm/tools"
-	"blog-agent-go/backend/internal/llm/tracing"
 )
 
 // Common errors
@@ -313,15 +312,9 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart, events chan<- AgentEvent) AgentEvent {
 	cfg := config.Get()
 
-	// Start tracing the agent request
-	tracer := tracing.GetTracer()
-	call, ctx := tracer.TraceAgentRequest(ctx, sessionID, content)
-	defer call.End()
-
 	// List existing messages; if none, start title generation asynchronously.
 	msgs, err := a.messages.List(ctx, sessionID)
 	if err != nil {
-		call.SetError(err)
 		return a.err(fmt.Errorf("failed to list messages: %w", err))
 	}
 	if len(msgs) == 0 {
@@ -366,10 +359,6 @@ func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, cont
 			logging.Info("Result", "message", agentMessage.FinishReason(), "toolResults", toolResults)
 		}
 		if (agentMessage.FinishReason() == message.FinishReasonToolUse) && toolResults != nil {
-			// Add tracing for tool execution
-			call.SetIntAttribute("tool_count", int64(len(agentMessage.ToolCalls())))
-			call.SetAttribute("acknowledgment", agentMessage.Content().String())
-
 			// Stream the acknowledgment message to the user before continuing with tool execution
 			if agentMessage.Content().String() != "" {
 				// Send acknowledgment message directly to the events channel

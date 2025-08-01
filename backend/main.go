@@ -2,15 +2,11 @@ package main
 
 import (
 	"blog-agent-go/backend/internal/database"
-	"blog-agent-go/backend/internal/llm/config"
-	"blog-agent-go/backend/internal/llm/tracing"
 	"blog-agent-go/backend/internal/server"
 	"blog-agent-go/backend/internal/services"
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
-	"syscall"
 
 	_ "github.com/joho/godotenv/autoload"
 )
@@ -21,24 +17,6 @@ func main() {
 	if secretKey == "" {
 		log.Fatal("AUTH_SECRET environment variable is required")
 	}
-
-	// Initialize tracing service
-	cfg := config.Get()
-	if err := tracing.InitializeFromConfig(cfg.Tracing); err != nil {
-		log.Printf("Warning: Failed to initialize tracing: %v", err)
-	}
-
-	// Set up graceful shutdown for tracing
-	go func() {
-		sigChan := make(chan os.Signal, 1)
-		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-		<-sigChan
-		log.Println("Shutting down tracing...")
-		if err := tracing.GracefulShutdown(); err != nil {
-			log.Printf("Error during tracing shutdown: %v", err)
-		}
-		os.Exit(0)
-	}()
 
 	// Initialize database service
 	dbService := database.New()
