@@ -1,4 +1,3 @@
-'use server'
 import { Article, ArticleChatHistory } from '../types';
 import { VITE_API_BASE_URL } from '../constants';
 export async function generateArticle(prompt: string, title: string, authorId: number, draft?: boolean) {

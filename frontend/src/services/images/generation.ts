@@ -1,5 +1,3 @@
-'use server'
-
 import { ImageGeneration, ImageGenerationStatus } from '../types';
 import { VITE_API_BASE_URL } from '../constants';
 

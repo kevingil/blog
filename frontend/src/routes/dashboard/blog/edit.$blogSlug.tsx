@@ -1,5 +1,3 @@
-'use server'
-
 import ArticleEditor from '@/components/blog/Editor';
 import { redirect } from '@tanstack/react-router';
 import { useAuth } from '@/services/auth/auth';
