@@ -503,6 +503,31 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 					Done:      false,
 				}
 			}
+		case agent.AgentEventTypeTool:
+			if event.Message.ID != "" {
+				m.logMessageDetails(event.Message, asyncReq.ID)
+
+				// Extract tool results and serialize them as JSON content
+				toolResults := event.Message.ToolResults()
+				var content string
+				if len(toolResults) > 0 {
+					// For now, take the first tool result content (most common case)
+					// In the future, we could combine multiple tool results
+					content = toolResults[0].Content
+				} else {
+					// Fallback to regular text content if no tool results
+					content = event.Message.Content().String()
+				}
+
+				// Stream tool message as role "tool" with content containing tool results
+				asyncReq.ResponseChan <- StreamResponse{
+					RequestID: asyncReq.ID,
+					Type:      "chat",
+					Role:      "tool",
+					Content:   content,
+					Done:      false,
+				}
+			}
 		case agent.AgentEventTypeError:
 			// Error is already handled above
 		case agent.AgentEventTypeSummarize:

@@ -30,6 +30,7 @@ type AgentEventType string
 const (
 	AgentEventTypeError     AgentEventType = "error"
 	AgentEventTypeResponse  AgentEventType = "response"
+	AgentEventTypeTool      AgentEventType = "tool"
 	AgentEventTypeSummarize AgentEventType = "summarize"
 )
 
@@ -367,6 +368,15 @@ func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, cont
 				logging.Info("[AGENT] Streaming acknowledgment message", "content", agentMessage.Content().String())
 				events <- responseEvent
 			}
+
+			// Stream the tool results message
+			toolEvent := AgentEvent{
+				Type:    AgentEventTypeTool,
+				Message: *toolResults,
+				Done:    false,
+			}
+			logging.Info("[AGENT] Streaming tool results message", "toolResults", len(toolResults.ToolResults()))
+			events <- toolEvent
 
 			// We are not done, we need to respond with the tool response
 			msgHistory = append(msgHistory, agentMessage, *toolResults)

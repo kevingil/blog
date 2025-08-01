@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
 // RewriteDocumentTool rewrites the entire document
@@ -108,16 +110,43 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 		return NewTextErrorResponse("original_text and new_text are required"), fmt.Errorf("original_text and new_text are required")
 	}
 
+	// Generate unified diff patch using diffmatchpatch
+	dmp := diffmatchpatch.New()
+	diffs := dmp.DiffMain(input.OriginalText, input.NewText, false)
+	patch := dmp.PatchMake(input.OriginalText, diffs)
+	patchText := dmp.PatchToText(patch)
+
+	// Prepare the result with patch information
 	result := map[string]interface{}{
 		"original_text": input.OriginalText,
 		"new_text":      input.NewText,
 		"reason":        input.Reason,
-		"edit_type":     "replace",
+		"edit_type":     "patch",
 		"tool_name":     "edit_text",
+		"patch": map[string]interface{}{
+			"unified_diff": patchText,
+			"diffs":        diffs,
+			"summary": map[string]interface{}{
+				"additions": countDiffType(diffs, diffmatchpatch.DiffInsert),
+				"deletions": countDiffType(diffs, diffmatchpatch.DiffDelete),
+				"unchanged": countDiffType(diffs, diffmatchpatch.DiffEqual),
+			},
+		},
 	}
 
 	resultJSON, _ := json.Marshal(result)
 	return NewTextResponse(string(resultJSON)), nil
+}
+
+// Helper function to count characters by diff type
+func countDiffType(diffs []diffmatchpatch.Diff, diffType diffmatchpatch.Operation) int {
+	count := 0
+	for _, diff := range diffs {
+		if diff.Type == diffType {
+			count += len(diff.Text)
+		}
+	}
+	return count
 }
 
 // AnalyzeDocumentTool analyzes document and provides suggestions

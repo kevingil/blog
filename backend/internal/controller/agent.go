@@ -107,7 +107,11 @@ func handleAgentCopilotStreaming(ctx context.Context, con *websocket.Conn, reque
 			case "artifact":
 				log.Printf("WebSocket: Sending artifact update for request %s", requestID)
 			case "chat":
-				log.Printf("WebSocket: Sending chat message for request %s", requestID)
+				if response.Role == "tool" {
+					log.Printf("WebSocket: Sending tool message for request %s", requestID)
+				} else {
+					log.Printf("WebSocket: Sending chat message (%s) for request %s", response.Role, requestID)
+				}
 			case "error":
 				log.Printf("WebSocket: Sending error for request %s: %s", requestID, response.Error)
 			case "done":
