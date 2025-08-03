@@ -46,6 +46,51 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogTitle, DialogContent, DialogTrigger, DialogDescription, DialogFooter, DialogHeader, DialogClose } from '@/components/ui/dialog';
 import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerClose } from '@/components/ui/drawer';
 
+// Helper function to convert tool names to user-friendly display names
+function getToolDisplayName(toolName: string): string {
+  const toolDisplayMap: Record<string, string> = {
+    'rewrite_document': 'Rewriting document',
+    'edit_text': 'Editing text',
+    'analyze_document': 'Analyzing document',
+    'generate_image_prompt': 'Generating image prompt',
+    'search_web': 'Searching the web',
+    'fetch_url': 'Fetching content',
+    'search_documents': 'Searching documents',
+    'read_file': 'Reading file',
+    'write_file': 'Writing file',
+    'calculate': 'Calculating',
+    'translate': 'Translating',
+    'summarize': 'Summarizing',
+    'research': 'Researching'
+  };
+  
+  // If we have a specific mapping, use it
+  if (toolDisplayMap[toolName]) {
+    return toolDisplayMap[toolName];
+  }
+  
+  // Try to create a user-friendly name from the tool name
+  const friendlyName = toolName
+    .replace(/_/g, ' ')
+    .replace(/([A-Z])/g, ' $1')
+    .toLowerCase()
+    .replace(/^./, str => str.toUpperCase())
+    .trim();
+  
+  // Add appropriate prefix based on the tool type
+  if (toolName.toLowerCase().includes('search')) {
+    return `Searching for ${friendlyName.toLowerCase()}`;
+  } else if (toolName.toLowerCase().includes('generate')) {
+    return `Generating ${friendlyName.toLowerCase()}`;
+  } else if (toolName.toLowerCase().includes('fetch') || toolName.toLowerCase().includes('get')) {
+    return `Fetching ${friendlyName.toLowerCase()}`;
+  } else if (toolName.toLowerCase().includes('analyze')) {
+    return `Analyzing ${friendlyName.toLowerCase()}`;
+  } else {
+    return `Using ${friendlyName.toLowerCase()}`;
+  }
+}
+
 const DEFAULT_IMAGE_PROMPT = [
   "A modern, minimalist illustration",
   "A vibrant, colorful scene",
@@ -765,8 +810,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     const assistantIndex = baseMessages.length;
     setChatMessages((prev) => [...prev, { role: 'assistant', content: '' } as ChatMessage]);
 
-    // Create messages for API (send original user message without document content)
-    const apiMessages = [...chatMessages, { role: 'user', content: text } as ChatMessage];
+    // Create messages for API - only send user messages, not assistant responses
+    // This prevents the backend from streaming back previous assistant messages as context
+    const userMessages = chatMessages.filter(msg => msg.role === 'user' || msg.role === 'system');
+    const apiMessages = [...userMessages, { role: 'user', content: text } as ChatMessage];
 
     // Rest of the chat logic...
     await performChatRequest(apiMessages, assistantIndex, isEditRequest, text, currentContent);
@@ -793,7 +840,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       const apiUrl = `${VITE_API_BASE_URL}/agent`;
       console.log('API Base URL:', VITE_API_BASE_URL);
       console.log('Full API URL:', apiUrl);
-      console.log('Sending chat request:', { messages: apiMessages, documentContent });
+      console.log('Sending chat request:', { 
+        messages: apiMessages.map(m => ({ role: m.role, content: m.content.substring(0, 100) + (m.content.length > 100 ? '...' : '') })),
+        documentContent: documentContent ? `${documentContent.substring(0, 100)}...` : 'none'
+      });
       
       // Submit the request and get immediate response with request ID
       const resp = await fetch(apiUrl, {
@@ -855,7 +905,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       console.log('Connecting to WebSocket:', wsUrl);
       
       const ws = new WebSocket(wsUrl);
-      let acc = '';
 
       ws.onopen = () => {
         console.log('WebSocket connected, subscribing to request:', requestId);
@@ -865,8 +914,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         }));
       };
 
-      let toolCompletionMessage = '';
-      let toolCompletionInserted = false;
+      let currentAssistantContent = '';
+      let hasInitialContent = false;
 
       ws.onmessage = (event) => {
         try {
@@ -886,9 +935,164 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             return;
           }
 
-          // Handle tool messages (role "tool") containing artifacts
-          if (msg.role === 'tool' && msg.content) {
-            console.log('Received tool message:', msg);
+          // Handle new block-based message types
+          if (msg.type) {
+            switch (msg.type) {
+              case 'user':
+                // Display user message blocks (usually shown as context)
+                console.log('User message block:', msg.content);
+                break;
+                
+              case 'system':
+                // Display system message blocks (usually shown as context)
+                console.log('System message block:', msg.content);
+                break;
+                
+              case 'text':
+                // Handle assistant text responses as separate messages
+                if (msg.content) {
+                  // If this is the first text block, update the existing assistant message
+                  if (!hasInitialContent) {
+                    currentAssistantContent = msg.content;
+                    hasInitialContent = true;
+                    setChatMessages((prev) => {
+                      const updated = [...prev];
+                      updated[assistantIndex] = { 
+                        role: 'assistant', 
+                        content: currentAssistantContent 
+                      } as ChatMessage;
+                      return updated;
+                    });
+                  } else {
+                    // For subsequent text blocks, add as new messages
+                    setChatMessages((prev) => [
+                      ...prev,
+                      { role: 'assistant', content: msg.content }
+                    ]);
+                  }
+                }
+                break;
+                
+              case 'tool_use':
+                // Display tool usage feedback as a separate message
+                if (msg.tool_name) {
+                  const toolDisplayName = getToolDisplayName(msg.tool_name);
+                  const toolMessage = `🔧 ${toolDisplayName}...`;
+                  
+                  setChatMessages((prev) => [
+                    ...prev,
+                    { role: 'assistant', content: toolMessage }
+                  ]);
+                  
+                  console.log('Tool use:', msg.tool_name, msg.tool_input);
+                }
+                break;
+                
+              case 'tool_result':
+                // Handle tool results with structured data
+                if (msg.tool_result) {
+                  console.log('Tool result:', msg.tool_result);
+                  
+                  // Create a unique identifier for this tool message
+                  const toolMessageId = `${requestId}-${Date.now()}-tool-result`;
+                  const isNewMessage = !processedToolMessages.has(toolMessageId);
+                  
+                  try {
+                    // Check if this is an edit_text tool result
+                    if (msg.tool_result.content) {
+                      const toolResult = JSON.parse(msg.tool_result.content);
+                      
+                      if (toolResult.tool_name === 'edit_text' && isNewMessage) {
+                        // Check if this is a patch-based edit or traditional edit
+                        if (toolResult.edit_type === 'patch' && toolResult.patch) {
+                          // Show patch for review instead of applying directly
+                          setPendingPatch({
+                            patch: toolResult.patch,
+                            originalText: toolResult.original_text,
+                            newText: toolResult.new_text,
+                            reason: toolResult.reason
+                          });
+                          
+                          // Add patch review message as separate message
+                          setChatMessages((prev) => [
+                            ...prev,
+                            { role: 'assistant', content: `📋 Text edit ready for review: ${toolResult.reason}` }
+                          ]);
+                        } else {
+                          // Legacy direct application (fallback)
+                          applyTextEdit(toolResult.original_text, toolResult.new_text, toolResult.reason);
+                          
+                          // Add completion message as separate message
+                          setChatMessages((prev) => [
+                            ...prev,
+                            { role: 'assistant', content: `✅ Text edited: ${toolResult.reason}` }
+                          ]);
+                        }
+                        
+                        // Mark this tool message as processed
+                        setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
+                      } else {
+                        // For non-edit tools, add generic completion message
+                        setChatMessages((prev) => [
+                          ...prev,
+                          { role: 'assistant', content: '✅ Task completed' }
+                        ]);
+                      }
+                    }
+                    
+                    // Add the tool result to chat history (but don't display it visually)
+                    // This keeps the technical result available for debugging
+                    console.log('Tool result data:', JSON.stringify(msg.tool_result));
+                    
+                  } catch (error) {
+                    console.error('Error parsing tool result:', error);
+                    // Add error message
+                    setChatMessages((prev) => [
+                      ...prev,
+                      { role: 'assistant', content: '⚠️ Tool execution completed with warnings' }
+                    ]);
+                  }
+                }
+                break;
+                
+              case 'done':
+                console.log('Stream completed');
+                ws.close();
+                
+                // After response is complete, check if we should show a document edit option
+                if (isEditRequest && currentAssistantContent.length > 100) {
+                  const codeBlockMatch = currentAssistantContent.match(/```(?:markdown|md)?\n([\s\S]*?)\n```/);
+                  if (codeBlockMatch) {
+                    const suggestedContent = codeBlockMatch[1].trim();
+                    if (suggestedContent.length > 50) {
+                      setPendingEdit({
+                        newContent: suggestedContent,
+                        summary: `Suggested changes from: "${originalText}"`
+                      });
+                    }
+                  }
+                }
+                
+                resolve();
+                break;
+                
+              case 'error':
+                console.error('Stream error:', msg.error);
+                toast({ 
+                  title: "Assistant Error", 
+                  description: msg.error,
+                  variant: "destructive"
+                });
+                setChatMessages((prev) => prev.slice(0, -1));
+                ws.close();
+                reject(new Error(msg.error));
+                break;
+            }
+          }
+          
+          // Backward compatibility: Handle legacy role-based messages
+          else if (msg.role === 'tool' && msg.content) {
+            console.log('Legacy tool message:', msg);
             
             // Create a unique identifier for this tool message
             const toolMessageId = `${requestId}-${Date.now()}-${msg.content.slice(0, 50)}`;
@@ -911,72 +1115,70 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     reason: toolResult.reason
                   });
                   
-                  // Insert patch review message at the current position in the stream
-                  toolCompletionMessage = `\n\n📋 Text edit ready for review: ${toolResult.reason}\n\n`;
-                  toolCompletionInserted = true;
-                  acc += toolCompletionMessage;
+                  // Add patch review message as separate message
+                  setChatMessages((prev) => [
+                    ...prev,
+                    { role: 'assistant', content: `📋 Text edit ready for review: ${toolResult.reason}` }
+                  ]);
                 } else {
                   // Legacy direct application (fallback)
                   applyTextEdit(toolResult.original_text, toolResult.new_text, toolResult.reason);
                   
-                  // Insert the completion message at the current position in the stream
-                  toolCompletionMessage = `\n\n✅ Text edited: ${toolResult.reason}\n\n`;
-                  toolCompletionInserted = true;
-                  acc += toolCompletionMessage;
+                  // Add completion message as separate message
+                  setChatMessages((prev) => [
+                    ...prev,
+                    { role: 'assistant', content: `✅ Text edited: ${toolResult.reason}` }
+                  ]);
                 }
-                
-                // Update the current assistant message 
-                setChatMessages((prev) => {
-                  const updated = [...prev];
-                  if (updated[assistantIndex]) {
-                    updated[assistantIndex] = { 
-                      role: 'assistant', 
-                      content: acc 
-                    } as ChatMessage;
-                  }
-                  return updated;
-                });
                 
                 // Mark this tool message as processed
                 setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
               }
               
-              // Add the tool message to chat history (always add, regardless of processing)
-              setChatMessages((prev) => [
-                ...prev,
-                { role: 'tool', content: msg.content }
-              ]);
+              // Add the tool message to chat history (for debugging, not displayed)
+              console.log('Legacy tool message data:', msg.content);
               
             } catch (error) {
               console.error('Error parsing tool result:', error);
-              // Fallback: add as regular tool message
+              // Add error message
               setChatMessages((prev) => [
                 ...prev,
-                { role: 'tool', content: msg.content }
+                { role: 'assistant', content: '⚠️ Tool execution completed with warnings' }
               ]);
             }
           }
           
-          if (msg.role === 'assistant' && msg.content) {
-            acc += msg.content;
-            setChatMessages((prev) => {
-              const updated = [...prev];
-              // Just use the accumulated content - tool completion is already included if it was inserted
-              updated[assistantIndex] = { 
-                role: 'assistant', 
-                content: acc 
-              } as ChatMessage;
-              return updated;
-            });
+          // Backward compatibility: Handle legacy assistant messages
+          else if (msg.role === 'assistant' && msg.content) {
+            // For legacy messages, treat them as text blocks
+            if (!hasInitialContent) {
+              currentAssistantContent = msg.content;
+              hasInitialContent = true;
+              setChatMessages((prev) => {
+                const updated = [...prev];
+                updated[assistantIndex] = { 
+                  role: 'assistant', 
+                  content: currentAssistantContent 
+                } as ChatMessage;
+                return updated;
+              });
+            } else {
+              // Add as new message
+              setChatMessages((prev) => [
+                ...prev,
+                { role: 'assistant', content: msg.content }
+              ]);
+            }
           }
           
-          if (msg.done) {
+          // Backward compatibility: Handle legacy done signal
+          else if (msg.done) {
             console.log('Stream completed');
             ws.close();
             
             // After response is complete, check if we should show a document edit option
-            if (isEditRequest && acc.length > 100) {
-              const codeBlockMatch = acc.match(/```(?:markdown|md)?\n([\s\S]*?)\n```/);
+            if (isEditRequest && currentAssistantContent.length > 100) {
+              const codeBlockMatch = currentAssistantContent.match(/```(?:markdown|md)?\n([\s\S]*?)\n```/);
               if (codeBlockMatch) {
                 const suggestedContent = codeBlockMatch[1].trim();
                 if (suggestedContent.length > 50) {

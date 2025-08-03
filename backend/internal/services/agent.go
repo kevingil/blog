@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -224,15 +225,39 @@ type ChatRequestResponse struct {
 	Status    string `json:"status"`
 }
 
-// WebSocket streaming types
+// WebSocket streaming types - Block-based streaming for structured agent responses
+//
+// This struct supports streaming agent responses as individual message blocks, where each
+// block represents a specific part of the agent's response (text, tool calls, tool results).
+// Blocks belonging to the same request are grouped by RequestID on the frontend.
+//
+// Supported block types:
+// - "text": Assistant text responses
+// - "tool_use": Tool/function calls made by the agent
+// - "tool_result": Results returned from tool executions
+// - "user": User messages (streamed as initial context)
+// - "system": System messages (streamed as initial context)
+// - "error": Error messages
+// - "done": Completion signal
 type StreamResponse struct {
 	RequestID string `json:"requestId,omitempty"`
-	Type      string `json:"type"` // "chat", "artifact", "plan", "error", "done"
-	Role      string `json:"role,omitempty"`
+	Type      string `json:"type"` // "text", "tool_use", "tool_result", "error", "done"
 	Content   string `json:"content,omitempty"`
-	Data      any    `json:"data,omitempty"`
-	Done      bool   `json:"done,omitempty"`
-	Error     string `json:"error,omitempty"`
+	Iteration int    `json:"iteration,omitempty"`
+
+	// Tool-specific fields for tool_use blocks
+	ToolID    string      `json:"tool_id,omitempty"`
+	ToolName  string      `json:"tool_name,omitempty"`
+	ToolInput interface{} `json:"tool_input,omitempty"`
+
+	// Tool result fields for tool_result blocks
+	ToolResult interface{} `json:"tool_result,omitempty"`
+
+	// Legacy fields for backward compatibility
+	Role  string `json:"role,omitempty"`
+	Data  any    `json:"data,omitempty"`
+	Done  bool   `json:"done,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 // Artifact represents tool execution status shown to user
@@ -262,6 +287,7 @@ type AgentAsyncRequest struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	SessionID    string
+	iteration    int // Track iteration number for message blocks
 }
 
 var (
@@ -425,6 +451,40 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 		}
 	}
 
+	// Stream initial messages as separate blocks before starting agent processing
+	// Only stream user and system messages as context - skip assistant messages to avoid duplication
+	asyncReq.iteration = 1
+	for _, msg := range asyncReq.Request.Messages {
+		// Skip assistant messages - they are responses that have already been shown to the user
+		if msg.Role == "assistant" {
+			continue
+		}
+
+		var blockType string
+		switch msg.Role {
+		case "system":
+			blockType = "system"
+		case "user":
+			blockType = "user"
+		default:
+			blockType = "user" // Default to user for unknown roles
+		}
+
+		content := msg.Content
+		// Add document content to user messages if provided
+		if msg.Role == "user" && asyncReq.Request.DocumentContent != "" {
+			content += "\n\n--- Current Document ---\n" + asyncReq.Request.DocumentContent
+		}
+
+		// Stream the message block
+		asyncReq.ResponseChan <- StreamResponse{
+			RequestID: asyncReq.ID,
+			Type:      blockType,
+			Content:   content,
+			Iteration: asyncReq.iteration,
+		}
+	}
+
 	// Start agent processing
 	userPrompt := ""
 	if len(asyncReq.Request.Messages) > 0 {
@@ -494,38 +554,73 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 		case agent.AgentEventTypeResponse:
 			if event.Message.ID != "" {
 				m.logMessageDetails(event.Message, asyncReq.ID)
+				asyncReq.iteration++
 
-				asyncReq.ResponseChan <- StreamResponse{
-					RequestID: asyncReq.ID,
-					Type:      "chat",
-					Role:      "assistant",
-					Content:   event.Message.Content().String(),
-					Done:      false,
+				// Check if this message has tool calls - if so, stream them separately
+				toolCalls := event.Message.ToolCalls()
+				if len(toolCalls) > 0 {
+					// Stream text content first if there is any
+					textContent := event.Message.Content().String()
+					if textContent != "" {
+						asyncReq.ResponseChan <- StreamResponse{
+							RequestID: asyncReq.ID,
+							Type:      "text",
+							Content:   textContent,
+							Iteration: asyncReq.iteration,
+						}
+					}
+
+					// Stream each tool call as a separate tool_use block
+					for _, toolCall := range toolCalls {
+						// Parse tool input as JSON if possible
+						var toolInput interface{}
+						if toolCall.Input != "" {
+							// Try to parse as JSON, fallback to string if parsing fails
+							var jsonInput map[string]interface{}
+							if err := json.Unmarshal([]byte(toolCall.Input), &jsonInput); err == nil {
+								toolInput = jsonInput
+							} else {
+								toolInput = toolCall.Input
+							}
+						}
+
+						asyncReq.ResponseChan <- StreamResponse{
+							RequestID: asyncReq.ID,
+							Type:      "tool_use",
+							Iteration: asyncReq.iteration,
+							ToolID:    toolCall.ID,
+							ToolName:  toolCall.Name,
+							ToolInput: toolInput,
+						}
+					}
+				} else {
+					// Regular text response without tool calls
+					asyncReq.ResponseChan <- StreamResponse{
+						RequestID: asyncReq.ID,
+						Type:      "text",
+						Content:   event.Message.Content().String(),
+						Iteration: asyncReq.iteration,
+					}
 				}
 			}
 		case agent.AgentEventTypeTool:
 			if event.Message.ID != "" {
 				m.logMessageDetails(event.Message, asyncReq.ID)
 
-				// Extract tool results and serialize them as JSON content
+				// This event contains tool results - stream each as a separate tool_result block
 				toolResults := event.Message.ToolResults()
-				var content string
-				if len(toolResults) > 0 {
-					// For now, take the first tool result content (most common case)
-					// In the future, we could combine multiple tool results
-					content = toolResults[0].Content
-				} else {
-					// Fallback to regular text content if no tool results
-					content = event.Message.Content().String()
-				}
-
-				// Stream tool message as role "tool" with content containing tool results
-				asyncReq.ResponseChan <- StreamResponse{
-					RequestID: asyncReq.ID,
-					Type:      "chat",
-					Role:      "tool",
-					Content:   content,
-					Done:      false,
+				for _, toolResult := range toolResults {
+					asyncReq.ResponseChan <- StreamResponse{
+						RequestID: asyncReq.ID,
+						Type:      "tool_result",
+						Iteration: asyncReq.iteration,
+						ToolID:    toolResult.ToolCallID,
+						ToolResult: map[string]interface{}{
+							"content":  toolResult.Content,
+							"metadata": toolResult.Metadata,
+							"is_error": toolResult.IsError,
+						},
+					}
 				}
 			}
 		case agent.AgentEventTypeError:
