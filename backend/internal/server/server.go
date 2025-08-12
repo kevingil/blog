@@ -13,6 +13,7 @@ type FiberServer struct {
 	db              database.Service
 	authService     *services.AuthService
 	blogService     *services.ArticleService
+    projectsService *services.ProjectsService
 	imageService    *services.ImageGenerationService
 	storageService  *services.StorageService
 	pagesService    *services.PagesService
@@ -23,6 +24,7 @@ func NewFiberServer(
 	db database.Service,
 	authService *services.AuthService,
 	blogService *services.ArticleService,
+    projectsService *services.ProjectsService,
 	imageService *services.ImageGenerationService,
 	storageService *services.StorageService,
 	pagesService *services.PagesService,
@@ -33,6 +35,7 @@ func NewFiberServer(
 		db:              db,
 		authService:     authService,
 		blogService:     blogService,
+        projectsService: projectsService,
 		imageService:    imageService,
 		storageService:  storageService,
 		pagesService:    pagesService,
@@ -43,6 +46,7 @@ func NewFiberServer(
 	router.RegisterRoutes(server.App, router.RouteDeps{
 		AuthService:     authService,
 		BlogService:     blogService,
+        ProjectsService: projectsService,
 		ImageService:    imageService,
 		StorageService:  storageService,
 		PagesService:    pagesService,

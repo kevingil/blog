@@ -12,6 +12,7 @@ import (
 type RouteDeps struct {
 	AuthService     *services.AuthService
 	BlogService     *services.ArticleService
+    ProjectsService *services.ProjectsService
 	ImageService    *services.ImageGenerationService
 	StorageService  *services.StorageService
 	PagesService    *services.PagesService
@@ -64,6 +65,14 @@ func RegisterRoutes(app *fiber.App, deps RouteDeps) {
 	images.Post("/generate", controller.GenerateArticleImageHandler(deps.ImageService))
 	images.Get(":requestId", controller.GetImageGenerationHandler(deps.ImageService))
 	images.Get(":requestId/status", controller.GetImageGenerationStatusHandler(deps.ImageService))
+
+    // Projects
+    projects := app.Group("/projects")
+    projects.Get("/", controller.ListProjectsHandler(deps.ProjectsService))
+    projects.Post("/", controller.CreateProjectHandler(deps.ProjectsService))
+    projects.Get(":id", controller.GetProjectHandler(deps.ProjectsService))
+    projects.Put(":id", controller.UpdateProjectHandler(deps.ProjectsService))
+    projects.Delete(":id", controller.DeleteProjectHandler(deps.ProjectsService))
 
 	// Storage
 	storage := app.Group("/storage")

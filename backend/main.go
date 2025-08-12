@@ -37,6 +37,7 @@ func main() {
 	authService := services.NewAuthService(dbService, secretKey)
 	writerAgent := services.NewWriterAgent()
 	blogService := services.NewArticleService(dbService, writerAgent)
+    projectsService := services.NewProjectsService(dbService)
 	storageService := services.NewStorageService(s3Client, bucket, urlPrefix)
 	imageService := services.NewImageGenerationService(dbService, storageService)
 	pagesService := services.NewPagesService(dbService)
@@ -53,6 +54,7 @@ func main() {
 		dbService,
 		authService,
 		blogService,
+        projectsService,
 		imageService,
 		storageService,
 		pagesService,
