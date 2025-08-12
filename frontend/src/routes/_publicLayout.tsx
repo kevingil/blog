@@ -4,6 +4,7 @@ import Aurora from '@/components/home/aurora';
 import { Suspense } from 'react';
 import { AuthProvider } from "@/services/auth/auth";
 import { createFileRoute, Outlet } from '@tanstack/react-router';
+import './_publicLayout/projects/index'
 import { SpiralGalaxyAnimation } from "@/components/home/galaxy";
 
 function PublicLayout() {
