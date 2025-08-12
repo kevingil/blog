@@ -2,6 +2,7 @@ import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { listProjects } from '@/services/projects';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { Card, CardContent } from '@/components/ui/card';
 import { useEffect, useState } from 'react';
 import { ExternalLink, ArrowLeft, Sparkles } from 'lucide-react';
 
@@ -59,92 +60,82 @@ function ProjectsPage() {
           {isLoading || (isFetching && !data) ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="group relative">
-                  <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-lg border border-slate-200 dark:border-slate-700">
-                    <div className="aspect-video w-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 animate-pulse" />
-                    <div className="p-6 space-y-3">
-                      <div className="h-6 bg-slate-200 dark:bg-slate-600 rounded animate-pulse" />
-                      <div className="space-y-2">
-                        <div className="h-4 bg-slate-200 dark:bg-slate-600 rounded animate-pulse" />
-                        <div className="h-4 bg-slate-200 dark:bg-slate-600 rounded w-3/4 animate-pulse" />
-                      </div>
+                <Card key={i} animationDelay={i * 100} className="group relative overflow-hidden">
+                  <div className="aspect-video w-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 animate-pulse" />
+                  <CardContent className="space-y-3">
+                    <div className="h-6 bg-slate-200 dark:bg-slate-600 rounded animate-pulse" />
+                    <div className="space-y-2">
+                      <div className="h-4 bg-slate-200 dark:bg-slate-600 rounded animate-pulse" />
+                      <div className="h-4 bg-slate-200 dark:bg-slate-600 rounded w-3/4 animate-pulse" />
                     </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           ) : projects.length === 0 ? (
             <div className="text-center py-16">
               <div className="mx-auto max-w-md">
-                <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 flex items-center justify-center">
-                  <Sparkles className="w-12 h-12 text-slate-400" />
+                <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-muted flex items-center justify-center">
+                  <Sparkles className="w-12 h-12 text-muted-foreground" />
                 </div>
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">No projects yet</h3>
-                <p className="text-slate-600 dark:text-slate-400">Check back soon for exciting new projects!</p>
+                <h3 className="text-lg font-semibold mb-2">No projects yet</h3>
+                <p className="text-muted-foreground">Check back soon for exciting new projects!</p>
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {projects.map((project, index) => (
-                <div
+                <Card
                   key={project.id}
-                  className="group relative"
-                  style={{ 
-                    animationDelay: `${index * 100}ms`,
-                    animation: 'fadeInUp 0.6s ease-out forwards'
-                  }}
+                  animationDelay={index * 100}
+                  className="group relative overflow-hidden hover:shadow-2xl transition-all duration-500 hover:border-primary/50 transform hover:-translate-y-2"
                 >
-                  <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800 shadow-lg hover:shadow-2xl transition-all duration-500 border border-slate-200 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-800 transform hover:-translate-y-2">
-                    {/* Gradient overlay on hover */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/0 via-purple-500/0 to-pink-500/0 group-hover:from-indigo-500/5 group-hover:via-purple-500/5 group-hover:to-pink-500/5 transition-all duration-500 rounded-2xl" />
-                    
-                    <a 
-                      href={project.url || '#'} 
-                      target={project.url ? '_blank' : undefined} 
-                      rel="noreferrer"
-                      className="block relative"
-                    >
-                      {/* Image */}
-                      <div className="relative aspect-video overflow-hidden">
-                        {project.image_url ? (
-                          <img 
-                            src={project.image_url} 
-                            alt={project.title} 
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-indigo-100 via-purple-50 to-pink-100 dark:from-indigo-900/30 dark:via-purple-900/30 dark:to-pink-900/30 flex items-center justify-center">
-                            <Sparkles className="w-12 h-12 text-indigo-400 dark:text-indigo-500" />
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
-                        
-                        {/* External link indicator */}
-                        {project.url && (
-                          <div className="absolute top-4 right-4 w-8 h-8 bg-white/90 dark:bg-slate-800/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0">
-                            <ExternalLink className="w-4 h-4 text-slate-700 dark:text-slate-300" />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Content */}
-                      <div className="p-6">
-                        <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-3 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                          {project.title}
-                        </h3>
-                        <p className="text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-3">
-                          {project.description}
-                        </p>
-                        
-                        {/* Hover arrow */}
-                        <div className="flex items-center gap-2 mt-4 text-indigo-600 dark:text-indigo-400 font-medium opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
-                          <span className="text-sm">View Project</span>
+                  <a 
+                    href={project.url || '#'} 
+                    target={project.url ? '_blank' : undefined} 
+                    rel="noreferrer"
+                    className="block relative"
+                  >
+                    {/* Image */}
+                    <div className="relative aspect-video overflow-hidden">
+                      {project.image_url ? (
+                        <img 
+                          src={project.image_url} 
+                          alt={project.title} 
+                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-muted flex items-center justify-center">
+                          <Sparkles className="w-12 h-12 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+                      
+                      {/* External link indicator */}
+                      {project.url && (
+                        <div className="absolute top-4 right-4 w-8 h-8 bg-background/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0">
                           <ExternalLink className="w-4 h-4" />
                         </div>
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <CardContent>
+                      <h3 className="text-xl font-semibold mb-3 group-hover:text-primary transition-colors">
+                        {project.title}
+                      </h3>
+                      <p className="text-muted-foreground leading-relaxed line-clamp-3">
+                        {project.description}
+                      </p>
+                      
+                      {/* Hover arrow */}
+                      <div className="flex items-center gap-2 mt-4 text-primary font-medium opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
+                        <span className="text-sm">View Project</span>
+                        <ExternalLink className="w-4 h-4" />
                       </div>
-                    </a>
-                  </div>
-                </div>
+                    </CardContent>
+                  </a>
+                </Card>
               ))}
             </div>
           )}
