@@ -812,7 +812,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
     // Create messages for API - only send user messages, not assistant responses
     // This prevents the backend from streaming back previous assistant messages as context
-    const userMessages = chatMessages.filter(msg => msg.role === 'user' || msg.role === 'system');
+    const userMessages = chatMessages.filter(msg => msg.role === 'user');
     const apiMessages = [...userMessages, { role: 'user', content: text } as ChatMessage];
 
     // Rest of the chat logic...
