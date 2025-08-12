@@ -23,10 +23,14 @@ import { Route as PublicLayoutSignupImport } from './routes/_publicLayout/signup
 import { Route as PublicLayoutLoginImport } from './routes/_publicLayout/login'
 import { Route as PublicLayoutContactImport } from './routes/_publicLayout/contact'
 import { Route as PublicLayoutAboutImport } from './routes/_publicLayout/about'
+import { Route as DashboardProjectsIndexImport } from './routes/dashboard/projects/index'
 import { Route as DashboardBlogIndexImport } from './routes/dashboard/blog/index'
+import { Route as PublicLayoutProjectsIndexImport } from './routes/_publicLayout/projects/index'
 import { Route as PublicLayoutBlogIndexImport } from './routes/_publicLayout/blog/index'
+import { Route as DashboardProjectsNewImport } from './routes/dashboard/projects/new'
 import { Route as DashboardBlogNewImport } from './routes/dashboard/blog/new'
 import { Route as PublicLayoutBlogBlogSlugImport } from './routes/_publicLayout/blog/$blogSlug'
+import { Route as DashboardProjectsEditProjectIdImport } from './routes/dashboard/projects/edit.$projectId'
 import { Route as DashboardBlogEditBlogSlugImport } from './routes/dashboard/blog/edit.$blogSlug'
 
 // Create/Update Routes
@@ -102,16 +106,34 @@ const PublicLayoutAboutRoute = PublicLayoutAboutImport.update({
   getParentRoute: () => PublicLayoutRoute,
 } as any)
 
+const DashboardProjectsIndexRoute = DashboardProjectsIndexImport.update({
+  id: '/projects/',
+  path: '/projects/',
+  getParentRoute: () => DashboardRoute,
+} as any)
+
 const DashboardBlogIndexRoute = DashboardBlogIndexImport.update({
   id: '/blog/',
   path: '/blog/',
   getParentRoute: () => DashboardRoute,
 } as any)
 
+const PublicLayoutProjectsIndexRoute = PublicLayoutProjectsIndexImport.update({
+  id: '/projects/',
+  path: '/projects/',
+  getParentRoute: () => PublicLayoutRoute,
+} as any)
+
 const PublicLayoutBlogIndexRoute = PublicLayoutBlogIndexImport.update({
   id: '/blog/',
   path: '/blog/',
   getParentRoute: () => PublicLayoutRoute,
+} as any)
+
+const DashboardProjectsNewRoute = DashboardProjectsNewImport.update({
+  id: '/projects/new',
+  path: '/projects/new',
+  getParentRoute: () => DashboardRoute,
 } as any)
 
 const DashboardBlogNewRoute = DashboardBlogNewImport.update({
@@ -125,6 +147,13 @@ const PublicLayoutBlogBlogSlugRoute = PublicLayoutBlogBlogSlugImport.update({
   path: '/blog/$blogSlug',
   getParentRoute: () => PublicLayoutRoute,
 } as any)
+
+const DashboardProjectsEditProjectIdRoute =
+  DashboardProjectsEditProjectIdImport.update({
+    id: '/projects/edit/$projectId',
+    path: '/projects/edit/$projectId',
+    getParentRoute: () => DashboardRoute,
+  } as any)
 
 const DashboardBlogEditBlogSlugRoute = DashboardBlogEditBlogSlugImport.update({
   id: '/blog/edit/$blogSlug',
@@ -234,11 +263,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardBlogNewImport
       parentRoute: typeof DashboardImport
     }
+    '/dashboard/projects/new': {
+      id: '/dashboard/projects/new'
+      path: '/projects/new'
+      fullPath: '/dashboard/projects/new'
+      preLoaderRoute: typeof DashboardProjectsNewImport
+      parentRoute: typeof DashboardImport
+    }
     '/_publicLayout/blog/': {
       id: '/_publicLayout/blog/'
       path: '/blog'
       fullPath: '/blog'
       preLoaderRoute: typeof PublicLayoutBlogIndexImport
+      parentRoute: typeof PublicLayoutImport
+    }
+    '/_publicLayout/projects/': {
+      id: '/_publicLayout/projects/'
+      path: '/projects'
+      fullPath: '/projects'
+      preLoaderRoute: typeof PublicLayoutProjectsIndexImport
       parentRoute: typeof PublicLayoutImport
     }
     '/dashboard/blog/': {
@@ -248,11 +291,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardBlogIndexImport
       parentRoute: typeof DashboardImport
     }
+    '/dashboard/projects/': {
+      id: '/dashboard/projects/'
+      path: '/projects'
+      fullPath: '/dashboard/projects'
+      preLoaderRoute: typeof DashboardProjectsIndexImport
+      parentRoute: typeof DashboardImport
+    }
     '/dashboard/blog/edit/$blogSlug': {
       id: '/dashboard/blog/edit/$blogSlug'
       path: '/blog/edit/$blogSlug'
       fullPath: '/dashboard/blog/edit/$blogSlug'
       preLoaderRoute: typeof DashboardBlogEditBlogSlugImport
+      parentRoute: typeof DashboardImport
+    }
+    '/dashboard/projects/edit/$projectId': {
+      id: '/dashboard/projects/edit/$projectId'
+      path: '/projects/edit/$projectId'
+      fullPath: '/dashboard/projects/edit/$projectId'
+      preLoaderRoute: typeof DashboardProjectsEditProjectIdImport
       parentRoute: typeof DashboardImport
     }
   }
@@ -268,6 +325,7 @@ interface PublicLayoutRouteChildren {
   PublicLayoutIndexRoute: typeof PublicLayoutIndexRoute
   PublicLayoutBlogBlogSlugRoute: typeof PublicLayoutBlogBlogSlugRoute
   PublicLayoutBlogIndexRoute: typeof PublicLayoutBlogIndexRoute
+  PublicLayoutProjectsIndexRoute: typeof PublicLayoutProjectsIndexRoute
 }
 
 const PublicLayoutRouteChildren: PublicLayoutRouteChildren = {
@@ -278,6 +336,7 @@ const PublicLayoutRouteChildren: PublicLayoutRouteChildren = {
   PublicLayoutIndexRoute: PublicLayoutIndexRoute,
   PublicLayoutBlogBlogSlugRoute: PublicLayoutBlogBlogSlugRoute,
   PublicLayoutBlogIndexRoute: PublicLayoutBlogIndexRoute,
+  PublicLayoutProjectsIndexRoute: PublicLayoutProjectsIndexRoute,
 }
 
 const PublicLayoutRouteWithChildren = PublicLayoutRoute._addFileChildren(
@@ -290,8 +349,11 @@ interface DashboardRouteChildren {
   DashboardUploadsRoute: typeof DashboardUploadsRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
   DashboardBlogNewRoute: typeof DashboardBlogNewRoute
+  DashboardProjectsNewRoute: typeof DashboardProjectsNewRoute
   DashboardBlogIndexRoute: typeof DashboardBlogIndexRoute
+  DashboardProjectsIndexRoute: typeof DashboardProjectsIndexRoute
   DashboardBlogEditBlogSlugRoute: typeof DashboardBlogEditBlogSlugRoute
+  DashboardProjectsEditProjectIdRoute: typeof DashboardProjectsEditProjectIdRoute
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
@@ -300,8 +362,11 @@ const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardUploadsRoute: DashboardUploadsRoute,
   DashboardIndexRoute: DashboardIndexRoute,
   DashboardBlogNewRoute: DashboardBlogNewRoute,
+  DashboardProjectsNewRoute: DashboardProjectsNewRoute,
   DashboardBlogIndexRoute: DashboardBlogIndexRoute,
+  DashboardProjectsIndexRoute: DashboardProjectsIndexRoute,
   DashboardBlogEditBlogSlugRoute: DashboardBlogEditBlogSlugRoute,
+  DashboardProjectsEditProjectIdRoute: DashboardProjectsEditProjectIdRoute,
 }
 
 const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
@@ -323,9 +388,13 @@ export interface FileRoutesByFullPath {
   '/dashboard/': typeof DashboardIndexRoute
   '/blog/$blogSlug': typeof PublicLayoutBlogBlogSlugRoute
   '/dashboard/blog/new': typeof DashboardBlogNewRoute
+  '/dashboard/projects/new': typeof DashboardProjectsNewRoute
   '/blog': typeof PublicLayoutBlogIndexRoute
+  '/projects': typeof PublicLayoutProjectsIndexRoute
   '/dashboard/blog': typeof DashboardBlogIndexRoute
+  '/dashboard/projects': typeof DashboardProjectsIndexRoute
   '/dashboard/blog/edit/$blogSlug': typeof DashboardBlogEditBlogSlugRoute
+  '/dashboard/projects/edit/$projectId': typeof DashboardProjectsEditProjectIdRoute
 }
 
 export interface FileRoutesByTo {
@@ -341,9 +410,13 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardIndexRoute
   '/blog/$blogSlug': typeof PublicLayoutBlogBlogSlugRoute
   '/dashboard/blog/new': typeof DashboardBlogNewRoute
+  '/dashboard/projects/new': typeof DashboardProjectsNewRoute
   '/blog': typeof PublicLayoutBlogIndexRoute
+  '/projects': typeof PublicLayoutProjectsIndexRoute
   '/dashboard/blog': typeof DashboardBlogIndexRoute
+  '/dashboard/projects': typeof DashboardProjectsIndexRoute
   '/dashboard/blog/edit/$blogSlug': typeof DashboardBlogEditBlogSlugRoute
+  '/dashboard/projects/edit/$projectId': typeof DashboardProjectsEditProjectIdRoute
 }
 
 export interface FileRoutesById {
@@ -362,9 +435,13 @@ export interface FileRoutesById {
   '/dashboard/': typeof DashboardIndexRoute
   '/_publicLayout/blog/$blogSlug': typeof PublicLayoutBlogBlogSlugRoute
   '/dashboard/blog/new': typeof DashboardBlogNewRoute
+  '/dashboard/projects/new': typeof DashboardProjectsNewRoute
   '/_publicLayout/blog/': typeof PublicLayoutBlogIndexRoute
+  '/_publicLayout/projects/': typeof PublicLayoutProjectsIndexRoute
   '/dashboard/blog/': typeof DashboardBlogIndexRoute
+  '/dashboard/projects/': typeof DashboardProjectsIndexRoute
   '/dashboard/blog/edit/$blogSlug': typeof DashboardBlogEditBlogSlugRoute
+  '/dashboard/projects/edit/$projectId': typeof DashboardProjectsEditProjectIdRoute
 }
 
 export interface FileRouteTypes {
@@ -384,9 +461,13 @@ export interface FileRouteTypes {
     | '/dashboard/'
     | '/blog/$blogSlug'
     | '/dashboard/blog/new'
+    | '/dashboard/projects/new'
     | '/blog'
+    | '/projects'
     | '/dashboard/blog'
+    | '/dashboard/projects'
     | '/dashboard/blog/edit/$blogSlug'
+    | '/dashboard/projects/edit/$projectId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/not-found'
@@ -401,9 +482,13 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/blog/$blogSlug'
     | '/dashboard/blog/new'
+    | '/dashboard/projects/new'
     | '/blog'
+    | '/projects'
     | '/dashboard/blog'
+    | '/dashboard/projects'
     | '/dashboard/blog/edit/$blogSlug'
+    | '/dashboard/projects/edit/$projectId'
   id:
     | '__root__'
     | '/_publicLayout'
@@ -420,9 +505,13 @@ export interface FileRouteTypes {
     | '/dashboard/'
     | '/_publicLayout/blog/$blogSlug'
     | '/dashboard/blog/new'
+    | '/dashboard/projects/new'
     | '/_publicLayout/blog/'
+    | '/_publicLayout/projects/'
     | '/dashboard/blog/'
+    | '/dashboard/projects/'
     | '/dashboard/blog/edit/$blogSlug'
+    | '/dashboard/projects/edit/$projectId'
   fileRoutesById: FileRoutesById
 }
 
@@ -462,7 +551,8 @@ export const routeTree = rootRoute
         "/_publicLayout/signup",
         "/_publicLayout/",
         "/_publicLayout/blog/$blogSlug",
-        "/_publicLayout/blog/"
+        "/_publicLayout/blog/",
+        "/_publicLayout/projects/"
       ]
     },
     "/dashboard": {
@@ -473,8 +563,11 @@ export const routeTree = rootRoute
         "/dashboard/uploads",
         "/dashboard/",
         "/dashboard/blog/new",
+        "/dashboard/projects/new",
         "/dashboard/blog/",
-        "/dashboard/blog/edit/$blogSlug"
+        "/dashboard/projects/",
+        "/dashboard/blog/edit/$blogSlug",
+        "/dashboard/projects/edit/$projectId"
       ]
     },
     "/not-found": {
@@ -524,16 +617,32 @@ export const routeTree = rootRoute
       "filePath": "dashboard/blog/new.tsx",
       "parent": "/dashboard"
     },
+    "/dashboard/projects/new": {
+      "filePath": "dashboard/projects/new.tsx",
+      "parent": "/dashboard"
+    },
     "/_publicLayout/blog/": {
       "filePath": "_publicLayout/blog/index.tsx",
+      "parent": "/_publicLayout"
+    },
+    "/_publicLayout/projects/": {
+      "filePath": "_publicLayout/projects/index.tsx",
       "parent": "/_publicLayout"
     },
     "/dashboard/blog/": {
       "filePath": "dashboard/blog/index.tsx",
       "parent": "/dashboard"
     },
+    "/dashboard/projects/": {
+      "filePath": "dashboard/projects/index.tsx",
+      "parent": "/dashboard"
+    },
     "/dashboard/blog/edit/$blogSlug": {
       "filePath": "dashboard/blog/edit.$blogSlug.tsx",
+      "parent": "/dashboard"
+    },
+    "/dashboard/projects/edit/$projectId": {
+      "filePath": "dashboard/projects/edit.$projectId.tsx",
       "parent": "/dashboard"
     }
   }

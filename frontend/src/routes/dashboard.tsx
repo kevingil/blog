@@ -14,6 +14,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent } from '@/components/ui/card'
 import { getArticles } from '@/services/blog';
 import { ArticleListItem } from '@/services/types';
+// Preload child routes so they are discovered in route tree
+import './dashboard/blog/index'
+import './dashboard/blog/new'
+import './dashboard/blog/edit.$blogSlug'
+import './dashboard/projects/index'
+import './dashboard/projects/new'
+import './dashboard/projects/edit.$projectId'
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardLayout,

@@ -72,6 +72,21 @@ const navigationData = {
       ],
     },
     {
+      title: "Projects",
+      url: "/dashboard/projects",
+      icon: IconFolder,
+      items: [
+        {
+          title: "All Projects",
+          url: "/dashboard/projects",
+        },
+        {
+          title: "New Project",
+          url: "/dashboard/projects/new",
+        },
+      ],
+    },
+    {
       title: "Uploads",
       url: "/dashboard/uploads",
       icon: IconUpload,
