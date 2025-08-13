@@ -134,10 +134,9 @@ function LatestProjectsGrid() {
           animationDelay={index * 150}
           className="group relative overflow-hidden hover:shadow-2xl transition-all duration-500 hover:border-primary/50 transform hover:-translate-y-2"
         >
-          <a 
-            href={project.url || '#'} 
-            target={project.url ? '_blank' : undefined} 
-            rel="noreferrer"
+          <Link 
+            to="/projects/$projectId"
+            params={{ projectId: project.id }}
             className="block relative"
           >
             {/* Image */}
@@ -184,7 +183,7 @@ function LatestProjectsGrid() {
                 </svg>
               </div>
             </CardContent>
-          </a>
+          </Link>
         </Card>
       ))}
       
