@@ -90,10 +90,9 @@ function ProjectsPage() {
                   animationDelay={index * 100}
                   className="group relative overflow-hidden hover:shadow-2xl transition-all duration-500 hover:border-primary/50 transform hover:-translate-y-2"
                 >
-                  <a 
-                    href={project.url || '#'} 
-                    target={project.url ? '_blank' : undefined} 
-                    rel="noreferrer"
+                  <Link 
+                    to="/projects/$projectId" 
+                    params={{ projectId: project.id }}
                     className="block relative"
                   >
                     {/* Image */}
@@ -134,7 +133,7 @@ function ProjectsPage() {
                         <ExternalLink className="w-4 h-4" />
                       </div>
                     </CardContent>
-                  </a>
+                  </Link>
                 </Card>
               ))}
             </div>
