@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { createProject } from '@/services/projects';
+import { ChipInput } from '@/components/ui/chip-input';
 
 export const Route = createFileRoute('/dashboard/projects/new')({
   component: NewProjectPage,
@@ -15,6 +16,8 @@ export const Route = createFileRoute('/dashboard/projects/new')({
 const schema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().min(1, 'Description is required'),
+  content: z.string().optional(),
+  tags: z.array(z.string()).default([]),
   image_url: z.string().url().optional().or(z.literal('')),
   url: z.string().url().optional().or(z.literal('')),
 });
@@ -23,15 +26,18 @@ type FormData = z.infer<typeof schema>;
 
 function NewProjectPage() {
   const navigate = useNavigate();
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors, isSubmitting }, setValue, watch } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { title: '', description: '', image_url: '', url: '' },
+    defaultValues: { title: '', description: '', content: '', tags: [], image_url: '', url: '' },
   });
+  const watchedTags = watch('tags');
 
   const onSubmit = async (data: FormData) => {
     await createProject({
       title: data.title,
       description: data.description,
+      content: data.content,
+      tags: data.tags,
       image_url: data.image_url || undefined,
       url: data.url || undefined,
     });
@@ -50,9 +56,23 @@ function NewProjectPage() {
               {errors.title && <p className="text-sm text-red-500">{errors.title.message}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium">Description</label>
-              <Textarea rows={6} {...register('description')} />
+              <label className="block text-sm font-medium">Short Description</label>
+              <Textarea rows={4} {...register('description')} />
               {errors.description && <p className="text-sm text-red-500">{errors.description.message}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium">README Content</label>
+              <Textarea rows={12} placeholder="Longer README-style content" {...register('content')} />
+              {errors.content && <p className="text-sm text-red-500">{errors.content.message as string}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Tags</label>
+              <ChipInput
+                value={watchedTags}
+                onChange={(tags) => setValue('tags', tags)}
+                placeholder="Type and press Enter to add tags..."
+              />
+              {errors.tags && <p className="text-sm text-red-500">{errors.tags.message as string}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium">Image URL</label>

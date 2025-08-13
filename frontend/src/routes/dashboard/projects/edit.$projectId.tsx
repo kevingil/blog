@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { getProject, updateProject } from '@/services/projects';
 import { useQuery } from '@tanstack/react-query';
+import { ChipInput } from '@/components/ui/chip-input';
 
 export const Route = createFileRoute('/dashboard/projects/edit/$projectId')({
   component: EditProjectPage,
@@ -17,6 +18,8 @@ export const Route = createFileRoute('/dashboard/projects/edit/$projectId')({
 const schema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().min(1, 'Description is required'),
+  content: z.string().optional(),
+  tags: z.array(z.string()),
   image_url: z.string().url().optional().or(z.literal('')),
   url: z.string().url().optional().or(z.literal('')),
 });
@@ -27,36 +30,38 @@ function EditProjectPage() {
   const { projectId } = useParams({ from: '/dashboard/projects/edit/$projectId' });
   const navigate = useNavigate();
 
-  const { data: project, isLoading, error } = useQuery({
+  const { data: detail, isLoading, error } = useQuery({
     queryKey: ['project', projectId],
     queryFn: () => getProject(projectId),
   });
 
-  const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors, isSubmitting }, reset, setValue, watch } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { title: '', description: '', image_url: '', url: '' },
+    defaultValues: { title: '', description: '', content: '', tags: [], image_url: '', url: '' },
   });
-
-  if (isLoading) return <div>Loading project...</div>;
-  if (error || !project) return <div>Error loading project</div>;
+  const watchedTags = watch('tags');
 
   // Sync fetched data to form once after load
   // Avoid calling reset during render to prevent render loops
   useEffect(() => {
-    if (project) {
+    if (detail) {
       reset({
-        title: project.title,
-        description: project.description,
-        image_url: project.image_url || '',
-        url: project.url || '',
+        title: detail.project.title,
+        description: detail.project.description,
+        content: detail.project.content || '',
+        tags: detail.tags || [],
+        image_url: detail.project.image_url || '',
+        url: detail.project.url || '',
       });
     }
-  }, [project, reset]);
+  }, [detail, reset]);
 
   const onSubmit = async (data: FormData) => {
     await updateProject(projectId, {
       title: data.title,
       description: data.description,
+      content: data.content,
+      tags: data.tags,
       image_url: data.image_url || undefined,
       url: data.url || undefined,
     });
@@ -66,6 +71,11 @@ function EditProjectPage() {
   return (
     <section className="flex-1 p-0 md:p-4">
       <h1 className="text-lg lg:text-2xl font-medium text-gray-900 dark:text-white mb-6">Edit Project</h1>
+      {isLoading ? (
+        <div>Loading project...</div>
+      ) : (error || !detail) ? (
+        <div>Error loading project</div>
+      ) : (
       <Card>
         <CardContent className="p-4">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -75,9 +85,23 @@ function EditProjectPage() {
               {errors.title && <p className="text-sm text-red-500">{errors.title.message}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium">Description</label>
-              <Textarea rows={6} {...register('description')} />
+              <label className="block text-sm font-medium">Short Description</label>
+              <Textarea rows={4} {...register('description')} />
               {errors.description && <p className="text-sm text-red-500">{errors.description.message}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium">README Content</label>
+              <Textarea rows={12} placeholder="Longer README-style content" {...register('content')} />
+              {errors.content && <p className="text-sm text-red-500">{errors.content.message as string}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Tags</label>
+              <ChipInput
+                value={watchedTags ?? []}
+                onChange={(tags) => setValue('tags', tags)}
+                placeholder="Type and press Enter to add tags..."
+              />
+              {errors.tags && <p className="text-sm text-red-500">{errors.tags.message as string}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium">Image URL</label>
@@ -96,6 +120,7 @@ function EditProjectPage() {
           </form>
         </CardContent>
       </Card>
+      )}
     </section>
   );
 }

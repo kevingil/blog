@@ -26,7 +26,7 @@ function ProjectSkeleton() {
 function ProjectPage() {
   const { projectId } = useParams({ from: '/_publicLayout/projects/$projectId' });
 
-  const { data: project, isLoading, isFetching, error } = useQuery({
+  const { data: detail, isLoading, isFetching, error } = useQuery({
     queryKey: ['public-project', projectId],
     queryFn: () => getProject(projectId),
   });
@@ -39,7 +39,7 @@ function ProjectPage() {
           Back to Projects
         </Link>
 
-        {(isLoading || (isFetching && !project)) && <ProjectSkeleton />}
+        {(isLoading || (isFetching && !detail)) && <ProjectSkeleton />}
 
         {error && (
           <div className="text-center py-16">
@@ -48,36 +48,55 @@ function ProjectPage() {
           </div>
         )}
 
-        {!isLoading && project && (
+        {!isLoading && detail && (
           <Card className="overflow-hidden">
             <div className="relative">
-              {project.image_url && (
+              {detail.project.image_url && (
                 <img
-                  src={project.image_url}
-                  alt={project.title}
+                  src={detail.project.image_url}
+                  alt={detail.project.title}
                   className="w-full object-cover aspect-video"
                 />
               )}
             </div>
             <CardContent className="p-6">
-              <h1 className="text-3xl font-bold mb-3">{project.title}</h1>
+              <h1 className="text-3xl font-bold mb-3">{detail.project.title}</h1>
               <p className="text-sm text-muted-foreground mb-6">
                 {(() => {
-                  const date = project.created_at ? new Date(project.created_at) : null;
+                  const date = detail.project.created_at ? new Date(detail.project.created_at) : null;
                   if (!date || isNaN(date.getTime())) return 'Unknown date';
                   const year = date.getFullYear();
                   if (year > 2100) return 'Unknown date';
                   return format(date, 'MMMM d, yyyy');
                 })()}
               </p>
-              <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
-                {project.description}
+              <p className="text-muted-foreground leading-relaxed mb-6">
+                {detail.project.description}
               </p>
 
-              {project.url && (
+              {detail.tags && detail.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {detail.tags.map((t) => (
+                    <span key={t} className="px-2 py-1 text-xs rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50">
+                      {t.toUpperCase()}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {detail.project.content && (
+                <div className="prose dark:prose-invert max-w-none border-t pt-6">
+                  <h2 className="text-xl font-semibold mb-3">README</h2>
+                  <div className="text-foreground/90 whitespace-pre-wrap">
+                    {detail.project.content}
+                  </div>
+                </div>
+              )}
+
+              {detail.project.url && (
                 <div className="mt-8">
                   <Button asChild>
-                    <a href={project.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2">
+                    <a href={detail.project.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2">
                       Visit Project
                       <ExternalLink className="w-4 h-4" />
                     </a>
