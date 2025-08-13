@@ -4,9 +4,11 @@ import (
 	"blog-agent-go/backend/internal/database"
 	"blog-agent-go/backend/internal/models"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"gorm.io/gorm"
 )
 
 // ProjectsService provides CRUD operations for Project model
@@ -19,21 +21,21 @@ func NewProjectsService(db database.Service) *ProjectsService {
 }
 
 type ProjectCreateRequest struct {
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Content     string  `json:"content"`
-	TagIDs      []int64 `json:"tag_ids"`
-	ImageURL    string  `json:"image_url"`
-	URL         string  `json:"url"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Content     string   `json:"content"`
+	Tags        []string `json:"tags"`
+	ImageURL    string   `json:"image_url"`
+	URL         string   `json:"url"`
 }
 
 type ProjectUpdateRequest struct {
-	Title       *string  `json:"title"`
-	Description *string  `json:"description"`
-	Content     *string  `json:"content"`
-	TagIDs      *[]int64 `json:"tag_ids"`
-	ImageURL    *string  `json:"image_url"`
-	URL         *string  `json:"url"`
+	Title       *string   `json:"title"`
+	Description *string   `json:"description"`
+	Content     *string   `json:"content"`
+	Tags        *[]string `json:"tags"`
+	ImageURL    *string   `json:"image_url"`
+	URL         *string   `json:"url"`
 }
 
 func (s *ProjectsService) ListProjects(page int, perPage int) ([]models.Project, int64, error) {
@@ -73,11 +75,30 @@ func (s *ProjectsService) CreateProject(req ProjectCreateRequest) (*models.Proje
 	if req.Title == "" || req.Description == "" {
 		return nil, fmt.Errorf("title and description are required")
 	}
+	// Handle tags: ensure tag records exist and collect IDs
+	var tagIDs []int64
+	for _, name := range req.Tags {
+		t := strings.ToLower(strings.TrimSpace(name))
+		if t == "" {
+			continue
+		}
+		var tag models.Tag
+		res := db.Where("LOWER(name) = ?", t).First(&tag)
+		if res.Error == gorm.ErrRecordNotFound {
+			tag = models.Tag{Name: t}
+			if err := db.Create(&tag).Error; err != nil {
+				return nil, fmt.Errorf("failed creating tag '%s': %w", t, err)
+			}
+		} else if res.Error != nil {
+			return nil, fmt.Errorf("failed checking tag '%s': %w", t, res.Error)
+		}
+		tagIDs = append(tagIDs, int64(tag.ID))
+	}
 	project := &models.Project{
 		Title:       req.Title,
 		Description: req.Description,
 		Content:     req.Content,
-		TagIDs:      pq.Int64Array(req.TagIDs),
+		TagIDs:      pq.Int64Array(tagIDs),
 		ImageURL:    req.ImageURL,
 		URL:         req.URL,
 	}
@@ -102,8 +123,26 @@ func (s *ProjectsService) UpdateProject(id uuid.UUID, req ProjectUpdateRequest) 
 	if req.Content != nil {
 		project.Content = *req.Content
 	}
-	if req.TagIDs != nil {
-		project.TagIDs = pq.Int64Array(*req.TagIDs)
+	if req.Tags != nil {
+		var tagIDs []int64
+		for _, name := range *req.Tags {
+			t := strings.ToLower(strings.TrimSpace(name))
+			if t == "" {
+				continue
+			}
+			var tag models.Tag
+			res := db.Where("LOWER(name) = ?", t).First(&tag)
+			if res.Error == gorm.ErrRecordNotFound {
+				tag = models.Tag{Name: t}
+				if err := db.Create(&tag).Error; err != nil {
+					return nil, fmt.Errorf("failed creating tag '%s': %w", t, err)
+				}
+			} else if res.Error != nil {
+				return nil, fmt.Errorf("failed checking tag '%s': %w", t, res.Error)
+			}
+			tagIDs = append(tagIDs, int64(tag.ID))
+		}
+		project.TagIDs = pq.Int64Array(tagIDs)
 	}
 	if req.ImageURL != nil {
 		project.ImageURL = *req.ImageURL
@@ -120,4 +159,28 @@ func (s *ProjectsService) UpdateProject(id uuid.UUID, req ProjectUpdateRequest) 
 func (s *ProjectsService) DeleteProject(id uuid.UUID) error {
 	db := s.db.GetDB()
 	return db.Delete(&models.Project{}, "id = ?", id).Error
+}
+
+// ProjectDetail includes project with resolved tag names
+type ProjectDetail struct {
+	Project models.Project `json:"project"`
+	Tags    []string       `json:"tags"`
+}
+
+func (s *ProjectsService) GetProjectDetail(id uuid.UUID) (*ProjectDetail, error) {
+	db := s.db.GetDB()
+	var project models.Project
+	if err := db.First(&project, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	var names []string
+	if len(project.TagIDs) > 0 {
+		var tagModels []models.Tag
+		if err := db.Where("id IN ?", project.TagIDs).Find(&tagModels).Error; err == nil {
+			for _, t := range tagModels {
+				names = append(names, t.Name)
+			}
+		}
+	}
+	return &ProjectDetail{Project: project, Tags: names}, nil
 }
