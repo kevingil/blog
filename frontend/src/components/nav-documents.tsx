@@ -118,7 +118,7 @@ export function NavDocuments({
         <div className="flex flex-row justify-between gap-2">
         <SidebarGroupLabel>Recent Articles</SidebarGroupLabel>
         </div>
-        <SidebarMenu className="h-[calc(100vh-400px)] overflow-y-auto">
+        <SidebarMenu className="h-[calc(100vh-450px)] overflow-y-auto">
           {articles
             .slice()
             .sort((a, b) => {
