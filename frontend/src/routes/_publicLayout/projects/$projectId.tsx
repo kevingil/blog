@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getProject } from '@/services/projects';
 import { format } from 'date-fns';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
@@ -49,25 +50,26 @@ function ProjectPage() {
         )}
 
         {!isLoading && detail && (
-          <Card className="overflow-hidden">
+          <Card className="group relative overflow-hidden shadow-sm border hover:shadow-md transition-shadow">
             <div className="relative">
               {detail.project.image_url && (
-                <img
-                  src={detail.project.image_url}
-                  alt={detail.project.title}
-                  className="w-full object-cover aspect-video"
-                />
+                <div className="relative">
+                  <img
+                    src={detail.project.image_url}
+                    alt={detail.project.title}
+                    className="w-full object-cover aspect-video transition-transform duration-300 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+                </div>
               )}
             </div>
             <CardContent className="p-6">
-              <h1 className="text-3xl font-bold mb-3">{detail.project.title}</h1>
+              <h1 className="text-3xl font-bold mb-3 group-hover:text-primary transition-colors">{detail.project.title}</h1>
               <p className="text-sm text-muted-foreground mb-6">
                 {(() => {
                   const date = detail.project.created_at ? new Date(detail.project.created_at) : null;
                   if (!date || isNaN(date.getTime())) return 'Unknown date';
-                  const year = date.getFullYear();
-                  if (year > 2100) return 'Unknown date';
-                  return format(date, 'MMMM d, yyyy');
+                  return format(date, 'MMM d, yyyy');
                 })()}
               </p>
               <p className="text-muted-foreground leading-relaxed mb-6">
@@ -77,9 +79,9 @@ function ProjectPage() {
               {detail.tags && detail.tags.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-6">
                   {detail.tags.map((t) => (
-                    <span key={t} className="px-2 py-1 text-xs rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50">
+                    <Badge key={t} variant="secondary" className="text-primary">
                       {t.toUpperCase()}
-                    </span>
+                    </Badge>
                   ))}
                 </div>
               )}

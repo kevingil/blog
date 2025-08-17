@@ -257,48 +257,63 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
       ) : (
         <div className={`grid grid-cols-1 gap-4 w-full`}>
           {articles.map((article: ArticleListItem, index) => (
-            <Card key={article.article.id} animationDelay={index * 100}>
+            <Card
+              key={article.article.id}
+              animationDelay={index * 100}
+              className="group relative overflow-hidden hover:shadow-2xl transition-all duration-500 hover:border-primary/50"
+            >
               <CardContent className="p-0">
-                <Link to="/blog/$blogSlug" params={{ blogSlug: article.article.slug as string }} search={{ page: undefined, tag: undefined, search: undefined }}
-                  className='w-full h-full flex flex-row justify-between'>
-                  <div className='p-4 w-full'>
-                    <h2 className="text-xl font-semibold mb-2">{article.article?.title}</h2>
-                    <div className="flex items-center mb-4">
-                      <span className="text-sm text-muted-foreground">{article.author?.name}</span>
+                <Link
+                  to="/blog/$blogSlug"
+                  params={{ blogSlug: article.article.slug as string }}
+                  search={{ page: undefined, tag: undefined, search: undefined }}
+                  className="flex items-stretch gap-4"
+                >
+                  {/* Text */}
+                  <div className="flex-1 p-4 sm:p-5">
+                    <h2 className="text-lg sm:text-xl font-semibold mb-1 line-clamp-2 group-hover:text-primary transition-colors">
+                      {article.article?.title}
+                    </h2>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs sm:text-sm text-muted-foreground">{article.author?.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {(() => {
+                          const date = article.article.published_at ? new Date(article.article.published_at) : null;
+                          return date && !isNaN(date.getTime()) ? format(date, 'MMM d, yyyy') : 'Unknown';
+                        })()}
+                      </span>
                     </div>
-                    <div className="flex items-center mb-4 gap-2">
-                      <p className="text-sm text-muted-foreground mb-4">
-                        {markdownToPlainText(article.article.content?.substring(0, 160) || '' )}
-                      </p>
-                      <div className='items-start flex sm:hidden w-full min-w-[40%]'>
-                        {article.article.image_url !== null && article.article.image_url !== '' ? (
-                          <img src={article.article.image_url} alt={article.article.title ? article.article.title : ''}
-                            className="rounded-lg object-cover aspect-square h-full w-full bg-gray-300/10 dark:bg-gray-100/10" />
-                        ) : (
-                          <ImageIcon className='h-2/3 w-full text-zinc-200 dark:text-zinc-600' />
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      {(() => {
-                        const date = article.article.published_at ? new Date(article.article.published_at) : null;
-                        return date && !isNaN(date.getTime()) ? format(date, 'MMMM d, yyyy') : 'Unknown';
-                      })()}
+                    <p className="text-sm text-muted-foreground line-clamp-2">
+                      {markdownToPlainText(article.article.content?.substring(0, 200) || '')}
                     </p>
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {article.tags?.map((tag) => (
-                        tag.name ? (
-                          <Badge key={tag.tag_id} variant="secondary" className="text-primary">{tag.name.toUpperCase()}</Badge>
-                        ) : null
-                      ))}
-                    </div>
+                    {article.tags && article.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {article.tags.slice(0, 3).map((tag) => (
+                          tag.name ? (
+                            <Badge key={tag.tag_id} variant="secondary" className="text-primary">
+                              {tag.name.toUpperCase()}
+                            </Badge>
+                          ) : null
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className='max-w-[30%] p-4 items-center hidden sm:flex aspect-square'>
-                    {article.article.image_url !== null && article.article.image_url !== '' ? (
-                      <img src={article.article.image_url} alt={article.article.title ? article.article.title : ''}
-                        className="rounded-lg object-cover h-full w-full bg-gray-300/10 dark:bg-gray-100/10" />
+
+                  {/* Image */}
+                  <div className="relative w-36 sm:w-48 md:w-56 flex-shrink-0 overflow-hidden rounded-md my-4 mr-4">
+                    {article.article.image_url ? (
+                      <>
+                        <img
+                          src={article.article.image_url}
+                          alt={article.article.title ? article.article.title : ''}
+                          className="w-full h-full object-cover aspect-video transition-transform duration-300 group-hover:scale-110"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+                      </>
                     ) : (
-                      <ImageIcon className='h-2/3 w-full text-zinc-200 dark:text-zinc-600' />
+                      <div className="w-full h-full aspect-video bg-muted flex items-center justify-center">
+                        <ImageIcon className="w-10 h-10 text-muted-foreground" />
+                      </div>
                     )}
                   </div>
                 </Link>

@@ -88,7 +88,7 @@ function ProjectsPage() {
                 <Card
                   key={project.id}
                   animationDelay={index * 100}
-                  className="group relative overflow-hidden hover:shadow-2xl transition-all duration-500 hover:border-primary/50 transform hover:-translate-y-2"
+                  className="group relative overflow-hidden hover:shadow-2xl transition-all duration-500 hover:border-primary/50 pt-0"
                 >
                   <Link 
                     to="/projects/$projectId" 
@@ -101,7 +101,7 @@ function ProjectsPage() {
                         <img 
                           src={project.image_url} 
                           alt={project.title} 
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110" 
                         />
                       ) : (
                         <div className="w-full h-full bg-muted flex items-center justify-center">
@@ -119,16 +119,16 @@ function ProjectsPage() {
                     </div>
 
                     {/* Content */}
-                    <CardContent>
-                      <h3 className="text-xl font-semibold mb-3 group-hover:text-primary transition-colors">
+                    <CardContent className="mt-4">
+                      <h3 className="text-lg sm:text-xl font-semibold mb-2 group-hover:text-primary transition-colors">
                         {project.title}
                       </h3>
-                      <p className="text-muted-foreground leading-relaxed line-clamp-3">
+                      <p className="text-muted-foreground leading-relaxed line-clamp-2">
                         {project.description}
                       </p>
                       
                       {/* Hover arrow */}
-                      <div className="flex items-center gap-2 mt-4 text-primary font-medium opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
+                      <div className="flex items-center gap-2 mt-4 text-primary font-medium opacity-0 group-hover:opacity-100 transition-all duration-300">
                         <span className="text-sm">View Project</span>
                         <ExternalLink className="w-4 h-4" />
                       </div>
