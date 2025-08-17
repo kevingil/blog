@@ -5,19 +5,22 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Underline, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo } from "lucide-react"
+import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
-import { IconLoader, IconLoader2 } from '@tabler/icons-react';
+import { IconLoader2 } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import CodeBlock from '@tiptap/extension-code-block';
+import { Extension } from '@tiptap/core';
+import { Plugin, PluginKey } from 'prosemirror-state';
+import { Decoration, DecorationSet } from 'prosemirror-view';
 import MarkdownIt from 'markdown-it';
 import { diffWords } from 'diff';
 import type { Editor as TiptapEditor } from '@tiptap/core';
 import { VITE_API_BASE_URL } from "@/services/constants";
 import '@/tiptap.css';
- 
+
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -64,12 +67,10 @@ function getToolDisplayName(toolName: string): string {
     'research': 'Researching'
   };
   
-  // If we have a specific mapping, use it
   if (toolDisplayMap[toolName]) {
     return toolDisplayMap[toolName];
   }
   
-  // Try to create a user-friendly name from the tool name
   const friendlyName = toolName
     .replace(/_/g, ' ')
     .replace(/([A-Z])/g, ' $1')
@@ -77,7 +78,6 @@ function getToolDisplayName(toolName: string): string {
     .replace(/^./, str => str.toUpperCase())
     .trim();
   
-  // Add appropriate prefix based on the tool type
   if (toolName.toLowerCase().includes('search')) {
     return `Searching for ${friendlyName.toLowerCase()}`;
   } else if (toolName.toLowerCase().includes('generate')) {
@@ -109,141 +109,134 @@ const articleSchema = z.object({
 
 type ArticleFormData = z.infer<typeof articleSchema>;
 
-// Minimal shape for the conversational side panel. Mirrors what our backend
-// expects/returns.
 type ChatMessage = {
   role: 'user' | 'assistant' | 'tool';
   content: string;
 };
 
-// === Helper utilities for Markdown ↔️ HTML and diff markup ===================
-function fromMarkdown(text: string) {
-  const md = new MarkdownIt({ typographer: true, html: true });
-  return md.render(text);
-}
-
-function diffPartialText(
-  oldText: string,
-  newText: string,
-  isComplete: boolean = false,
-): string {
-  let oldTextToCompare = oldText;
-  if (oldText.length > newText.length && !isComplete) {
-    oldTextToCompare = oldText.slice(0, newText.length);
-  }
-
-  const changes = diffWords(oldTextToCompare, newText);
-
-  let result = '';
-  changes.forEach((part: any) => {
-    if (part.added) {
-      result += `<em>${part.value}</em>`;
-    } else if (part.removed) {
-      result += `<s>${part.value}</s>`;
-    } else {
-      result += part.value;
-    }
-  });
-
-  if (oldText.length > newText.length && !isComplete) {
-    result += oldText.slice(newText.length);
-  }
-
-  return result;
-}
-
-// DiffViewer component to show patch changes with accept/reject functionality
-function DiffViewer({ patch, onAccept, onReject }: { 
-  patch: any; 
-  onAccept: () => void; 
-  onReject: () => void; 
-}) {
-  const renderDiffContent = () => {
-    if (!patch?.diffs) return null;
-
-    return (
-      <div className="max-h-96 overflow-y-auto border rounded-md p-4 bg-gray-50 dark:bg-gray-900 font-mono text-sm">
-        {patch.diffs.map((diff: any, index: number) => {
-          const { Type, Text } = diff;
-          let className = '';
-          let prefix = '';
-          
-          if (Type === 1) { // Insert
-            className = 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200';
-            prefix = '+ ';
-          } else if (Type === -1) { // Delete
-            className = 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200';
-            prefix = '- ';
-          } else { // Equal
-            className = 'text-gray-600 dark:text-gray-400';
-            prefix = '  ';
+// === TipTap Diff Extension ================================================
+const DIFF_PLUGIN_KEY = new PluginKey('diff-highlighter');
+const DiffHighlighter = Extension.create({
+  name: 'diffHighlighter',
+  addStorage() {
+    return {
+      active: false as boolean,
+      parts: [] as Array<{ added?: boolean; removed?: boolean; value: string }>,
+    };
+  },
+  addCommands() {
+    return {
+      showDiff:
+        (oldText: string, newText: string) => ({ tr, dispatch }: { tr: unknown; dispatch: (tr: unknown) => void }) => {
+          try {
+            const parts = diffWords(oldText, newText);
+            // @ts-ignore
+            this.storage.active = true;
+            // @ts-ignore
+            this.storage.parts = parts;
+            // @ts-ignore - set meta to force plugin to recompute decorations
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (tr as any).setMeta(DIFF_PLUGIN_KEY, { updatedAt: Date.now(), active: true });
+            if (dispatch) dispatch(tr);
+            return true;
+          } catch (e) {
+            console.error('Failed to compute diff:', e);
+            return false;
           }
+        },
+      clearDiff:
+        () => ({ tr, dispatch }: { tr: unknown; dispatch: (tr: unknown) => void }) => {
+          // @ts-ignore
+          this.storage.active = false;
+          // @ts-ignore
+          this.storage.parts = [];
+          // @ts-ignore
+          (tr as any).setMeta(DIFF_PLUGIN_KEY, { updatedAt: Date.now(), active: false });
+          if (dispatch) dispatch(tr);
+          return true;
+        },
+    } as any;
+  },
+  addProseMirrorPlugins() {
+    const ext = this;
+    return [
+      new Plugin({
+        key: DIFF_PLUGIN_KEY,
+        state: {
+          init: () => DecorationSet.empty,
+          apply(tr, _value) {
+            // @ts-ignore
+            if (!ext.storage.active || !(ext.storage.parts && ext.storage.parts.length)) {
+              return DecorationSet.empty;
+            }
+            const doc = tr.doc;
+            const decorations: Decoration[] = [];
+            const textNodes: Array<{ from: number; to: number; text: string }> = [];
+            doc.descendants((node, pos) => {
+              if (node.isText) {
+                textNodes.push({ from: pos, to: pos + node.nodeSize, text: node.text || '' });
+              }
+              return true;
+            });
 
-          return (
-            <div key={index} className={`whitespace-pre-wrap ${className}`}>
-              {prefix}{Text}
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
+            const offsetToPos = (offset: number): number => {
+              let acc = 0;
+              for (const n of textNodes) {
+                const len = n.text.length;
+                if (offset <= acc + len) {
+                  const within = offset - acc;
+                  return n.from + within;
+                }
+                acc += len;
+              }
+              return doc.content.size - 1;
+            };
 
-  const summary = patch?.summary || {};
-  
-  return (
-    <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-10">
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-200 space-y-4 max-w-4xl w-full mx-4 max-h-[80vh] overflow-hidden">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold">Review AI Changes</h2>
-          <div className="text-sm text-gray-500 space-x-4">
-            {summary.additions > 0 && (
-              <span className="text-green-600">+{summary.additions}</span>
-            )}
-            {summary.deletions > 0 && (
-              <span className="text-red-600">-{summary.deletions}</span>
-            )}
-          </div>
-        </div>
-        
-        {patch.reason && (
-          <p className="text-sm text-gray-600 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
-            <strong>Reason:</strong> {patch.reason}
-          </p>
-        )}
-        
-        <div className="space-y-2">
-          <h3 className="font-medium text-sm">Changes:</h3>
-          {renderDiffContent()}
-        </div>
-        
-        <div className="flex justify-end space-x-4">
-          <Button variant="outline" onClick={onReject}>
-            Reject Changes
-          </Button>
-          <Button onClick={onAccept}>
-            Accept Changes
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
+            let newIdx = 0;
+            // @ts-ignore
+            for (const part of ext.storage.parts) {
+              if (part.added) {
+                const fromOff = newIdx;
+                const toOff = newIdx + part.value.length;
+                const from = offsetToPos(fromOff);
+                const to = offsetToPos(toOff);
+                if (from < to) {
+                  decorations.push(Decoration.inline(from, to, { class: 'diff-insert' }));
+                }
+                newIdx += part.value.length;
+              } else if (part.removed) {
+                const at = offsetToPos(newIdx);
+                const value = part.value;
+                decorations.push(
+                  Decoration.widget(
+                    at,
+                    () => {
+                      const span = document.createElement('span');
+                      span.className = 'diff-delete';
+                      span.textContent = value;
+                      return span;
+                    },
+                    { side: -1 }
+                  )
+                );
+              } else {
+                newIdx += part.value.length;
+              }
+            }
 
-// Simple overlay component to confirm/reject AI changes (legacy)
-function ConfirmChanges({ onReject, onConfirm }: { onReject: () => void; onConfirm: () => void; }) {
-  return (
-    <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-10">
-      <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg border border-gray-200 space-y-4">
-        <h2 className="text-lg font-bold">Accept AI changes?</h2>
-        <div className="flex justify-end space-x-4">
-          <Button variant="outline" onClick={onReject}>Reject</Button>
-          <Button onClick={onConfirm}>Confirm</Button>
-        </div>
-      </div>
-    </div>
-  );
-}
+            const deco = DecorationSet.create(doc, decorations);
+            return deco.map(tr.mapping, tr.doc);
+          },
+        },
+        props: {
+          decorations(state) {
+            return (this as any).getState(state);
+          },
+        },
+      }),
+    ];
+  },
+});
 
 // Formatting toolbar component
 function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
@@ -463,19 +456,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const chatMessagesRef = useRef<HTMLDivElement>(null);
   
-  // Document editing state
-  const [pendingEdit, setPendingEdit] = useState<{
-    newContent: string;
-    summary: string;
-  } | null>(null);
-  
-  // Patch review state
-  const [pendingPatch, setPendingPatch] = useState<{
-    patch: any;
-    originalText: string;
-    newText: string;
-    reason: string;
-  } | null>(null);
+  // (deprecated) pending edit/patch state removed in favor of inline diffs
   
   // Track processed tool messages to avoid re-applying old patches
   const [processedToolMessages, setProcessedToolMessages] = useState<Set<string>>(new Set());
@@ -516,6 +497,57 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [diffing, setDiffing] = useState(false);
   const [originalDocument, setOriginalDocument] = useState<string>('');
   const [pendingNewDocument, setPendingNewDocument] = useState<string>('');
+  
+  // Inline diff lifecycle helpers
+  const enterDiffPreview = (oldHtml: string, newHtml: string) => {
+    if (!editor) return;
+    // Compute plain text for old/new documents using temporary DOM containers
+    const getPlainText = (html: string) => {
+      const container = document.createElement('div');
+      container.innerHTML = html;
+      return container.textContent || container.innerText || '';
+    };
+    const oldText = getPlainText(oldHtml);
+    const newText = getPlainText(newHtml);
+    editor.commands.setContent(newHtml);
+    setOriginalDocument(oldHtml);
+    setPendingNewDocument(newHtml);
+    setDiffing(true);
+    // @ts-ignore custom command provided by DiffHighlighter
+    if ((editor as any).commands?.showDiff) {
+      // @ts-ignore
+      (editor as any).commands.showDiff(oldText, newText);
+    }
+    // Force a tiny transaction to ensure decorations render even if doc didn't change further
+    editor.chain().focus().setTextSelection({ from: 1, to: 1 }).run();
+  };
+
+  const clearDiffDecorations = () => {
+    if (!editor) return;
+    // @ts-ignore
+    if ((editor as any).commands?.clearDiff) {
+      // @ts-ignore
+      (editor as any).commands.clearDiff();
+    }
+  };
+
+  const acceptDiff = () => {
+    if (!editor) return;
+    editor.commands.setContent(pendingNewDocument || editor.getHTML());
+    setValue('content', editor.getHTML());
+    clearDiffDecorations();
+    setDiffing(false);
+    setPendingNewDocument('');
+  };
+
+  const rejectDiff = () => {
+    if (!editor) return;
+    editor.commands.setContent(originalDocument || editor.getHTML());
+    setValue('content', originalDocument || editor.getHTML());
+    clearDiffDecorations();
+    setDiffing(false);
+    setPendingNewDocument('');
+  };
 
   const editor = useEditor({
     extensions: [
@@ -525,6 +557,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           class: 'bg-gray-100 dark:bg-gray-800 p-4 rounded-md border',
         },
       }),
+      DiffHighlighter,
     ],
     content: watchedValues.content || '', // Content is already HTML
     editorProps: {
@@ -619,7 +652,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
     try {
       if (isNew) {
-        const newArticle = await createArticle({
+        await createArticle({
           title: data.title,
           content: data.content,
           image_url: data.image_url,
@@ -682,12 +715,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       
       if (result.success) {
         const newHtml = result.content;
-        // For now, show the new content directly - you can implement HTML diffing later if needed
-        setOriginalDocument(oldHtml);
-        setPendingNewDocument(newHtml);
-        setDiffing(true);
-        // Show new content directly
-        editor.commands.setContent(newHtml);
+        enterDiffPreview(oldHtml, newHtml);
+        setChatMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: '📋 Proposed full-document changes' },
+          { role: 'assistant', content: '__DIFF_ACTIONS__' },
+        ]);
       }
     } catch (error) {
       console.error('Error rewriting article:', error);
@@ -703,42 +736,28 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     
     console.log('Applying text edit:', { originalText, newText, reason });
     
-    // Get the current editor content as text
+    const oldHtml = editor.getHTML();
     const currentText = editor.getText();
-    
-    // Find the original text in the document
     const index = currentText.indexOf(originalText);
     if (index === -1) {
       console.warn('Original text not found in document:', originalText);
       toast({
-        title: "Edit Warning",
-        description: "Could not locate the text to edit. The document may have changed.",
-        variant: "destructive"
+        title: 'Edit Warning',
+        description: 'Could not locate the text to edit. The document may have changed.',
+        variant: 'destructive'
       });
       return;
     }
-    
-    // Calculate the position for replacement
     const from = index;
     const to = index + originalText.length;
-    
-    // Replace the text in the editor
-    editor.chain()
-      .focus()
-      .setTextSelection({ from, to })
-      .insertContent(newText)
-      .run();
-    
-    // Update the form value
-    setValue('content', editor.getHTML());
-    
-    // Show success feedback
-    toast({
-      title: "Text Updated",
-      description: reason || "Text has been edited successfully",
-    });
-    
-    console.log('Text edit applied successfully');
+    editor.chain().focus().setTextSelection({ from, to }).insertContent(newText).run();
+    const newHtml = editor.getHTML();
+    enterDiffPreview(oldHtml, newHtml);
+    setChatMessages((prev) => [
+      ...prev,
+      { role: 'assistant', content: `📋 Proposed changes: ${reason}` },
+      { role: 'assistant', content: '__DIFF_ACTIONS__' },
+    ]);
   };
 
   // Apply patch from AI assistant (new implementation)
@@ -747,43 +766,28 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     
     console.log('Applying patch:', { patch, originalText, newText, reason });
     
-    // For now, use the same logic as applyTextEdit
-    // In the future, we could implement proper patch application using the unified diff
+    const oldHtml = editor.getHTML();
     const currentText = editor.getText();
-    
-    // Find the text to replace in the current content
     const index = currentText.indexOf(originalText);
     if (index === -1) {
       console.warn('Original text not found in document for patch:', originalText);
       toast({
-        title: "Patch Failed",
-        description: "Could not locate the text to edit. The document may have changed.",
-        variant: "destructive"
+        title: 'Patch Failed',
+        description: 'Could not locate the text to edit. The document may have changed.',
+        variant: 'destructive'
       });
       return;
     }
-    
-    // Calculate the position for replacement
     const from = index;
     const to = index + originalText.length;
-    
-    // Replace the text in the editor
-    editor.chain()
-      .focus()
-      .setTextSelection({ from, to })
-      .insertContent(newText)
-      .run();
-    
-    // Update the form value
-    setValue('content', editor.getHTML());
-    
-    // Show success feedback
-    toast({
-      title: "Patch Applied",
-      description: reason || "Changes have been applied successfully",
-    });
-    
-    console.log('Patch applied successfully');
+    editor.chain().focus().setTextSelection({ from, to }).insertContent(newText).run();
+    const newHtml = editor.getHTML();
+    enterDiffPreview(oldHtml, newHtml);
+    setChatMessages((prev) => [
+      ...prev,
+      { role: 'assistant', content: `📋 Proposed changes: ${reason}` },
+      { role: 'assistant', content: '__DIFF_ACTIONS__' },
+    ]);
   };
 
   const sendChatWithMessage = async (message: string) => {
@@ -816,7 +820,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     const apiMessages = [...userMessages, { role: 'user', content: text } as ChatMessage];
 
     // Rest of the chat logic...
-    await performChatRequest(apiMessages, assistantIndex, isEditRequest, text, currentContent);
+    await performChatRequest(apiMessages, assistantIndex, isEditRequest, currentContent);
   };
 
   const sendChat = async () => {
@@ -834,7 +838,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     await sendChatWithMessage(text);
   };
 
-  const performChatRequest = async (apiMessages: ChatMessage[], assistantIndex: number, isEditRequest: boolean, originalText: string, documentContent: string) => {
+  const performChatRequest = async (apiMessages: ChatMessage[], assistantIndex: number, isEditRequest: boolean, documentContent: string) => {
     setChatLoading(true);
     try {
       const apiUrl = `${VITE_API_BASE_URL}/agent`;
@@ -876,7 +880,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       }
 
       // Connect to WebSocket and stream the response
-      await streamChatResponse(result.requestId, assistantIndex, isEditRequest, originalText);
+      await streamChatResponse(result.requestId, assistantIndex, isEditRequest);
 
     } catch (err) {
       console.error('Chat error:', err);
@@ -899,7 +903,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   };
 
-  const streamChatResponse = async (requestId: string, assistantIndex: number, isEditRequest: boolean, originalText: string) => {
+  const streamChatResponse = async (requestId: string, assistantIndex: number, isEditRequest: boolean) => {
     return new Promise<void>((resolve, reject) => {
       const wsUrl = `${VITE_API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://')}/websocket`;
       console.log('Connecting to WebSocket:', wsUrl);
@@ -1003,30 +1007,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       const toolResult = JSON.parse(msg.tool_result.content);
                       
                       if (toolResult.tool_name === 'edit_text' && isNewMessage) {
-                        // Check if this is a patch-based edit or traditional edit
+                        // Use inline diff preview and chat actions
                         if (toolResult.edit_type === 'patch' && toolResult.patch) {
-                          // Show patch for review instead of applying directly
-                          setPendingPatch({
-                            patch: toolResult.patch,
-                            originalText: toolResult.original_text,
-                            newText: toolResult.new_text,
-                            reason: toolResult.reason
-                          });
-                          
-                          // Add patch review message as separate message
-                          setChatMessages((prev) => [
-                            ...prev,
-                            { role: 'assistant', content: `📋 Text edit ready for review: ${toolResult.reason}` }
-                          ]);
+                          applyPatch(toolResult.patch, toolResult.original_text, toolResult.new_text, toolResult.reason);
                         } else {
-                          // Legacy direct application (fallback)
                           applyTextEdit(toolResult.original_text, toolResult.new_text, toolResult.reason);
-                          
-                          // Add completion message as separate message
-                          setChatMessages((prev) => [
-                            ...prev,
-                            { role: 'assistant', content: `✅ Text edited: ${toolResult.reason}` }
-                          ]);
                         }
                         
                         // Mark this tool message as processed
@@ -1065,10 +1050,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   if (codeBlockMatch) {
                     const suggestedContent = codeBlockMatch[1].trim();
                     if (suggestedContent.length > 50) {
-                      setPendingEdit({
-                        newContent: suggestedContent,
-                        summary: `Suggested changes from: "${originalText}"`
-                      });
+                      const oldHtml = editor?.getHTML() || '';
+                      const newHtml = mdParser.render(suggestedContent);
+                      enterDiffPreview(oldHtml, newHtml);
+                      setChatMessages((prev) => [
+                        ...prev,
+                        { role: 'assistant', content: '📋 Proposed full-document changes' },
+                        { role: 'assistant', content: '__DIFF_ACTIONS__' },
+                      ]);
                     }
                   }
                 }
@@ -1105,30 +1094,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               
               // Handle edit_text tool specifically - only for new messages
               if (toolResult.tool_name === 'edit_text' && isNewMessage) {
-                // Check if this is a patch-based edit or traditional edit
                 if (toolResult.edit_type === 'patch' && toolResult.patch) {
-                  // Show patch for review instead of applying directly
-                  setPendingPatch({
-                    patch: toolResult.patch,
-                    originalText: toolResult.original_text,
-                    newText: toolResult.new_text,
-                    reason: toolResult.reason
-                  });
-                  
-                  // Add patch review message as separate message
-                  setChatMessages((prev) => [
-                    ...prev,
-                    { role: 'assistant', content: `📋 Text edit ready for review: ${toolResult.reason}` }
-                  ]);
+                  applyPatch(toolResult.patch, toolResult.original_text, toolResult.new_text, toolResult.reason);
                 } else {
-                  // Legacy direct application (fallback)
                   applyTextEdit(toolResult.original_text, toolResult.new_text, toolResult.reason);
-                  
-                  // Add completion message as separate message
-                  setChatMessages((prev) => [
-                    ...prev,
-                    { role: 'assistant', content: `✅ Text edited: ${toolResult.reason}` }
-                  ]);
                 }
                 
                 // Mark this tool message as processed
@@ -1182,10 +1151,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               if (codeBlockMatch) {
                 const suggestedContent = codeBlockMatch[1].trim();
                 if (suggestedContent.length > 50) {
-                  setPendingEdit({
-                    newContent: suggestedContent,
-                    summary: `Suggested changes from: "${originalText}"`
-                  });
+                  const oldHtml = editor?.getHTML() || '';
+                  const newHtml = mdParser.render(suggestedContent);
+                  enterDiffPreview(oldHtml, newHtml);
+                  setChatMessages((prev) => [
+                    ...prev,
+                    { role: 'assistant', content: '📋 Proposed full-document changes' },
+                    { role: 'assistant', content: '__DIFF_ACTIONS__' },
+                  ]);
                 }
               }
             }
@@ -1430,7 +1403,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       <Calendar
                         mode="single"
                         selected={article?.article.published_at ? new Date(article.article.published_at) : undefined}
-                        onSelect={(date: Date | undefined) => {
+                        onSelect={() => {
                           /* Not a form field; selection handled elsewhere if needed */
                         }}
                         initialFocus
@@ -1481,85 +1454,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 <FormattingToolbar editor={editor} />
                 <EditorContent
                   editor={editor}
-                  className="w-full border-none rounded-b-md h-[calc(100vh-610px)] overflow-y-auto focus:outline-none"
+                  className="tiptap w-full border-none rounded-b-md h-[calc(100vh-610px)] overflow-y-auto focus:outline-none"
                 />
                 {/* Hidden input to keep react-hook-form registration for content */}
                 <input type="hidden" {...register('content')} value={watchedValues.content} />
                 {errors.content && <p className="text-red-500">{errors.content.message}</p>}
-                {diffing && (
-                  <ConfirmChanges
-                    onReject={() => {
-                      if (editor) {
-                        editor.commands.setContent(originalDocument);
-                      }
-                      setValue('content', originalDocument);
-                      setDiffing(false);
-                      setPendingNewDocument('');
-                    }}
-                    onConfirm={() => {
-                      if (editor) {
-                        editor.commands.setContent(pendingNewDocument);
-                      }
-                      setValue('content', pendingNewDocument);
-                      setDiffing(false);
-                      setPendingNewDocument('');
-                    }}
-                  />
-                )}
-                {pendingEdit && !diffing && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-10">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg border border-gray-200 space-y-4 max-w-md">
-                      <h2 className="text-lg font-bold">Apply AI Suggestions?</h2>
-                      <p className="text-sm text-gray-600 dark:text-gray-300">{pendingEdit.summary}</p>
-                      <div className="flex justify-end space-x-4">
-                        <Button variant="outline" onClick={() => setPendingEdit(null)}>
-                          Ignore
-                        </Button>
-                        <Button onClick={() => {
-                          const currentHtml = editor?.getHTML() || '';
-                          // For now, just replace content directly - you can implement HTML diffing later if needed
-                          setOriginalDocument(currentHtml);
-                          setPendingNewDocument(pendingEdit.newContent);
-                          setDiffing(true);
-                          if (editor) {
-                            // Assuming pendingEdit.newContent is markdown, convert it to HTML
-                            editor.commands.setContent(mdParser.render(pendingEdit.newContent));
-                          }
-                          setPendingEdit(null);
-                        }}>
-                          Preview Changes
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {pendingPatch && !diffing && (
-                  <DiffViewer
-                    patch={pendingPatch.patch}
-                    onAccept={() => {
-                      // Apply the patch
-                      applyPatch(
-                        pendingPatch.patch,
-                        pendingPatch.originalText,
-                        pendingPatch.newText,
-                        pendingPatch.reason
-                      );
-                      
-                      // Clear the pending patch
-                      setPendingPatch(null);
-                    }}
-                    onReject={() => {
-                      // Just clear the pending patch without applying
-                      setPendingPatch(null);
-                      
-                      // Show rejection message
-                      toast({
-                        title: "Changes Rejected",
-                        description: "The proposed changes have been discarded.",
-                      });
-                    }}
-                  />
-                )}
+                {/* Diff preview is inline; accept/decline in chat */}
               </div>
               <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Tags</label>
               <div className='mb-2'>
@@ -1584,6 +1484,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   type="submit"
                   onClick={() => {
                     setIsSaving(true);
+                    if (diffing) {
+                      // Discard diff changes
+                      rejectDiff();
+                    }
                     handleSubmit((data) => onSubmit(data, false))();
                   }}
                   disabled={isSaving}>
@@ -1592,6 +1496,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 }
               <Button type='submit' disabled={isLoading} onClick={() => {
                 setIsLoading(true);
+                if (diffing) {
+                  // Discard diff changes
+                  rejectDiff();
+                }
                 handleSubmit((data) => onSubmit(data, true))();
               }}>
                 {isLoading ? 'Updating...' : isNew ? 'Create Article' : 'Save & Return'}
@@ -1606,60 +1514,75 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       <div className="hidden xl:flex flex-col w-96 border rounded-md">
         <div ref={chatMessagesRef} className="flex-1 overflow-y-auto p-4 space-y-3">
           {chatMessages.map((m, i) => {
-            // Special rendering for tool messages
-            if (m.role === 'tool') {
-              try {
-                const toolResult = JSON.parse(m.content);
-                if (toolResult.tool_name === 'edit_text') {
+            switch (m.role) {
+              case 'tool': {
+                try {
+                  const toolResult = JSON.parse(m.content);
+                  const label = toolResult.tool_name === 'edit_text'
+                    ? `${toolResult.edit_type === 'patch' ? 'Patch generated' : 'Text edit proposed'}: ${toolResult.reason}`
+                    : 'Tool executed';
                   return (
                     <div key={i} className="w-full flex justify-center">
                       <div className="max-w-xs bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2 text-xs">
                         <div className="flex items-center gap-2">
                           <span className="text-blue-600 dark:text-blue-400">🔧</span>
-                          <span className="text-blue-700 dark:text-blue-300">
-                            {toolResult.edit_type === 'patch' ? 'Patch generated' : 'Text edit completed'}: {toolResult.reason}
-                          </span>
+                          <span className="text-blue-700 dark:text-blue-300 truncate">{label}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                } catch (_e) {
+                  return (
+                    <div key={i} className="w-full flex justify-center">
+                      <div className="max-w-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-600 dark:text-gray-400">⚙️</span>
+                          <span className="text-gray-700 dark:text-gray-300 truncate">Tool executed</span>
                         </div>
                       </div>
                     </div>
                   );
                 }
-              } catch (error) {
-                // Fallback for non-JSON tool messages
-                return (
-                  <div key={i} className="w-full flex justify-center">
-                    <div className="max-w-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-600 dark:text-gray-400">⚙️</span>
-                        <span className="text-gray-700 dark:text-gray-300 truncate">Tool executed</span>
+              }
+              case 'assistant': {
+                if (m.content === '__DIFF_ACTIONS__') {
+                  return (
+                    <div key={i} className="w-full flex justify-start">
+                      <div className="max-w-xs rounded-lg px-3 py-2 text-sm bg-gray-100 dark:bg-gray-800">
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={acceptDiff} disabled={!diffing}>Accept</Button>
+                          <Button size="sm" variant="outline" onClick={rejectDiff} disabled={!diffing}>Discard</Button>
+                        </div>
                       </div>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={i} className="w-full flex justify-start">
+                    <div className="max-w-xs whitespace-pre-wrap rounded-lg px-3 py-2 text-sm bg-gray-200 dark:bg-gray-700 dark:text-white">
+                      {m.content || (chatLoading ? (
+                        <div className="flex items-center gap-1">
+                          <div className="flex space-x-1">
+                            <IconLoader2 className="w-4 h-4 text-indigo-500 animate-spin" />
+                          </div>
+                          <span className="text-xs opacity-75">thinking...</span>
+                        </div>
+                      ) : m.content)}
+                    </div>
+                  </div>
+                );
+              }
+              case 'user':
+              default: {
+                return (
+                  <div key={i} className="w-full flex justify-end">
+                    <div className="max-w-xs whitespace-pre-wrap rounded-lg px-3 py-2 text-sm bg-indigo-500 text-white">
+                      {m.content}
                     </div>
                   </div>
                 );
               }
             }
-            
-            // Regular user/assistant message rendering
-            return (
-              <div key={i} className={`w-full flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div
-                  className={`max-w-xs whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
-                    m.role === 'user'
-                      ? 'bg-indigo-500 text-white'
-                      : 'bg-gray-200 dark:bg-gray-700 dark:text-white'
-                  }`}
-                >
-                  {m.content || (m.role === 'assistant' && chatLoading ? (
-                    <div className="flex items-center gap-1">
-                      <div className="flex space-x-1">
-                        <IconLoader2 className="w-4 h-4 text-indigo-500 animate-spin" />
-                      </div>
-                      <span className="text-xs opacity-75">thinking...</span>
-                    </div>
-                  ) : m.content)}
-                </div>
-              </div>
-            );
           })}
         </div>
         <div className="p-4 border-t space-y-2">
