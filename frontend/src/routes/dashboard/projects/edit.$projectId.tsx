@@ -22,6 +22,7 @@ const schema = z.object({
   tags: z.array(z.string()),
   image_url: z.string().url().optional().or(z.literal('')),
   url: z.string().url().optional().or(z.literal('')),
+  created_at: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -37,7 +38,7 @@ function EditProjectPage() {
 
   const { register, handleSubmit, formState: { errors, isSubmitting }, reset, setValue, watch } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { title: '', description: '', content: '', tags: [], image_url: '', url: '' },
+    defaultValues: { title: '', description: '', content: '', tags: [], image_url: '', url: '', created_at: '' },
   });
   const watchedTags = watch('tags');
 
@@ -52,6 +53,7 @@ function EditProjectPage() {
         tags: detail.tags || [],
         image_url: detail.project.image_url || '',
         url: detail.project.url || '',
+        created_at: detail.project.created_at ? detail.project.created_at.slice(0, 10) : '',
       });
     }
   }, [detail, reset]);
@@ -64,6 +66,7 @@ function EditProjectPage() {
       tags: data.tags,
       image_url: data.image_url || undefined,
       url: data.url || undefined,
+      created_at: data.created_at ? new Date(`${data.created_at}T00:00:00Z`).toISOString() : undefined,
     });
     navigate({ to: '/dashboard/projects' });
   };
@@ -102,6 +105,11 @@ function EditProjectPage() {
                 placeholder="Type and press Enter to add tags..."
               />
               {errors.tags && <p className="text-sm text-red-500">{errors.tags.message as string}</p>}
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Date</label>
+              <Input type="date" {...register('created_at')} />
+              {errors.created_at && <p className="text-sm text-red-500">{errors.created_at.message as string}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium">Image URL</label>

@@ -5,6 +5,7 @@ import (
 	"blog-agent-go/backend/internal/models"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -30,12 +31,13 @@ type ProjectCreateRequest struct {
 }
 
 type ProjectUpdateRequest struct {
-	Title       *string   `json:"title"`
-	Description *string   `json:"description"`
-	Content     *string   `json:"content"`
-	Tags        *[]string `json:"tags"`
-	ImageURL    *string   `json:"image_url"`
-	URL         *string   `json:"url"`
+	Title       *string    `json:"title"`
+	Description *string    `json:"description"`
+	Content     *string    `json:"content"`
+	Tags        *[]string  `json:"tags"`
+	ImageURL    *string    `json:"image_url"`
+	URL         *string    `json:"url"`
+	CreatedAt   *time.Time `json:"created_at"`
 }
 
 func (s *ProjectsService) ListProjects(page int, perPage int) ([]models.Project, int64, error) {
@@ -149,6 +151,9 @@ func (s *ProjectsService) UpdateProject(id uuid.UUID, req ProjectUpdateRequest) 
 	}
 	if req.URL != nil {
 		project.URL = *req.URL
+	}
+	if req.CreatedAt != nil {
+		project.CreatedAt = *req.CreatedAt
 	}
 	if err := db.Save(&project).Error; err != nil {
 		return nil, err

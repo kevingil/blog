@@ -61,6 +61,7 @@ export async function updateProject(id: string, payload: {
   tags?: string[];
   image_url?: string;
   url?: string;
+  created_at?: string;
 }): Promise<Project> {
   const res = await fetch(`${VITE_API_BASE_URL}/projects/${id}`, {
     method: 'PUT',

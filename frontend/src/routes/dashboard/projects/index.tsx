@@ -47,6 +47,7 @@ function ProjectsPage() {
                   <div>
                     <h2 className="font-semibold">{p.title}</h2>
                     <p className="text-sm text-muted-foreground line-clamp-2">{p.description}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{new Date(p.created_at).toLocaleDateString()}</p>
                     {p.url && (
                       <a href={p.url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
                         {p.url}
