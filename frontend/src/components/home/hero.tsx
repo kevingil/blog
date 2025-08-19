@@ -54,7 +54,7 @@ function AdvancedAnimatedText({
         // Set initial state with rotation and advanced transforms
         gsap.set(chars, {
           opacity: 0,
-          y: 100,
+          y: 20,
           rotationZ: () => gsap.utils.random(-45, 45), // Random initial rotation
           rotationX: -90,
           transformOrigin: "50% 50% -50px",
@@ -431,18 +431,18 @@ export const HeroSection = () => {
         id="hero" 
         className="container py-32 pb-48 mx-auto relative z-10"
       >
-        <div className="flex flex-col gap-4 px-4">
-          <h1 className="text-xl sm:text-2xl tracking-tight font-bold" role="banner">
+        <div className="flex flex-col gap-4 px-4 ml-6 sm:ml-12 md:ml-16 lg:ml-20 xl:ml-24">
+          <h1 className="text-2xl sm:text-2xl tracking-tight font-bold" role="banner">
             <AdvancedAnimatedText 
               text="Hi, I'm Kevin 👋" 
               animationType="reveal"
               delay={0.5}
             />
           </h1>
-          <p className="max-w-[600px] text-muted-foreground text-sm sm:text-md tracking-tight" role="doc-subtitle">
+          <p className="max-w-[600px] text-muted-foreground text-md sm:text-lg tracking-tight" role="doc-subtitle">
             <SequentialAnimatedText 
               text="Software Engineer based in San Francisco" 
-              delay={1.8}
+              delay={1}
             />
           </p>
           
