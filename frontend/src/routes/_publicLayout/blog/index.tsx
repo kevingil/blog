@@ -9,7 +9,7 @@ export const Route = createFileRoute('/_publicLayout/blog/')({
 export default function ArticlesPage() {
   return (
     <div className="container mx-auto">
-      <h1 className="text-3xl font-bold mb-8">Blog</h1>
+      <h1 className="text-3xl font-bold mb-8 mt-8">Blog</h1>
       <Suspense fallback={<ArticlesSkeleton />}>
         <ArticlesList
         pagination={true} />
