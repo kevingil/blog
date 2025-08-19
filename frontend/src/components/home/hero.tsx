@@ -331,7 +331,7 @@ function SequentialAnimatedText({
           value: text,
           delimiter: ""
         },
-        duration: text.length * 0.03, // Same speed as before
+        duration: text.length * 0.01, // Same speed as before
         ease: "none",
         onUpdate: () => {
           // Add natural typing variations
