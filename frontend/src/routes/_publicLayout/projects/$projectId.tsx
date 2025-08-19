@@ -51,13 +51,13 @@ function ProjectPage() {
 
         {!isLoading && detail && (
           <Card className="group relative overflow-hidden shadow-sm border hover:shadow-md transition-shadow">
-            <div className="relative">
+            <div className="relative p-2">
               {detail.project.image_url && (
                 <div className="relative">
                   <img
                     src={detail.project.image_url}
                     alt={detail.project.title}
-                    className="w-full object-cover aspect-video transition-transform duration-300 group-hover:scale-105"
+                    className="w-full object-contain aspect-video"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
                 </div>
