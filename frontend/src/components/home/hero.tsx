@@ -51,33 +51,56 @@ function AdvancedAnimatedText({
         element.innerHTML = ''
         chars.forEach(char => element.appendChild(char))
 
-        // Set initial state with advanced transforms
+        // Set initial state with rotation and advanced transforms
         gsap.set(chars, {
           opacity: 0,
           y: 100,
+          rotationZ: () => gsap.utils.random(-45, 45), // Random initial rotation
           rotationX: -90,
           transformOrigin: "50% 50% -50px",
           filter: "blur(10px)",
           scale: 0.3
         })
 
-        // Animate with sophisticated easing and stagger
+        // Single unified animation - bounce and wave that settles to baseline
         tl.to(chars, {
           opacity: 1,
-          y: 0,
+          y: 0, // Settle to baseline, no wave positions
+          rotationZ: 0, // Correct rotation
           rotationX: 0,
           filter: "blur(0px)",
-          scale: 1,
-          duration: 0.8,
-          ease: "back.out(1.7)",
+          scale: 1, // Final scale
+          duration: 1.2, // Longer duration to include bounce and wave motion
+          ease: "elastic.out(1, 0.5)", // Elastic ease creates bounce and wave in single animation
           stagger: {
-            amount: 0.6,
+            amount: 0.5,
             from: "start"
           }
         })
         .to(chars, {
           willChange: "auto"
         }, "-=0.2")
+
+        // Add interactive hover effects for each character (no rotation)
+        chars.forEach((char) => {
+          char.addEventListener('mouseenter', () => {
+            gsap.to(char, {
+              scale: 1.2,
+              y: -5,
+              duration: 0.3,
+              ease: "back.out(1.7)"
+            })
+          })
+          
+          char.addEventListener('mouseleave', () => {
+            gsap.to(char, {
+              scale: 1,
+              y: 0, // Return to baseline
+              duration: 0.3,
+              ease: "power2.out"
+            })
+          })
+        })
         break
 
       case "typewriter":
@@ -179,6 +202,12 @@ function AdvancedAnimatedText({
       tl.kill()
       if (element) {
         gsap.set(element, { clearProps: "all" })
+        // Clean up event listeners for reveal animation
+        const charElements = element.querySelectorAll('span')
+        charElements.forEach(char => {
+          const newChar = char.cloneNode(true)
+          char.parentNode?.replaceChild(newChar, char)
+        })
       }
     }
   }, [text, delay, animationType])
