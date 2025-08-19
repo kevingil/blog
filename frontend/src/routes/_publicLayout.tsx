@@ -1,13 +1,19 @@
 import { FooterSection } from "@/components/footer";
 import { Navbar } from "@/components/navbar";
-import Aurora from '@/components/home/aurora';
-import { Suspense } from 'react';
+// import Aurora from '@/components/home/aurora';
+import { Suspense, useEffect } from 'react';
 import { AuthProvider } from "@/services/auth/auth";
-import { createFileRoute, Outlet } from '@tanstack/react-router';
+import { createFileRoute, Outlet, useLocation } from '@tanstack/react-router';
 import './_publicLayout/projects/index'
 import { SpiralGalaxyAnimation } from "@/components/home/galaxy";
 
 function PublicLayout() {
+  const location = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+
   return (
     <div className="min-h-[100dvh] flex flex-col relative">
       <Suspense fallback={<div>Loading...</div>}>
