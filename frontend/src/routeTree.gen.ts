@@ -21,7 +21,6 @@ import { Route as DashboardSettingsImport } from './routes/dashboard/settings'
 import { Route as DashboardSecurityImport } from './routes/dashboard/security'
 import { Route as PublicLayoutSignupImport } from './routes/_publicLayout/signup'
 import { Route as PublicLayoutLoginImport } from './routes/_publicLayout/login'
-import { Route as PublicLayoutContactImport } from './routes/_publicLayout/contact'
 import { Route as PublicLayoutAboutImport } from './routes/_publicLayout/about'
 import { Route as DashboardProjectsIndexImport } from './routes/dashboard/projects/index'
 import { Route as DashboardBlogIndexImport } from './routes/dashboard/blog/index'
@@ -92,12 +91,6 @@ const PublicLayoutSignupRoute = PublicLayoutSignupImport.update({
 const PublicLayoutLoginRoute = PublicLayoutLoginImport.update({
   id: '/login',
   path: '/login',
-  getParentRoute: () => PublicLayoutRoute,
-} as any)
-
-const PublicLayoutContactRoute = PublicLayoutContactImport.update({
-  id: '/contact',
-  path: '/contact',
   getParentRoute: () => PublicLayoutRoute,
 } as any)
 
@@ -199,13 +192,6 @@ declare module '@tanstack/react-router' {
       path: '/about'
       fullPath: '/about'
       preLoaderRoute: typeof PublicLayoutAboutImport
-      parentRoute: typeof PublicLayoutImport
-    }
-    '/_publicLayout/contact': {
-      id: '/_publicLayout/contact'
-      path: '/contact'
-      fullPath: '/contact'
-      preLoaderRoute: typeof PublicLayoutContactImport
       parentRoute: typeof PublicLayoutImport
     }
     '/_publicLayout/login': {
@@ -334,7 +320,6 @@ declare module '@tanstack/react-router' {
 
 interface PublicLayoutRouteChildren {
   PublicLayoutAboutRoute: typeof PublicLayoutAboutRoute
-  PublicLayoutContactRoute: typeof PublicLayoutContactRoute
   PublicLayoutLoginRoute: typeof PublicLayoutLoginRoute
   PublicLayoutSignupRoute: typeof PublicLayoutSignupRoute
   PublicLayoutIndexRoute: typeof PublicLayoutIndexRoute
@@ -346,7 +331,6 @@ interface PublicLayoutRouteChildren {
 
 const PublicLayoutRouteChildren: PublicLayoutRouteChildren = {
   PublicLayoutAboutRoute: PublicLayoutAboutRoute,
-  PublicLayoutContactRoute: PublicLayoutContactRoute,
   PublicLayoutLoginRoute: PublicLayoutLoginRoute,
   PublicLayoutSignupRoute: PublicLayoutSignupRoute,
   PublicLayoutIndexRoute: PublicLayoutIndexRoute,
@@ -395,7 +379,6 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRouteWithChildren
   '/not-found': typeof NotFoundRoute
   '/about': typeof PublicLayoutAboutRoute
-  '/contact': typeof PublicLayoutContactRoute
   '/login': typeof PublicLayoutLoginRoute
   '/signup': typeof PublicLayoutSignupRoute
   '/dashboard/security': typeof DashboardSecurityRoute
@@ -418,7 +401,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/not-found': typeof NotFoundRoute
   '/about': typeof PublicLayoutAboutRoute
-  '/contact': typeof PublicLayoutContactRoute
   '/login': typeof PublicLayoutLoginRoute
   '/signup': typeof PublicLayoutSignupRoute
   '/dashboard/security': typeof DashboardSecurityRoute
@@ -444,7 +426,6 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRouteWithChildren
   '/not-found': typeof NotFoundRoute
   '/_publicLayout/about': typeof PublicLayoutAboutRoute
-  '/_publicLayout/contact': typeof PublicLayoutContactRoute
   '/_publicLayout/login': typeof PublicLayoutLoginRoute
   '/_publicLayout/signup': typeof PublicLayoutSignupRoute
   '/dashboard/security': typeof DashboardSecurityRoute
@@ -471,7 +452,6 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/not-found'
     | '/about'
-    | '/contact'
     | '/login'
     | '/signup'
     | '/dashboard/security'
@@ -493,7 +473,6 @@ export interface FileRouteTypes {
   to:
     | '/not-found'
     | '/about'
-    | '/contact'
     | '/login'
     | '/signup'
     | '/dashboard/security'
@@ -517,7 +496,6 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/not-found'
     | '/_publicLayout/about'
-    | '/_publicLayout/contact'
     | '/_publicLayout/login'
     | '/_publicLayout/signup'
     | '/dashboard/security'
@@ -569,7 +547,6 @@ export const routeTree = rootRoute
       "filePath": "_publicLayout.tsx",
       "children": [
         "/_publicLayout/about",
-        "/_publicLayout/contact",
         "/_publicLayout/login",
         "/_publicLayout/signup",
         "/_publicLayout/",
@@ -599,10 +576,6 @@ export const routeTree = rootRoute
     },
     "/_publicLayout/about": {
       "filePath": "_publicLayout/about.tsx",
-      "parent": "/_publicLayout"
-    },
-    "/_publicLayout/contact": {
-      "filePath": "_publicLayout/contact.tsx",
       "parent": "/_publicLayout"
     },
     "/_publicLayout/login": {

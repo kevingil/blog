@@ -37,7 +37,7 @@ function ProjectsPage() {
       {/* Hero Section */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0" />
-        <div className="relative px-6 py-24 sm:py-32 lg:px-8">
+        <div className="relative px-6 py-24 sm:py-32 lg:px-2">
           <div className="mx-auto max-w-4xl text-left">
             <Link to="/" className="inline-flex items-center gap-2 text-white/80 hover:text-white transition-colors mb-8 group">
               <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
