@@ -81,12 +81,13 @@ function AdvancedAnimatedText({
           willChange: "auto"
         }, "-=0.2")
 
-        // Add interactive hover effects for each character (no rotation)
+        // Add enhanced interactive hover effects for each character (no rotation)
         chars.forEach((char) => {
           char.addEventListener('mouseenter', () => {
             gsap.to(char, {
-              scale: 1.2,
-              y: -5,
+              scale: 1.4, // More pronounced scale
+              y: -8, // More pronounced vertical movement
+              x: gsap.utils.random(-3, 3), // Add horizontal translate
               duration: 0.3,
               ease: "back.out(1.7)"
             })
@@ -96,6 +97,7 @@ function AdvancedAnimatedText({
             gsap.to(char, {
               scale: 1,
               y: 0, // Return to baseline
+              x: 0, // Return to baseline
               duration: 0.3,
               ease: "power2.out"
             })
@@ -296,6 +298,7 @@ function SequentialAnimatedText({
 }) {
   const textRef = useRef<HTMLSpanElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const isAnimationComplete = useRef(false)
 
   useEffect(() => {
     const element = textRef.current
@@ -375,6 +378,72 @@ function SequentialAnimatedText({
         duration: 0.2,
         onComplete: () => {
           element.textContent = text
+          isAnimationComplete.current = true
+          
+          // Add hover glitch functionality after animation completes
+          const addGlitchHover = () => {
+            if (!isAnimationComplete.current) return
+            
+            const originalText = text
+            let glitchTimeline: gsap.core.Timeline | null = null
+            
+            const startGlitch = () => {
+              if (glitchTimeline) glitchTimeline.kill()
+              
+              glitchTimeline = gsap.timeline()
+              glitchTimeline.to(element, {
+                duration: 0.05,
+                repeat: 12,
+                yoyo: true,
+                ease: "power2.inOut",
+                textShadow: "2px 0 #ff0000, -2px 0 #00ff00",
+                filter: "blur(1px)",
+                onUpdate: function() {
+                  if (Math.random() < 0.7) {
+                    const glitchChars = "!@#$%^&*(){}[]|\\:;<>?/~`"
+                    let glitchText = ""
+                    for (let i = 0; i < originalText.length; i++) {
+                      glitchText += Math.random() < 0.15 
+                        ? glitchChars[Math.floor(Math.random() * glitchChars.length)]
+                        : originalText[i]
+                    }
+                    element.textContent = glitchText
+                  }
+                }
+              })
+              .to(element, {
+                textShadow: "none",
+                filter: "blur(0px)",
+                duration: 0.1,
+                onComplete: () => {
+                  element.textContent = originalText
+                }
+              })
+            }
+            
+            const stopGlitch = () => {
+              if (glitchTimeline) {
+                glitchTimeline.kill()
+                gsap.set(element, {
+                  textShadow: "none",
+                  filter: "blur(0px)"
+                })
+                element.textContent = originalText
+              }
+            }
+            
+            element.addEventListener('mouseenter', startGlitch)
+            element.addEventListener('mouseleave', stopGlitch)
+            
+            // Store cleanup function
+            ;(element as any)._glitchCleanup = () => {
+              element.removeEventListener('mouseenter', startGlitch)
+              element.removeEventListener('mouseleave', stopGlitch)
+              if (glitchTimeline) glitchTimeline.kill()
+            }
+          }
+          
+          addGlitchHover()
         }
       })
 
@@ -382,6 +451,10 @@ function SequentialAnimatedText({
     return () => {
       tl.kill()
       if (element) {
+        // Clean up glitch hover if it exists
+        if ((element as any)._glitchCleanup) {
+          (element as any)._glitchCleanup()
+        }
         gsap.set(element, { clearProps: "all" })
       }
     }
@@ -389,7 +462,7 @@ function SequentialAnimatedText({
 
   return (
     <div ref={containerRef} className="inline-block">
-      <span ref={textRef} className={className} />
+      <span ref={textRef} className={`${className} cursor-pointer`} />
     </div>
   )
 }
