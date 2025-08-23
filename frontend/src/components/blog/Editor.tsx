@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo } from "lucide-react"
+import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo, BookOpen } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { IconLoader2 } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
@@ -48,6 +48,7 @@ import { ArticleListItem } from '@/services/types';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogTitle, DialogContent, DialogTrigger, DialogDescription, DialogFooter, DialogHeader, DialogClose } from '@/components/ui/dialog';
 import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerClose } from '@/components/ui/drawer';
+import { SourcesDrawer } from './SourcesDrawer';
 
 // Helper function to convert tool names to user-friendly display names
 function getToolDisplayName(toolName: string): string {
@@ -444,6 +445,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [stagedImageUrl, setStagedImageUrl] = useState<string | null | undefined>(undefined);
   const [generateImageOpen, setGenerateImageOpen] = useState(false);
   const [generatingRewrite, setGeneratingRewrite] = useState(false);
+  const [sourcesDrawerOpen, setSourcesDrawerOpen] = useState(false);
 
   /* --------------------------------------------------------------------- */
   /* Chat (right-hand panel)                                               */
@@ -1449,6 +1451,18 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               <div className="space-y-4">
                 <h3 className="text-sm font-medium text-gray-900 dark:text-white">Actions</h3>
                 <div className="space-y-2">
+                  {/* Sources button - available for both new and existing articles */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full text-sm flex flex-row gap-2"
+                    onClick={() => setSourcesDrawerOpen(true)}
+                    disabled={!article && isNew} // Disable for new articles until they're created
+                  >
+                    <BookOpen className="w-4 h-4 text-indigo-500" />
+                    Sources & References
+                  </Button>
+                  
                   {!isNew && (
                     <>
                       <Link
@@ -1689,6 +1703,15 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           </div>
         </div>
       </div>
+
+      {/* Sources Drawer */}
+      {article && (
+        <SourcesDrawer
+          articleId={article.article.id}
+          isOpen={sourcesDrawerOpen}
+          onOpenChange={setSourcesDrawerOpen}
+        />
+      )}
     </section>
   );
 }
