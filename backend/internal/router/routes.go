@@ -12,10 +12,11 @@ import (
 type RouteDeps struct {
 	AuthService     *services.AuthService
 	BlogService     *services.ArticleService
-    ProjectsService *services.ProjectsService
+	ProjectsService *services.ProjectsService
 	ImageService    *services.ImageGenerationService
 	StorageService  *services.StorageService
 	PagesService    *services.PagesService
+	SourcesService  *services.ArticleSourceService
 	AgentCopilotMgr *services.AgentAsyncCopilotManager
 }
 
@@ -66,13 +67,23 @@ func RegisterRoutes(app *fiber.App, deps RouteDeps) {
 	images.Get(":requestId", controller.GetImageGenerationHandler(deps.ImageService))
 	images.Get(":requestId/status", controller.GetImageGenerationStatusHandler(deps.ImageService))
 
-    // Projects
-    projects := app.Group("/projects")
-    projects.Get("/", controller.ListProjectsHandler(deps.ProjectsService))
-    projects.Post("/", controller.CreateProjectHandler(deps.ProjectsService))
-    projects.Get(":id", controller.GetProjectHandler(deps.ProjectsService))
-    projects.Put(":id", controller.UpdateProjectHandler(deps.ProjectsService))
-    projects.Delete(":id", controller.DeleteProjectHandler(deps.ProjectsService))
+	// Sources
+	sources := app.Group("/sources")
+	sources.Post("/", controller.CreateSourceHandler(deps.SourcesService))
+	sources.Post("/scrape", controller.ScrapeAndCreateSourceHandler(deps.SourcesService))
+	sources.Get("/article/:articleId", controller.GetArticleSourcesHandler(deps.SourcesService))
+	sources.Get("/article/:articleId/search", controller.SearchSimilarSourcesHandler(deps.SourcesService))
+	sources.Get("/:sourceId", controller.GetSourceHandler(deps.SourcesService))
+	sources.Put("/:sourceId", controller.UpdateSourceHandler(deps.SourcesService))
+	sources.Delete("/:sourceId", controller.DeleteSourceHandler(deps.SourcesService))
+
+	// Projects
+	projects := app.Group("/projects")
+	projects.Get("/", controller.ListProjectsHandler(deps.ProjectsService))
+	projects.Post("/", controller.CreateProjectHandler(deps.ProjectsService))
+	projects.Get(":id", controller.GetProjectHandler(deps.ProjectsService))
+	projects.Put(":id", controller.UpdateProjectHandler(deps.ProjectsService))
+	projects.Delete(":id", controller.DeleteProjectHandler(deps.ProjectsService))
 
 	// Storage
 	storage := app.Group("/storage")

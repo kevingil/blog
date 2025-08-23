@@ -13,10 +13,11 @@ type FiberServer struct {
 	db              database.Service
 	authService     *services.AuthService
 	blogService     *services.ArticleService
-    projectsService *services.ProjectsService
+	projectsService *services.ProjectsService
 	imageService    *services.ImageGenerationService
 	storageService  *services.StorageService
 	pagesService    *services.PagesService
+	sourcesService  *services.ArticleSourceService
 	agentCopilotMgr *services.AgentAsyncCopilotManager
 }
 
@@ -24,10 +25,11 @@ func NewFiberServer(
 	db database.Service,
 	authService *services.AuthService,
 	blogService *services.ArticleService,
-    projectsService *services.ProjectsService,
+	projectsService *services.ProjectsService,
 	imageService *services.ImageGenerationService,
 	storageService *services.StorageService,
 	pagesService *services.PagesService,
+	sourcesService *services.ArticleSourceService,
 	agentCopilotMgr *services.AgentAsyncCopilotManager,
 ) *FiberServer {
 	server := &FiberServer{
@@ -35,10 +37,11 @@ func NewFiberServer(
 		db:              db,
 		authService:     authService,
 		blogService:     blogService,
-        projectsService: projectsService,
+		projectsService: projectsService,
 		imageService:    imageService,
 		storageService:  storageService,
 		pagesService:    pagesService,
+		sourcesService:  sourcesService,
 		agentCopilotMgr: agentCopilotMgr,
 	}
 
@@ -46,10 +49,11 @@ func NewFiberServer(
 	router.RegisterRoutes(server.App, router.RouteDeps{
 		AuthService:     authService,
 		BlogService:     blogService,
-        ProjectsService: projectsService,
+		ProjectsService: projectsService,
 		ImageService:    imageService,
 		StorageService:  storageService,
 		PagesService:    pagesService,
+		SourcesService:  sourcesService,
 		AgentCopilotMgr: agentCopilotMgr,
 	})
 
