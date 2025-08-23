@@ -1,0 +1,485 @@
+import { useState, useEffect } from 'react';
+import { Plus, ExternalLink, Edit2, Trash2, Globe, FileText, Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { 
+  Drawer, 
+  DrawerContent, 
+  DrawerHeader, 
+  DrawerTitle, 
+  DrawerDescription,
+  DrawerFooter,
+  DrawerClose,
+  DrawerTrigger
+} from '@/components/ui/drawer';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Switch } from '@/components/ui/switch';
+import { 
+  getArticleSources, 
+  createSource, 
+  scrapeAndCreateSource, 
+  updateSource, 
+  deleteSource 
+} from '@/services/sources';
+import type { ArticleSource, CreateSourceRequest, UpdateSourceRequest } from '@/services/types';
+
+interface SourcesDrawerProps {
+  articleId: string;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+interface SourceFormData {
+  title: string;
+  content: string;
+  url: string;
+  source_type: 'web' | 'manual';
+}
+
+export function SourcesDrawer({ articleId, isOpen, onOpenChange }: SourcesDrawerProps) {
+  const { toast } = useToast();
+  const [sources, setSources] = useState<ArticleSource[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isAddingSource, setIsAddingSource] = useState(false);
+  const [editingSource, setEditingSource] = useState<ArticleSource | null>(null);
+  const [isScrapingUrl, setIsScrapingUrl] = useState(false);
+  
+  // Form state
+  const [formData, setFormData] = useState<SourceFormData>({
+    title: '',
+    content: '',
+    url: '',
+    source_type: 'manual'
+  });
+  const [useUrlScraping, setUseUrlScraping] = useState(false);
+
+  // Load sources when drawer opens
+  useEffect(() => {
+    if (isOpen && articleId) {
+      loadSources();
+    }
+  }, [isOpen, articleId]);
+
+  const loadSources = async () => {
+    setIsLoading(true);
+    try {
+      const sourcesData = await getArticleSources(articleId);
+      setSources(sourcesData);
+    } catch (error) {
+      console.error('Error loading sources:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load sources',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      content: '',
+      url: '',
+      source_type: 'manual'
+    });
+    setUseUrlScraping(false);
+    setEditingSource(null);
+  };
+
+  const handleAddSource = async () => {
+    if (!formData.title.trim() || (!formData.content.trim() && !useUrlScraping)) {
+      toast({
+        title: 'Error',
+        description: 'Title and content are required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (useUrlScraping && !formData.url.trim()) {
+      toast({
+        title: 'Error',
+        description: 'URL is required for web scraping',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsAddingSource(true);
+    try {
+      let newSource: ArticleSource;
+
+      if (useUrlScraping && formData.url.trim()) {
+        setIsScrapingUrl(true);
+        newSource = await scrapeAndCreateSource({
+          article_id: articleId,
+          url: formData.url.trim(),
+        });
+      } else {
+        const request: CreateSourceRequest = {
+          article_id: articleId,
+          title: formData.title.trim(),
+          content: formData.content.trim(),
+          url: formData.url.trim() || undefined,
+          source_type: useUrlScraping ? 'web' : 'manual',
+        };
+        newSource = await createSource(request);
+      }
+
+      setSources(prev => [newSource, ...prev]);
+      resetForm();
+      setIsAddingSource(false);
+      toast({
+        title: 'Success',
+        description: useUrlScraping ? 'Source scraped and added successfully' : 'Source added successfully',
+      });
+    } catch (error) {
+      console.error('Error adding source:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to add source',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsAddingSource(false);
+      setIsScrapingUrl(false);
+    }
+  };
+
+  const handleEditSource = (source: ArticleSource) => {
+    setEditingSource(source);
+    setFormData({
+      title: source.title,
+      content: source.content,
+      url: source.url || '',
+      source_type: source.source_type,
+    });
+    setUseUrlScraping(source.source_type === 'web');
+  };
+
+  const handleUpdateSource = async () => {
+    if (!editingSource) return;
+
+    if (!formData.title.trim() || !formData.content.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Title and content are required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsAddingSource(true);
+    try {
+      const request: UpdateSourceRequest = {
+        title: formData.title.trim(),
+        content: formData.content.trim(),
+        url: formData.url.trim() || undefined,
+        source_type: useUrlScraping ? 'web' : 'manual',
+      };
+
+      const updatedSource = await updateSource(editingSource.id, request);
+      setSources(prev => prev.map(s => s.id === editingSource.id ? updatedSource : s));
+      resetForm();
+      toast({
+        title: 'Success',
+        description: 'Source updated successfully',
+      });
+    } catch (error) {
+      console.error('Error updating source:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update source',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsAddingSource(false);
+    }
+  };
+
+  const handleDeleteSource = async (sourceId: string) => {
+    try {
+      await deleteSource(sourceId);
+      setSources(prev => prev.filter(s => s.id !== sourceId));
+      toast({
+        title: 'Success',
+        description: 'Source deleted successfully',
+      });
+    } catch (error) {
+      console.error('Error deleting source:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete source',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  const truncateContent = (content: string, maxLength: number = 100) => {
+    return content.length > maxLength ? content.substring(0, maxLength) + '...' : content;
+  };
+
+  return (
+    <Drawer open={isOpen} onOpenChange={onOpenChange} direction="right">
+      <DrawerContent className="w-full sm:max-w-lg ml-auto h-full">
+        <DrawerHeader className="border-b">
+          <DrawerTitle className="flex items-center gap-2">
+            <FileText className="w-5 h-5" />
+            Sources & References
+          </DrawerTitle>
+          <DrawerDescription>
+            Manage sources and references for this article. Add web links to scrape content automatically, or add manual sources.
+          </DrawerDescription>
+        </DrawerHeader>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Add Source Button */}
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button className="w-full" onClick={resetForm}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Source
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingSource ? 'Edit Source' : 'Add New Source'}
+                </DialogTitle>
+                <DialogDescription>
+                  {editingSource 
+                    ? 'Update the source information below.' 
+                    : 'Add a new source or reference to your article.'}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                {/* URL Scraping Toggle */}
+                {!editingSource && (
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="use-url-scraping" className="text-sm font-medium">
+                      Scrape from URL
+                    </Label>
+                    <Switch
+                      id="use-url-scraping"
+                      checked={useUrlScraping}
+                      onCheckedChange={setUseUrlScraping}
+                    />
+                  </div>
+                )}
+
+                {/* URL Input (when scraping or editing web source) */}
+                {(useUrlScraping || editingSource?.source_type === 'web') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="url">URL</Label>
+                    <Input
+                      id="url"
+                      type="url"
+                      placeholder="https://example.com/article"
+                      value={formData.url}
+                      onChange={(e) => setFormData(prev => ({ ...prev, url: e.target.value }))}
+                    />
+                  </div>
+                )}
+
+                {/* Title Input */}
+                <div className="space-y-2">
+                  <Label htmlFor="title">Title</Label>
+                  <Input
+                    id="title"
+                    placeholder="Source title"
+                    value={formData.title}
+                    onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                  />
+                </div>
+
+                {/* Content Input (only when not using URL scraping) */}
+                {!useUrlScraping && (
+                  <div className="space-y-2">
+                    <Label htmlFor="content">Content</Label>
+                    <Textarea
+                      id="content"
+                      placeholder="Source content or summary..."
+                      rows={4}
+                      value={formData.content}
+                      onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
+                    />
+                  </div>
+                )}
+
+                {useUrlScraping && (
+                  <p className="text-sm text-muted-foreground">
+                    Content will be automatically extracted from the URL.
+                  </p>
+                )}
+              </div>
+
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button 
+                  onClick={editingSource ? handleUpdateSource : handleAddSource}
+                  disabled={isAddingSource || isScrapingUrl}
+                >
+                  {isScrapingUrl ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Scraping...
+                    </>
+                  ) : isAddingSource ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      {editingSource ? 'Updating...' : 'Adding...'}
+                    </>
+                  ) : (
+                    editingSource ? 'Update Source' : 'Add Source'
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Sources List */}
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin" />
+              <span className="ml-2">Loading sources...</span>
+            </div>
+          ) : sources.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p>No sources added yet.</p>
+              <p className="text-sm">Add your first source to get started.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {sources.map((source) => (
+                <Card key={source.id} className="border">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className="text-sm font-medium line-clamp-2">
+                          {source.title}
+                        </CardTitle>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant={source.source_type === 'web' ? 'default' : 'secondary'} className="text-xs">
+                            {source.source_type === 'web' ? (
+                              <>
+                                <Globe className="w-3 h-3 mr-1" />
+                                Web
+                              </>
+                            ) : (
+                              <>
+                                <FileText className="w-3 h-3 mr-1" />
+                                Manual
+                              </>
+                            )}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {formatDate(source.created_at)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 ml-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditSource(source)}
+                        >
+                          <Edit2 className="w-3 h-3" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Source</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this source? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeleteSource(source.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <p className="text-sm text-muted-foreground line-clamp-3">
+                      {truncateContent(source.content)}
+                    </p>
+                    {source.url && (
+                      <div className="mt-2">
+                        <a
+                          href={source.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1 truncate"
+                        >
+                          <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">{source.url}</span>
+                        </a>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <DrawerFooter className="border-t">
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span>{sources.length} source{sources.length !== 1 ? 's' : ''}</span>
+            <DrawerClose asChild>
+              <Button variant="outline">Close</Button>
+            </DrawerClose>
+          </div>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
+  );
+}

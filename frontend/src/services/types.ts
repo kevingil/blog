@@ -165,4 +165,36 @@ export type ArticleRow = {
   slug: string | null;
   tags: string[];
   image_url: string | null;
+}
+
+export interface ArticleSource {
+  id: string;
+  article_id: string;
+  title: string;
+  content: string;
+  url: string;
+  source_type: 'web' | 'manual';
+  embedding?: number[];
+  meta_data?: Record<string, any>;
+  created_at: string;
+}
+
+export interface CreateSourceRequest {
+  article_id: string;
+  title: string;
+  content: string;
+  url?: string;
+  source_type?: 'web' | 'manual';
+}
+
+export interface UpdateSourceRequest {
+  title?: string;
+  content?: string;
+  url?: string;
+  source_type?: 'web' | 'manual';
+}
+
+export interface ScrapeSourceRequest {
+  article_id: string;
+  url: string;
 } 
