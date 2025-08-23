@@ -790,6 +790,26 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     ]);
   };
 
+  // Apply document rewrite from AI assistant
+  const applyDocumentRewrite = (newContent: string, reason: string, originalContent?: string) => {
+    if (!editor) return;
+    
+    console.log('Applying document rewrite:', { newContent, reason, originalContent });
+    
+    const oldHtml = editor.getHTML();
+    
+    // Convert markdown to HTML for the new content
+    const newHtml = mdParser.render(newContent);
+    
+    // Create diff preview
+    enterDiffPreview(oldHtml, newHtml);
+    setChatMessages((prev) => [
+      ...prev,
+      { role: 'assistant', content: `📋 Document rewrite: ${reason}` },
+      { role: 'assistant', content: '__DIFF_ACTIONS__' },
+    ]);
+  };
+
   const sendChatWithMessage = async (message: string) => {
     const text = message.trim();
     console.log("Sending chat with message:", text);
@@ -1016,6 +1036,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         
                         // Mark this tool message as processed
                         setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
+                      } else if (toolResult.tool_name === 'rewrite_document' && isNewMessage) {
+                        // Handle document rewrite with diff preview
+                        applyDocumentRewrite(toolResult.new_content, toolResult.reason, toolResult.original_content);
+                        
+                        // Mark this tool message as processed
+                        setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
                       } else {
                         // For non-edit tools, add generic completion message
                         setChatMessages((prev) => [
@@ -1099,6 +1125,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 } else {
                   applyTextEdit(toolResult.original_text, toolResult.new_text, toolResult.reason);
                 }
+                
+                // Mark this tool message as processed
+                setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
+              } else if (toolResult.tool_name === 'rewrite_document' && isNewMessage) {
+                // Handle document rewrite with diff preview
+                applyDocumentRewrite(toolResult.new_content, toolResult.reason, toolResult.original_content);
                 
                 // Mark this tool message as processed
                 setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));

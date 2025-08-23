@@ -27,7 +27,7 @@ func NewRewriteDocumentTool(textGenService TextGenerationService) *RewriteDocume
 func (t *RewriteDocumentTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        "rewrite_document",
-		Description: "Completely rewrite or significantly edit the document content",
+		Description: "Completely rewrite or significantly edit the document content with diff generation support",
 		Parameters: map[string]any{
 			"new_content": map[string]any{
 				"type":        "string",
@@ -37,6 +37,10 @@ func (t *RewriteDocumentTool) Info() ToolInfo {
 				"type":        "string",
 				"description": "Brief explanation of the changes made",
 			},
+			"original_content": map[string]any{
+				"type":        "string",
+				"description": "Optional: Original document content for generating diff patches. When provided, enables diff preview functionality.",
+			},
 		},
 		Required: []string{"new_content", "reason"},
 	}
@@ -44,8 +48,9 @@ func (t *RewriteDocumentTool) Info() ToolInfo {
 
 func (t *RewriteDocumentTool) Run(ctx context.Context, params ToolCall) (ToolResponse, error) {
 	var input struct {
-		NewContent string `json:"new_content"`
-		Reason     string `json:"reason"`
+		NewContent      string `json:"new_content"`
+		Reason          string `json:"reason"`
+		OriginalContent string `json:"original_content,omitempty"` // Optional for diff generation
 	}
 
 	if err := json.Unmarshal([]byte(params.Input), &input); err != nil {
@@ -60,6 +65,28 @@ func (t *RewriteDocumentTool) Run(ctx context.Context, params ToolCall) (ToolRes
 		"new_content": input.NewContent,
 		"reason":      input.Reason,
 		"tool_name":   "rewrite_document",
+		"edit_type":   "rewrite",
+	}
+
+	// If original content is provided, generate diff patch like edit_text tool
+	if input.OriginalContent != "" {
+		// Generate unified diff patch using diffmatchpatch
+		dmp := diffmatchpatch.New()
+		diffs := dmp.DiffMain(input.OriginalContent, input.NewContent, false)
+		patch := dmp.PatchMake(input.OriginalContent, diffs)
+		patchText := dmp.PatchToText(patch)
+
+		// Add patch information to result
+		result["original_content"] = input.OriginalContent
+		result["patch"] = map[string]interface{}{
+			"unified_diff": patchText,
+			"diffs":        diffs,
+			"summary": map[string]interface{}{
+				"additions": countDiffType(diffs, diffmatchpatch.DiffInsert),
+				"deletions": countDiffType(diffs, diffmatchpatch.DiffDelete),
+				"unchanged": countDiffType(diffs, diffmatchpatch.DiffEqual),
+			},
+		}
 	}
 
 	resultJSON, _ := json.Marshal(result)

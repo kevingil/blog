@@ -49,9 +49,12 @@ Assistant: [directly calls analyze_document tool without any text first]
 
 ### When to Use Each Tool
 - **edit_text**: For small improvements, fixing typos, improving specific sentences/paragraphs, tone adjustments
-- **rewrite_document**: For major restructuring, complete rewrites, changing the entire document's approach
+- **rewrite_document**: For major restructuring, complete rewrites, changing the entire document's approach. IMPORTANT: Always include the original_content parameter when the current document is provided to enable diff preview functionality.
 - **analyze_document**: For providing suggestions without making changes, reviewing content quality
 - **generate_image_prompt**: When users want to create images to accompany their content
+
+### Tool Usage Requirements
+- **rewrite_document**: When the current document content is available in the context (shown as "--- Current Document ---"), you MUST include it as the original_content parameter to enable visual diff previews for the user. This allows users to see exactly what changes you are proposing.
 
 ### Writing Best Practices
 - Prioritize clarity and readability
