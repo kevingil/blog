@@ -43,7 +43,6 @@ export function SourcesPreview({ articleId, onOpenDrawer, disabled, refreshTrigg
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="text-sm font-medium text-gray-900 dark:text-white">Sources & References</label>
       <Card 
         className="w-full h-32 p-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors overflow-hidden"
         onClick={!disabled ? onOpenDrawer : undefined}

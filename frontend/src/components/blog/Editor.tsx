@@ -21,7 +21,7 @@ import type { Editor as TiptapEditor } from '@tiptap/core';
 import { VITE_API_BASE_URL } from "@/services/constants";
 import '@/tiptap.css';
 
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -1260,8 +1260,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     <section className="flex gap-4 p-0 md:p-4 h-[calc(100vh-60px)]">
       <div className="flex-1">
         {/* Article Metadata Card */}
-        <Card className="mb-6 p-0">
-          <CardContent className="p-4">
+        
             {/* Article Title Section */}
             <div className="mb-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -1281,10 +1280,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               </div>
             </div>
             {/* Article Tools Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-4">
               {/* Header Image Section */}
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-gray-900 dark:text-white">Header Image</label>
                 <Drawer direction="right">
                   <DrawerTrigger asChild>
                     <Card className="w-full h-32 flex items-center justify-center overflow-hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
@@ -1407,65 +1405,165 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 refreshTrigger={sourcesRefreshTrigger}
               />
 
+              {/* Tags Section */}
+              <div className="space-y-3">
+                <Drawer direction="right">
+                  <DrawerTrigger asChild>
+                    <Card className="p-3 h-32 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                      <div className="h-full flex flex-col">
+                        <div className="flex-1 space-y-1">
+                          {watchedValues.tags && watchedValues.tags.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {watchedValues.tags.slice(0, 3).map((tag, idx) => (
+                                <span
+                                  key={idx}
+                                  className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                              {watchedValues.tags.length > 3 && (
+                                <span className="text-xs text-muted-foreground">
+                                  +{watchedValues.tags.length - 3} more
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-center text-muted-foreground">
+                              <span className="text-xs">Click to add tags</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-2">
+                          {watchedValues.tags?.length || 0} tag{(watchedValues.tags?.length || 0) !== 1 ? 's' : ''}
+                        </div>
+                      </div>
+                    </Card>
+                  </DrawerTrigger>
+
+                  {/* Drawer content for tags editing */}
+                  <DrawerContent className="w-full sm:max-w-sm ml-auto">
+                    <DrawerHeader>
+                      <DrawerTitle>Edit Tags</DrawerTitle>
+                      <DrawerDescription>Add or remove tags for your article.</DrawerDescription>
+                    </DrawerHeader>
+                    <div className="space-y-4 px-4">
+                      <div className="space-y-2">
+                        <label className="block text-md font-medium leading-6 text-gray-900 dark:text-white">Article Tags</label>
+                        <ChipInput
+                          value={watchedValues.tags}
+                          onChange={(tags) => setValue('tags', tags.map((tag: string) => tag.toUpperCase()))}
+                          placeholder="Type and press Enter to add tags..."
+                        />
+                        {errors.tags && <p className="text-red-500 text-sm">{errors.tags.message}</p>}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Tags help categorize your article and make it easier to find. Press Enter or comma to add a tag.
+                      </div>
+                    </div>
+                    <DrawerFooter>
+                      <DrawerClose asChild>
+                        <Button variant="outline" className="w-full">Done</Button>
+                      </DrawerClose>
+                    </DrawerFooter>
+                  </DrawerContent>
+                </Drawer>
+              </div>
+
               {/* Publishing Settings Section */}
               <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-900 dark:text-white">Publishing</label>
-                <Card className="p-3 space-y-3">
-                  {/* Publication Status */}
-                  <div className="flex items-center justify-between">
-                    <label htmlFor="isDraft" className="text-xs font-medium">Status</label>
-                    <div className="flex items-center gap-2">
-                      <span className={cn("text-xs", watchedValues.isDraft ? "text-muted-foreground" : "text-green-600")}>
-                        {watchedValues.isDraft ? "Draft" : "Published"}
-                      </span>
-                      <Switch
-                        id="isDraft"
-                        checked={!watchedValues.isDraft}
-                        onCheckedChange={(checked) => {
-                          setValue('isDraft', !checked);
-                        }}
-                      />
-                    </div>
-                  </div>
+                <Drawer direction="right">
+                  <DrawerTrigger asChild>
+                    <Card className="p-3 h-32 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                      <div className="h-full flex flex-col justify-between">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium">Status:</span>
+                            <span className={cn("text-xs font-medium", watchedValues.isDraft ? "text-orange-600" : "text-green-600")}>
+                              {watchedValues.isDraft ? "Draft" : "Published"}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium">Date:</span>
+                            <span className="text-xs text-muted-foreground">
+                              {article?.article.published_at ? format(new Date(article.article.published_at), 'MMM d') : 'Not set'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Click to edit settings
+                        </div>
+                      </div>
+                    </Card>
+                  </DrawerTrigger>
 
-                  {/* Published Date */}
-                  <div className="space-y-1">
-                    <label htmlFor="publishedAt" className="text-xs font-medium">Date</label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant={"outline"}
-                          size="sm"
-                          className={cn(
-                            'w-full justify-start text-left font-normal h-8',
-                            !article?.article.published_at && 'text-muted-foreground'
-                          )}
-                        >
-                          <CalendarIcon className="mr-1 h-3 w-3" />
-                          <span className="text-xs">
-                            {article?.article.published_at ? format(article.article.published_at, 'MMM d, yyyy') : 'Pick date'}
-                          </span>
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={article?.article.published_at ? new Date(article.article.published_at) : undefined}
-                          onSelect={() => {
-                            /* Not a form field; selection handled elsewhere if needed */
-                          }}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </Card>
+                  {/* Drawer content for publishing settings */}
+                  <DrawerContent className="w-full sm:max-w-sm ml-auto">
+                    <DrawerHeader>
+                      <DrawerTitle>Publishing Settings</DrawerTitle>
+                      <DrawerDescription>Configure publication status and date.</DrawerDescription>
+                    </DrawerHeader>
+                    <div className="space-y-4 px-4">
+                      {/* Publication Status */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label htmlFor="isDraft" className="text-sm font-medium">Publication Status</label>
+                          <div className="flex items-center gap-2">
+                            <span className={cn("text-sm", watchedValues.isDraft ? "text-muted-foreground" : "text-green-600")}>
+                              {watchedValues.isDraft ? "Draft" : "Published"}
+                            </span>
+                            <Switch
+                              id="isDraft"
+                              checked={!watchedValues.isDraft}
+                              onCheckedChange={(checked) => {
+                                setValue('isDraft', !checked);
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Published Date */}
+                        <div className="space-y-2">
+                          <label htmlFor="publishedAt" className="text-sm font-medium">Publication Date</label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant={"outline"}
+                                className={cn(
+                                  'w-full justify-start text-left font-normal',
+                                  !article?.article.published_at && 'text-muted-foreground'
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {article?.article.published_at ? format(new Date(article.article.published_at), 'PPP') : 'Pick a date'}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar
+                                mode="single"
+                                selected={article?.article.published_at ? new Date(article.article.published_at) : undefined}
+                                onSelect={() => {
+                                  /* Not a form field; selection handled elsewhere if needed */
+                                }}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </div>
+                    </div>
+                    <DrawerFooter>
+                      <DrawerClose asChild>
+                        <Button variant="outline" className="w-full">Done</Button>
+                      </DrawerClose>
+                    </DrawerFooter>
+                  </DrawerContent>
+                </Drawer>
               </div>
 
               {/* Actions Section */}
               <div className="space-y-3">
-                <label className="text-sm font-medium text-gray-900 dark:text-white">Actions</label>
-                <Card className="p-3 space-y-2">
+                <Card className="p-3 h-32 space-y-2">
                   {!isNew && (
                     <>
                       <Link
@@ -1492,41 +1590,30 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     </>
                   )}
                   {isNew && (
-                    <div className="text-xs text-muted-foreground text-center py-2">
+                    <div className="text-xs text-muted-foreground text-center py-8">
                       Save article to access actions
                     </div>
                   )}
                 </Card>
               </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card>
+            </div>
+
           <form className="">
-            <CardContent className="space-y-4">
+
               <div className="border border-gray-300 dark:border-gray-600 rounded-md">
                 <FormattingToolbar editor={editor} />
                 <EditorContent
                   editor={editor}
-                  className="tiptap w-full border-none rounded-b-md h-[calc(100vh-610px)] overflow-y-auto focus:outline-none"
+                  className="tiptap w-full border-none rounded-b-md h-[calc(100vh-400px)] overflow-y-auto focus:outline-none"
                 />
                 {/* Hidden input to keep react-hook-form registration for content */}
                 <input type="hidden" {...register('content')} value={watchedValues.content} />
                 {errors.content && <p className="text-red-500">{errors.content.message}</p>}
                 {/* Diff preview is inline; accept/decline in chat */}
               </div>
-              <label className="block text-sm font-medium leading-6 text-gray-900 dark:text-white">Tags</label>
-              <div className='mb-2'>
-                <ChipInput
-                  value={watchedValues.tags}
-                  onChange={(tags) => setValue('tags', tags.map((tag: string) => tag.toUpperCase()))}
-                  placeholder="Type and press Enter to add tags..."
-                />
-                {errors.tags && <p className="text-red-500">{errors.tags.message}</p>}
-              </div>
-            </CardContent>
-            <CardFooter className="flex justify-between">
+
+<div className="w-full flex flex-row gap-2 justify-between mt-4">
               <Button variant="secondary">
                 <Link to="/dashboard/blog">
                   {isNew ? 'Cancel' : 'Go Back'}
@@ -1560,9 +1647,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 {isLoading ? 'Updating...' : isNew ? 'Create Article' : 'Save & Return'}
               </Button>
               </div>
-            </CardFooter>
+              </div>
+
           </form>
-        </Card>
+
       </div>
 
       {/* Chat side-panel */}
