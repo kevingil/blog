@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { 
   Drawer, 
@@ -14,8 +14,7 @@ import {
   DrawerTitle, 
   DrawerDescription,
   DrawerFooter,
-  DrawerClose,
-  DrawerTrigger
+  DrawerClose
 } from '@/components/ui/drawer';
 import {
   Dialog,
@@ -25,7 +24,6 @@ import {
   DialogDescription,
   DialogFooter,
   DialogClose,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -54,6 +52,15 @@ interface SourcesDrawerProps {
   onOpenChange: (open: boolean) => void;
 }
 
+interface AddSourceModalProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  articleId: string;
+  editingSource: ArticleSource | null;
+  onSourceAdded: (source: ArticleSource) => void;
+  onSourceUpdated: (source: ArticleSource) => void;
+}
+
 interface SourceFormData {
   title: string;
   content: string;
@@ -61,12 +68,16 @@ interface SourceFormData {
   source_type: 'web' | 'manual';
 }
 
-export function SourcesDrawer({ articleId, isOpen, onOpenChange }: SourcesDrawerProps) {
+function AddSourceModal({ 
+  isOpen, 
+  onOpenChange, 
+  articleId, 
+  editingSource, 
+  onSourceAdded, 
+  onSourceUpdated 
+}: AddSourceModalProps) {
   const { toast } = useToast();
-  const [sources, setSources] = useState<ArticleSource[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [isAddingSource, setIsAddingSource] = useState(false);
-  const [editingSource, setEditingSource] = useState<ArticleSource | null>(null);
   const [isScrapingUrl, setIsScrapingUrl] = useState(false);
   
   // Form state
@@ -77,6 +88,215 @@ export function SourcesDrawer({ articleId, isOpen, onOpenChange }: SourcesDrawer
     source_type: 'manual'
   });
   const [useUrlScraping, setUseUrlScraping] = useState(false);
+
+  // Reset form when modal opens/closes or editing source changes
+  useEffect(() => {
+    if (editingSource) {
+      setFormData({
+        title: editingSource.title,
+        content: editingSource.content,
+        url: editingSource.url || '',
+        source_type: editingSource.source_type,
+      });
+      setUseUrlScraping(editingSource.source_type === 'web');
+    } else {
+      setFormData({
+        title: '',
+        content: '',
+        url: '',
+        source_type: 'manual'
+      });
+      setUseUrlScraping(false);
+    }
+  }, [editingSource, isOpen]);
+
+  const handleSubmit = async () => {
+    if (!formData.title.trim() || (!formData.content.trim() && !useUrlScraping)) {
+      toast({
+        title: 'Error',
+        description: 'Title and content are required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (useUrlScraping && !formData.url.trim()) {
+      toast({
+        title: 'Error',
+        description: 'URL is required for web scraping',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsAddingSource(true);
+    try {
+      if (editingSource) {
+        // Update existing source
+        const request: UpdateSourceRequest = {
+          title: formData.title.trim(),
+          content: formData.content.trim(),
+          url: formData.url.trim() || undefined,
+          source_type: useUrlScraping ? 'web' : 'manual',
+        };
+
+        const updatedSource = await updateSource(editingSource.id, request);
+        onSourceUpdated(updatedSource);
+        toast({
+          title: 'Success',
+          description: 'Source updated successfully',
+        });
+      } else {
+        // Create new source
+        let newSource: ArticleSource;
+
+        if (useUrlScraping && formData.url.trim()) {
+          setIsScrapingUrl(true);
+          newSource = await scrapeAndCreateSource({
+            article_id: articleId,
+            url: formData.url.trim(),
+          });
+        } else {
+          const request: CreateSourceRequest = {
+            article_id: articleId,
+            title: formData.title.trim(),
+            content: formData.content.trim(),
+            url: formData.url.trim() || undefined,
+            source_type: useUrlScraping ? 'web' : 'manual',
+          };
+          newSource = await createSource(request);
+        }
+
+        onSourceAdded(newSource);
+        toast({
+          title: 'Success',
+          description: useUrlScraping ? 'Source scraped and added successfully' : 'Source added successfully',
+        });
+      }
+
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Error saving source:', error);
+      toast({
+        title: 'Error',
+        description: editingSource ? 'Failed to update source' : 'Failed to add source',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsAddingSource(false);
+      setIsScrapingUrl(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {editingSource ? 'Edit Source' : 'Add New Source'}
+          </DialogTitle>
+          <DialogDescription>
+            {editingSource 
+              ? 'Update the source information below.' 
+              : 'Add a new source or reference to your article.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* URL Scraping Toggle */}
+          {!editingSource && (
+            <div className="flex items-center justify-between">
+              <Label htmlFor="use-url-scraping" className="text-sm font-medium">
+                Scrape from URL
+              </Label>
+              <Switch
+                id="use-url-scraping"
+                checked={useUrlScraping}
+                onCheckedChange={setUseUrlScraping}
+              />
+            </div>
+          )}
+
+          {/* URL Input (when scraping or editing web source) */}
+          {(useUrlScraping || editingSource?.source_type === 'web') && (
+            <div className="space-y-2">
+              <Label htmlFor="url">URL</Label>
+              <Input
+                id="url"
+                type="url"
+                placeholder="https://example.com/article"
+                value={formData.url}
+                onChange={(e) => setFormData(prev => ({ ...prev, url: e.target.value }))}
+              />
+            </div>
+          )}
+
+          {/* Title Input */}
+          <div className="space-y-2">
+            <Label htmlFor="title">Title</Label>
+            <Input
+              id="title"
+              placeholder="Source title"
+              value={formData.title}
+              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+            />
+          </div>
+
+          {/* Content Input (only when not using URL scraping) */}
+          {!useUrlScraping && (
+            <div className="space-y-2">
+              <Label htmlFor="content">Content</Label>
+              <Textarea
+                id="content"
+                placeholder="Source content or summary..."
+                rows={4}
+                value={formData.content}
+                onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
+              />
+            </div>
+          )}
+
+          {useUrlScraping && (
+            <p className="text-sm text-muted-foreground">
+              Content will be automatically extracted from the URL.
+            </p>
+          )}
+        </div>
+
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline">Cancel</Button>
+          </DialogClose>
+          <Button 
+            onClick={handleSubmit}
+            disabled={isAddingSource || isScrapingUrl}
+          >
+            {isScrapingUrl ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Scraping...
+              </>
+            ) : isAddingSource ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                {editingSource ? 'Updating...' : 'Adding...'}
+              </>
+            ) : (
+              editingSource ? 'Update Source' : 'Add Source'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function SourcesDrawer({ articleId, isOpen, onOpenChange }: SourcesDrawerProps) {
+  const { toast } = useToast();
+  const [sources, setSources] = useState<ArticleSource[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [editingSource, setEditingSource] = useState<ArticleSource | null>(null);
+  const [addSourceModalOpen, setAddSourceModalOpen] = useState(false);
 
   // Load sources when drawer opens
   useEffect(() => {
@@ -102,126 +322,18 @@ export function SourcesDrawer({ articleId, isOpen, onOpenChange }: SourcesDrawer
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      title: '',
-      content: '',
-      url: '',
-      source_type: 'manual'
-    });
-    setUseUrlScraping(false);
-    setEditingSource(null);
+  const handleSourceAdded = (source: ArticleSource) => {
+    setSources(prev => [source, ...prev]);
   };
 
-  const handleAddSource = async () => {
-    if (!formData.title.trim() || (!formData.content.trim() && !useUrlScraping)) {
-      toast({
-        title: 'Error',
-        description: 'Title and content are required',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (useUrlScraping && !formData.url.trim()) {
-      toast({
-        title: 'Error',
-        description: 'URL is required for web scraping',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setIsAddingSource(true);
-    try {
-      let newSource: ArticleSource;
-
-      if (useUrlScraping && formData.url.trim()) {
-        setIsScrapingUrl(true);
-        newSource = await scrapeAndCreateSource({
-          article_id: articleId,
-          url: formData.url.trim(),
-        });
-      } else {
-        const request: CreateSourceRequest = {
-          article_id: articleId,
-          title: formData.title.trim(),
-          content: formData.content.trim(),
-          url: formData.url.trim() || undefined,
-          source_type: useUrlScraping ? 'web' : 'manual',
-        };
-        newSource = await createSource(request);
-      }
-
-      setSources(prev => [newSource, ...prev]);
-      resetForm();
-      setIsAddingSource(false);
-      toast({
-        title: 'Success',
-        description: useUrlScraping ? 'Source scraped and added successfully' : 'Source added successfully',
-      });
-    } catch (error) {
-      console.error('Error adding source:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to add source',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsAddingSource(false);
-      setIsScrapingUrl(false);
-    }
+  const handleSourceUpdated = (updatedSource: ArticleSource) => {
+    setSources(prev => prev.map(s => s.id === updatedSource.id ? updatedSource : s));
+    setEditingSource(null);
   };
 
   const handleEditSource = (source: ArticleSource) => {
     setEditingSource(source);
-    setFormData({
-      title: source.title,
-      content: source.content,
-      url: source.url || '',
-      source_type: source.source_type,
-    });
-    setUseUrlScraping(source.source_type === 'web');
-  };
-
-  const handleUpdateSource = async () => {
-    if (!editingSource) return;
-
-    if (!formData.title.trim() || !formData.content.trim()) {
-      toast({
-        title: 'Error',
-        description: 'Title and content are required',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setIsAddingSource(true);
-    try {
-      const request: UpdateSourceRequest = {
-        title: formData.title.trim(),
-        content: formData.content.trim(),
-        url: formData.url.trim() || undefined,
-        source_type: useUrlScraping ? 'web' : 'manual',
-      };
-
-      const updatedSource = await updateSource(editingSource.id, request);
-      setSources(prev => prev.map(s => s.id === editingSource.id ? updatedSource : s));
-      resetForm();
-      toast({
-        title: 'Success',
-        description: 'Source updated successfully',
-      });
-    } catch (error) {
-      console.error('Error updating source:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update source',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsAddingSource(false);
-    }
+    setAddSourceModalOpen(true);
   };
 
   const handleDeleteSource = async (sourceId: string) => {
@@ -265,111 +377,16 @@ export function SourcesDrawer({ articleId, isOpen, onOpenChange }: SourcesDrawer
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* Add Source Button */}
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button className="w-full" onClick={resetForm}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Source
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingSource ? 'Edit Source' : 'Add New Source'}
-                </DialogTitle>
-                <DialogDescription>
-                  {editingSource 
-                    ? 'Update the source information below.' 
-                    : 'Add a new source or reference to your article.'}
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-4">
-                {/* URL Scraping Toggle */}
-                {!editingSource && (
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="use-url-scraping" className="text-sm font-medium">
-                      Scrape from URL
-                    </Label>
-                    <Switch
-                      id="use-url-scraping"
-                      checked={useUrlScraping}
-                      onCheckedChange={setUseUrlScraping}
-                    />
-                  </div>
-                )}
-
-                {/* URL Input (when scraping or editing web source) */}
-                {(useUrlScraping || editingSource?.source_type === 'web') && (
-                  <div className="space-y-2">
-                    <Label htmlFor="url">URL</Label>
-                    <Input
-                      id="url"
-                      type="url"
-                      placeholder="https://example.com/article"
-                      value={formData.url}
-                      onChange={(e) => setFormData(prev => ({ ...prev, url: e.target.value }))}
-                    />
-                  </div>
-                )}
-
-                {/* Title Input */}
-                <div className="space-y-2">
-                  <Label htmlFor="title">Title</Label>
-                  <Input
-                    id="title"
-                    placeholder="Source title"
-                    value={formData.title}
-                    onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                  />
-                </div>
-
-                {/* Content Input (only when not using URL scraping) */}
-                {!useUrlScraping && (
-                  <div className="space-y-2">
-                    <Label htmlFor="content">Content</Label>
-                    <Textarea
-                      id="content"
-                      placeholder="Source content or summary..."
-                      rows={4}
-                      value={formData.content}
-                      onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
-                    />
-                  </div>
-                )}
-
-                {useUrlScraping && (
-                  <p className="text-sm text-muted-foreground">
-                    Content will be automatically extracted from the URL.
-                  </p>
-                )}
-              </div>
-
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline">Cancel</Button>
-                </DialogClose>
-                <Button 
-                  onClick={editingSource ? handleUpdateSource : handleAddSource}
-                  disabled={isAddingSource || isScrapingUrl}
-                >
-                  {isScrapingUrl ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Scraping...
-                    </>
-                  ) : isAddingSource ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      {editingSource ? 'Updating...' : 'Adding...'}
-                    </>
-                  ) : (
-                    editingSource ? 'Update Source' : 'Add Source'
-                  )}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button 
+            className="w-full" 
+            onClick={() => {
+              setEditingSource(null);
+              setAddSourceModalOpen(true);
+            }}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Source
+          </Button>
 
           {/* Sources List */}
           {isLoading ? (
@@ -480,6 +497,16 @@ export function SourcesDrawer({ articleId, isOpen, onOpenChange }: SourcesDrawer
           </div>
         </DrawerFooter>
       </DrawerContent>
+      
+      {/* Add Source Modal - Outside of drawer to avoid z-index conflicts */}
+      <AddSourceModal
+        isOpen={addSourceModalOpen}
+        onOpenChange={setAddSourceModalOpen}
+        articleId={articleId}
+        editingSource={editingSource}
+        onSourceAdded={handleSourceAdded}
+        onSourceUpdated={handleSourceUpdated}
+      />
     </Drawer>
   );
 }

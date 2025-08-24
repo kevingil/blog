@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo, BookOpen } from "lucide-react"
+import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { IconLoader2 } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
@@ -49,6 +49,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogTitle, DialogContent, DialogTrigger, DialogDescription, DialogFooter, DialogHeader, DialogClose } from '@/components/ui/dialog';
 import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerClose } from '@/components/ui/drawer';
 import { SourcesDrawer } from './SourcesDrawer';
+import { SourcesPreview } from './SourcesPreview';
 
 // Helper function to convert tool names to user-friendly display names
 function getToolDisplayName(toolName: string): string {
@@ -446,6 +447,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [generateImageOpen, setGenerateImageOpen] = useState(false);
   const [generatingRewrite, setGeneratingRewrite] = useState(false);
   const [sourcesDrawerOpen, setSourcesDrawerOpen] = useState(false);
+  const [sourcesRefreshTrigger, setSourcesRefreshTrigger] = useState(0);
 
   /* --------------------------------------------------------------------- */
   /* Chat (right-hand panel)                                               */
@@ -1278,9 +1280,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Article Tools Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
               {/* Header Image Section */}
-              <div className="flex flex-col gap-[4px]">
+              <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-gray-900 dark:text-white">Header Image</label>
                 <Drawer direction="right">
                   <DrawerTrigger asChild>
@@ -1293,8 +1296,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       />
                       {(!stagedImageUrl && !article?.article.image_url) && (
                         <div className="text-center">
-                          <UploadIcon className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">Click to add image</span>
+                          <UploadIcon className="w-6 h-6 mx-auto mb-1 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground">Click to add image</span>
                         </div>
                       )}
                     </Card>
@@ -1396,73 +1399,73 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 </Drawer>
               </div>
 
-              {/* Publishing Settings Section */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium text-gray-900 dark:text-white">Publishing Settings</h3>
-                
-                {/* Publication Status */}
-                <div className="flex items-center justify-between">
-                  <label htmlFor="isDraft" className="text-sm font-medium">Publication Status</label>
-                  <div className="flex items-center gap-2">
-                    <span className={cn("text-sm", watchedValues.isDraft ? "text-muted-foreground" : "text-green-600")}>
-                      {watchedValues.isDraft ? "Draft" : "Published"}
-                    </span>
-                    <Switch
-                      id="isDraft"
-                      checked={!watchedValues.isDraft}
-                      onCheckedChange={(checked) => {
-                        setValue('isDraft', !checked);
-                      }}
-                    />
-                  </div>
-                </div>
+              {/* Sources Preview Section */}
+              <SourcesPreview
+                articleId={article?.article.id}
+                onOpenDrawer={() => setSourcesDrawerOpen(true)}
+                disabled={!article && isNew}
+                refreshTrigger={sourcesRefreshTrigger}
+              />
 
-                {/* Published Date */}
-                <div className="space-y-2">
-                  <label htmlFor="publishedAt" className="text-sm font-medium">Published Date</label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          'w-full justify-start text-left font-normal',
-                          !article?.article.published_at && 'text-muted-foreground'
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {article?.article.published_at ? format(article.article.published_at, 'PPP') : <span>Pick a date</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={article?.article.published_at ? new Date(article.article.published_at) : undefined}
-                        onSelect={() => {
-                          /* Not a form field; selection handled elsewhere if needed */
+              {/* Publishing Settings Section */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-900 dark:text-white">Publishing</label>
+                <Card className="p-3 space-y-3">
+                  {/* Publication Status */}
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="isDraft" className="text-xs font-medium">Status</label>
+                    <div className="flex items-center gap-2">
+                      <span className={cn("text-xs", watchedValues.isDraft ? "text-muted-foreground" : "text-green-600")}>
+                        {watchedValues.isDraft ? "Draft" : "Published"}
+                      </span>
+                      <Switch
+                        id="isDraft"
+                        checked={!watchedValues.isDraft}
+                        onCheckedChange={(checked) => {
+                          setValue('isDraft', !checked);
                         }}
-                        initialFocus
                       />
-                    </PopoverContent>
-                  </Popover>
-                </div>
+                    </div>
+                  </div>
+
+                  {/* Published Date */}
+                  <div className="space-y-1">
+                    <label htmlFor="publishedAt" className="text-xs font-medium">Date</label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={"outline"}
+                          size="sm"
+                          className={cn(
+                            'w-full justify-start text-left font-normal h-8',
+                            !article?.article.published_at && 'text-muted-foreground'
+                          )}
+                        >
+                          <CalendarIcon className="mr-1 h-3 w-3" />
+                          <span className="text-xs">
+                            {article?.article.published_at ? format(article.article.published_at, 'MMM d, yyyy') : 'Pick date'}
+                          </span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={article?.article.published_at ? new Date(article.article.published_at) : undefined}
+                          onSelect={() => {
+                            /* Not a form field; selection handled elsewhere if needed */
+                          }}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </Card>
               </div>
 
               {/* Actions Section */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium text-gray-900 dark:text-white">Actions</h3>
-                <div className="space-y-2">
-                  {/* Sources button - available for both new and existing articles */}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full text-sm flex flex-row gap-2"
-                    onClick={() => setSourcesDrawerOpen(true)}
-                    disabled={!article && isNew} // Disable for new articles until they're created
-                  >
-                    <BookOpen className="w-4 h-4 text-indigo-500" />
-                    Sources & References
-                  </Button>
-                  
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-900 dark:text-white">Actions</label>
+                <Card className="p-3 space-y-2">
                   {!isNew && (
                     <>
                       <Link
@@ -1470,24 +1473,30 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         params={{ slug: article?.article.slug || '' }}
                         search={{ page: undefined, tag: undefined, search: undefined }}
                         target="_blank"
-                        className="flex items-center gap-2 text-sm text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                        className="flex items-center gap-2 text-xs text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1 rounded hover:bg-gray-50 dark:hover:bg-gray-800"
                       >
-                        <ExternalLinkIcon className="w-4 h-4" />
-                        View Published Article
+                        <ExternalLinkIcon className="w-3 h-3" />
+                        View Article
                       </Link>
                       <Button
                         type="button"
-                        variant="outline"
-                        className="w-full text-sm flex flex-row gap-2"
+                        variant="ghost"
+                        size="sm"
+                        className="w-full text-xs justify-start h-7"
                         onClick={rewriteArticle}
                         disabled={generatingRewrite}
                       >
-                        <RefreshCw className={cn('w-4 h-4 text-indigo-500', generatingRewrite && 'animate-spin')} /> 
-                        Regenerate Content
+                        <RefreshCw className={cn('w-3 h-3 mr-2 text-indigo-500', generatingRewrite && 'animate-spin')} /> 
+                        Regenerate
                       </Button>
                     </>
                   )}
-                </div>
+                  {isNew && (
+                    <div className="text-xs text-muted-foreground text-center py-2">
+                      Save article to access actions
+                    </div>
+                  )}
+                </Card>
               </div>
             </div>
           </CardContent>
