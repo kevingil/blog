@@ -1288,12 +1288,15 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 <Drawer direction="right">
                   <DrawerTrigger asChild>
                     <Card className="w-full h-32 flex items-center justify-center overflow-hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                      <div className="flex flex-col px-2 gap-2">
+                        <div className="text-xs">Image</div>
                       <ImageLoader
                         article={article}
                         newImageGenerationRequestId={newImageGenerationRequestId}
                         stagedImageUrl={stagedImageUrl}
                         setStagedImageUrl={setStagedImageUrl}
                       />
+                      </div>
                       {(!stagedImageUrl && !article?.article.image_url) && (
                         <div className="text-center">
                           <UploadIcon className="w-6 h-6 mx-auto mb-1 text-muted-foreground" />
