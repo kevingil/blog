@@ -119,7 +119,7 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
 
   const articles: ArticleListItem[] = (articlesData as GetArticlesResponse | undefined)?.articles ?? [];
   const totalPages: number = (articlesData as GetArticlesResponse | undefined)?.total_pages ?? 0;
-  const loading = isLoading || (isFetching && !articlesData);
+  const loading = isLoading || isFetching;
 
   // Debounce implementation function
   // thanks to: https://blog.alexefimenko.com/posts/debounce-react
@@ -249,9 +249,9 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
         <ArticlesSkeleton />
       ) : articles.length === 0 ? (
         <div className="text-center py-8 text-muted-foreground">
-          {searchTerm && !debounceTimeout.current ? 
+          {searchTerm ? 
             "No articles found matching your search criteria." :
-            "Loading results..."
+            "No articles available."
           }
         </div>
       ) : (

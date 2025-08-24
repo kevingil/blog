@@ -278,7 +278,7 @@ func (s *ArticleService) GetArticles(page int, tag string, status string, articl
 		return nil, result.Error
 	}
 
-	var articleItems []ArticleListItem
+	articleItems := make([]ArticleListItem, 0)
 	for _, article := range articles {
 		// Parse tag IDs
 		var tagIDs []int64
@@ -327,7 +327,7 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string) (*Ar
 
 	searchQuery := db.Model(&models.Article{}).
 		Where("is_draft = ?", false).
-		Where("title LIKE ? OR content LIKE ?", "%"+query+"%", "%"+query+"%")
+		Where("title LIKE ? OR content LIKE ? OR EXISTS (SELECT 1 FROM tag WHERE id = ANY(article.tag_ids) AND name ILIKE ?)", "%"+query+"%", "%"+query+"%", "%"+query+"%")
 
 	if tag != "" {
 		var tagModel models.Tag
@@ -347,7 +347,7 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string) (*Ar
 		return nil, result.Error
 	}
 
-	var articleItems []ArticleListItem
+	articleItems := make([]ArticleListItem, 0)
 	for _, article := range articles {
 		var tagIDs []int64
 		tagIDs = article.TagIDs
