@@ -173,7 +173,7 @@ export interface ArticleSource {
   title: string;
   content: string;
   url: string;
-  source_type: 'web' | 'manual';
+  source_type: 'web' | 'manual' | 'pdf';
   embedding?: number[];
   meta_data?: Record<string, any>;
   created_at: string;
