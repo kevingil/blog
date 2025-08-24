@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, Link } from '@tanstack/react-router';
 import { format } from 'date-fns';
 import { Card, CardContent } from "@/components/ui/card";
-import { Image as ImageIcon } from "lucide-react";
+import { Image as ImageIcon, X, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -72,6 +72,7 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
   const [searchTag, setSearchTag] = useState<string | null>(search.get('tag'));
   const [searchTerm, setSearchTerm] = useState<string>(search.get('search') || '');
   const [recentTags, setRecentTags] = useState<string[]>(['All']);
+  const [isDebouncing, setIsDebouncing] = useState(false);
 
   // Update URL without triggering navigation, for tags, pages, and search
   const updateURLQuietly = useCallback((newParams: { page?: number; search?: string; tag?: string | null }) => {
@@ -121,36 +122,54 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
   const totalPages: number = (articlesData as GetArticlesResponse | undefined)?.total_pages ?? 0;
   const loading = isLoading || isFetching;
 
-  // Debounce implementation function
-  // thanks to: https://blog.alexefimenko.com/posts/debounce-react
-  const debounce = (func: Function, delay: number) => {
-    return function (...args: any[]) {
+  // Debounce (delay) search
+  const debouncedSearch = useCallback(
+    (value: string) => {
       if (debounceTimeout.current) {
         clearTimeout(debounceTimeout.current);
       }
       
+      setIsDebouncing(true);
       debounceTimeout.current = setTimeout(() => {
-        func(...args);
+        setPage(1);
+        setSearchTag(null);
+        updateURLQuietly({ search: value, page: 1 });
+        setIsDebouncing(false);
         debounceTimeout.current = null;
-      }, delay);
-    };
-  };
-
-  // Debounce (delay) search
-  const debouncedSearch = useCallback(
-    debounce((value: string) => {
-      setPage(1);
-      setSearchTag(null);
-      updateURLQuietly({ search: value, page: 1 });
-      // React Query will automatically refetch when searchTerm changes
-    }, SEARCH_DELAY),
+      }, SEARCH_DELAY);
+    },
     [updateURLQuietly]
   );
 
   // Handle search input change
   const handleSearch = (value: string) => {
     setSearchTerm(value);
-    debouncedSearch(value);
+    if (value.trim()) {
+      debouncedSearch(value);
+    } else {
+      // Clear search immediately when empty
+      if (debounceTimeout.current) {
+        clearTimeout(debounceTimeout.current);
+        debounceTimeout.current = null;
+      }
+      setIsDebouncing(false);
+      setPage(1);
+      setSearchTag(null);
+      updateURLQuietly({ search: '', page: 1 });
+    }
+  };
+
+  // Handle clear search
+  const handleClearSearch = () => {
+    if (debounceTimeout.current) {
+      clearTimeout(debounceTimeout.current);
+      debounceTimeout.current = null;
+    }
+    setIsDebouncing(false);
+    setSearchTerm('');
+    setPage(1);
+    setSearchTag(null);
+    updateURLQuietly({ search: '', page: 1 });
   };
 
   // Handle tag selection
@@ -201,18 +220,29 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
       {pagination && (
         <div className='w-full'>
           <div className="relative">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none">
+              <Search className="h-5 w-5 text-muted-foreground" />
+            </div>
             <Input
-              type="search"
+              type="text"
               placeholder="Search articles..."
               value={searchTerm}
               onChange={(e) => handleSearch(e.target.value)}
-              className="w-full p-4 py-6 rounded-full"
+              className="w-full pl-12 pr-12 py-6 rounded-full [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
             />
-            {debounceTimeout.current && (
-              <div className="absolute right-4 top-1/2 -translate-y-1/2">
+            <div className="absolute right-4 top-1/2 -translate-y-1/2">
+              {isDebouncing ? (
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
-              </div>
-            )}
+              ) : searchTerm ? (
+                <button
+                  onClick={handleClearSearch}
+                  className="p-1 rounded-full hover:bg-muted transition-colors"
+                  title="Clear search"
+                >
+                  <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                </button>
+              ) : null}
+            </div>
           </div>
           <div className='flex flex-wrap gap-2 my-4'>
             {recentTags && recentTags.length > 0 && recentTags.map((tag) => (
