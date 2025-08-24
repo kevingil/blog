@@ -327,7 +327,7 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string) (*Ar
 
 	searchQuery := db.Model(&models.Article{}).
 		Where("is_draft = ?", false).
-		Where("title LIKE ? OR content LIKE ? OR EXISTS (SELECT 1 FROM tag WHERE id = ANY(article.tag_ids) AND name ILIKE ?)", "%"+query+"%", "%"+query+"%", "%"+query+"%")
+		Where("title ILIKE ? OR content ILIKE ? OR EXISTS (SELECT 1 FROM tag WHERE tag.id = ANY(tag_ids) AND tag.name ILIKE ?)", "%"+query+"%", "%"+query+"%", "%"+query+"%")
 
 	if tag != "" {
 		var tagModel models.Tag
