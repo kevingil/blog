@@ -12,6 +12,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	openai "github.com/openai/openai-go"
+	"github.com/pgvector/pgvector-go"
 	"gorm.io/gorm"
 )
 
@@ -142,10 +144,32 @@ func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uuid.UUID,
 		article.TagIDs = pq.Int64Array(tagIDs)
 	}
 
-	result = db.Save(&article)
+	// Update article without embedding field to avoid "vector must have at least 1 dimension" error
+	updateFields := map[string]interface{}{
+		"title":        article.Title,
+		"content":      article.Content,
+		"image_url":    article.ImageURL,
+		"is_draft":     article.IsDraft,
+		"published_at": article.PublishedAt,
+		"tag_ids":      article.TagIDs,
+		"updated_at":   time.Now(),
+	}
+
+	fmt.Println("\n\n- Updating article", articleID)
+	result = db.Model(&article).Updates(updateFields)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to update article: %w", result.Error)
 	}
+
+	// Generate embeddings in the background after successful update
+	go func() {
+		fmt.Println("\n\n- Regenerating embedding for article", articleID)
+		ctx := context.Background()
+		if err := s.regenerateArticleEmbedding(ctx, articleID, req.Content); err != nil {
+			// Log error but don't fail the update
+			fmt.Printf("Warning: failed to regenerate embedding for article %s: %v\n", articleID, err)
+		}
+	}()
 
 	return s.GetArticle(article.ID)
 }
@@ -613,4 +637,71 @@ func safeTimeToString(t *time.Time) *string {
 	}
 	s := t.UTC().Format(time.RFC3339)
 	return &s
+}
+
+// generateEmbedding generates an embedding vector for the given text using OpenAI's API
+func (s *ArticleService) generateEmbedding(ctx context.Context, text string) (pgvector.Vector, error) {
+	if text == "" {
+		return pgvector.Vector{}, fmt.Errorf("text cannot be empty")
+	}
+
+	// Truncate text if too long (OpenAI has token limits)
+	// text-embedding-3-small supports up to 8192 tokens (~6000 characters)
+	originalLength := len(text)
+	if len(text) > 8000 {
+		text = text[:8000]
+	}
+
+	// Create OpenAI client
+	client := openai.NewClient()
+
+	// Generate embedding using OpenAI's text-embedding-3-small model
+	// This model produces 1536-dimensional embeddings
+	resp, err := client.Embeddings.New(ctx, openai.EmbeddingNewParams{
+		Input: openai.EmbeddingNewParamsInputUnion{
+			OfArrayOfStrings: []string{text},
+		},
+		Model: openai.EmbeddingModelTextEmbedding3Small,
+		// Optionally set dimensions to 1536 explicitly (default for text-embedding-3-small)
+		// Dimensions: param.Int(1536),
+	})
+	if err != nil {
+		return pgvector.Vector{}, fmt.Errorf("failed to generate embedding from OpenAI (text length: %d): %w", originalLength, err)
+	}
+
+	if len(resp.Data) == 0 {
+		return pgvector.Vector{}, fmt.Errorf("no embedding data returned from OpenAI")
+	}
+
+	// Validate embedding dimensions
+	embeddingData := resp.Data[0].Embedding
+	if len(embeddingData) != 1536 {
+		return pgvector.Vector{}, fmt.Errorf("unexpected embedding dimensions: got %d, expected 1536", len(embeddingData))
+	}
+
+	// Convert []float64 to []float32 for pgvector compatibility
+	embedding := make([]float32, len(embeddingData))
+	for i, v := range embeddingData {
+		embedding[i] = float32(v)
+	}
+
+	return pgvector.NewVector(embedding), nil
+}
+
+// regenerateArticleEmbedding generates and updates the embedding for an article
+func (s *ArticleService) regenerateArticleEmbedding(ctx context.Context, articleID uuid.UUID, content string) error {
+	// Generate embedding for the article content
+	embedding, err := s.generateEmbedding(ctx, content)
+	if err != nil {
+		return fmt.Errorf("failed to generate embedding: %w", err)
+	}
+
+	// Update the article with the new embedding
+	db := s.db.GetDB()
+	result := db.Model(&models.Article{}).Where("id = ?", articleID).Update("embedding", embedding)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update article embedding: %w", result.Error)
+	}
+
+	return nil
 }
