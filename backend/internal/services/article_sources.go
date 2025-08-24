@@ -1,8 +1,10 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/google/uuid"
+	"github.com/ledongthuc/pdf"
 	"github.com/openai/openai-go"
 	"github.com/pgvector/pgvector-go"
 	"gorm.io/gorm"
@@ -99,13 +102,19 @@ func (s *ArticleSourceService) ScrapeAndCreateSource(ctx context.Context, articl
 		return nil, fmt.Errorf("failed to scrape URL: %w", err)
 	}
 
+	// Determine source type based on URL and content
+	sourceType := "web"
+	if s.isPDFURL(targetURL) {
+		sourceType = "pdf"
+	}
+
 	// Create the source
 	req := CreateSourceRequest{
 		ArticleID:  articleID,
 		Title:      scraped.Title,
 		Content:    scraped.Content,
 		URL:        scraped.URL,
-		SourceType: "web",
+		SourceType: sourceType,
 	}
 
 	return s.CreateSource(ctx, req)
@@ -199,6 +208,75 @@ func (s *ArticleSourceService) DeleteSource(sourceID uuid.UUID) error {
 	return nil
 }
 
+// extractTextFromPDF extracts text content from PDF data
+func (s *ArticleSourceService) extractTextFromPDF(pdfData []byte) (string, string, error) {
+	reader := bytes.NewReader(pdfData)
+
+	// Open the PDF
+	pdfReader, err := pdf.NewReader(reader, int64(len(pdfData)))
+	if err != nil {
+		return "", "", fmt.Errorf("failed to open PDF: %w", err)
+	}
+
+	var textContent strings.Builder
+	var title string
+
+	// Extract text from all pages
+	for i := 1; i <= pdfReader.NumPage(); i++ {
+		page := pdfReader.Page(i)
+		if page.V.IsNull() {
+			continue
+		}
+
+		pageText, err := page.GetPlainText(nil)
+		if err != nil {
+			// Log the error but continue with other pages
+			continue
+		}
+
+		// Use first non-empty line as title if we haven't found one yet
+		if title == "" && pageText != "" {
+			lines := strings.Split(pageText, "\n")
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if len(line) > 0 && len(line) < 200 { // Reasonable title length
+					title = line
+					break
+				}
+			}
+		}
+
+		textContent.WriteString(pageText)
+		textContent.WriteString("\n\n")
+	}
+
+	content := strings.TrimSpace(textContent.String())
+	if content == "" {
+		return "", "", fmt.Errorf("no text content found in PDF")
+	}
+
+	// Clean up the title
+	if title == "" {
+		title = "PDF Document"
+	}
+
+	return title, content, nil
+}
+
+// isPDFURL checks if a URL likely points to a PDF file
+func (s *ArticleSourceService) isPDFURL(targetURL string) bool {
+	// Check file extension
+	if strings.HasSuffix(strings.ToLower(targetURL), ".pdf") {
+		return true
+	}
+
+	// Check if URL path contains PDF-related patterns
+	lowerURL := strings.ToLower(targetURL)
+	return strings.Contains(lowerURL, ".pdf") ||
+		strings.Contains(lowerURL, "/pdf/") ||
+		strings.Contains(lowerURL, "content-type=application/pdf")
+}
+
 // scrapeURL scrapes content from a web URL
 func (s *ArticleSourceService) scrapeURL(targetURL string) (*ScrapedContent, error) {
 	// Validate URL
@@ -236,8 +314,33 @@ func (s *ArticleSourceService) scrapeURL(targetURL string) (*ScrapedContent, err
 		return nil, fmt.Errorf("HTTP error: %d", resp.StatusCode)
 	}
 
-	// Parse HTML
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	// Check content type to determine if it's a PDF
+	contentType := resp.Header.Get("Content-Type")
+
+	// Read the response body
+	bodyData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Handle PDF content
+	if strings.Contains(contentType, "application/pdf") ||
+		(len(bodyData) > 4 && string(bodyData[:4]) == "%PDF") {
+
+		title, content, err := s.extractTextFromPDF(bodyData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract PDF content: %w", err)
+		}
+
+		return &ScrapedContent{
+			Title:   title,
+			Content: content,
+			URL:     targetURL,
+		}, nil
+	}
+
+	// Handle HTML content (existing logic)
+	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(bodyData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse HTML: %w", err)
 	}

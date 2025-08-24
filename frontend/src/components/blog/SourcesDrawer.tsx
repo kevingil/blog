@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, ExternalLink, Edit2, Trash2, Globe, FileText, Loader2 } from 'lucide-react';
+import { Plus, ExternalLink, Edit2, Trash2, Globe, FileText, Loader2, FileIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -411,11 +411,16 @@ export function SourcesDrawer({ articleId, isOpen, onOpenChange }: SourcesDrawer
                           {source.title}
                         </CardTitle>
                         <div className="flex items-center gap-2 mt-1">
-                          <Badge variant={source.source_type === 'web' ? 'default' : 'secondary'} className="text-xs">
+                          <Badge variant={source.source_type === 'web' ? 'default' : source.source_type === 'pdf' ? 'destructive' : 'secondary'} className="text-xs">
                             {source.source_type === 'web' ? (
                               <>
                                 <Globe className="w-3 h-3 mr-1" />
                                 Web
+                              </>
+                            ) : source.source_type === 'pdf' ? (
+                              <>
+                                <FileIcon className="w-3 h-3 mr-1" />
+                                PDF
                               </>
                             ) : (
                               <>

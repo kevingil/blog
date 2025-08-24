@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BookOpen, Globe, FileText, Plus } from 'lucide-react';
+import { BookOpen, Globe, FileText, Plus, FileIcon } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getArticleSources } from '@/services/sources';
@@ -92,6 +92,8 @@ export function SourcesPreview({ articleId, onOpenDrawer, disabled, refreshTrigg
                 >
                   {source.source_type === 'web' ? (
                     <Globe className="w-3 h-3 text-blue-500 flex-shrink-0" />
+                  ) : source.source_type === 'pdf' ? (
+                    <FileIcon className="w-3 h-3 text-red-500 flex-shrink-0" />
                   ) : (
                     <FileText className="w-3 h-3 text-gray-500 flex-shrink-0" />
                   )}
