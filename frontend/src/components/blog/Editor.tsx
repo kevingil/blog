@@ -1347,13 +1347,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                               />
                             </div>
                             <DialogFooter>
-                              <div className="flex items-center gap-2 w-full">
+                              <div className="flex justify-end gap-2 w-full">
                                 <DialogClose asChild>
-                                  <Button variant="outline" className="w-full">Cancel</Button>
+                                  <Button variant="outline" className="">Cancel</Button>
                                 </DialogClose>
                                 <Button
                                   type="submit"
-                                  className="w-full"
+                                  className=""
                                   onClick={async () => {
                                     const result = await generateArticleImage(imagePrompt || '', article?.article.id || '');
                                     if (result.success) {

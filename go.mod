@@ -11,6 +11,7 @@ require (
 	github.com/gofiber/fiber/v2 v2.52.6
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/joho/godotenv v1.5.1
+	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/lib/pq v1.10.9
 	github.com/mark3labs/mcp-go v0.36.0
 	github.com/openai/openai-go v1.6.0
@@ -53,7 +54,6 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
-	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/microsoft/go-mssqldb v1.8.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect

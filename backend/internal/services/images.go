@@ -57,10 +57,14 @@ func (s *ImageGenerationService) GenerateArticleImage(ctx context.Context, promp
 
 	// Generate image using official OpenAI client and get base64 response
 	imgResp, err := client.Images.Generate(ctx, openai.ImageGenerateParams{
-		Prompt:         prompt,
-		Model:          openai.ImageModelGPTImage1,
-		ResponseFormat: openai.ImageGenerateParamsResponseFormatB64JSON,
-		N:              openai.Int(1),
+		Prompt:       prompt,
+		Model:        openai.ImageModelGPTImage1,
+		N:            openai.Int(1),
+		Size:         openai.ImageGenerateParamsSizeAuto,        // Auto selects best size for gpt-image-1
+		Quality:      openai.ImageGenerateParamsQualityHigh,     // High quality for better article images
+		OutputFormat: openai.ImageGenerateParamsOutputFormatPNG, // PNG for better quality
+		Background:   openai.ImageGenerateParamsBackgroundAuto,  // Auto background selection
+		Moderation:   openai.ImageGenerateParamsModerationAuto,  // Default content moderation
 	})
 	if err != nil {
 		return nil, err
