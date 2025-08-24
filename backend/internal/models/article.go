@@ -6,24 +6,25 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"github.com/pgvector/pgvector-go"
 	"gorm.io/datatypes"
 )
 
 type Article struct {
-	ID              uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	Slug            string         `json:"slug" gorm:"uniqueIndex;not null"`
-	Title           string         `json:"title" gorm:"not null"`
-	Content         string         `json:"content" gorm:"type:text"`
-	ImageURL        string         `json:"image_url"`
-	AuthorID        uuid.UUID      `json:"author_id" gorm:"type:uuid;not null"`
-	TagIDs          pq.Int64Array  `json:"tag_ids" gorm:"type:integer[]"`
-	IsDraft         bool           `json:"is_draft" gorm:"default:true"`
-	CreatedAt       time.Time      `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt       time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
-	PublishedAt     *time.Time     `json:"published_at,omitempty"`
-	ImagenRequestID *uuid.UUID     `json:"imagen_request_id" gorm:"type:uuid"`
-	Embedding       []float32      `json:"embedding" gorm:"type:vector(1536)"`
-	SessionMemory   datatypes.JSON `json:"session_memory" gorm:"type:jsonb;default:'{}'"`
+	ID              uuid.UUID       `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	Slug            string          `json:"slug" gorm:"uniqueIndex;not null"`
+	Title           string          `json:"title" gorm:"not null"`
+	Content         string          `json:"content" gorm:"type:text"`
+	ImageURL        string          `json:"image_url"`
+	AuthorID        uuid.UUID       `json:"author_id" gorm:"type:uuid;not null"`
+	TagIDs          pq.Int64Array   `json:"tag_ids" gorm:"type:integer[]"`
+	IsDraft         bool            `json:"is_draft" gorm:"default:true"`
+	CreatedAt       time.Time       `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt       time.Time       `json:"updated_at" gorm:"autoUpdateTime"`
+	PublishedAt     *time.Time      `json:"published_at,omitempty"`
+	ImagenRequestID *uuid.UUID      `json:"imagen_request_id" gorm:"type:uuid"`
+	Embedding       pgvector.Vector `json:"embedding" gorm:"type:vector(1536)"`
+	SessionMemory   datatypes.JSON  `json:"session_memory" gorm:"type:jsonb;default:'{}'"`
 }
 
 func (Article) TableName() string {
@@ -64,15 +65,15 @@ func (Tag) TableName() string {
 // Matches the article_source table
 
 type ArticleSource struct {
-	ID         uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
-	ArticleID  uuid.UUID      `json:"article_id" gorm:"type:uuid;not null;index"`
-	Title      string         `json:"title"`
-	Content    string         `json:"content" gorm:"type:text;not null"`
-	URL        string         `json:"url"`
-	SourceType string         `json:"source_type" gorm:"default:web"`
-	Embedding  []float32      `json:"embedding" gorm:"type:vector(1536)"`
-	MetaData   datatypes.JSON `json:"meta_data" gorm:"type:jsonb;default:'{}'"`
-	CreatedAt  time.Time      `json:"created_at" gorm:"autoCreateTime"`
+	ID         uuid.UUID       `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	ArticleID  uuid.UUID       `json:"article_id" gorm:"type:uuid;not null;index"`
+	Title      string          `json:"title"`
+	Content    string          `json:"content" gorm:"type:text;not null"`
+	URL        string          `json:"url"`
+	SourceType string          `json:"source_type" gorm:"default:web"`
+	Embedding  pgvector.Vector `json:"embedding" gorm:"type:vector(1536)"`
+	MetaData   datatypes.JSON  `json:"meta_data" gorm:"type:jsonb;default:'{}'"`
+	CreatedAt  time.Time       `json:"created_at" gorm:"autoCreateTime"`
 }
 
 func (ArticleSource) TableName() string {
