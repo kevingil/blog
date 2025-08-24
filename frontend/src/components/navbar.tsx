@@ -1,7 +1,8 @@
 "use client";
-import { Terminal, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
 import React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { gsap } from 'gsap';
 import {
   Sheet,
   SheetContent,
@@ -18,7 +19,7 @@ import {
   NavigationMenuList,
 } from "./ui/navigation-menu";
 
-import { signOut, useAuth } from '@/services/auth/auth';
+import { useAuth } from '@/services/auth/auth';
 import { Home, LogOut } from 'lucide-react';
 
 import {
@@ -29,21 +30,123 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from "@/components/ui/button";
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import { ToggleTheme } from "./home/toogle-theme";
-import { siteMetadata } from '@/services/constants';
 import { getAboutPage } from '@/services/user';
 import { useQuery } from '@tanstack/react-query';
 import { useAtomValue } from 'jotai';
-import { tokenAtom, isAuthenticatedAtom } from '@/services/auth/auth';
+import { isAuthenticatedAtom } from '@/services/auth/auth';
 import { cn } from "@/lib/utils";
+
+// Glitch animation component for KG title
+function GlitchText({ 
+  text, 
+  className = ""
+}: { 
+  text: string
+  className?: string
+}) {
+  const textRef = useRef<HTMLSpanElement>(null)
+  const isAnimationComplete = useRef(false)
+
+  useEffect(() => {
+    const element = textRef.current
+    if (!element) return
+
+    // Check for reduced motion preference
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    
+    if (prefersReducedMotion) {
+      element.textContent = text
+      isAnimationComplete.current = true
+      return
+    }
+
+    // Initial setup
+    element.textContent = text
+    isAnimationComplete.current = true
+
+    // Add glitch hover effect
+    const addGlitchHover = () => {
+      const originalText = text
+      let glitchTimeline: gsap.core.Timeline | null = null
+
+      const startGlitch = () => {
+        if (glitchTimeline) glitchTimeline.kill()
+        
+        glitchTimeline = gsap.timeline({ repeat: -1 })
+        glitchTimeline.to(element, {
+          duration: 0.1,
+          repeat: 8,
+          yoyo: true,
+          ease: "power2.inOut",
+          textShadow: "2px 0 #ff0000, -2px 0 #00ff00",
+          filter: "blur(1px)",
+          onUpdate: function() {
+            if (Math.random() < 0.5) {
+              const glitchChars = "!@#$%^&*(){}[]|\\:;<>?/~`"
+              let glitchText = ""
+              for (let i = 0; i < originalText.length; i++) {
+                glitchText += Math.random() < 0.1 
+                  ? glitchChars[Math.floor(Math.random() * glitchChars.length)]
+                  : originalText[i]
+              }
+              element.textContent = glitchText
+            }
+          }
+        })
+      }
+      
+      const stopGlitch = () => {
+        if (glitchTimeline) {
+          glitchTimeline.kill()
+          gsap.set(element, {
+            textShadow: "none",
+            filter: "blur(0px)"
+          })
+          element.textContent = originalText
+        }
+      }
+      
+      element.addEventListener('mouseenter', startGlitch)
+      element.addEventListener('mouseleave', stopGlitch)
+      
+      // Store cleanup function
+      ;(element as any)._glitchCleanup = () => {
+        element.removeEventListener('mouseenter', startGlitch)
+        element.removeEventListener('mouseleave', stopGlitch)
+        if (glitchTimeline) glitchTimeline.kill()
+      }
+    }
+    
+    addGlitchHover()
+
+    // Cleanup function
+    return () => {
+      if (element) {
+        // Clean up glitch hover if it exists
+        if ((element as any)._glitchCleanup) {
+          (element as any)._glitchCleanup()
+        }
+        gsap.set(element, { clearProps: "all" })
+      }
+    }
+  }, [text])
+
+  return (
+    <span 
+      ref={textRef} 
+      className={`${className} cursor-pointer`}
+    />
+  )
+}
 
 interface RouteProps {
   href: string;
   label: string;
 }
 
-const title: string = siteMetadata.title;
+
 
 const routeList: RouteProps[] = [
   {
@@ -90,7 +193,10 @@ export const Navbar = () => {
       isAnimated ? "card-animated" : "card-hidden"
     )}>
       <Link to="/" className="flex items-center">
-        <span className={'text-xl'}>{title}</span>
+        <GlitchText 
+          text="KG" 
+          className="text-2xl font-bold font-gloria" 
+        />
       </Link>
       {/* <!-- Mobile --> */}
       <div className="flex items-center lg:hidden">
@@ -113,7 +219,10 @@ export const Navbar = () => {
               <SheetHeader className="mb-4 ml-4">
                 <SheetTitle className="flex items-center">
                   <Link to="/" className="flex items-center">
-                    Kevin Gil
+                    <GlitchText 
+                      text="KG" 
+                      className="text-xl font-bold font-gloria" 
+                    />
                   </Link>
                 </SheetTitle>
               </SheetHeader>

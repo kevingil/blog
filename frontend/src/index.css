@@ -162,6 +162,11 @@
   html {
     scroll-behavior: smooth;
   }
+  
+  /* Ensure Gloria Hallelujah font loads properly */
+  .font-gloria {
+    font-family: 'Gloria Hallelujah', cursive !important;
+  }
 }
 
 @layer utilities {
