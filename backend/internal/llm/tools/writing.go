@@ -141,19 +141,19 @@ func (t *GetRelevantSourcesTool) Run(ctx context.Context, params ToolCall) (Tool
 		log.Printf("   📝 Content Preview: %q", contentPreview)
 
 		// Chunk the content and find the most relevant chunks
-		chunks := t.chunkText(source.Content, 500)                         // 500 character chunks with overlap
-		relevantChunks := t.findMostRelevantChunks(chunks, input.Query, 3) // Top 3 chunks per source
+		chunks := t.chunkText(source.Content, 1200)                        // 1200 character chunks with overlap for more context
+		relevantChunks := t.findMostRelevantChunks(chunks, input.Query, 2) // Top 2 chunks per source (longer chunks)
 
 		log.Printf("   🧩 Generated %d chunks, selected %d most relevant", len(chunks), len(relevantChunks))
 
 		// Add each relevant chunk as a separate source entry
 		for j, chunk := range relevantChunks {
 			chunkPreview := chunk.Text
-			if len(chunkPreview) > 100 {
-				chunkPreview = chunkPreview[:100] + "..."
+			if len(chunkPreview) > 200 {
+				chunkPreview = chunkPreview[:200] + "..."
 			}
 
-			log.Printf("   📝 Chunk #%d (score: %.3f): %q", j+1, chunk.Score, chunkPreview)
+			log.Printf("   📝 Chunk #%d (score: %.3f, length: %d chars): %q", j+1, chunk.Score, len(chunk.Text), chunkPreview)
 
 			sourceData := map[string]interface{}{
 				"source_title": source.Title,
@@ -175,15 +175,41 @@ func (t *GetRelevantSourcesTool) Run(ctx context.Context, params ToolCall) (Tool
 	}
 	totalChunks = len(relevantSources) // Now each chunk is a separate entry
 
+	// Calculate chunk size statistics
+	var chunkSizes []int
+	totalChunkLength := 0
+	for _, source := range relevantSources {
+		if chunk, ok := source["text_chunk"].(string); ok {
+			chunkLength := len(chunk)
+			chunkSizes = append(chunkSizes, chunkLength)
+			totalChunkLength += chunkLength
+		}
+	}
+
 	log.Printf("🔍 [GetRelevantSources] 📊 Quality Metrics:")
 	log.Printf("   📄 Total sources found: %d", len(sources))
 	log.Printf("   🧩 Total chunks extracted: %d", totalChunks)
 	log.Printf("   📏 Total original content length: %d characters", totalContentLength)
+	log.Printf("   📏 Total chunk content length: %d characters", totalChunkLength)
 	if len(sources) > 0 {
 		avgContentLength := totalContentLength / len(sources)
 		avgChunksPerSource := float64(totalChunks) / float64(len(sources))
 		log.Printf("   📊 Average content length per source: %d characters", avgContentLength)
 		log.Printf("   📊 Average chunks per source: %.1f", avgChunksPerSource)
+	}
+	if len(chunkSizes) > 0 {
+		avgChunkSize := totalChunkLength / len(chunkSizes)
+		minChunkSize := chunkSizes[0]
+		maxChunkSize := chunkSizes[0]
+		for _, size := range chunkSizes {
+			if size < minChunkSize {
+				minChunkSize = size
+			}
+			if size > maxChunkSize {
+				maxChunkSize = size
+			}
+		}
+		log.Printf("   📊 Chunk sizes - Avg: %d, Min: %d, Max: %d characters", avgChunkSize, minChunkSize, maxChunkSize)
 	}
 
 	result := map[string]interface{}{
@@ -222,7 +248,7 @@ func NewRewriteDocumentTool(textGenService TextGenerationService, sourceService 
 func (t *RewriteDocumentTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        "rewrite_document",
-		Description: "Completely rewrite or significantly edit the document content with diff generation support",
+		Description: "Completely rewrite or significantly edit the document content with diff generation support. CRITICAL: Write like a human, not an AI. Avoid AI writing patterns: no puffery ('breathtaking', 'nestled'), no symbolic importance phrases ('stands as a testament'), no editorializing ('it's important to note'), no superficial analyses with -ing phrases, no overused conjunctions, no section summaries, no negative parallelisms, no excessive em dashes, use sentence case headings, avoid vague attributions, write naturally with varied structures and concrete details.",
 		Parameters: map[string]any{
 			"new_content": map[string]any{
 				"type":        "string",
@@ -326,7 +352,32 @@ func (t *RewriteDocumentTool) Run(ctx context.Context, params ToolCall) (ToolRes
 	if len(relevantSources) > 0 {
 		result["relevant_sources"] = relevantSources
 		result["sources_used"] = len(relevantSources)
+
 		log.Printf("📝 [RewriteDocument] ✅ Including %d relevant sources in response", len(relevantSources))
+
+		// Log the source context that will be available to the LLM
+		log.Printf("📝 [RewriteDocument] 📚 Source context being provided:")
+		for i, source := range relevantSources {
+			sourceTitle := "Unknown"
+			sourceURL := "N/A"
+			textChunk := "N/A"
+
+			if title, ok := source["source_title"].(string); ok {
+				sourceTitle = title
+			}
+			if url, ok := source["source_url"].(string); ok {
+				sourceURL = url
+			}
+			if chunk, ok := source["text_chunk"].(string); ok {
+				textChunk = chunk
+				if len(textChunk) > 300 {
+					textChunk = textChunk[:300] + "..."
+				}
+			}
+
+			log.Printf("   📖 Source %d: %s (%s)", i+1, sourceTitle, sourceURL)
+			log.Printf("   📄 Content: %q", textChunk)
+		}
 	} else {
 		log.Printf("📝 [RewriteDocument] No relevant sources found or included")
 	}
@@ -412,7 +463,7 @@ func (t *GetRelevantSourcesTool) chunkText(text string, chunkSize int) []TextChu
 	}
 
 	var chunks []TextChunk
-	overlap := chunkSize / 4 // 25% overlap
+	overlap := chunkSize / 3 // 33% overlap for better context preservation
 
 	for i := 0; i < len(text); i += chunkSize - overlap {
 		end := i + chunkSize
@@ -422,10 +473,18 @@ func (t *GetRelevantSourcesTool) chunkText(text string, chunkSize int) []TextChu
 
 		chunk := text[i:end]
 		// Try to break at sentence boundaries to avoid cutting words
-		if end < len(text) && !strings.Contains(chunk[len(chunk)-20:], ".") {
-			// Look for the last sentence boundary in the chunk
-			if lastDot := strings.LastIndex(chunk, "."); lastDot > chunkSize/2 {
-				chunk = chunk[:lastDot+1]
+		if end < len(text) {
+			// Look for the last sentence boundary in the last third of the chunk
+			searchStart := len(chunk) * 2 / 3
+			if searchStart < len(chunk) {
+				lastPart := chunk[searchStart:]
+				if lastDot := strings.LastIndex(lastPart, "."); lastDot != -1 {
+					chunk = chunk[:searchStart+lastDot+1]
+				} else if lastQuestion := strings.LastIndex(lastPart, "?"); lastQuestion != -1 {
+					chunk = chunk[:searchStart+lastQuestion+1]
+				} else if lastExclamation := strings.LastIndex(lastPart, "!"); lastExclamation != -1 {
+					chunk = chunk[:searchStart+lastExclamation+1]
+				}
 			}
 		}
 
@@ -550,7 +609,7 @@ func NewEditTextTool() *EditTextTool {
 func (t *EditTextTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        "edit_text",
-		Description: "Edit specific text in the document while preserving the rest. Use this for targeted edits, improvements, or changes to specific sections.",
+		Description: "Edit specific text in the document while preserving the rest. Use this for targeted edits, improvements, or changes to specific sections. IMPORTANT: Write like a human - avoid AI patterns like puffery words, symbolic importance phrases, editorializing, superficial analyses, overused conjunctions, section summaries, and negative parallelisms. Use natural, varied sentence structures.",
 		Parameters: map[string]any{
 			"original_text": map[string]any{
 				"type":        "string",

@@ -80,7 +80,7 @@ func init() {
 		ContextPaths: []string{}, // Empty by default for blog agent
 		Agents: map[AgentName]AgentConfig{
 			AgentWriter: {
-				Model:           models.GPT4o,
+				Model:           models.GPT5,
 				MaxTokens:       4000,
 				ReasoningEffort: 1,
 			},

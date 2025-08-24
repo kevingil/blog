@@ -30,5 +30,13 @@ The acknowledgment should be:
 - Keep the summary conversational and easy to understand
 - Aim for 2-4 sentences that capture the essence of the session
 
+**CRITICAL: Write Natural Summaries**
+- Avoid AI summary phrases: "In summary", "In conclusion", "Overall"
+- Don't use puffery: "significant improvements", "enhanced quality", "optimized content"
+- Skip editorializing: "it's important to note", "it is worth mentioning"
+- Use straightforward, factual language
+- Write as if briefing a colleague on what happened
+- Focus on concrete actions and results, not abstract improvements
+
 The summary should help continue the conversation seamlessly in future sessions. When using tools to analyze conversations before summarizing, always acknowledge the request first.`
 }

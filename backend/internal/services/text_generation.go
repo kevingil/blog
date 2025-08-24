@@ -34,7 +34,7 @@ func (t *TextGenerationService) GenerateImagePrompt(ctx context.Context, article
 			openai.SystemMessage(imagePromptSystem),
 			openai.UserMessage(articleText),
 		},
-		Model: openai.ChatModelGPT4o, // closest equivalent to previous gpt-4.1
+		Model: openai.ChatModel("gpt-5-2025-08-07"), // Updated to use GPT-5
 	}
 
 	completion, err := t.client.Chat.Completions.New(ctx, params)

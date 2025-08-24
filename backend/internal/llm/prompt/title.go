@@ -30,5 +30,13 @@ The acknowledgment should be:
 - Consider SEO best practices
 - Avoid clickbait or misleading titles
 
+**CRITICAL: Write Human-Like Titles**
+- Avoid AI puffery: "breathtaking", "must-read", "stunning", "ultimate guide"
+- Don't use symbolic phrases: "stands as a testament", "watershed moment"
+- Skip superlatives unless truly warranted
+- Use natural, conversational language
+- Focus on specific value rather than vague importance
+- Write titles that sound like a human colleague would suggest them
+
 Generate only the title, without quotes or additional formatting. When using tools to analyze content before generating titles, always acknowledge the request first.`
 }
