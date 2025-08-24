@@ -52,13 +52,13 @@ func RegisterRoutes(app *fiber.App, deps RouteDeps) {
 	blog := app.Group("/blog")
 	blog.Post("/generate", controller.GenerateArticleHandler(deps.BlogService))
 	blog.Put(":id/update", controller.UpdateArticleWithContextHandler(deps.BlogService))
+	blog.Get("/articles/search", controller.SearchArticlesHandler(deps.BlogService))
 	blog.Get("/articles/:slug", controller.GetArticleDataHandler(deps.BlogService))
 	blog.Post("/articles/:slug/update", controller.UpdateArticleHandler(deps.BlogService))
 	blog.Post("/articles", controller.CreateArticleHandler(deps.BlogService))
 	blog.Get("/articles/:id/recommended", controller.GetRecommendedArticlesHandler(deps.BlogService))
 	blog.Delete("/articles/:id", controller.DeleteArticleHandler(deps.BlogService))
 	blog.Get("/articles", controller.GetArticlesHandler(deps.BlogService))
-	blog.Get("/articles/search", controller.SearchArticlesHandler(deps.BlogService))
 	blog.Get("/tags/popular", controller.GetPopularTagsHandler(deps.BlogService))
 
 	// Images
