@@ -4,23 +4,218 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"math"
+	"sort"
 	"strings"
 
+	"blog-agent-go/backend/internal/models"
+
+	"github.com/google/uuid"
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
-// RewriteDocumentTool rewrites the entire document
-type RewriteDocumentTool struct {
-	textGenService TextGenerationService
+// ArticleSourceService interface for source operations - using the real service directly
+type ArticleSourceService interface {
+	SearchSimilarSources(ctx context.Context, articleID uuid.UUID, query string, limit int) ([]*models.ArticleSource, error)
 }
 
+// TextGenerationService interface for text generation operations
 type TextGenerationService interface {
 	GenerateImagePrompt(ctx context.Context, content string) (string, error)
 }
 
-func NewRewriteDocumentTool(textGenService TextGenerationService) *RewriteDocumentTool {
+// GetRelevantSourcesTool finds relevant source chunks based on query
+type GetRelevantSourcesTool struct {
+	sourceService ArticleSourceService
+}
+
+func NewGetRelevantSourcesTool(sourceService ArticleSourceService) *GetRelevantSourcesTool {
+	return &GetRelevantSourcesTool{
+		sourceService: sourceService,
+	}
+}
+
+func (t *GetRelevantSourcesTool) Info() ToolInfo {
+	return ToolInfo{
+		Name:        "get_relevant_sources",
+		Description: "Find relevant source chunks based on a query to provide context for document rewriting",
+		Parameters: map[string]any{
+			"query": map[string]any{
+				"type":        "string",
+				"description": "The query to search for relevant sources (e.g., main topics, keywords from the document)",
+			},
+			"limit": map[string]any{
+				"type":        "number",
+				"description": "Maximum number of relevant sources to return (default: 5)",
+			},
+		},
+		Required: []string{"query"},
+	}
+}
+
+func (t *GetRelevantSourcesTool) Run(ctx context.Context, params ToolCall) (ToolResponse, error) {
+	var input struct {
+		Query string `json:"query"`
+		Limit int    `json:"limit"`
+	}
+
+	if err := json.Unmarshal([]byte(params.Input), &input); err != nil {
+		log.Printf("🔍 [GetRelevantSources] ERROR: Failed to parse input: %v", err)
+		return NewTextErrorResponse("Invalid input format"), err
+	}
+
+	if input.Query == "" {
+		log.Printf("🔍 [GetRelevantSources] ERROR: Empty query provided")
+		return NewTextErrorResponse("query is required"), fmt.Errorf("query is required")
+	}
+
+	// Set default limit
+	if input.Limit <= 0 {
+		input.Limit = 5
+	}
+
+	log.Printf("🔍 [GetRelevantSources] Starting source search")
+	log.Printf("   📝 Query: %q", input.Query)
+	log.Printf("   🎯 Limit: %d", input.Limit)
+
+	// Debug context values
+	sessionID, messageID := GetContextValues(ctx)
+	log.Printf("   🔍 Context Debug - Session ID: %q", sessionID)
+	log.Printf("   🔍 Context Debug - Message ID: %q", messageID)
+
+	// Get article ID from context
+	articleIDStr := GetArticleIDFromContext(ctx)
+	log.Printf("   🔍 Context Debug - Article ID: %q", articleIDStr)
+
+	if articleIDStr == "" {
+		log.Printf("🔍 [GetRelevantSources] WARNING: No article ID in context - cannot search for article-specific sources")
+
+		// Return empty result instead of error to allow the rewrite to continue without sources
+		result := map[string]interface{}{
+			"relevant_sources": []map[string]interface{}{},
+			"query":            input.Query,
+			"total_found":      0,
+			"tool_name":        "get_relevant_sources",
+			"warning":          "No article ID available - returned empty sources",
+		}
+
+		log.Printf("🔍 [GetRelevantSources] ⚠️  Returning empty sources due to missing article ID")
+		resultJSON, _ := json.Marshal(result)
+		return NewTextResponse(string(resultJSON)), nil
+	}
+
+	articleID, err := uuid.Parse(articleIDStr)
+	if err != nil {
+		log.Printf("🔍 [GetRelevantSources] ERROR: Invalid article ID format: %s", articleIDStr)
+		return NewTextErrorResponse("Invalid article ID"), fmt.Errorf("invalid article ID: %w", err)
+	}
+
+	log.Printf("   📄 Article ID: %s", articleID)
+
+	// Search for similar sources
+	log.Printf("🔍 [GetRelevantSources] Executing vector similarity search...")
+	sources, err := t.sourceService.SearchSimilarSources(ctx, articleID, input.Query, input.Limit)
+	if err != nil {
+		log.Printf("🔍 [GetRelevantSources] ERROR: Search failed: %v", err)
+		return NewTextErrorResponse(fmt.Sprintf("Failed to search sources: %v", err)), err
+	}
+
+	log.Printf("🔍 [GetRelevantSources] ✅ Found %d sources", len(sources))
+
+	// Convert models.ArticleSource to response format with text chunking
+	var relevantSources []map[string]interface{}
+	for i, source := range sources {
+		// Log detailed information about each source
+		contentLength := len(source.Content)
+		contentPreview := source.Content
+		if len(contentPreview) > 150 {
+			contentPreview = contentPreview[:150] + "..."
+		}
+
+		log.Printf("🔍 [GetRelevantSources] Source #%d:", i+1)
+		log.Printf("   📋 Title: %q", source.Title)
+		log.Printf("   🔗 URL: %q", source.URL)
+		log.Printf("   📊 Type: %q", source.SourceType)
+		log.Printf("   📏 Content Length: %d characters", contentLength)
+		log.Printf("   📝 Content Preview: %q", contentPreview)
+
+		// Chunk the content and find the most relevant chunks
+		chunks := t.chunkText(source.Content, 500)                         // 500 character chunks with overlap
+		relevantChunks := t.findMostRelevantChunks(chunks, input.Query, 3) // Top 3 chunks per source
+
+		log.Printf("   🧩 Generated %d chunks, selected %d most relevant", len(chunks), len(relevantChunks))
+
+		// Add each relevant chunk as a separate source entry
+		for j, chunk := range relevantChunks {
+			chunkPreview := chunk.Text
+			if len(chunkPreview) > 100 {
+				chunkPreview = chunkPreview[:100] + "..."
+			}
+
+			log.Printf("   📝 Chunk #%d (score: %.3f): %q", j+1, chunk.Score, chunkPreview)
+
+			sourceData := map[string]interface{}{
+				"source_title": source.Title,
+				"source_url":   source.URL,
+				"text_chunk":   chunk.Text,
+				"source_type":  source.SourceType,
+				"chunk_score":  chunk.Score,
+				"chunk_index":  j + 1,
+			}
+			relevantSources = append(relevantSources, sourceData)
+		}
+	}
+
+	// Calculate and log some quality metrics
+	totalContentLength := 0
+	totalChunks := 0
+	for _, source := range sources {
+		totalContentLength += len(source.Content)
+	}
+	totalChunks = len(relevantSources) // Now each chunk is a separate entry
+
+	log.Printf("🔍 [GetRelevantSources] 📊 Quality Metrics:")
+	log.Printf("   📄 Total sources found: %d", len(sources))
+	log.Printf("   🧩 Total chunks extracted: %d", totalChunks)
+	log.Printf("   📏 Total original content length: %d characters", totalContentLength)
+	if len(sources) > 0 {
+		avgContentLength := totalContentLength / len(sources)
+		avgChunksPerSource := float64(totalChunks) / float64(len(sources))
+		log.Printf("   📊 Average content length per source: %d characters", avgContentLength)
+		log.Printf("   📊 Average chunks per source: %.1f", avgChunksPerSource)
+	}
+
+	result := map[string]interface{}{
+		"relevant_sources": relevantSources,
+		"query":            input.Query,
+		"total_found":      len(relevantSources),
+		"tool_name":        "get_relevant_sources",
+	}
+
+	log.Printf("🔍 [GetRelevantSources] ✅ Returning %d relevant chunks from %d sources", len(relevantSources), len(sources))
+
+	resultJSON, _ := json.Marshal(result)
+	return NewTextResponse(string(resultJSON)), nil
+}
+
+// RewriteDocumentTool rewrites the entire document
+type RewriteDocumentTool struct {
+	textGenService      TextGenerationService
+	sourceService       ArticleSourceService
+	relevantSourcesTool *GetRelevantSourcesTool
+}
+
+func NewRewriteDocumentTool(textGenService TextGenerationService, sourceService ArticleSourceService) *RewriteDocumentTool {
+	var relevantSourcesTool *GetRelevantSourcesTool
+	if sourceService != nil {
+		relevantSourcesTool = NewGetRelevantSourcesTool(sourceService)
+	}
+
 	return &RewriteDocumentTool{
-		textGenService: textGenService,
+		textGenService:      textGenService,
+		sourceService:       sourceService,
+		relevantSourcesTool: relevantSourcesTool,
 	}
 }
 
@@ -61,11 +256,79 @@ func (t *RewriteDocumentTool) Run(ctx context.Context, params ToolCall) (ToolRes
 		return NewTextErrorResponse("new_content is required"), fmt.Errorf("new_content is required")
 	}
 
+	// Try to get relevant sources if we have the service and content to analyze
+	var relevantSources []map[string]interface{}
+	if t.relevantSourcesTool != nil && input.OriginalContent != "" {
+		log.Printf("📝 [RewriteDocument] Searching for relevant sources to enhance rewrite")
+
+		// Extract key topics from the original content for source search
+		searchQuery := t.extractSearchQuery(input.OriginalContent, input.Reason)
+		log.Printf("📝 [RewriteDocument] Extracted search query: %q", searchQuery)
+
+		sourcesParams := ToolCall{
+			ID:    params.ID + "_sources",
+			Name:  "get_relevant_sources",
+			Input: fmt.Sprintf(`{"query": "%s", "limit": 5}`, searchQuery),
+		}
+
+		sourcesResponse, err := t.relevantSourcesTool.Run(ctx, sourcesParams)
+		if err == nil && !sourcesResponse.IsError {
+			log.Printf("📝 [RewriteDocument] Successfully retrieved source search results")
+
+			// Parse the sources response
+			var sourcesResult map[string]interface{}
+			if err := json.Unmarshal([]byte(sourcesResponse.Content), &sourcesResult); err == nil {
+				// Check for warnings (like missing article ID)
+				if warning, hasWarning := sourcesResult["warning"].(string); hasWarning {
+					log.Printf("📝 [RewriteDocument] ⚠️  Source search warning: %s", warning)
+				}
+
+				if sources, ok := sourcesResult["relevant_sources"].([]interface{}); ok {
+					for _, source := range sources {
+						if sourceMap, ok := source.(map[string]interface{}); ok {
+							relevantSources = append(relevantSources, sourceMap)
+						}
+					}
+					if len(relevantSources) > 0 {
+						log.Printf("📝 [RewriteDocument] Successfully parsed %d relevant sources", len(relevantSources))
+					} else {
+						log.Printf("📝 [RewriteDocument] No relevant sources found")
+					}
+				} else {
+					log.Printf("📝 [RewriteDocument] WARNING: Could not parse relevant_sources from response")
+				}
+			} else {
+				log.Printf("📝 [RewriteDocument] ERROR: Failed to unmarshal sources response: %v", err)
+			}
+		} else {
+			if err != nil {
+				log.Printf("📝 [RewriteDocument] ERROR: Source search failed: %v", err)
+			} else {
+				log.Printf("📝 [RewriteDocument] ERROR: Source search returned error: %s", sourcesResponse.Content)
+			}
+		}
+	} else {
+		if t.relevantSourcesTool == nil {
+			log.Printf("📝 [RewriteDocument] No source service available - skipping source search")
+		} else {
+			log.Printf("📝 [RewriteDocument] No original content provided - skipping source search")
+		}
+	}
+
 	result := map[string]interface{}{
 		"new_content": input.NewContent,
 		"reason":      input.Reason,
 		"tool_name":   "rewrite_document",
 		"edit_type":   "rewrite",
+	}
+
+	// Add relevant sources to the result if found
+	if len(relevantSources) > 0 {
+		result["relevant_sources"] = relevantSources
+		result["sources_used"] = len(relevantSources)
+		log.Printf("📝 [RewriteDocument] ✅ Including %d relevant sources in response", len(relevantSources))
+	} else {
+		log.Printf("📝 [RewriteDocument] No relevant sources found or included")
 	}
 
 	// If original content is provided, generate diff patch like edit_text tool
@@ -91,6 +354,190 @@ func (t *RewriteDocumentTool) Run(ctx context.Context, params ToolCall) (ToolRes
 
 	resultJSON, _ := json.Marshal(result)
 	return NewTextResponse(string(resultJSON)), nil
+}
+
+// extractSearchQuery extracts key terms from content and reason for source searching
+func (t *RewriteDocumentTool) extractSearchQuery(content, reason string) string {
+	log.Printf("🔍 [ExtractSearchQuery] Processing search query extraction")
+	log.Printf("   📝 Reason: %q", reason)
+	log.Printf("   📄 Content length: %d characters", len(content))
+
+	// Simple implementation: combine reason and extract first few sentences of content
+	query := reason
+
+	// Add key terms from content (first 200 characters, cleaned up)
+	if len(content) > 0 {
+		contentSample := content
+		if len(contentSample) > 200 {
+			contentSample = contentSample[:200]
+			log.Printf("   ✂️  Truncated content to 200 characters")
+		}
+
+		originalSample := contentSample
+		// Remove markdown formatting and newlines for cleaner search
+		contentSample = strings.ReplaceAll(contentSample, "\n", " ")
+		contentSample = strings.ReplaceAll(contentSample, "#", "")
+		contentSample = strings.ReplaceAll(contentSample, "*", "")
+		contentSample = strings.TrimSpace(contentSample)
+
+		log.Printf("   📝 Original content sample: %q", originalSample)
+		log.Printf("   🧹 Cleaned content sample: %q", contentSample)
+
+		if contentSample != "" {
+			query = reason + " " + contentSample
+		}
+	}
+
+	// Escape quotes for JSON
+	originalQuery := query
+	query = strings.ReplaceAll(query, `"`, `\"`)
+
+	log.Printf("   🎯 Final query (before escaping): %q", originalQuery)
+	log.Printf("   🎯 Final query (after escaping): %q", query)
+
+	return query
+}
+
+// TextChunk represents a chunk of text with relevance scoring
+type TextChunk struct {
+	Text  string
+	Score float64
+	Index int
+}
+
+// chunkText splits text into overlapping chunks for better context preservation
+func (t *GetRelevantSourcesTool) chunkText(text string, chunkSize int) []TextChunk {
+	if len(text) <= chunkSize {
+		return []TextChunk{{Text: text, Index: 0}}
+	}
+
+	var chunks []TextChunk
+	overlap := chunkSize / 4 // 25% overlap
+
+	for i := 0; i < len(text); i += chunkSize - overlap {
+		end := i + chunkSize
+		if end > len(text) {
+			end = len(text)
+		}
+
+		chunk := text[i:end]
+		// Try to break at sentence boundaries to avoid cutting words
+		if end < len(text) && !strings.Contains(chunk[len(chunk)-20:], ".") {
+			// Look for the last sentence boundary in the chunk
+			if lastDot := strings.LastIndex(chunk, "."); lastDot > chunkSize/2 {
+				chunk = chunk[:lastDot+1]
+			}
+		}
+
+		chunks = append(chunks, TextChunk{
+			Text:  strings.TrimSpace(chunk),
+			Index: len(chunks),
+		})
+
+		if end >= len(text) {
+			break
+		}
+	}
+
+	return chunks
+}
+
+// findMostRelevantChunks finds the most relevant chunks using simple text similarity
+func (t *GetRelevantSourcesTool) findMostRelevantChunks(chunks []TextChunk, query string, maxChunks int) []TextChunk {
+	if len(chunks) == 0 {
+		return chunks
+	}
+
+	// Score each chunk based on keyword overlap with query
+	queryWords := t.extractKeywords(strings.ToLower(query))
+
+	for i := range chunks {
+		chunks[i].Score = t.calculateRelevanceScore(chunks[i].Text, queryWords)
+	}
+
+	// Sort by score (highest first)
+	sort.Slice(chunks, func(i, j int) bool {
+		return chunks[i].Score > chunks[j].Score
+	})
+
+	// Return top chunks, but limit to maxChunks
+	if len(chunks) > maxChunks {
+		chunks = chunks[:maxChunks]
+	}
+
+	return chunks
+}
+
+// extractKeywords extracts meaningful keywords from a query
+func (t *GetRelevantSourcesTool) extractKeywords(text string) []string {
+	// Simple keyword extraction - split on spaces and filter common words
+	stopWords := map[string]bool{
+		"the": true, "a": true, "an": true, "and": true, "or": true, "but": true,
+		"in": true, "on": true, "at": true, "to": true, "for": true, "of": true,
+		"with": true, "by": true, "is": true, "are": true, "was": true, "were": true,
+		"be": true, "been": true, "being": true, "have": true, "has": true, "had": true,
+		"do": true, "does": true, "did": true, "will": true, "would": true, "could": true,
+		"should": true, "may": true, "might": true, "must": true, "can": true,
+		"this": true, "that": true, "these": true, "those": true, "i": true, "you": true,
+		"he": true, "she": true, "it": true, "we": true, "they": true, "me": true,
+		"him": true, "her": true, "us": true, "them": true,
+	}
+
+	words := strings.Fields(text)
+	var keywords []string
+
+	for _, word := range words {
+		// Clean the word
+		word = strings.ToLower(strings.Trim(word, ".,!?;:()[]{}\"'"))
+
+		// Skip if empty, too short, or a stop word
+		if len(word) < 3 || stopWords[word] {
+			continue
+		}
+
+		keywords = append(keywords, word)
+	}
+
+	return keywords
+}
+
+// calculateRelevanceScore calculates a simple relevance score based on keyword frequency
+func (t *GetRelevantSourcesTool) calculateRelevanceScore(text string, queryKeywords []string) float64 {
+	if len(queryKeywords) == 0 {
+		return 0.0
+	}
+
+	textLower := strings.ToLower(text)
+	textWords := strings.Fields(textLower)
+	textWordCount := make(map[string]int)
+
+	// Count word frequencies in text
+	for _, word := range textWords {
+		word = strings.Trim(word, ".,!?;:()[]{}\"'")
+		if len(word) > 2 {
+			textWordCount[word]++
+		}
+	}
+
+	// Calculate score based on keyword matches
+	var score float64
+	matchedKeywords := 0
+
+	for _, keyword := range queryKeywords {
+		if count, exists := textWordCount[keyword]; exists {
+			// Use TF-IDF inspired scoring: frequency * log(text_length / keyword_frequency)
+			tf := float64(count) / float64(len(textWords))
+			idf := math.Log(float64(len(textWords)) / float64(count))
+			score += tf * idf
+			matchedKeywords++
+		}
+	}
+
+	// Boost score based on percentage of matched keywords
+	keywordCoverage := float64(matchedKeywords) / float64(len(queryKeywords))
+	score *= (1.0 + keywordCoverage)
+
+	return score
 }
 
 // EditTextTool edits specific text in the document

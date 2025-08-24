@@ -17,6 +17,7 @@ type toolResponseType string
 type (
 	sessionIDContextKey string
 	messageIDContextKey string
+	articleIDContextKey string
 )
 
 const (
@@ -25,6 +26,7 @@ const (
 
 	SessionIDContextKey sessionIDContextKey = "session_id"
 	MessageIDContextKey messageIDContextKey = "message_id"
+	ArticleIDContextKey articleIDContextKey = "article_id"
 )
 
 type ToolResponse struct {
@@ -81,4 +83,17 @@ func GetContextValues(ctx context.Context) (string, string) {
 		return sessionID.(string), ""
 	}
 	return sessionID.(string), messageID.(string)
+}
+
+func GetArticleIDFromContext(ctx context.Context) string {
+	articleID := ctx.Value(ArticleIDContextKey)
+	if articleID == nil {
+		return ""
+	}
+	return articleID.(string)
+}
+
+// WithArticleID adds article ID to context for tools that need it
+func WithArticleID(ctx context.Context, articleID string) context.Context {
+	return context.WithValue(ctx, ArticleIDContextKey, articleID)
 }

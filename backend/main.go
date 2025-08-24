@@ -43,8 +43,8 @@ func main() {
 	pagesService := services.NewPagesService(dbService)
 	sourcesService := services.NewArticleSourceService(dbService)
 
-	// Initialize the Agent-powered copilot manager
-	if err := services.InitializeAgentCopilotManager(); err != nil {
+	// Initialize the Agent-powered copilot manager with sources service
+	if err := services.InitializeAgentCopilotManager(sourcesService); err != nil {
 		log.Printf("Warning: Failed to initialize AgentCopilotManager: %v", err)
 	}
 

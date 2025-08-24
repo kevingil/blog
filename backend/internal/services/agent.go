@@ -217,6 +217,7 @@ type ChatRequest struct {
 	Messages        []ChatMessage `json:"messages"`
 	Model           string        `json:"model"`
 	DocumentContent string        `json:"documentContent,omitempty"`
+	ArticleID       string        `json:"articleId,omitempty"`
 }
 
 // ChatRequestResponse is the immediate response returned when a chat request is submitted
@@ -313,17 +314,28 @@ func (m *AgentAsyncCopilotManager) SetAgentServices(agentSvc agent.Service, sess
 }
 
 // InitializeAgentCopilotManager initializes the agent copilot manager with real services
-func InitializeAgentCopilotManager() error {
+func InitializeAgentCopilotManager(articleSourceService *ArticleSourceService) error {
 	// Create session and message services
 	sessionSvc := session.NewInMemorySessionService()
 	messageSvc := message.NewInMemoryMessageService()
 
+	// Use the real service directly - it already implements the interface we need
+	var sourceService tools.ArticleSourceService = nil
+	if articleSourceService != nil {
+		sourceService = articleSourceService
+	}
+
 	// Create writing tools for the agent
 	writingTools := []tools.BaseTool{
-		tools.NewRewriteDocumentTool(nil), // TextGenService not needed for basic functionality
+		tools.NewRewriteDocumentTool(nil, sourceService), // TextGenService and SourceService
 		tools.NewEditTextTool(),
 		tools.NewAnalyzeDocumentTool(),
 		tools.NewGenerateImagePromptTool(nil), // TextGenService not needed for basic functionality
+	}
+
+	// Add get_relevant_sources tool if source service is available
+	if sourceService != nil {
+		writingTools = append(writingTools, tools.NewGetRelevantSourcesTool(sourceService))
 	}
 
 	// Create the agent using the LLM framework
@@ -403,6 +415,7 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	}()
 
 	log.Printf("AgentAsyncCopilotManager: Starting agent processing for request %s", asyncReq.ID)
+	log.Printf("AgentAsyncCopilotManager: Request details - Article ID: %q, Messages: %d", asyncReq.Request.ArticleID, len(asyncReq.Request.Messages))
 
 	// Create session for this request
 	session, err := m.sessionSvc.Create(asyncReq.ctx, "Writing Copilot Session")
@@ -415,6 +428,19 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 			Done:      true,
 		}
 		return
+	}
+
+	// Add article ID to context if provided
+	ctx := asyncReq.ctx
+	if asyncReq.Request.ArticleID != "" {
+		ctx = tools.WithArticleID(ctx, asyncReq.Request.ArticleID)
+		log.Printf("AgentAsyncCopilotManager: Added article ID %s to context", asyncReq.Request.ArticleID)
+
+		// Verify the article ID was set correctly
+		testArticleID := tools.GetArticleIDFromContext(ctx)
+		log.Printf("AgentAsyncCopilotManager: Verified article ID in context: %q", testArticleID)
+	} else {
+		log.Printf("AgentAsyncCopilotManager: No article ID provided in request")
 	}
 
 	// Convert request messages to agent format and add them to session
@@ -441,7 +467,7 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 			asyncReq.Request.DocumentContent = "" // Only add once
 		}
 
-		_, err := m.messageSvc.Create(asyncReq.ctx, session.ID, message.CreateMessageParams{
+		_, err := m.messageSvc.Create(ctx, session.ID, message.CreateMessageParams{
 			Role:  role,
 			Parts: parts,
 			Model: "user",
@@ -494,8 +520,12 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 		}
 	}
 
-	// Run agent request
-	resultChan, err := m.agent.Run(asyncReq.ctx, session.ID, userPrompt)
+	// Run agent request with article ID context
+	// Final verification before running agent
+	finalArticleID := tools.GetArticleIDFromContext(ctx)
+	log.Printf("AgentAsyncCopilotManager: Final context check - Article ID: %q", finalArticleID)
+
+	resultChan, err := m.agent.Run(ctx, session.ID, userPrompt)
 
 	startTime := time.Now()
 	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")

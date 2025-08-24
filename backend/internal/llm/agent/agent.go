@@ -400,6 +400,7 @@ func (a *agent) createUserMessage(ctx context.Context, sessionID, content string
 }
 
 func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msgHistory []message.Message) (message.Message, *message.Message, error) {
+	// Preserve any existing context values (like article ID) and add session ID
 	ctx = context.WithValue(ctx, tools.SessionIDContextKey, sessionID)
 	eventChan := a.provider.StreamResponse(ctx, msgHistory, a.tools)
 
@@ -412,7 +413,7 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 		return assistantMsg, nil, fmt.Errorf("failed to create assistant message: %w", err)
 	}
 
-	// Add the session and message ID into the context if needed by tools.
+	// Add the message ID into the context while preserving existing values (like article ID and session ID)
 	ctx = context.WithValue(ctx, tools.MessageIDContextKey, assistantMsg.ID)
 
 	// Process each event in the stream.
