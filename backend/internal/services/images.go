@@ -105,6 +105,8 @@ func (s *ImageGenerationService) GenerateArticleImage(ctx context.Context, promp
 		Provider:  "openai",
 		ModelName: "gpt-image-1",
 		OutputURL: imageURL,
+		RequestID: uuid.New().String(),
+		Status:    "completed",
 	}
 
 	// Save to database

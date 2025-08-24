@@ -127,33 +127,47 @@ export async function updateArticle(slug: string, article: {
 
 // Article image operations
 export async function generateArticleImage(prompt: string, articleId: string): Promise<{ success: boolean; generationRequestId: string }> {
-  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${articleId}/image`, {
+  const response = await fetch(`${VITE_API_BASE_URL}/images/generate`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify({ 
+      prompt,
+      article_id: articleId,
+      generate_prompt: false
+    }),
   });
   if (!response.ok) {
     throw new Error('Failed to generate article image');
   }
-  return response.json();
+  const result = await response.json();
+  return { 
+    success: true, 
+    generationRequestId: result.request_id
+  };
 }
 
 export async function getImageGeneration(requestId: string): Promise<{ outputUrl: string | null }> {
-  const response = await fetch(`${VITE_API_BASE_URL}/blog/images/${requestId}`);
+  const response = await fetch(`${VITE_API_BASE_URL}/images/${requestId}`);
   if (!response.ok) {
     throw new Error('Failed to get image generation status');
   }
-  return response.json();
+  const result = await response.json();
+  return {
+    outputUrl: result.output_url || null
+  };
 }
 
 export async function getImageGenerationStatus(requestId: string): Promise<{ outputUrl: string | null }> {
-  const response = await fetch(`${VITE_API_BASE_URL}/blog/images/${requestId}/status`);
+  const response = await fetch(`${VITE_API_BASE_URL}/images/${requestId}/status`);
   if (!response.ok) {
     throw new Error('Failed to get image generation status');
   }
-  return response.json();
+  const result = await response.json();
+  return {
+    outputUrl: result.output_url || result.outputUrl || null
+  };
 }
 
 // Article context operations
