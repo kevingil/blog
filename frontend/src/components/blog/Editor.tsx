@@ -870,7 +870,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       console.log('Full API URL:', apiUrl);
       console.log('Sending chat request:', { 
         messages: apiMessages.map(m => ({ role: m.role, content: m.content.substring(0, 100) + (m.content.length > 100 ? '...' : '') })),
-        documentContent: documentContent ? `${documentContent.substring(0, 100)}...` : 'none'
+        documentContent: documentContent ? `${documentContent.substring(0, 100)}...` : 'none',
+        articleId: article?.article?.id || 'not available'
       });
       
       // Submit the request and get immediate response with request ID
@@ -879,7 +880,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           messages: apiMessages,
-          documentContent: documentContent 
+          documentContent: documentContent,
+          articleId: article?.article?.id || null  // Include article ID for source search
         }),
       });
 
