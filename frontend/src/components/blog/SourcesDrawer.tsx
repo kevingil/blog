@@ -37,6 +37,13 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { 
   getArticleSources, 
   createSource, 
@@ -110,20 +117,47 @@ function AddSourceModal({
     }
   }, [editingSource, isOpen]);
 
-  const handleSubmit = async () => {
-    if (!formData.title.trim() || (!formData.content.trim() && !useUrlScraping)) {
+  const handleModalClose = (open: boolean) => {
+    if (!open) {
+      // Reset loading states when closing
+      setIsAddingSource(false);
+      setIsScrapingUrl(false);
+    }
+    onOpenChange(open);
+  };
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    // Validation logic
+    const isWebSource = editingSource ? formData.source_type === 'web' : useUrlScraping;
+    const requiresContent = editingSource ? formData.source_type !== 'web' : !useUrlScraping;
+    
+    if (!formData.title.trim()) {
       toast({
         title: 'Error',
-        description: 'Title and content are required',
+        description: 'Title is required',
         variant: 'destructive',
       });
       return;
     }
 
-    if (useUrlScraping && !formData.url.trim()) {
+    if (requiresContent && !formData.content.trim()) {
       toast({
         title: 'Error',
-        description: 'URL is required for web scraping',
+        description: 'Content is required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (isWebSource && !formData.url.trim()) {
+      toast({
+        title: 'Error',
+        description: 'URL is required for web sources',
         variant: 'destructive',
       });
       return;
@@ -137,7 +171,7 @@ function AddSourceModal({
           title: formData.title.trim(),
           content: formData.content.trim(),
           url: formData.url.trim() || undefined,
-          source_type: useUrlScraping ? 'web' : 'manual',
+          source_type: formData.source_type,
         };
 
         const updatedSource = await updateSource(editingSource.id, request);
@@ -174,7 +208,10 @@ function AddSourceModal({
         });
       }
 
-      onOpenChange(false);
+      // Use setTimeout to ensure state updates complete before closing
+      setTimeout(() => {
+        handleModalClose(false);
+      }, 100);
     } catch (error) {
       console.error('Error saving source:', error);
       toast({
@@ -189,8 +226,8 @@ function AddSourceModal({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={isOpen} onOpenChange={handleModalClose}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {editingSource ? 'Edit Source' : 'Add New Source'}
@@ -217,8 +254,70 @@ function AddSourceModal({
             </div>
           )}
 
+          {/* Source Type and Title Row (when editing) */}
+          {editingSource ? (
+            <div className="flex gap-4">
+              {/* Title Input */}
+              <div className="flex-[2] space-y-2">
+                <Label htmlFor="title">Title</Label>
+                <Input
+                  id="title"
+                  placeholder="Source title"
+                  value={formData.title}
+                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                />
+              </div>
+
+              {/* Source Type Dropdown */}
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="source-type">Source Type</Label>
+                <Select
+                  value={formData.source_type}
+                  onValueChange={(value: 'web' | 'manual' | 'pdf') => 
+                    setFormData(prev => ({ ...prev, source_type: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select source type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manual">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4" />
+                        Manual
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="web">
+                      <div className="flex items-center gap-2">
+                        <Globe className="w-4 h-4" />
+                        Web
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="pdf">
+                      <div className="flex items-center gap-2">
+                        <FileIcon className="w-4 h-4" />
+                        PDF
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          ) : (
+            /* Title Input for new sources */
+            <div className="space-y-2">
+              <Label htmlFor="title">Title</Label>
+              <Input
+                id="title"
+                placeholder="Source title"
+                value={formData.title}
+                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+              />
+            </div>
+          )}
+
           {/* URL Input (when scraping or editing web source) */}
-          {(useUrlScraping || editingSource?.source_type === 'web') && (
+          {(useUrlScraping || (editingSource && formData.source_type === 'web')) && (
             <div className="space-y-2">
               <Label htmlFor="url">URL</Label>
               <Input
@@ -231,34 +330,34 @@ function AddSourceModal({
             </div>
           )}
 
-          {/* Title Input */}
-          <div className="space-y-2">
-            <Label htmlFor="title">Title</Label>
-            <Input
-              id="title"
-              placeholder="Source title"
-              value={formData.title}
-              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-            />
-          </div>
-
-          {/* Content Input (only when not using URL scraping) */}
-          {!useUrlScraping && (
+          {/* Content Input (only when not using URL scraping or editing non-web sources) */}
+          {(!useUrlScraping && !editingSource) || (editingSource && formData.source_type !== 'web') ? (
             <div className="space-y-2">
               <Label htmlFor="content">Content</Label>
               <Textarea
                 id="content"
-                placeholder="Source content or summary..."
-                rows={4}
+                placeholder={
+                  editingSource && formData.source_type === 'pdf' 
+                    ? "PDF content or summary..." 
+                    : "Source content or summary..."
+                }
+                rows={6}
+                className="resize-none min-h-[150px] max-h-[300px] overflow-y-auto"
                 value={formData.content}
                 onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
               />
+              {editingSource && formData.source_type === 'pdf' && (
+                <p className="text-xs text-muted-foreground">
+                  PDF file content was extracted at upload time. You can edit this content as needed.
+                </p>
+              )}
             </div>
-          )}
-
-          {useUrlScraping && (
+          ) : (
             <p className="text-sm text-muted-foreground">
-              Content will be automatically extracted from the URL.
+              {editingSource && formData.source_type === 'web' 
+                ? "Content is managed automatically for web sources."
+                : "Content will be automatically extracted from the URL."
+              }
             </p>
           )}
         </div>
@@ -364,7 +463,7 @@ export function SourcesDrawer({ articleId, isOpen, onOpenChange }: SourcesDrawer
 
   return (
     <Drawer open={isOpen} onOpenChange={onOpenChange} direction="right">
-      <DrawerContent className="w-full sm:max-w-lg ml-auto h-full">
+      <DrawerContent className="w-full sm:max-w-2xl ml-auto h-full">
         <DrawerHeader className="border-b">
           <DrawerTitle className="flex items-center gap-2">
             <FileText className="w-5 h-5" />
