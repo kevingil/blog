@@ -114,6 +114,12 @@ type ArticleFormData = z.infer<typeof articleSchema>;
 type ChatMessage = {
   role: 'user' | 'assistant' | 'tool';
   content: string;
+  diffState?: 'accepted' | 'rejected';
+  diffPreview?: {
+    oldText: string;
+    newText: string;
+    reason?: string;
+  };
 };
 
 // === TipTap Diff Extension ================================================
@@ -239,6 +245,63 @@ const DiffHighlighter = Extension.create({
     ];
   },
 });
+
+// Diff preview component for chat messages
+function DiffPreview({ diffPreview, diffState }: { 
+  diffPreview: { oldText: string; newText: string; reason?: string }, 
+  diffState: 'accepted' | 'rejected' 
+}) {
+  const parts = diffWords(diffPreview.oldText, diffPreview.newText);
+  const maxLength = 200; // Limit preview length
+  
+  let previewText = '';
+  let charCount = 0;
+  let truncated = false;
+  
+  for (const part of parts) {
+    if (charCount + part.value.length > maxLength) {
+      previewText += part.value.substring(0, maxLength - charCount) + '...';
+      truncated = true;
+      break;
+    }
+    previewText += part.value;
+    charCount += part.value.length;
+  }
+  
+  return (
+    <div className={cn(
+      "mt-2 p-2 rounded-md text-xs border",
+      diffState === 'accepted' ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+    )}>
+      <div className={cn(
+        "flex items-center gap-1 mb-1 font-medium",
+        diffState === 'accepted' ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300"
+      )}>
+        <span>{diffState === 'accepted' ? '✅' : '❌'}</span>
+        <span>{diffState === 'accepted' ? 'Accepted' : 'Rejected'}</span>
+        {diffPreview.reason && <span>• {diffPreview.reason}</span>}
+      </div>
+      <div className="font-mono text-xs whitespace-pre-wrap">
+        {parts.map((part, index) => {
+          if (charCount > maxLength && index > 0) return null;
+          return (
+            <span
+              key={index}
+              className={cn(
+                part.added ? "bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100" : 
+                part.removed ? "bg-red-200 dark:bg-red-800 text-red-900 dark:text-red-100 line-through" : 
+                "text-gray-700 dark:text-gray-300"
+              )}
+            >
+              {part.value}
+            </span>
+          );
+        })}
+        {truncated && <span className="text-gray-500">...</span>}
+      </div>
+    </div>
+  );
+}
 
 // Formatting toolbar component
 function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
@@ -561,9 +624,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [diffing, setDiffing] = useState(false);
   const [originalDocument, setOriginalDocument] = useState<string>('');
   const [pendingNewDocument, setPendingNewDocument] = useState<string>('');
+  const [currentDiffReason, setCurrentDiffReason] = useState<string>('');
+  const [activeDiffMessageIndex, setActiveDiffMessageIndex] = useState<number | null>(null);
   
   // Inline diff lifecycle helpers
-  const enterDiffPreview = (oldHtml: string, newHtml: string) => {
+  const enterDiffPreview = (oldHtml: string, newHtml: string, reason?: string) => {
     if (!editor) return;
     // Compute plain text for old/new documents using temporary DOM containers
     const getPlainText = (html: string) => {
@@ -576,6 +641,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     editor.commands.setContent(newHtml);
     setOriginalDocument(oldHtml);
     setPendingNewDocument(newHtml);
+    setCurrentDiffReason(reason || '');
     setDiffing(true);
     // @ts-ignore custom command provided by DiffHighlighter
     if ((editor as any).commands?.showDiff) {
@@ -597,20 +663,84 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
   const acceptDiff = () => {
     if (!editor) return;
+    
+    // Save diff preview data before clearing
+    const getPlainText = (html: string) => {
+      const container = document.createElement('div');
+      container.innerHTML = html;
+      return container.textContent || container.innerText || '';
+    };
+    
+    const oldText = getPlainText(originalDocument);
+    const newText = getPlainText(pendingNewDocument);
+    
+    // Update the __DIFF_ACTIONS__ message with accepted state
+    if (activeDiffMessageIndex !== null) {
+      setChatMessages((prev) => {
+        const updated = [...prev];
+        if (updated[activeDiffMessageIndex]?.content === '__DIFF_ACTIONS__') {
+          updated[activeDiffMessageIndex] = {
+            ...updated[activeDiffMessageIndex],
+            diffState: 'accepted',
+            diffPreview: {
+              oldText,
+              newText,
+              reason: currentDiffReason,
+            },
+          };
+        }
+        return updated;
+      });
+    }
+    
     editor.commands.setContent(pendingNewDocument || editor.getHTML());
     setValue('content', editor.getHTML());
     clearDiffDecorations();
     setDiffing(false);
     setPendingNewDocument('');
+    setCurrentDiffReason('');
+    setActiveDiffMessageIndex(null);
   };
 
   const rejectDiff = () => {
     if (!editor) return;
+    
+    // Save diff preview data before clearing
+    const getPlainText = (html: string) => {
+      const container = document.createElement('div');
+      container.innerHTML = html;
+      return container.textContent || container.innerText || '';
+    };
+    
+    const oldText = getPlainText(originalDocument);
+    const newText = getPlainText(pendingNewDocument);
+    
+    // Update the __DIFF_ACTIONS__ message with rejected state
+    if (activeDiffMessageIndex !== null) {
+      setChatMessages((prev) => {
+        const updated = [...prev];
+        if (updated[activeDiffMessageIndex]?.content === '__DIFF_ACTIONS__') {
+          updated[activeDiffMessageIndex] = {
+            ...updated[activeDiffMessageIndex],
+            diffState: 'rejected',
+            diffPreview: {
+              oldText,
+              newText,
+              reason: currentDiffReason,
+            },
+          };
+        }
+        return updated;
+      });
+    }
+    
     editor.commands.setContent(originalDocument || editor.getHTML());
     setValue('content', originalDocument || editor.getHTML());
     clearDiffDecorations();
     setDiffing(false);
     setPendingNewDocument('');
+    setCurrentDiffReason('');
+    setActiveDiffMessageIndex(null);
   };
 
   const editor = useEditor({
@@ -769,12 +899,18 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       
       if (result.success) {
         const newHtml = result.content;
-        enterDiffPreview(oldHtml, newHtml);
-        setChatMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: '📋 Proposed full-document changes' },
-          { role: 'assistant', content: '__DIFF_ACTIONS__' },
-        ]);
+        const reason = 'Full-document rewrite';
+        enterDiffPreview(oldHtml, newHtml, reason);
+        setChatMessages((prev) => {
+          const newMessages: ChatMessage[] = [
+            ...prev,
+            { role: 'assistant', content: '📋 Proposed full-document changes' },
+            { role: 'assistant', content: '__DIFF_ACTIONS__' },
+          ];
+          // Set the active diff message index (last message)
+          setActiveDiffMessageIndex(newMessages.length - 1);
+          return newMessages;
+        });
       }
     } catch (error) {
       console.error('Error rewriting article:', error);
@@ -806,12 +942,17 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     const to = index + originalText.length;
     editor.chain().focus().setTextSelection({ from, to }).insertContent(newText).run();
     const newHtml = editor.getHTML();
-    enterDiffPreview(oldHtml, newHtml);
-    setChatMessages((prev) => [
-      ...prev,
-      { role: 'assistant', content: `📋 Proposed changes: ${reason}` },
-      { role: 'assistant', content: '__DIFF_ACTIONS__' },
-    ]);
+    enterDiffPreview(oldHtml, newHtml, reason);
+    setChatMessages((prev) => {
+      const newMessages: ChatMessage[] = [
+        ...prev,
+        { role: 'assistant', content: `📋 Proposed changes: ${reason}` },
+        { role: 'assistant', content: '__DIFF_ACTIONS__' },
+      ];
+      // Set the active diff message index (last message)
+      setActiveDiffMessageIndex(newMessages.length - 1);
+      return newMessages;
+    });
   };
 
   // Apply patch from AI assistant (new implementation)
@@ -836,12 +977,17 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     const to = index + originalText.length;
     editor.chain().focus().setTextSelection({ from, to }).insertContent(newText).run();
     const newHtml = editor.getHTML();
-    enterDiffPreview(oldHtml, newHtml);
-    setChatMessages((prev) => [
-      ...prev,
-      { role: 'assistant', content: `📋 Proposed changes: ${reason}` },
-      { role: 'assistant', content: '__DIFF_ACTIONS__' },
-    ]);
+    enterDiffPreview(oldHtml, newHtml, reason);
+    setChatMessages((prev) => {
+      const newMessages: ChatMessage[] = [
+        ...prev,
+        { role: 'assistant', content: `📋 Proposed changes: ${reason}` },
+        { role: 'assistant', content: '__DIFF_ACTIONS__' },
+      ];
+      // Set the active diff message index (last message)
+      setActiveDiffMessageIndex(newMessages.length - 1);
+      return newMessages;
+    });
   };
 
   // Apply document rewrite from AI assistant
@@ -856,12 +1002,17 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     const newHtml = mdParser.render(newContent);
     
     // Create diff preview
-    enterDiffPreview(oldHtml, newHtml);
-    setChatMessages((prev) => [
-      ...prev,
-      { role: 'assistant', content: `📋 Document rewrite: ${reason}` },
-      { role: 'assistant', content: '__DIFF_ACTIONS__' },
-    ]);
+    enterDiffPreview(oldHtml, newHtml, reason);
+    setChatMessages((prev) => {
+      const newMessages: ChatMessage[] = [
+        ...prev,
+        { role: 'assistant', content: `📋 Document rewrite: ${reason}` },
+        { role: 'assistant', content: '__DIFF_ACTIONS__' },
+      ];
+      // Set the active diff message index (last message)
+      setActiveDiffMessageIndex(newMessages.length - 1);
+      return newMessages;
+    });
   };
 
   const sendChatWithMessage = async (message: string) => {
@@ -1134,12 +1285,18 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     if (suggestedContent.length > 50) {
                       const oldHtml = editor?.getHTML() || '';
                       const newHtml = mdParser.render(suggestedContent);
-                      enterDiffPreview(oldHtml, newHtml);
-                      setChatMessages((prev) => [
-                        ...prev,
-                        { role: 'assistant', content: '📋 Proposed full-document changes' },
-                        { role: 'assistant', content: '__DIFF_ACTIONS__' },
-                      ]);
+                      const reason = 'AI-suggested content from code block';
+                      enterDiffPreview(oldHtml, newHtml, reason);
+                      setChatMessages((prev) => {
+                        const newMessages: ChatMessage[] = [
+                          ...prev,
+                          { role: 'assistant', content: '📋 Proposed full-document changes' },
+                          { role: 'assistant', content: '__DIFF_ACTIONS__' },
+                        ];
+                        // Set the active diff message index (last message)
+                        setActiveDiffMessageIndex(newMessages.length - 1);
+                        return newMessages;
+                      });
                     }
                   }
                 }
@@ -1241,12 +1398,18 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 if (suggestedContent.length > 50) {
                   const oldHtml = editor?.getHTML() || '';
                   const newHtml = mdParser.render(suggestedContent);
-                  enterDiffPreview(oldHtml, newHtml);
-                  setChatMessages((prev) => [
-                    ...prev,
-                    { role: 'assistant', content: '📋 Proposed full-document changes' },
-                    { role: 'assistant', content: '__DIFF_ACTIONS__' },
-                  ]);
+                  const reason = 'AI-suggested content from code block (legacy)';
+                  enterDiffPreview(oldHtml, newHtml, reason);
+                  setChatMessages((prev) => {
+                    const newMessages: ChatMessage[] = [
+                      ...prev,
+                      { role: 'assistant', content: '📋 Proposed full-document changes' },
+                      { role: 'assistant', content: '__DIFF_ACTIONS__' },
+                    ];
+                    // Set the active diff message index (last message)
+                    setActiveDiffMessageIndex(newMessages.length - 1);
+                    return newMessages;
+                  });
                 }
               }
             }
@@ -1745,16 +1908,28 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               }
               case 'assistant': {
                 if (m.content === '__DIFF_ACTIONS__') {
-                  return (
-                    <div key={i} className="w-full flex justify-start">
-                      <div className="max-w-xs rounded-lg px-3 py-2 text-sm bg-gray-100 dark:bg-gray-800">
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={acceptDiff} disabled={!diffing}>Accept</Button>
-                          <Button size="sm" variant="outline" onClick={rejectDiff} disabled={!diffing}>Discard</Button>
+                  // Show diff preview if the action has been taken, otherwise show buttons
+                  if (m.diffState && m.diffPreview) {
+                    return (
+                      <div key={i} className="w-full flex justify-start">
+                        <div className="max-w-sm rounded-lg px-3 py-2 text-sm bg-gray-100 dark:bg-gray-800">
+                          <DiffPreview diffPreview={m.diffPreview} diffState={m.diffState} />
                         </div>
                       </div>
-                    </div>
-                  );
+                    );
+                  } else {
+                    // Show action buttons
+                    return (
+                      <div key={i} className="w-full flex justify-start">
+                        <div className="max-w-xs rounded-lg px-3 py-2 text-sm bg-gray-100 dark:bg-gray-800">
+                          <div className="flex gap-2">
+                            <Button size="sm" onClick={acceptDiff} disabled={!diffing}>Accept</Button>
+                            <Button size="sm" variant="outline" onClick={rejectDiff} disabled={!diffing}>Discard</Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
                 }
                 return (
                   <div key={i} className="w-full flex justify-start">
