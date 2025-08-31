@@ -107,7 +107,7 @@ export async function createArticle(article: {
 export async function updateArticle(slug: string, article: {
   title: string;
   content: string;
-  image?: string;
+  image_url?: string;
   tags: string[];
   is_draft: boolean;
   published_at: number | null;

@@ -8,7 +8,7 @@ import { format } from "date-fns"
 import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { IconLoader2 } from '@tabler/icons-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import CodeBlock from '@tiptap/extension-code-block';
@@ -434,20 +434,22 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const { toast } = useToast()
   const navigate = useNavigate();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   
   // Only use useParams when editing an existing article
   const params = !isNew ? useParams({ from: '/dashboard/blog/edit/$blogSlug' }) : null;
   const blogSlug = params?.blogSlug;
   
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  // Loading states are now handled by React Query mutations
+  // const [isLoading, setIsLoading] = useState(false);
+  // const [isSaving, setIsSaving] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
   const [newImageGenerationRequestId, setNewImageGenerationRequestId] = useState<string | null>(null);
   const [stagedImageUrl, setStagedImageUrl] = useState<string | null | undefined>(undefined);
   const [generateImageOpen, setGenerateImageOpen] = useState(false);
   const [generatingRewrite, setGeneratingRewrite] = useState(false);
   const [sourcesDrawerOpen, setSourcesDrawerOpen] = useState(false);
-  const [sourcesRefreshTrigger, setSourcesRefreshTrigger] = useState(0);
+  const [sourcesRefreshTrigger] = useState(0);
 
   /* --------------------------------------------------------------------- */
   /* Chat (right-hand panel)                                               */
@@ -471,6 +473,64 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     queryFn: () => getArticle(blogSlug as string),
     enabled: !isNew && !!blogSlug,
     staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Mutation for creating new articles
+  const createArticleMutation = useMutation({
+    mutationFn: (data: {
+      title: string;
+      content: string;
+      image_url?: string;
+      tags: string[];
+      isDraft: boolean;
+      authorId: number;
+    }) => createArticle(data),
+    onSuccess: () => {
+      toast({ title: "Success", description: "Article created successfully." });
+      queryClient.invalidateQueries({ queryKey: ['articles'] });
+      navigate({ to: '/dashboard/blog' });
+    },
+    onError: (error) => {
+      console.error('Error creating article:', error);
+      toast({ title: "Error", description: "Failed to create article. Please try again.", variant: "destructive" });
+    }
+  });
+
+  // Mutation for updating existing articles
+  const updateArticleMutation = useMutation({
+    mutationFn: (data: {
+      slug: string;
+      updateData: {
+        title: string;
+        content: string;
+        image_url?: string;
+        tags: string[];
+        is_draft: boolean;
+        published_at: number | null;
+      };
+      returnToDashboard?: boolean;
+    }) => updateArticle(data.slug, data.updateData),
+    onSuccess: (_, variables) => {
+      toast({ title: "Success", description: "Article updated successfully." });
+      queryClient.invalidateQueries({ queryKey: ['article', blogSlug] });
+      queryClient.invalidateQueries({ queryKey: ['articles'] });
+      
+      if (variables.returnToDashboard) {
+        navigate({ to: '/dashboard/blog' });
+      } else {
+        // If we are *not* navigating away, refresh local state:
+        const data = variables.updateData;
+        setValue('title', data.title);
+        setValue('content', data.content);
+        setValue('image_url', data.image_url || '');
+        setValue('tags', data.tags);
+        setValue('isDraft', data.is_draft);
+      }
+    },
+    onError: (error) => {
+      console.error('Error updating article:', error);
+      toast({ title: "Error", description: "Failed to update article. Please try again.", variant: "destructive" });
+    }
   });
 
   const { register, handleSubmit, setValue, formState: { errors }, watch, reset } = useForm<ArticleFormData>({
@@ -654,58 +714,48 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       return;
     }
 
-    try {
-      if (isNew) {
-        await createArticle({
-          title: data.title,
-          content: data.content,
-          image_url: data.image_url,
-          tags: data.tags,
-          isDraft: data.isDraft,
-          authorId: user.id,
-        });
-        toast({ title: "Success", description: "Article created successfully." });
-        if (returnToDashboard) {
-          navigate({ to: '/dashboard/blog' });
-        }
-      } else {        
-        const updateData = {
-          title: data.title,
-          content: data.content, // HTML content from Tiptap editor
-          image_url: data.image_url,
-          tags: data.tags,
-          is_draft: data.isDraft,
-          published_at: (() => {
-            if (data.isDraft) return null;
-            if (article?.article.published_at && article.article.published_at !== '') {
-              return typeof article.article.published_at === 'string'
-                ? new Date(article.article.published_at).getTime()
-                : article.article.published_at;
-            }
-            return Date.now();
-          })(),
-        };
-        
-        console.log('=== ARTICLE UPDATE DATA ===');
-        console.log('Blog Slug:', blogSlug);
-        console.log('Update Data:', updateData);
-        console.log('==========================');
-        
-        await updateArticle(blogSlug as string, updateData);
-        if (returnToDashboard) {
-          navigate({ to: '/dashboard/blog' });
-        } else {
-          // If we are *not* navigating away, refresh local state:
-          setValue('title', data.title);
-          setValue('content', data.content);
-          setValue('image_url', data.image_url || '');
-          setValue('tags', data.tags);
-          setValue('isDraft', data.isDraft);
-        }
-      }
-    } catch (error) {
-      console.error('Error saving article:', error);
-      toast({ title: "Error", description: "Failed to save article. Please try again." });
+    // Ensure staged image URL is synced to form data before saving
+    const finalImageUrl = stagedImageUrl !== undefined ? stagedImageUrl : data.image_url;
+
+    if (isNew) {
+      createArticleMutation.mutate({
+        title: data.title,
+        content: data.content,
+        image_url: finalImageUrl || undefined,
+        tags: data.tags,
+        isDraft: data.isDraft,
+        authorId: user.id,
+      });
+    } else {        
+      const updateData = {
+        title: data.title,
+        content: data.content, // HTML content from Tiptap editor
+        image_url: finalImageUrl || undefined,
+        tags: data.tags,
+        is_draft: data.isDraft,
+        published_at: (() => {
+          if (data.isDraft) return null;
+          if (article?.article.published_at && article.article.published_at !== '') {
+            return typeof article.article.published_at === 'string'
+              ? new Date(article.article.published_at).getTime()
+              : article.article.published_at;
+          }
+          return Date.now();
+        })(),
+      };
+      
+      console.log('=== ARTICLE UPDATE DATA ===');
+      console.log('Blog Slug:', blogSlug);
+      console.log('Update Data:', updateData);
+      console.log('Staged Image URL:', stagedImageUrl);
+      console.log('Final Image URL:', finalImageUrl);
+      console.log('==========================');
+      
+      updateArticleMutation.mutate({
+        slug: blogSlug as string,
+        updateData,
+        returnToDashboard
+      });
     }
   };
 
@@ -1630,26 +1680,27 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     variant="outline"
                   type="submit"
                   onClick={() => {
-                    setIsSaving(true);
                     if (diffing) {
                       // Discard diff changes
                       rejectDiff();
                     }
                     handleSubmit((data) => onSubmit(data, false))();
                   }}
-                  disabled={isSaving}>
-                   {isSaving ? 'Saving...' : 'Save'}
+                  disabled={updateArticleMutation.isPending}>
+                   {updateArticleMutation.isPending ? 'Saving...' : 'Save'}
                   </Button>
                 }
-              <Button type='submit' disabled={isLoading} onClick={() => {
-                setIsLoading(true);
+              <Button type='submit' disabled={createArticleMutation.isPending || updateArticleMutation.isPending} onClick={() => {
                 if (diffing) {
                   // Discard diff changes
                   rejectDiff();
                 }
                 handleSubmit((data) => onSubmit(data, true))();
               }}>
-                {isLoading ? 'Updating...' : isNew ? 'Create Article' : 'Save & Return'}
+                {(createArticleMutation.isPending || updateArticleMutation.isPending) ? 
+                  (isNew ? 'Creating...' : 'Updating...') : 
+                  (isNew ? 'Create Article' : 'Save & Return')
+                }
               </Button>
               </div>
               </div>

@@ -50,7 +50,7 @@ type ArticleListItem struct {
 type ArticleUpdateRequest struct {
 	Title       string   `json:"title"`
 	Content     string   `json:"content"`
-	Image       string   `json:"image"`
+	ImageURL    string   `json:"image_url"`
 	Tags        []string `json:"tags"`
 	IsDraft     bool     `json:"is_draft"`
 	PublishedAt *int64   `json:"published_at"`
@@ -124,7 +124,7 @@ func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uuid.UUID,
 	// Update article fields directly
 	article.Title = req.Title
 	article.Content = req.Content
-	article.ImageURL = req.Image
+	article.ImageURL = req.ImageURL
 	article.IsDraft = req.IsDraft
 
 	// Convert Unix timestamp to time.Time if provided
@@ -568,7 +568,7 @@ func (s *ArticleService) DeleteArticle(id uuid.UUID) error {
 type ArticleCreateRequest struct {
 	Title    string    `json:"title"`
 	Content  string    `json:"content"`
-	Image    string    `json:"image"`
+	ImageURL string    `json:"image_url"`
 	Tags     []string  `json:"tags"`
 	IsDraft  bool      `json:"isDraft"`
 	AuthorID uuid.UUID `json:"authorId"`
@@ -601,7 +601,7 @@ func (s *ArticleService) CreateArticle(ctx context.Context, req ArticleCreateReq
 	article := models.Article{
 		Title:    req.Title,
 		Content:  req.Content,
-		ImageURL: req.Image,
+		ImageURL: req.ImageURL,
 		IsDraft:  req.IsDraft,
 		AuthorID: req.AuthorID,
 		Slug:     generateSlug(req.Title),
