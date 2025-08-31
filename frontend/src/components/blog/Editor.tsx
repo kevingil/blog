@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo } from "lucide-react"
+import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo, ChevronDown as ChevronDownIcon, ChevronUp as ChevronUpIcon } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { IconLoader2 } from '@tabler/icons-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -251,54 +251,96 @@ function DiffPreview({ diffPreview, diffState }: {
   diffPreview: { oldText: string; newText: string; reason?: string }, 
   diffState: 'accepted' | 'rejected' 
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const parts = diffWords(diffPreview.oldText, diffPreview.newText);
-  const maxLength = 200; // Limit preview length
+  const maxLines = 3; // Show first 3 lines by default
   
-  let previewText = '';
-  let charCount = 0;
-  let truncated = false;
+  type DiffPart = { added?: boolean; removed?: boolean; value: string; truncated?: boolean };
   
-  for (const part of parts) {
-    if (charCount + part.value.length > maxLength) {
-      previewText += part.value.substring(0, maxLength - charCount) + '...';
-      truncated = true;
+  // Split parts into lines to determine if we need truncation
+  let currentLine = 0;
+  let truncatedParts: DiffPart[] = [];
+  let hasMoreContent = false;
+  
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    const lines = part.value.split('\n');
+    
+    if (currentLine + lines.length <= maxLines || isExpanded) {
+      // Include the whole part
+      truncatedParts.push(part);
+      currentLine += lines.length - 1; // -1 because last line doesn't count as a new line
+    } else {
+      // Truncate this part
+      const remainingLines = maxLines - currentLine;
+      if (remainingLines > 0) {
+        const truncatedValue = lines.slice(0, remainingLines).join('\n');
+        truncatedParts.push({
+          ...part,
+          value: truncatedValue,
+          truncated: true
+        });
+      }
+      hasMoreContent = true;
       break;
     }
-    previewText += part.value;
-    charCount += part.value.length;
   }
+  
+  // If we're not expanded and there's more content, show the expand button
+  const showExpandButton = !isExpanded && (hasMoreContent || parts.some(p => p.value.split('\n').length > maxLines));
   
   return (
     <div className={cn(
-      "mt-2 p-2 rounded-md text-xs border",
-      diffState === 'accepted' ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+      "mt-2 p-0 rounded-md text-xs"
     )}>
       <div className={cn(
-        "flex items-center gap-1 mb-1 font-medium",
+        "flex flex-col items-start gap-1 mb-1 font-medium",
         diffState === 'accepted' ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300"
       )}>
-        <span>{diffState === 'accepted' ? '✅' : '❌'}</span>
-        <span>{diffState === 'accepted' ? 'Accepted' : 'Rejected'}</span>
+        <div className="flex flex-row items-center gap-1">
+          <span>{diffState === 'accepted' ? '✅' : '❌'}</span>
+          <span>{diffState === 'accepted' ? 'Accepted' : 'Rejected'}</span>
+        </div>
         {diffPreview.reason && <span>• {diffPreview.reason}</span>}
       </div>
       <div className="font-mono text-xs whitespace-pre-wrap">
-        {parts.map((part, index) => {
-          if (charCount > maxLength && index > 0) return null;
-          return (
-            <span
-              key={index}
-              className={cn(
-                part.added ? "bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100" : 
-                part.removed ? "bg-red-200 dark:bg-red-800 text-red-900 dark:text-red-100 line-through" : 
-                "text-gray-700 dark:text-gray-300"
-              )}
-            >
-              {part.value}
-            </span>
-          );
-        })}
-        {truncated && <span className="text-gray-500">...</span>}
+        {(isExpanded ? parts : truncatedParts).map((part, index) => (
+          <span
+            key={index}
+            className={cn(
+              part.added ? "bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100" : 
+              part.removed ? "bg-red-200 dark:bg-red-800 text-red-900 dark:text-red-100 line-through" : 
+              "text-gray-700 dark:text-gray-300"
+            )}
+          >
+            {part.value}
+            {'truncated' in part && part.truncated && <span className="text-gray-500">...</span>}
+          </span>
+        ))}
       </div>
+      {/* Show expand/collapse button at bottom */}
+      {(showExpandButton || isExpanded) && (
+        <div className="flex justify-center mt-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="h-6 px-2 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            {isExpanded ? (
+              <>
+                <ChevronUpIcon className="h-3 w-3 mr-1" />
+                Show less
+              </>
+            ) : (
+              <>
+                <ChevronDownIcon className="h-3 w-3 mr-1" />
+                Show more
+              </>
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1931,6 +1973,17 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     );
                   }
                 }
+                
+                // Check if this is an artifact message that should be hidden
+                // Hide artifact messages (📋 Document rewrite: ...) if the next message is a resolved diff action
+                if (m.content.startsWith('📋')) {
+                  const nextMessage = chatMessages[i + 1];
+                  if (nextMessage && nextMessage.content === '__DIFF_ACTIONS__' && nextMessage.diffState && nextMessage.diffPreview) {
+                    // Hide this artifact message since the diff preview will show everything
+                    return null;
+                  }
+                }
+                
                 return (
                   <div key={i} className="w-full flex justify-start">
                     <div className="max-w-xs whitespace-pre-wrap rounded-lg px-3 py-2 text-sm bg-gray-200 dark:bg-gray-700 dark:text-white">
