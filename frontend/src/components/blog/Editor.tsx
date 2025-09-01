@@ -48,7 +48,7 @@ import { ArticleListItem } from '@/services/types';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogTitle, DialogContent, DialogTrigger, DialogDescription, DialogFooter, DialogHeader, DialogClose } from '@/components/ui/dialog';
 import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerClose } from '@/components/ui/drawer';
-import { SourcesDrawer } from './SourcesDrawer';
+import { SourcesManager } from './SourcesManager';
 import { SourcesPreview } from './SourcesPreview';
 
 // Helper function to convert tool names to user-friendly display names
@@ -553,7 +553,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [stagedImageUrl, setStagedImageUrl] = useState<string | null | undefined>(undefined);
   const [generateImageOpen, setGenerateImageOpen] = useState(false);
   const [generatingRewrite, setGeneratingRewrite] = useState(false);
-  const [sourcesDrawerOpen, setSourcesDrawerOpen] = useState(false);
+  const [sourcesManagerOpen, setSourcesManagerOpen] = useState(false);
   const [sourcesRefreshTrigger] = useState(0);
 
   /* --------------------------------------------------------------------- */
@@ -1660,7 +1660,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               {/* Sources Preview Section */}
               <SourcesPreview
                 articleId={article?.article.id}
-                onOpenDrawer={() => setSourcesDrawerOpen(true)}
+                onOpenDrawer={() => setSourcesManagerOpen(true)}
                 disabled={!article && isNew}
                 refreshTrigger={sourcesRefreshTrigger}
               />
@@ -2085,12 +2085,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         </div>
       </div>
 
-      {/* Sources Drawer */}
+      {/* Sources Manager */}
       {article && (
-        <SourcesDrawer
+        <SourcesManager
           articleId={article.article.id}
-          isOpen={sourcesDrawerOpen}
-          onOpenChange={setSourcesDrawerOpen}
+          isOpen={sourcesManagerOpen}
+          onOpenChange={setSourcesManagerOpen}
         />
       )}
     </section>
