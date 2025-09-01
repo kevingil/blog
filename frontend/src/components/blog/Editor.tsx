@@ -669,17 +669,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [currentDiffReason, setCurrentDiffReason] = useState<string>('');
   const [activeDiffMessageIndex, setActiveDiffMessageIndex] = useState<number | null>(null);
   
+
+  
   // Inline diff lifecycle helpers
   const enterDiffPreview = (oldHtml: string, newHtml: string, reason?: string) => {
     if (!editor) return;
-    // Compute plain text for old/new documents using temporary DOM containers
-    const getPlainText = (html: string) => {
-      const container = document.createElement('div');
-      container.innerHTML = html;
-      return container.textContent || container.innerText || '';
-    };
-    const oldText = getPlainText(oldHtml);
-    const newText = getPlainText(newHtml);
+    // Use full HTML content for accurate diff generation - don't strip anything
+    const oldText = oldHtml;
+    const newText = newHtml;
     editor.commands.setContent(newHtml);
     setOriginalDocument(oldHtml);
     setPendingNewDocument(newHtml);
@@ -706,15 +703,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const acceptDiff = () => {
     if (!editor) return;
     
-    // Save diff preview data before clearing
-    const getPlainText = (html: string) => {
-      const container = document.createElement('div');
-      container.innerHTML = html;
-      return container.textContent || container.innerText || '';
-    };
-    
-    const oldText = getPlainText(originalDocument);
-    const newText = getPlainText(pendingNewDocument);
+    // Save diff preview data before clearing - use full HTML content
+    const oldText = originalDocument;
+    const newText = pendingNewDocument;
     
     // Update the __DIFF_ACTIONS__ message with accepted state
     if (activeDiffMessageIndex !== null) {
@@ -747,15 +738,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const rejectDiff = () => {
     if (!editor) return;
     
-    // Save diff preview data before clearing
-    const getPlainText = (html: string) => {
-      const container = document.createElement('div');
-      container.innerHTML = html;
-      return container.textContent || container.innerText || '';
-    };
-    
-    const oldText = getPlainText(originalDocument);
-    const newText = getPlainText(pendingNewDocument);
+    // Save diff preview data before clearing - use full HTML content
+    const oldText = originalDocument;
+    const newText = pendingNewDocument;
     
     // Update the __DIFF_ACTIONS__ message with rejected state
     if (activeDiffMessageIndex !== null) {

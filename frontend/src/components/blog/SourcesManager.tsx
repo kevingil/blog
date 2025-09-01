@@ -577,7 +577,7 @@ export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManag
               </>
             ) : (
               <div className="flex-1 flex items-center justify-center text-center text-muted-foreground">
-                <div>
+                <div className="h-[300px]">
                   <FileText className="w-16 h-16 mx-auto mb-4 opacity-30" />
                   <p className="text-lg font-medium mb-2">Select a source to edit</p>
                   <p className="text-sm">Choose a source from the list or create a new one</p>
