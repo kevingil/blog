@@ -180,11 +180,15 @@ func InitializeAgentCopilotManager(articleSourceService *ArticleSourceService) e
 		tools.NewEditTextTool(),
 		tools.NewAnalyzeDocumentTool(),
 		tools.NewGenerateImagePromptTool(textGenService), // TextGenService for image prompt generation
+		tools.NewGenerateTextContentTool(textGenService), // New tool for text generation
 	}
 
-	// Add get_relevant_sources tool if source service is available
+	// Add source-related tools if source service is available
 	if sourceService != nil {
-		writingTools = append(writingTools, tools.NewGetRelevantSourcesTool(sourceService))
+		writingTools = append(writingTools, 
+			tools.NewGetRelevantSourcesTool(sourceService),
+			tools.NewAddContextFromSourcesTool(sourceService), // New tool for context addition
+		)
 	}
 
 	// Create the agent using the LLM framework
