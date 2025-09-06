@@ -15,16 +15,12 @@ import {
   IconSearch,
   IconSettings,
   IconUsers,
-  IconShield,
-  IconPencil,
   IconUpload,
   IconHome,
 } from "@tabler/icons-react"
 
 import { NavDocuments } from "@/components/nav-documents"
 import { NavMain } from "@/components/nav-main"
-import { NavSecondary } from "@/components/nav-secondary"
-import { NavUser } from "@/components/nav-user"
 import {
   Sidebar,
   SidebarContent,
@@ -39,7 +35,9 @@ import { useEffect, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { getArticles } from "@/services/blog"
-import { ArticleListItem } from "@/services/types"
+import { Button } from "@/components/ui/button"
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+
 
 const navigationData = {
   navMain: [
@@ -123,13 +121,6 @@ const navigationData = {
           url: "/dashboard/uploads?type=documents",
         },
       ],
-    },
-  ],
-  navSecondary: [
-    {
-      title: "Settings",
-      url: "/dashboard/settings",
-      icon: IconSettings,
     },
   ],
   documents: [
@@ -232,11 +223,26 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           fetchNextPage={fetchNextPage}
           hasNextPage={hasNextPage}
           isFetchingNextPage={isFetchingNextPage}
-        />
-        <NavSecondary items={navigationData.navSecondary} className="mt-auto" />
+          />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={userData} />
+        <Link to="/dashboard/settings">
+        <Button
+            className="bg-slate-100 text-slate-800 hover:bg-slate-200 hover:text-slate-900 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 dark:hover:text-slate-100 w-full h-14"
+            >
+              <Avatar className="h-8 w-8 rounded-lg grayscale">
+                <AvatarImage src={userData.avatar} alt={userData.name} />
+                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+              </Avatar>
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-medium">{userData.name}</span>
+                <span className="text-muted-foreground truncate text-xs">
+                  {userData.email}
+                </span>
+              </div>
+              <IconSettings className="h-5 w-5 text-muted-foreground" />
+            </Button>
+        </Link>
       </SidebarFooter>
     </Sidebar>
   )
