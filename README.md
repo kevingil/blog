@@ -2,6 +2,7 @@
 
 An agentic blog editor.
 
+![frontend/public/screenshot-image.png](frontend/public/screenshot-image.png)
 
 ![frontend/public/Xnip2025-06-29_15-58-49.jpg](frontend/public/Xnip2025-07-08_00-16-13.png)
 
