@@ -174,18 +174,23 @@ func InitializeAgentCopilotManager(articleSourceService *ArticleSourceService) e
 	// Create text generation service for tools that need it
 	textGenService := NewTextGenerationService()
 
+	// Create Exa search service and adapter for web search capabilities
+	exaService := NewExaSearchService()
+	exaAdapter := NewExaServiceAdapter(exaService)
+
 	// Create writing tools for the agent
 	writingTools := []tools.BaseTool{
 		tools.NewRewriteDocumentTool(textGenService, sourceService), // TextGenService and SourceService
 		tools.NewEditTextTool(),
 		tools.NewAnalyzeDocumentTool(),
-		tools.NewGenerateImagePromptTool(textGenService), // TextGenService for image prompt generation
-		tools.NewGenerateTextContentTool(textGenService), // New tool for text generation
+		tools.NewGenerateImagePromptTool(textGenService),         // TextGenService for image prompt generation
+		tools.NewGenerateTextContentTool(textGenService),         // New tool for text generation
+		tools.NewExaSearchTool(exaAdapter, articleSourceService), // Exa web search with source creation
 	}
 
 	// Add source-related tools if source service is available
 	if sourceService != nil {
-		writingTools = append(writingTools, 
+		writingTools = append(writingTools,
 			tools.NewGetRelevantSourcesTool(sourceService),
 			tools.NewAddContextFromSourcesTool(sourceService), // New tool for context addition
 		)
