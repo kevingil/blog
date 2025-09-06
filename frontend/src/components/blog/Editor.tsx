@@ -501,6 +501,7 @@ export function ImageLoader({ article, newImageGenerationRequestId, stagedImageU
         if (imgGen) {
           if (imgGen.outputUrl) {
             setImageUrl(imgGen.outputUrl);
+            setStagedImageUrl(imgGen.outputUrl);
           } else {
             const status = await getImageGenerationStatus(requestToFetch);
             if (status.outputUrl) {
@@ -552,9 +553,54 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [newImageGenerationRequestId, setNewImageGenerationRequestId] = useState<string | null>(null);
   const [stagedImageUrl, setStagedImageUrl] = useState<string | null | undefined>(undefined);
   const [generateImageOpen, setGenerateImageOpen] = useState(false);
+  const [imageModalOpen, setImageModalOpen] = useState(false);
   const [generatingRewrite, setGeneratingRewrite] = useState(false);
   const [sourcesManagerOpen, setSourcesManagerOpen] = useState(false);
   const [sourcesRefreshTrigger] = useState(0);
+  
+  // Image versioning state
+  const [imageVersions, setImageVersions] = useState<Array<{ url: string; prompt?: string; timestamp: number }>>([]);
+  const [currentVersionIndex, setCurrentVersionIndex] = useState(-1);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string>('');
+
+  // Image versioning functions
+  const addImageVersion = (url: string, prompt?: string) => {
+    const newVersion = { url, prompt, timestamp: Date.now() };
+    setImageVersions(prev => [...prev, newVersion]);
+    setCurrentVersionIndex(prev => prev + 1);
+    setPreviewImageUrl(url);
+    setStagedImageUrl(url);
+    setValue('image_url', url);
+  };
+
+  const selectImageVersion = (index: number) => {
+    if (index >= 0 && index < imageVersions.length) {
+      setCurrentVersionIndex(index);
+      const selectedVersion = imageVersions[index];
+      setPreviewImageUrl(selectedVersion.url);
+      setStagedImageUrl(selectedVersion.url);
+      setValue('image_url', selectedVersion.url);
+    }
+  };
+
+  const removeImageVersion = (index: number) => {
+    if (imageVersions.length > 1) {
+      const newVersions = imageVersions.filter((_, i) => i !== index);
+      setImageVersions(newVersions);
+      
+      if (index === currentVersionIndex) {
+        const newIndex = Math.max(0, Math.min(index, newVersions.length - 1));
+        setCurrentVersionIndex(newIndex);
+        if (newVersions[newIndex]) {
+          setPreviewImageUrl(newVersions[newIndex].url);
+          setStagedImageUrl(newVersions[newIndex].url);
+          setValue('image_url', newVersions[newIndex].url);
+        }
+      } else if (index < currentVersionIndex) {
+        setCurrentVersionIndex(prev => prev - 1);
+      }
+    }
+  };
 
   /* --------------------------------------------------------------------- */
   /* Chat (right-hand panel)                                               */
@@ -810,10 +856,16 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     return <div>Please log in to edit articles.</div>;
   }
 
-  // Consume from ImageLoader
+  // Consume from ImageLoader and sync with versioning
   useEffect(() => {
     if (stagedImageUrl) {
       setValue('image_url', stagedImageUrl);
+      setPreviewImageUrl(stagedImageUrl);
+      
+      // Add to versions if it's a new URL
+      if (!imageVersions.some(v => v.url === stagedImageUrl)) {
+        addImageVersion(stagedImageUrl);
+      }
     }
   }, [stagedImageUrl, setValue]);
 
@@ -833,6 +885,18 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         isDraft: article.article.is_draft,
       } as ArticleFormData;
       reset(newValues);
+      
+      // Initialize image versions if there's an existing image
+      if (article.article.image_url) {
+        setImageVersions([{ url: article.article.image_url, timestamp: Date.now() }]);
+        setCurrentVersionIndex(0);
+        setPreviewImageUrl(article.article.image_url);
+      } else {
+        setImageVersions([]);
+        setCurrentVersionIndex(-1);
+        setPreviewImageUrl('');
+      }
+      
       // Sync editor with fresh content - load directly as HTML since content is already HTML
       if (editor) {
         editor.commands.setContent(newValues.content);
@@ -847,6 +911,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         isDraft: false,
       };
       reset(blank);
+      setImageVersions([]);
+      setCurrentVersionIndex(-1);
+      setPreviewImageUrl('');
       if (editor) {
         editor.commands.setContent('');
       }
@@ -1525,8 +1592,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-4">
               {/* Header Image Section */}
               <div className="flex flex-col gap-2">
-                <Drawer direction="right">
-                  <DrawerTrigger asChild>
+                <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
+                  <DialogTrigger asChild>
                     <Card className="w-full h-32 flex items-center justify-center overflow-hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                       <div className="flex flex-col px-2 gap-2">
                         <div className="text-xs">Image</div>
@@ -1544,102 +1611,226 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         </div>
                       )}
                     </Card>
-                  </DrawerTrigger>
+                  </DialogTrigger>
 
-                  {/* Drawer content for image editing */}
-                  <DrawerContent className="w-full sm:max-w-sm ml-auto">
-                    <DrawerHeader>
-                      <DrawerTitle>Edit Header Image</DrawerTitle>
-                      <DrawerDescription>Update or generate a header image for your article.</DrawerDescription>
-                    </DrawerHeader>
-                    <div className="space-y-4 px-4">
-                      <div className="space-y-2">
-                        <label className="block text-md font-medium leading-6 text-gray-900 dark:text-white">Image URL</label>
-                        <Input
-                          className="w-full"
-                          {...register('image_url')}
-                          value={watchedValues.image_url}
-                          onChange={(e) => {
-                            setValue('image_url', e.target.value);
-                            setStagedImageUrl(e.target.value);
-                          }}
-                          placeholder="Optional, for header"
-                        />
-                        {errors.image_url && <p className="text-red-500">{errors.image_url.message}</p>}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Dialog open={generateImageOpen} onOpenChange={setGenerateImageOpen}>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" className="">
-                              <PencilIcon className="w-4 h-4 text-indigo-500" /> Edit Prompt
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="sm:max-w-[600px]">
-                            <DialogHeader>
-                              <DialogTitle>Generate New Image</DialogTitle>
-                              <DialogDescription>
-                                Generate a new image for your article header.
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="flex flex-col items-start gap-4 w-full">
-                              <Textarea
-                                value={imagePrompt || ''}
-                                onChange={(e) => setImagePrompt(e.target.value)}
-                                placeholder="Prompt"
-                                className="h-[300px] w-full"
-                              />
-                            </div>
-                            <DialogFooter>
-                              <div className="flex justify-end gap-2 w-full">
-                                <DialogClose asChild>
-                                  <Button variant="outline" className="">Cancel</Button>
-                                </DialogClose>
-                                <Button
-                                  type="submit"
-                                  className=""
-                                  onClick={async () => {
-                                    const result = await generateArticleImage(imagePrompt || '', article?.article.id || '');
-                                    if (result.success) {
-                                      setNewImageGenerationRequestId(result.generationRequestId);
-                                      toast({ title: 'Success', description: 'Image generated successfully.' });
-                                      setGenerateImageOpen(false);
-                                    } else {
-                                      toast({ title: 'Error', description: 'Failed to generate image. Please try again.' });
-                                    }
-                                  }}
-                                >Generate</Button>
+                  {/* Modal content for image editing */}
+                  <DialogContent className="sm:max-w-4xl">
+                    <DialogHeader>
+                      <DialogTitle>Edit Header Image</DialogTitle>
+                      <DialogDescription>Update or generate a header image for your article.</DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Image Preview Section */}
+                      <div className="space-y-4">
+                        <div className="text-sm font-medium">Preview</div>
+                        <div className="aspect-video rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 overflow-hidden bg-gray-50 dark:bg-gray-900">
+                          {previewImageUrl ? (
+                            <img 
+                              src={previewImageUrl} 
+                              alt="Image preview" 
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-400">
+                              <div className="text-center">
+                                <UploadIcon className="w-12 h-12 mx-auto mb-2" />
+                                <p>No image selected</p>
                               </div>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          disabled={generatingImage}
-                          onClick={async (e) => {
-                            setGeneratingImage(true);
-                            e.preventDefault();
-                            const result = await generateArticleImage(article?.article.title || '', article?.article.id || '');
-                            if (result.success) {
-                              setNewImageGenerationRequestId(result.generationRequestId);
-                              toast({ title: 'Success', description: 'Image generated successfully.' });
-                            } else {
-                              toast({ title: 'Error', description: 'Failed to generate image. Please try again.' });
-                            }
-                            setGeneratingImage(false);
-                          }}
-                        >
-                          <SparklesIcon className={cn('w-4 h-4 text-indigo-500', generatingImage && 'animate-spin')} />
-                        </Button>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Image Versions */}
+                        {imageVersions.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="text-sm font-medium">Versions ({imageVersions.length})</div>
+                            <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+                              {imageVersions.map((version, index) => (
+                                <div
+                                  key={index}
+                                  className={cn(
+                                    "aspect-video rounded-md border-2 cursor-pointer overflow-hidden",
+                                    index === currentVersionIndex 
+                                      ? "border-indigo-500 ring-2 ring-indigo-200" 
+                                      : "border-gray-200 hover:border-gray-300"
+                                  )}
+                                  onClick={() => selectImageVersion(index)}
+                                >
+                                  <img 
+                                    src={version.url} 
+                                    alt={`Version ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Controls Section */}
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium">Image URL</label>
+                          <Input
+                            className="w-full"
+                            value={previewImageUrl}
+                            onChange={(e) => {
+                              setPreviewImageUrl(e.target.value);
+                              if (e.target.value) {
+                                addImageVersion(e.target.value);
+                              }
+                            }}
+                            placeholder="Enter image URL..."
+                          />
+                          {errors.image_url && <p className="text-red-500 text-sm">{errors.image_url.message}</p>}
+                        </div>
+                        
+                        <div className="space-y-3">
+                          <div className="text-sm font-medium">Generate New Image</div>
+                          <div className="flex items-center gap-2">
+                            <Dialog open={generateImageOpen} onOpenChange={setGenerateImageOpen}>
+                              <DialogTrigger asChild>
+                                <Button variant="outline" className="flex-1">
+                                  <PencilIcon className="w-4 h-4 mr-2 text-indigo-500" /> 
+                                  Custom Prompt
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="sm:max-w-[600px]">
+                                <DialogHeader>
+                                  <DialogTitle>Generate New Image</DialogTitle>
+                                  <DialogDescription>
+                                    Generate a new image for your article header.
+                                  </DialogDescription>
+                                </DialogHeader>
+                                <div className="flex flex-col items-start gap-4 w-full">
+                                  <Textarea
+                                    value={imagePrompt || ''}
+                                    onChange={(e) => setImagePrompt(e.target.value)}
+                                    placeholder="Prompt"
+                                    className="h-[300px] w-full"
+                                  />
+                                </div>
+                                <DialogFooter>
+                                  <div className="flex justify-end gap-2 w-full">
+                                    <DialogClose asChild>
+                                      <Button variant="outline">Cancel</Button>
+                                    </DialogClose>
+                                    <Button
+                                      type="submit"
+                                      onClick={async () => {
+                                        const result = await generateArticleImage(imagePrompt || '', article?.article.id || '');
+                                        if (result.success) {
+                                          setNewImageGenerationRequestId(result.generationRequestId);
+                                          // Add to versions when image is generated
+                                          if (result.generationRequestId) {
+                                            setTimeout(async () => {
+                                              const status = await getImageGenerationStatus(result.generationRequestId);
+                                              if (status.outputUrl) {
+                                                addImageVersion(status.outputUrl, imagePrompt || '');
+                                              }
+                                            }, 3000);
+                                          }
+                                          toast({ title: 'Success', description: 'Image generated successfully.' });
+                                          setGenerateImageOpen(false);
+                                        } else {
+                                          toast({ title: 'Error', description: 'Failed to generate image. Please try again.' });
+                                        }
+                                      }}
+                                    >Generate</Button>
+                                  </div>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              disabled={generatingImage}
+                              onClick={async (e) => {
+                                setGeneratingImage(true);
+                                e.preventDefault();
+                                const result = await generateArticleImage(article?.article.title || '', article?.article.id || '');
+                                if (result.success) {
+                                  setNewImageGenerationRequestId(result.generationRequestId);
+                                  // Add to versions when image is generated
+                                  if (result.generationRequestId) {
+                                    setTimeout(async () => {
+                                      const status = await getImageGenerationStatus(result.generationRequestId);
+                                      if (status.outputUrl) {
+                                        addImageVersion(status.outputUrl, article?.article.title || '');
+                                      }
+                                    }, 3000);
+                                  }
+                                  toast({ title: 'Success', description: 'Image generated successfully.' });
+                                } else {
+                                  toast({ title: 'Error', description: 'Failed to generate image. Please try again.' });
+                                }
+                                setGeneratingImage(false);
+                              }}
+                            >
+                              <SparklesIcon className={cn('w-4 h-4 text-indigo-500', generatingImage && 'animate-spin')} />
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        {/* Version Controls */}
+                        {imageVersions.length > 0 && (
+                          <div className="space-y-3">
+                            <div className="text-sm font-medium">Version Controls</div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={currentVersionIndex <= 0}
+                                onClick={() => selectImageVersion(currentVersionIndex - 1)}
+                              >
+                                Previous
+                              </Button>
+                              <span className="text-sm text-gray-500 flex-1 text-center">
+                                {currentVersionIndex + 1} of {imageVersions.length}
+                              </span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={currentVersionIndex >= imageVersions.length - 1}
+                                onClick={() => selectImageVersion(currentVersionIndex + 1)}
+                              >
+                                Next
+                              </Button>
+                            </div>
+                            {currentVersionIndex >= 0 && imageVersions.length > 1 && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="w-full"
+                                onClick={() => removeImageVersion(currentVersionIndex)}
+                              >
+                                Delete Current Version
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <DrawerFooter>
-                      <DrawerClose asChild>
-                        <Button variant="outline" className="w-full">Close</Button>
-                      </DrawerClose>
-                    </DrawerFooter>
-                  </DrawerContent>
-                </Drawer>
+                    
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button variant="outline">Cancel</Button>
+                      </DialogClose>
+                      <DialogClose asChild>
+                        <Button onClick={() => {
+                          if (previewImageUrl) {
+                            setStagedImageUrl(previewImageUrl);
+                            setValue('image_url', previewImageUrl);
+                          }
+                        }}>
+                          Apply Image
+                        </Button>
+                      </DialogClose>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </div>
 
               {/* Sources Preview Section */}
