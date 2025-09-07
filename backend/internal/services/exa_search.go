@@ -172,7 +172,7 @@ func (s *ExaSearchService) Search(ctx context.Context, query string, options *Ex
 // SearchWithDefaults performs a search with sensible defaults for content extraction
 func (s *ExaSearchService) SearchWithDefaults(ctx context.Context, query string) (*ExaSearchResponse, error) {
 	options := &ExaSearchOptions{
-		NumResults:        5, // Limit to 5 results for efficiency
+		NumResults:        6, // Always return 6 results for comprehensive coverage
 		IncludeText:       true,
 		IncludeHighlights: true,
 		IncludeSummary:    true,

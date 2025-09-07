@@ -178,6 +178,9 @@ func InitializeAgentCopilotManager(articleSourceService *ArticleSourceService) e
 	exaService := NewExaSearchService()
 	exaAdapter := NewExaServiceAdapter(exaService)
 
+	// Create source service adapter for tools interface compatibility
+	sourceServiceAdapter := NewSourceServiceAdapter(articleSourceService)
+
 	// Create writing tools for the agent
 	writingTools := []tools.BaseTool{
 		tools.NewRewriteDocumentTool(textGenService, sourceService), // TextGenService and SourceService
@@ -185,7 +188,7 @@ func InitializeAgentCopilotManager(articleSourceService *ArticleSourceService) e
 		tools.NewAnalyzeDocumentTool(),
 		tools.NewGenerateImagePromptTool(textGenService),         // TextGenService for image prompt generation
 		tools.NewGenerateTextContentTool(textGenService),         // New tool for text generation
-		tools.NewExaSearchTool(exaAdapter, articleSourceService), // Exa web search with source creation
+		tools.NewExaSearchTool(exaAdapter, sourceServiceAdapter), // Exa web search with source creation
 	}
 
 	// Add source-related tools if source service is available

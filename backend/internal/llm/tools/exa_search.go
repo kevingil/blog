@@ -42,10 +42,20 @@ type ExaSearchService interface {
 	SearchWithDefaults(ctx context.Context, query string) (*ExaSearchResponse, error)
 	IsConfigured() bool
 }
+]]]
+// CreateSourceRequest represents the request for creating a new source
+type CreateSourceRequest struct {
+	ArticleID  uuid.UUID `json:"article_id"`
+	Title      string    `json:"title"`
+	Content    string    `json:"content"`
+	URL        string    `json:"url"`
+	SourceType string    `json:"source_type"`
+}
 
 // ExaSourceService interface for creating sources from search results
 type ExaSourceService interface {
 	ScrapeAndCreateSource(ctx context.Context, articleID uuid.UUID, targetURL string) (*models.ArticleSource, error)
+	CreateSource(ctx context.Context, req CreateSourceRequest) (*models.ArticleSource, error)
 }
 
 // ExaSearchTool searches the web using Exa and automatically creates sources
@@ -170,6 +180,9 @@ func (t *ExaSearchTool) Run(ctx context.Context, params ToolCall) (ToolResponse,
 		if result.Author != "" {
 			log.Printf("   👤 Author: %q", result.Author)
 		}
+		if result.Text != "" {
+			log.Printf("   📄 Full text length: %d characters", len(result.Text))
+		}
 
 		// Create search result entry
 		searchResult := map[string]interface{}{
@@ -194,14 +207,17 @@ func (t *ExaSearchTool) Run(ctx context.Context, params ToolCall) (ToolResponse,
 			}
 			searchResult["text_preview"] = textPreview
 			searchResult["text_length"] = len(result.Text)
+			searchResult["has_full_text"] = true
+		} else {
+			searchResult["has_full_text"] = false
 		}
 
 		searchResults = append(searchResults, searchResult)
 
-		// Attempt to create source if enabled
-		if input.CreateSources && t.sourceService != nil {
+		// Attempt to create source if enabled and we have full text content
+		if input.CreateSources && t.sourceService != nil && result.Text != "" {
 			sourcesAttempted++
-			log.Printf("🔍 [ExaSearch] Attempting to create source from URL: %s", result.URL)
+			log.Printf("🔍 [ExaSearch] Creating web content source from search result: %s", result.URL)
 
 			// Skip obviously problematic URLs
 			if t.shouldSkipURL(result.URL) {
@@ -209,26 +225,53 @@ func (t *ExaSearchTool) Run(ctx context.Context, params ToolCall) (ToolResponse,
 				continue
 			}
 
-			source, err := t.sourceService.ScrapeAndCreateSource(ctx, articleID, result.URL)
+			// Create WebContentSource from search result data
+			searchResultData := models.SearchResultData{
+				ID:            result.ID,
+				Title:         result.Title,
+				URL:           result.URL,
+				Text:          result.Text,
+				Summary:       result.Summary,
+				Author:        result.Author,
+				PublishedDate: result.PublishedDate,
+				Highlights:    result.Highlights,
+				Score:         result.Score,
+				Favicon:       result.Favicon,
+				Image:         result.Image,
+				Extras:        result.Extras,
+			}
+
+			webContentSource := models.NewWebContentSourceFromSearchResult(articleID, input.Query, searchResultData)
+
+			// Convert to ArticleSource and create in database
+			articleSource := webContentSource.ToArticleSource()
+			
+			// Use the existing service to create the source with embedding generation
+			source, err := t.sourceService.CreateSource(ctx, CreateSourceRequest{
+				ArticleID:  articleSource.ArticleID,
+				Title:      articleSource.Title,
+				Content:    articleSource.Content,
+				URL:        articleSource.URL,
+				SourceType: "web_search", // Specify this as a web search source
+			})
 			if err != nil {
-				log.Printf("🔍 [ExaSearch] ❌ Failed to create source from %s: %v", result.URL, err)
+				log.Printf("🔍 [ExaSearch] ❌ Failed to create web content source from %s: %v", result.URL, err)
 				// Continue with other results even if one fails
 				continue
 			}
 
 			sourcesSuccessful++
-			log.Printf("🔍 [ExaSearch] ✅ Successfully created source from %s", result.URL)
+			log.Printf("🔍 [ExaSearch] ✅ Successfully created web content source from %s (ID: %s)", result.URL, source.ID)
 
 			sourceInfo := map[string]interface{}{
-				"original_title": result.Title,
-				"original_url":   result.URL,
-				"source_created": true,
-				"exa_id":         result.ID,
-			}
-
-			// Add source details if available
-			if source != nil {
-				sourceInfo["source_id"] = source
+				"original_title":   result.Title,
+				"original_url":     result.URL,
+				"source_created":   true,
+				"search_result_id": result.ID,
+				"source_id":        source.ID,
+				"content_length":   len(result.Text),
+				"source_type":      "web_search",
+				"search_query":     input.Query,
 			}
 
 			sourcesCreated = append(sourcesCreated, sourceInfo)
