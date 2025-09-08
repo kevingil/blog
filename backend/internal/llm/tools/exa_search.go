@@ -42,7 +42,7 @@ type ExaSearchService interface {
 	SearchWithDefaults(ctx context.Context, query string) (*ExaSearchResponse, error)
 	IsConfigured() bool
 }
-]]]
+
 // CreateSourceRequest represents the request for creating a new source
 type CreateSourceRequest struct {
 	ArticleID  uuid.UUID `json:"article_id"`
@@ -245,7 +245,7 @@ func (t *ExaSearchTool) Run(ctx context.Context, params ToolCall) (ToolResponse,
 
 			// Convert to ArticleSource and create in database
 			articleSource := webContentSource.ToArticleSource()
-			
+
 			// Use the existing service to create the source with embedding generation
 			source, err := t.sourceService.CreateSource(ctx, CreateSourceRequest{
 				ArticleID:  articleSource.ArticleID,
