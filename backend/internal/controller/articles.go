@@ -92,7 +92,9 @@ func GetArticlesHandler(blogService *services.ArticleService) fiber.Handler {
 		tag := c.Query("tag", "")
 		status := c.Query("status", "published")
 		articlesPerPage := c.QueryInt("articlesPerPage", 6)
-		response, err := blogService.GetArticles(page, tag, status, articlesPerPage)
+		sortBy := c.Query("sortBy", "")
+		sortOrder := c.Query("sortOrder", "")
+		response, err := blogService.GetArticles(page, tag, status, articlesPerPage, sortBy, sortOrder)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
@@ -108,7 +110,10 @@ func SearchArticlesHandler(blogService *services.ArticleService) fiber.Handler {
 		}
 		page := c.QueryInt("page", 1)
 		tag := c.Query("tag", "")
-		response, err := blogService.SearchArticles(query, page, tag)
+		status := c.Query("status", "published")
+		sortBy := c.Query("sortBy", "")
+		sortOrder := c.Query("sortOrder", "")
+		response, err := blogService.SearchArticles(query, page, tag, status, sortBy, sortOrder)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
