@@ -52,19 +52,7 @@ function DashboardLayout() {
       <SidebarInset className="flex flex-col overflow-hidden h-full">
         <SiteHeader />
         <div className="flex flex-1 flex-col overflow-hidden min-h-0">
-          {isRootDashboard ? (
-            <div className="@container/main flex flex-1 flex-col gap-2">
-              <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-                <div className="px-4 lg:px-6">
-                  <UserProfileBanner />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <main className="flex flex-1 flex-col overflow-hidden p-0 min-h-0">
-              <Outlet />
-            </main>
-          )}
+          <Outlet />
         </div>
       </SidebarInset>
     </SidebarProvider>
