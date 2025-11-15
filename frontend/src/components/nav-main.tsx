@@ -58,11 +58,12 @@ export function NavMain({
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton 
+                asChild
                 tooltip={item.title}
                 isActive={location.pathname === item.url}
               >
-                  {item.icon && <item.icon />}
                 <Link to={item.url}>
+                  {item.icon && <item.icon />}
                   <span>{item.title}</span>
                 </Link>
               </SidebarMenuButton>

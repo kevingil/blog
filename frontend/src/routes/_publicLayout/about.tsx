@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { Skeleton } from '../../components/ui/skeleton';
 
 import { Button } from '../../components/ui/button';
-import { getAboutPage, getContactPage } from '../../services/user';
+import { getAboutPage, getContactPage } from '../../services/pages';
 import { useRef } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';

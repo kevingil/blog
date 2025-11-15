@@ -3,12 +3,21 @@ import { GetArticlesResponse } from '@/routes/dashboard/blog/index';
 import { VITE_API_BASE_URL } from '@/services/constants';
 
 // Article listing and search
-export async function getArticles(page: number, tag: string | null = null, status: 'all' | 'published' | 'drafts' = 'published', articlesPerPage?: number): Promise<GetArticlesResponse> {
+export async function getArticles(
+  page: number, 
+  tag: string | null = null, 
+  status: 'all' | 'published' | 'drafts' = 'published', 
+  articlesPerPage?: number,
+  sortBy?: string,
+  sortOrder?: 'asc' | 'desc'
+): Promise<GetArticlesResponse> {
   const params = new URLSearchParams({
     page: page.toString(),
     ...(tag && tag !== 'All' ? { tag } : {}),
     status,
-    ...(articlesPerPage !== undefined ? { articlesPerPage: articlesPerPage.toString() } : {})
+    ...(articlesPerPage !== undefined ? { articlesPerPage: articlesPerPage.toString() } : {}),
+    ...(sortBy ? { sortBy } : {}),
+    ...(sortOrder ? { sortOrder } : {})
   });
 
   const response = await fetch(`${VITE_API_BASE_URL}/blog/articles?${params}`);
@@ -32,11 +41,21 @@ export async function getArticles(page: number, tag: string | null = null, statu
   };
 }
 
-export async function searchArticles(query: string, page: number = 1, tag: string | null = null): Promise<GetArticlesResponse> {
+export async function searchArticles(
+  query: string, 
+  page: number = 1, 
+  tag: string | null = null,
+  status: 'all' | 'published' | 'drafts' = 'published',
+  sortBy?: string,
+  sortOrder?: 'asc' | 'desc'
+): Promise<GetArticlesResponse> {
   const params = new URLSearchParams({
     query,
     page: page.toString(),
-    ...(tag && tag !== 'All' ? { tag } : {})
+    ...(tag && tag !== 'All' ? { tag } : {}),
+    status,
+    ...(sortBy ? { sortBy } : {}),
+    ...(sortOrder ? { sortOrder } : {})
   });
 
   const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/search?${params}`);

@@ -261,7 +261,7 @@ func (s *ArticleService) GetArticle(id uuid.UUID) (*ArticleListItem, error) {
 	}, nil
 }
 
-func (s *ArticleService) GetArticles(page int, tag string, status string, articlesPerPage int) (*ArticleListResponse, error) {
+func (s *ArticleService) GetArticles(page int, tag string, status string, articlesPerPage int, sortBy string, sortOrder string) (*ArticleListResponse, error) {
 	db := s.db.GetDB()
 	var articles []models.Article
 	var totalCount int64
@@ -297,7 +297,9 @@ func (s *ArticleService) GetArticles(page int, tag string, status string, articl
 	offset := (page - 1) * articlesPerPage
 	totalPages := int(math.Ceil(float64(totalCount) / float64(articlesPerPage)))
 
-	result := query.Order("created_at DESC").Offset(offset).Limit(articlesPerPage).Find(&articles)
+	// Apply sorting
+	orderClause := buildOrderClause(sortBy, sortOrder)
+	result := query.Order(orderClause).Offset(offset).Limit(articlesPerPage).Find(&articles)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -344,14 +346,25 @@ func (s *ArticleService) GetArticles(page int, tag string, status string, articl
 	}, nil
 }
 
-func (s *ArticleService) SearchArticles(query string, page int, tag string) (*ArticleListResponse, error) {
+func (s *ArticleService) SearchArticles(query string, page int, tag string, status string, sortBy string, sortOrder string) (*ArticleListResponse, error) {
 	db := s.db.GetDB()
 	var articles []models.Article
 	var totalCount int64
 
 	searchQuery := db.Model(&models.Article{}).
-		Where("is_draft = ?", false).
 		Where("title ILIKE ? OR content ILIKE ? OR EXISTS (SELECT 1 FROM tag WHERE tag.id = ANY(tag_ids) AND tag.name ILIKE ?)", "%"+query+"%", "%"+query+"%", "%"+query+"%")
+
+	// Apply status filter
+	switch status {
+	case "published":
+		searchQuery = searchQuery.Where("is_draft = ?", false)
+	case "drafts":
+		searchQuery = searchQuery.Where("is_draft = ?", true)
+	case "all":
+		// No filter
+	default:
+		searchQuery = searchQuery.Where("is_draft = ?", false)
+	}
 
 	if tag != "" {
 		var tagModel models.Tag
@@ -366,7 +379,9 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string) (*Ar
 	offset := (page - 1) * ITEMS_PER_PAGE
 	totalPages := int(math.Ceil(float64(totalCount) / float64(ITEMS_PER_PAGE)))
 
-	result := searchQuery.Order("created_at DESC").Offset(offset).Limit(ITEMS_PER_PAGE).Find(&articles)
+	// Apply sorting
+	orderClause := buildOrderClause(sortBy, sortOrder)
+	result := searchQuery.Order(orderClause).Offset(offset).Limit(ITEMS_PER_PAGE).Find(&articles)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -406,7 +421,7 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string) (*Ar
 	return &ArticleListResponse{
 		Articles:      articleItems,
 		TotalPages:    totalPages,
-		IncludeDrafts: false,
+		IncludeDrafts: status == "all" || status == "drafts",
 	}, nil
 }
 
@@ -625,6 +640,32 @@ func generateSlug(title string) string {
 	slug = strings.ReplaceAll(slug, " ", "-")
 	// Remove special characters (basic implementation)
 	return slug
+}
+
+// buildOrderClause constructs a safe ORDER BY clause for article queries
+func buildOrderClause(sortBy string, sortOrder string) string {
+	// Validate and sanitize sort order
+	order := "DESC"
+	if strings.ToUpper(sortOrder) == "ASC" {
+		order = "ASC"
+	}
+
+	// Map sortBy to valid column names
+	validColumns := map[string]string{
+		"title":        "title",
+		"created_at":   "created_at",
+		"published_at": "published_at",
+		"is_draft":     "is_draft",
+		"status":       "is_draft", // Map status to is_draft
+	}
+
+	column, exists := validColumns[sortBy]
+	if !exists {
+		// Default to created_at if invalid column
+		column = "created_at"
+	}
+
+	return fmt.Sprintf("%s %s", column, order)
 }
 
 func safeTimeToString(t *time.Time) *string {

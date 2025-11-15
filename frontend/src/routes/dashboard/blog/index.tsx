@@ -1,15 +1,12 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { useAuth } from '@/services/auth/auth';
-import { Button } from '@/components/ui/button';
-import { Plus, Sparkles } from 'lucide-react';
-import { getArticles } from '@/services/blog';
+import { getArticles, searchArticles } from '@/services/blog';
 import { ArticleListItem } from '@/services/types';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Link } from '@tanstack/react-router';
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { GenerateArticleDrawer } from '@/components/blog/GenerateArticleDrawer';
-import { ArticlesTable } from '@/components/blog/ArticlesTable';
+import { DataTable } from '@/components/blog/data-table/data-table';
+import { createColumns } from '@/components/blog/data-table/columns';
+import { useState, useMemo, useEffect } from 'react';
+import { SortingState } from '@tanstack/react-table';
 
 export type GetArticlesResponse = {
   articles: ArticleListItem[];
@@ -22,86 +19,93 @@ export const Route = createFileRoute('/dashboard/blog/')({
 });
 
 function ArticlesPage() {
-  // Separate queries for each tab
-  const { data: allArticles, isLoading: allLoading, error: allError, refetch: refetchAll } = useQuery<{ articles: ArticleListItem[], total_pages: number }>({
-    queryKey: ['articles', 'all', 0, 20],
-    queryFn: () => getArticles(0, null, 'all', 20) as Promise<{ articles: ArticleListItem[], total_pages: number }>
+  const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'drafts'>('published');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: 'article.created_at', desc: true }
+  ]);
+
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+      setPage(1); // Reset to first page on search
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Extract sort parameters from sorting state
+  const sortBy = sorting.length > 0 ? sorting[0].id.replace('article.', '') : 'created_at';
+  const sortOrder = sorting.length > 0 ? (sorting[0].desc ? 'desc' : 'asc') : 'desc';
+
+  // Single query that handles both search and regular listing
+  const { data, isLoading, error, refetch } = useQuery<GetArticlesResponse>({
+    queryKey: ['articles', page, statusFilter, debouncedSearchQuery, sortBy, sortOrder],
+    queryFn: async () => {
+      if (debouncedSearchQuery) {
+        return searchArticles(
+          debouncedSearchQuery,
+          page,
+          null,
+          statusFilter,
+          sortBy,
+          sortOrder
+        ) as Promise<GetArticlesResponse>;
+      } else {
+        return getArticles(
+          page,
+          null,
+          statusFilter,
+          20,
+          sortBy,
+          sortOrder
+        ) as Promise<GetArticlesResponse>;
+      }
+    },
   });
 
-  const { data: publishedArticles, isLoading: publishedLoading, error: publishedError, refetch: refetchPublished } = useQuery<{ articles: ArticleListItem[], total_pages: number }>({
-    queryKey: ['articles', 'published', 0, 20],
-    queryFn: () => getArticles(0, null, 'published', 20) as Promise<{ articles: ArticleListItem[], total_pages: number }>
-  });
+  const columns = useMemo(() => createColumns(() => refetch()), [refetch]);
 
-  const { data: draftArticles, isLoading: draftLoading, error: draftError, refetch: refetchDrafts } = useQuery<{ articles: ArticleListItem[], total_pages: number }>({
-    queryKey: ['articles', 'drafts', 0, 20],
-    queryFn: () => getArticles(0, null, 'drafts', 20) as Promise<{ articles: ArticleListItem[], total_pages: number }>
-  });
-
-  const isLoading = allLoading || publishedLoading || draftLoading;
-  const error = allError || publishedError || draftError;
-  const refetch = () => {
-    refetchAll();
-    refetchPublished();
-    refetchDrafts();
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
   };
 
-  console.log("articlesPayload error", error);
-  console.log("allArticles", allArticles);
-  console.log("publishedArticles", publishedArticles);
-  console.log("draftArticles", draftArticles);
+  const handleStatusFilterChange = (newStatus: 'all' | 'published' | 'drafts') => {
+    setStatusFilter(newStatus);
+    setPage(1); // Reset to first page on filter change
+  };
 
-  if (isLoading) return <div>Loading articles...</div>;
+  const handleSortingChange = (updaterOrValue: SortingState | ((old: SortingState) => SortingState)) => {
+    const newSorting = typeof updaterOrValue === 'function' 
+      ? updaterOrValue(sorting) 
+      : updaterOrValue;
+    setSorting(newSorting);
+    setPage(1); // Reset to first page on sort change
+  };
+
   if (error) return <div>Error loading articles</div>;
-  return (
-    <section className="flex-1 p-0 md:p-4">
-        <div className="flex justify-between items-center">
-          <h1 className="text-lg lg:text-2xl font-medium text-gray-900 dark:text-white mb-6">
-            Articles
-          </h1>
-          <div className="flex justify-end items-center mb-6 gap-4">
-            <GenerateArticleDrawer>
-              <Button >
-                <Sparkles className="mr-2 h-4 w-4" />
-                Generate
-              </Button>
-            </GenerateArticleDrawer>
-            <Link to="/dashboard/blog/new">
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Article
-              </Button>
-            </Link>
-          </div>
-        </div>
 
-      <Card>
-        <CardContent>
-        <Tabs defaultValue="published">
-          <TabsList className="mt-4">
-            <TabsTrigger value="all">All</TabsTrigger>
-            <TabsTrigger value="published">Published</TabsTrigger>
-            <TabsTrigger value="drafts">Drafts</TabsTrigger>
-          </TabsList>
-          <TabsContent value="all" className="p-0 w-full">
-            <ArticlesTable 
-              articles={allArticles?.articles.sort((a: ArticleListItem, b: ArticleListItem) => new Date(b.article.created_at || 0).getTime() - new Date(a.article.created_at || 0).getTime()) || []}
-              onArticleDeleted={() => refetch()}
-            />
-          </TabsContent>
-          <TabsContent value="published" className="p-0 w-full">
-            <ArticlesTable 
-              articles={publishedArticles?.articles.sort((a: ArticleListItem, b: ArticleListItem) => new Date(b.article.created_at || 0).getTime() - new Date(a.article.created_at || 0).getTime()) || []}
-              onArticleDeleted={() => refetch()}
-            />
-          </TabsContent>
-          <TabsContent value="drafts" className="p-0 w-full">
-            <ArticlesTable 
-              articles={draftArticles?.articles.sort((a: ArticleListItem, b: ArticleListItem) => new Date(b.article.created_at || 0).getTime() - new Date(a.article.created_at || 0).getTime()) || []}
-              onArticleDeleted={() => refetch()}
-            />
-          </TabsContent>
-          </Tabs>
+  return (
+    <section className="flex flex-col flex-1 p-0 md:p-4 h-full overflow-hidden">
+      <Card className="flex flex-col flex-1 overflow-hidden">
+        <CardContent className="flex flex-col flex-1 py-0 px-6 overflow-hidden">
+          <DataTable
+            columns={columns}
+            data={data?.articles || []}
+            totalPages={data?.total_pages || 1}
+            currentPage={page}
+            onPageChange={handlePageChange}
+            onSortingChange={handleSortingChange}
+            sorting={sorting}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            statusFilter={statusFilter}
+            onStatusFilterChange={handleStatusFilterChange}
+            isLoading={isLoading}
+          />
         </CardContent>
       </Card>
     </section>

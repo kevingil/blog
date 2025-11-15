@@ -3,6 +3,7 @@ package router
 import (
 	"blog-agent-go/backend/internal/controller"
 	"blog-agent-go/backend/internal/services"
+	"fmt"
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
@@ -33,9 +34,24 @@ func RegisterRoutes(app *fiber.App, deps RouteDeps) {
 	app.Post("/agent", controller.AgentCopilotHandler())
 	app.Get("/websocket", websocket.New(controller.WebsocketHandler()))
 
-	// Pages
+	// Pages - Public routes
 	pages := app.Group("/pages")
 	pages.Get(":slug", controller.GetPageBySlugHandler(deps.PagesService))
+	fmt.Println("✓ Registered public pages routes: GET /pages/:slug")
+	
+	// Pages - Dashboard management (authenticated)
+	dashboardPages := app.Group("/dashboard/pages", controller.AuthMiddleware(deps.AuthService))
+	dashboardPages.Get("/", controller.ListPagesHandler(deps.PagesService))
+	dashboardPages.Get("/:id", controller.GetPageByIDHandler(deps.PagesService))
+	dashboardPages.Post("/", controller.CreatePageHandler(deps.PagesService))
+	dashboardPages.Put("/:id", controller.UpdatePageHandler(deps.PagesService))
+	dashboardPages.Delete("/:id", controller.DeletePageHandler(deps.PagesService))
+	fmt.Println("✓ Registered dashboard pages routes:")
+	fmt.Println("  - GET    /dashboard/pages")
+	fmt.Println("  - GET    /dashboard/pages/:id")
+	fmt.Println("  - POST   /dashboard/pages")
+	fmt.Println("  - PUT    /dashboard/pages/:id")
+	fmt.Println("  - DELETE /dashboard/pages/:id")
 
 	// Auth
 	auth := app.Group("/auth")
