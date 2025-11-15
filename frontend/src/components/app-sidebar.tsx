@@ -35,17 +35,11 @@ import { useEffect, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { getArticles } from "@/services/blog"
-import { Button } from "@/components/ui/button"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 
 
 const navigationData = {
   navMain: [
-    {
-      title: "Home",
-      url: "/dashboard",
-      icon: IconHome,
-    },
     {
       title: "Articles",
       url: "/dashboard/blog",
@@ -103,6 +97,11 @@ const navigationData = {
       title: "Uploads",
       url: "/dashboard/uploads",
       icon: IconUpload,
+    },
+    {
+      title: "Profile",
+      url: "/dashboard/profile",
+      icon: IconUsers,
     },
   ],
   navClouds: [
