@@ -92,14 +92,14 @@ export function DataTable<TData, TValue>({
         statusFilter={statusFilter}
         onStatusFilterChange={onStatusFilterChange}
       />
-      <div className="flex-1 rounded-md border overflow-auto">
-        <Table>
-          <TableHeader className="sticky top-0 bg-background z-10">
+      <div className="flex-1 rounded-md border overflow-auto relative">
+        <Table noWrapper>
+          <TableHeader className="sticky top-0 bg-background z-10 border-b">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   return (
-                    <TableHead key={header.id}>
+                    <TableHead key={header.id} className="bg-background">
                       {header.isPlaceholder
                         ? null
                         : flexRender(
