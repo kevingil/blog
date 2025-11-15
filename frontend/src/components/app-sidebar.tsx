@@ -70,6 +70,21 @@ const navigationData = {
       ],
     },
     {
+      title: "Pages",
+      url: "/dashboard/pages",
+      icon: IconFileWord,
+      items: [
+        {
+          title: "All Pages",
+          url: "/dashboard/pages",
+        },
+        {
+          title: "New Page",
+          url: "/dashboard/pages/new",
+        },
+      ],
+    },
+    {
       title: "Projects",
       url: "/dashboard/projects",
       icon: IconFolder,

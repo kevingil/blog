@@ -4,6 +4,7 @@ import {
   ColumnFiltersState,
   SortingState,
   VisibilityState,
+  OnChangeFn,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
@@ -30,7 +31,7 @@ interface DataTableProps<TData, TValue> {
   totalPages: number;
   currentPage: number;
   onPageChange: (page: number) => void;
-  onSortingChange: (sorting: SortingState) => void;
+  onSortingChange: OnChangeFn<SortingState>;
   sorting: SortingState;
   searchQuery: string;
   onSearchChange: (value: string) => void;
