@@ -102,20 +102,35 @@ func DeleteAccountHandler(authService *services.AuthService) fiber.Handler {
 
 func AuthMiddleware(authService *services.AuthService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		fmt.Printf("\n=== AuthMiddleware ===\n")
+		fmt.Printf("URL: %s\n", c.OriginalURL())
+		fmt.Printf("Method: %s\n", c.Method())
+		
 		token := c.Get("Authorization")
+		fmt.Printf("Authorization header: '%s'\n", token)
+		
 		if token == "" {
+			fmt.Println("ERROR: No authorization header")
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Not authenticated"})
 		}
 		if len(token) < 7 || token[:7] != "Bearer " {
+			fmt.Printf("ERROR: Invalid token format (length: %d)\n", len(token))
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token format"})
 		}
 		token = token[7:]
+		fmt.Printf("Validating token (length: %d)...\n", len(token))
+		
 		validToken, err := authService.ValidateToken(token)
 		if err != nil {
+			fmt.Printf("ERROR: Token validation failed: %v\n", err)
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
 		}
 		claims := validToken.Claims.(jwt.MapClaims)
-		c.Locals("userID", uuid.MustParse(claims["sub"].(string)))
+		userID := uuid.MustParse(claims["sub"].(string))
+		fmt.Printf("✓ Token valid for user: %s\n", userID)
+		
+		c.Locals("userID", userID)
+		fmt.Println("=== End AuthMiddleware - Proceeding to handler ===")
 		return c.Next()
 	}
 }
