@@ -8,7 +8,9 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { X, Filter } from "lucide-react";
+import { X, Filter, Plus, Sparkles } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { GenerateArticleDrawer } from "@/components/blog/GenerateArticleDrawer";
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
@@ -82,6 +84,20 @@ export function DataTableToolbar<TData>({
             <X className="ml-2 h-4 w-4" />
           </Button>
         )}
+      </div>
+      <div className="flex items-center gap-4">
+        <GenerateArticleDrawer>
+          <Button>
+            <Sparkles className="mr-2 h-4 w-4" />
+            Generate
+          </Button>
+        </GenerateArticleDrawer>
+        <Link to="/dashboard/blog/new">
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            New Article
+          </Button>
+        </Link>
       </div>
     </div>
   );

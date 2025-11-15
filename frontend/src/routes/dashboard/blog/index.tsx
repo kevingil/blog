@@ -1,12 +1,8 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Plus, Sparkles } from 'lucide-react';
 import { getArticles, searchArticles } from '@/services/blog';
 import { ArticleListItem } from '@/services/types';
-import { Link } from '@tanstack/react-router';
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { GenerateArticleDrawer } from '@/components/blog/GenerateArticleDrawer';
 import { DataTable } from '@/components/blog/data-table/data-table';
 import { createColumns } from '@/components/blog/data-table/columns';
 import { useState, useMemo, useEffect } from 'react';
@@ -94,28 +90,8 @@ function ArticlesPage() {
 
   return (
     <section className="flex flex-col flex-1 p-0 md:p-4 h-full overflow-hidden">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-lg lg:text-2xl font-medium text-gray-900 dark:text-white">
-          Articles
-        </h1>
-        <div className="flex justify-end items-center gap-4">
-          <GenerateArticleDrawer>
-            <Button>
-              <Sparkles className="mr-2 h-4 w-4" />
-              Generate
-            </Button>
-          </GenerateArticleDrawer>
-          <Link to="/dashboard/blog/new">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              New Article
-            </Button>
-          </Link>
-        </div>
-      </div>
-
       <Card className="flex flex-col flex-1 overflow-hidden">
-        <CardContent className="flex flex-col flex-1 p-6 overflow-hidden">
+        <CardContent className="flex flex-col flex-1 py-0 px-6 overflow-hidden">
           <DataTable
             columns={columns}
             data={data?.articles || []}
