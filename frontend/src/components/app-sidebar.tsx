@@ -200,12 +200,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }, [user]);
 
   return (
-    <Sidebar collapsible="offcanvas" {...props}>
+    <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
+              tooltip="Blog Dashboard"
               className="data-[slot=sidebar-menu-button]:!p-1.5"
             >
               <Link to="/">
@@ -226,23 +227,30 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           />
       </SidebarContent>
       <SidebarFooter>
-        <Link to="/dashboard/settings">
-        <Button
-            className="bg-slate-100 text-slate-800 hover:bg-slate-200 hover:text-slate-900 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 dark:hover:text-slate-100 w-full h-14"
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              tooltip={userData.name || "Settings"}
+              size="lg"
+              className="bg-slate-100 text-slate-800 hover:bg-slate-200 hover:text-slate-900 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 dark:hover:text-slate-100"
             >
-              <Avatar className="h-8 w-8 rounded-lg grayscale">
-                <AvatarImage src={userData.avatar} alt={userData.name} />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
-              </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{userData.name}</span>
-                <span className="text-muted-foreground truncate text-xs">
-                  {userData.email}
-                </span>
-              </div>
-              <IconSettings className="h-5 w-5 text-muted-foreground" />
-            </Button>
-        </Link>
+              <Link to="/dashboard/settings">
+                <Avatar className="h-8 w-8 rounded-lg grayscale">
+                  <AvatarImage src={userData.avatar} alt={userData.name} />
+                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                </Avatar>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-medium">{userData.name}</span>
+                  <span className="text-muted-foreground truncate text-xs">
+                    {userData.email}
+                  </span>
+                </div>
+                <IconSettings className="h-5 w-5 text-muted-foreground" />
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
   )
