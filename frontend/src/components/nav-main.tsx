@@ -40,11 +40,11 @@ export function NavMain({
                 <span>Copilot</span>
               </Link>
             </SidebarMenuButton>
-            <Link to="/dashboard/blog/new">
+            <Link to="/dashboard/blog/new" className="group-data-[collapsible=icon]:hidden">
               <Button
                 size="icon"
                 className={cn(
-                  "outline-1 outline-gray-400 shadow-md size-8 group-data-[collapsible=icon]:opacity-0",
+                  "outline-1 outline-gray-400 shadow-md size-8",
                   location.pathname === '/dashboard/blog/new' 
                     ? 'bg-accent text-accent-foreground' 
                     : ''

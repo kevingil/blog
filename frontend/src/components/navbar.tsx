@@ -1,4 +1,3 @@
-"use client";
 import { Menu } from "lucide-react";
 import React from "react";
 import { useState, useEffect, useRef } from "react";
@@ -18,18 +17,8 @@ import {
   NavigationMenuLink,
   NavigationMenuList,
 } from "./ui/navigation-menu";
-
+import { Button } from "./ui/button";
 import { useAuth } from '@/services/auth/auth';
-import { Home, LogOut } from 'lucide-react';
-
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from "@/components/ui/button";
 import { Link } from '@tanstack/react-router';
 import { ToggleTheme } from "./home/toogle-theme";
 import { getAboutPage } from '@/services/user';
@@ -37,6 +26,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAtomValue } from 'jotai';
 import { isAuthenticatedAtom } from '@/services/auth/auth';
 import { cn } from "@/lib/utils";
+import { UserMenu } from './user-menu';
 
 // Glitch animation component for KG title
 function GlitchText({ 
@@ -165,9 +155,8 @@ const routeList: RouteProps[] = [
 
 export const Navbar = () => {
   const [isOpen, setIsOpen] = React.useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAnimated, setIsAnimated] = useState(false);
-  const { user, token, signOut } = useAuth();
+  const { token } = useAuth();
   const isAuthenticated = useAtomValue(isAuthenticatedAtom);
 
   useEffect(() => {
@@ -264,48 +253,18 @@ export const Navbar = () => {
               </NavigationMenuLink>
           </NavigationMenuItem>
             ))}
-            <NavigationMenuItem>
-            <ToggleTheme />
-            </NavigationMenuItem>
+            {!isAuthenticated && (
+              <NavigationMenuItem>
+                <ToggleTheme />
+              </NavigationMenuItem>
+            )}
 
             <NavigationMenuItem>
               <div>
                 {isAuthenticated && (
-            <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-              <DropdownMenuTrigger > 
-                <Avatar className="cursor-pointer size-9">
-                  <AvatarImage alt={user?.name || ''} />
-                  <AvatarFallback>
-                    {user?.email
-                      .split(' ')
-                      .map((n) => n[0])
-                      .join('')}
-                  </AvatarFallback>
-                </Avatar>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="flex flex-col gap-1">
-                <DropdownMenuItem className="cursor-pointer" onClick={() => setIsMenuOpen(false)}>
-                  <Link to="/dashboard" className="flex w-full items-center">
-                    <Home className="mr-2 h-4 w-4" />
-                    <span>Dashboard</span>
-                  </Link>
-                </DropdownMenuItem>
-                <form onSubmit={(e) => { e.preventDefault(); signOut(); }} className="w-full">
-                  <button type="submit" className="flex w-full">
-                    <DropdownMenuItem className="w-full flex-1 cursor-pointer"
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      signOut();
-                    }}>
-                      <LogOut className="mr-2 h-4 w-4" />
-                      <span>Sign out</span>
-                    </DropdownMenuItem>
-                  </button>
-                </form>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            )}
-          </div>
+                  <UserMenu variant="public" />
+                )}
+              </div>
             </NavigationMenuItem>
 
         </NavigationMenuList>
