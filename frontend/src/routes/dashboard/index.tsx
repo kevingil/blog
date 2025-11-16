@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/services/auth/auth';
@@ -6,6 +6,7 @@ import { generateArticle } from '@/services/llm/articles';
 import { scrapeAndCreateSource } from '@/services/sources';
 import { Article } from '@/services/types';
 import { AIChatLanding, AttachedSource } from '@/components/chat/AIChatLanding';
+import { useAdminDashboard } from '@/services/dashboard/dashboard';
 
 export const Route = createFileRoute('/dashboard/')({
   component: DashboardIndex,
@@ -16,6 +17,11 @@ function DashboardIndex() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isGenerating, setIsGenerating] = useState(false);
+  const { setPageTitle } = useAdminDashboard();
+
+  useEffect(() => {
+    setPageTitle("AI Copilot");
+  }, [setPageTitle]);
 
   const handleGenerate = async (prompt: string, sources: AttachedSource[]) => {
     if (!user?.id) {

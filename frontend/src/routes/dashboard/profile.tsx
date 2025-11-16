@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Pencil, X } from 'lucide-react';
 import { createFileRoute } from '@tanstack/react-router';
+import { useAdminDashboard } from '@/services/dashboard/dashboard';
 
 
 export const Route = createFileRoute('/dashboard/profile')({
@@ -22,6 +23,11 @@ function ProfileSettings() {
   const [editingAbout, setEditingAbout] = useState(false);
   const [editingContact, setEditingContact] = useState(false);
   const { toast } = useToast();
+  const { setPageTitle } = useAdminDashboard();
+
+  useEffect(() => {
+    setPageTitle("Profile");
+  }, [setPageTitle]);
 
   useEffect(() => {
     const loadData = async () => {

@@ -3,8 +3,9 @@ import { Button } from '@/components/ui/button';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { listProjects, deleteProject } from '@/services/projects';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Trash2, Pencil } from 'lucide-react';
+import { useAdminDashboard } from '@/services/dashboard/dashboard';
 
 export const Route = createFileRoute('/dashboard/projects/')({
   component: ProjectsPage,
@@ -12,6 +13,12 @@ export const Route = createFileRoute('/dashboard/projects/')({
 
 function ProjectsPage() {
   const [page, setPage] = useState(1);
+  const { setPageTitle } = useAdminDashboard();
+
+  useEffect(() => {
+    setPageTitle("Projects");
+  }, [setPageTitle]);
+
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['projects', page],
     queryFn: () => listProjects(page, 20),
@@ -24,8 +31,7 @@ function ProjectsPage() {
 
   return (
     <section className="flex-1 p-0 md:p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-lg lg:text-2xl font-medium text-gray-900 dark:text-white">Projects</h1>
+      <div className="flex justify-end items-center mb-6">
         <Link to="/dashboard/projects/new">
           <Button>
             <Plus className="mr-2 h-4 w-4" /> New Project

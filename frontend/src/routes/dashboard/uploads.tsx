@@ -17,6 +17,7 @@ import {
   DialogClose
 } from "../../components/ui/dialog"
 import { createFileRoute } from '@tanstack/react-router';
+import { useAdminDashboard } from '@/services/dashboard/dashboard';
 
 export const Route = createFileRoute('/dashboard/uploads')({
   component: UploadsPage,
@@ -29,6 +30,11 @@ function UploadsPage() {
   const [fileUpload, setFileUpload] = useState<File | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [fetchingError, setFetchingError] = useState<string | null>(null);
+  const { setPageTitle } = useAdminDashboard();
+
+  useEffect(() => {
+    setPageTitle("Uploads");
+  }, [setPageTitle]);
 
   console.log("VITE_PUBLIC_S3_URL_PREFIX", VITE_PUBLIC_S3_URL_PREFIX);
   

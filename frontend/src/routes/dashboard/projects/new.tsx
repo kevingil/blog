@@ -8,6 +8,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { createProject } from '@/services/projects';
 import { ChipInput } from '@/components/ui/chip-input';
+import { useEffect } from 'react';
+import { useAdminDashboard } from '@/services/dashboard/dashboard';
 
 export const Route = createFileRoute('/dashboard/projects/new')({
   component: NewProjectPage,
@@ -26,11 +28,16 @@ type FormData = z.infer<typeof schema>;
 
 function NewProjectPage() {
   const navigate = useNavigate();
+  const { setPageTitle } = useAdminDashboard();
   const { register, handleSubmit, formState: { errors, isSubmitting }, setValue, watch } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { title: '', description: '', content: '', tags: [], image_url: '', url: '' },
   });
   const watchedTags = watch('tags');
+
+  useEffect(() => {
+    setPageTitle("New Project");
+  }, [setPageTitle]);
 
   const onSubmit = async (data: FormData) => {
     await createProject({

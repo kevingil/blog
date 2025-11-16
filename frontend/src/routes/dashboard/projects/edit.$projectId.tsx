@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { getProject, updateProject } from '@/services/projects';
 import { useQuery } from '@tanstack/react-query';
 import { ChipInput } from '@/components/ui/chip-input';
+import { useAdminDashboard } from '@/services/dashboard/dashboard';
 
 export const Route = createFileRoute('/dashboard/projects/edit/$projectId')({
   component: EditProjectPage,
@@ -30,6 +31,11 @@ type FormData = z.infer<typeof schema>;
 function EditProjectPage() {
   const { projectId } = useParams({ from: '/dashboard/projects/edit/$projectId' });
   const navigate = useNavigate();
+  const { setPageTitle } = useAdminDashboard();
+
+  useEffect(() => {
+    setPageTitle("Edit Project");
+  }, [setPageTitle]);
 
   const { data: detail, isLoading, error } = useQuery({
     queryKey: ['project', projectId],

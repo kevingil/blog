@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
+import { useAdminDashboard } from '@/services/dashboard/dashboard';
 
 export const Route = createFileRoute('/dashboard/pages/edit/$pageId')({
   component: EditPagePage,
@@ -19,6 +20,7 @@ function EditPagePage() {
   const { pageId } = Route.useParams();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { setPageTitle } = useAdminDashboard();
   const [formData, setFormData] = useState({
     title: '',
     content: '',
@@ -31,6 +33,10 @@ function EditPagePage() {
     queryKey: ['page', pageId],
     queryFn: () => getPage(pageId),
   });
+
+  useEffect(() => {
+    setPageTitle("Edit Page");
+  }, [setPageTitle]);
 
   useEffect(() => {
     if (page) {
