@@ -541,12 +541,21 @@ export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManag
                         </p>
                       )}
                     </div>
+                  ) : isEditing && formData.source_type === 'web' ? (
+                    <div className="space-y-2 flex-1 flex flex-col">
+                      <Label htmlFor="content">Content Preview</Label>
+                      <div className="flex-1 min-h-[300px] max-h-[calc(100vh-460px)] p-3 border rounded-md bg-gray-50 dark:bg-gray-900 overflow-y-auto">
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                          {formData.content || 'No content available'}
+                        </p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Content was automatically extracted from the web source and cannot be edited.
+                      </p>
+                    </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">
-                      {isEditing && formData.source_type === 'web' 
-                        ? "Content is managed automatically for web sources."
-                        : "Content will be automatically extracted from the URL."
-                      }
+                      Content will be automatically extracted from the URL.
                     </p>
                   )}
 
