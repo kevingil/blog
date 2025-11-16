@@ -1573,9 +1573,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             {/* Article Title Section */}
             <div className="mb-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                <h1 className="text-lg lg:text-2xl font-medium text-gray-900 dark:text-white whitespace-nowrap">
-                  {isNew ? 'New Article' : 'Edit Article'}
-                </h1>
                 <div className="flex-1 w-full sm:w-auto">
                   <Input
                     {...register('title')}
