@@ -9,11 +9,13 @@ import { useQuery } from "@tanstack/react-query";
 import { useAtomValue } from "jotai";
 import { getAboutPage } from "@/services/user";
 import { Button } from "./ui/button";
+import { useAdminDashboard } from "@/services/dashboard/dashboard";
 
 
 export function SiteHeader() {
   const { token } = useAuth();
   const isAuthenticated = useAtomValue(isAuthenticatedAtom);
+  const { pageTitle } = useAdminDashboard();
 
   const { data: pageData, isLoading: aboutPageLoading } = useQuery({
     queryKey: ['aboutPage'],
@@ -30,7 +32,7 @@ export function SiteHeader() {
           orientation="vertical"
           className="mx-2 data-[orientation=vertical]:h-4"
         />
-        <h1 className="text-base font-medium">Documents</h1>
+        <h1 className="text-base font-medium">{pageTitle}</h1>
         <div className="ml-auto flex items-center gap-2">
         <Link to="/">
           <Button variant="outline" size="sm">
