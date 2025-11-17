@@ -2,6 +2,7 @@ package main
 
 import (
 	"blog-agent-go/backend/internal/config"
+	"blog-agent-go/backend/internal/core/chat"
 	"blog-agent-go/backend/internal/database"
 	"blog-agent-go/backend/internal/server"
 	"blog-agent-go/backend/internal/services"
@@ -33,9 +34,10 @@ func main() {
 	imageService := services.NewImageGenerationService(dbService, storageService)
 	pagesService := services.NewPagesService(dbService)
 	sourcesService := services.NewArticleSourceService(dbService)
+	chatService := chat.NewMessageService(dbService)
 
-	// Initialize the Agent-powered copilot manager with sources service
-	if err := services.InitializeAgentCopilotManager(sourcesService); err != nil {
+	// Initialize the Agent-powered copilot manager with sources service and chat service
+	if err := services.InitializeAgentCopilotManager(sourcesService, chatService); err != nil {
 		log.Printf("Warning: Failed to initialize AgentCopilotManager: %v", err)
 	}
 
@@ -51,6 +53,7 @@ func main() {
 		storageService,
 		pagesService,
 		sourcesService,
+		chatService,
 		services.GetAgentAsyncCopilotManager(),
 	)
 
