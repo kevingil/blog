@@ -15,11 +15,9 @@ import {
   Settings, 
   LogOut,
   Moon,
-  Sun,
-  ChevronDown 
+  Sun
 } from 'lucide-react';
 import { useTheme } from '@/components/theme-provider';
-import { cn } from '@/lib/utils';
 
 interface UserMenuProps {
   variant: 'public' | 'dashboard';
@@ -30,7 +28,7 @@ export function UserMenu({ variant }: UserMenuProps) {
   const { user, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
 
-  const buttonLabel = variant === 'public' ? 'Dashboard' : 'Home Page';
+  const buttonLabel = variant === 'public' ? 'Dashboard' : 'Home';
   const navLink = variant === 'public' ? '/dashboard' : '/';
   const navIcon = variant === 'public' ? LayoutDashboard : Home;
   const NavIcon = navIcon;
@@ -55,23 +53,33 @@ export function UserMenu({ variant }: UserMenuProps) {
   };
 
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
+    <div className="flex items-center gap-1">
+      {/* Navigation Button */}
+      <Link to={navLink}>
         <Button
-          variant="outline"
-          className="flex items-center gap-2 h-9 px-3"
+          variant="default"
+          className="h-7 mx-2 px-2 rounded-md border-2 border-primary"
         >
-          <span className="text-sm font-medium">{buttonLabel}</span>
-          <Avatar className="size-6">
-            <AvatarImage alt={user?.name || ''} />
-            <AvatarFallback className="text-xs">
-              {getUserInitials()}
-            </AvatarFallback>
-          </Avatar>
-          <ChevronDown className="size-4 opacity-50" />
+          <span className="text-xs font-light">{buttonLabel}</span>
         </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-64 p-3">
+      </Link>
+
+      {/* Avatar Popover */}
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            className="relative h-9 w-9 rounded-full p-0"
+          >
+            <Avatar className="size-9">
+              <AvatarImage alt={user?.name || ''} />
+              <AvatarFallback className="text-sm">
+                {getUserInitials()}
+              </AvatarFallback>
+            </Avatar>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-64 p-3">
         {/* User Info Section */}
         <div className="flex items-start gap-3 mb-3">
           <Avatar className="size-10">
@@ -94,17 +102,6 @@ export function UserMenu({ variant }: UserMenuProps) {
 
         {/* Menu Items */}
         <div className="flex flex-col gap-1">
-          {/* Navigation Link */}
-          <Link to={navLink} onClick={() => setIsOpen(false)}>
-            <Button
-              variant="ghost"
-              className="w-full justify-start h-9 px-2"
-            >
-              <NavIcon className="mr-2 h-4 w-4" />
-              <span>{variant === 'public' ? 'Dashboard' : 'Home Page'}</span>
-            </Button>
-          </Link>
-
           {/* Settings Link */}
           <Link 
             to={variant === 'dashboard' ? '/dashboard/settings' : '/dashboard/settings'} 
@@ -152,6 +149,7 @@ export function UserMenu({ variant }: UserMenuProps) {
         </div>
       </PopoverContent>
     </Popover>
+    </div>
   );
 }
 
