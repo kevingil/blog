@@ -1,4 +1,5 @@
 import { VITE_API_BASE_URL } from '@/services/constants';
+import { handleApiResponse } from '@/services/apiHelpers';
 
 export interface User {
   id: number;
@@ -46,7 +47,7 @@ export async function updateContactPage(data: ContactPageData): Promise<ContactP
     },
     body: JSON.stringify(data),
   });
-  return await response.json();
+  return handleApiResponse<ContactPageData>(response);
 }
 
 export async function updateAboutPage(data: AboutPageData): Promise<AboutPageData | null> {
@@ -57,7 +58,7 @@ export async function updateAboutPage(data: AboutPageData): Promise<AboutPageDat
     },
     body: JSON.stringify(data),
   });
-  return await response.json();
+  return handleApiResponse<AboutPageData>(response);
 }
 
 
@@ -73,7 +74,7 @@ export async function getContactPage(): Promise<ContactPageData | null> {
       }
       throw new Error('Failed to fetch contact page');
     }
-    const page = await response.json();
+    const page = await handleApiResponse<any>(response);
     // meta_data is a JSON object, parse social_links and email_address from it
     let meta: Record<string, any> = {};
     try {
@@ -106,7 +107,7 @@ export async function getAboutPage(): Promise<AboutPageData | null> {
       }
       throw new Error('Failed to fetch about page');
     }
-    const page = await response.json();
+    const page = await handleApiResponse<any>(response);
     return {
       id: page.id,
       title: page.title,

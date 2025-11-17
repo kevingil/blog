@@ -1,5 +1,6 @@
 import { ImageGeneration, ImageGenerationStatus } from '../types';
 import { VITE_API_BASE_URL } from '../constants';
+import { handleApiResponse } from '../apiHelpers';
 
 export async function generateArticleImage(
   prompt: string | undefined, 
@@ -26,11 +27,7 @@ export async function generateArticleImage(
       }),
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to generate image');
-    }
-
-    const result = await response.json();
+    const result = await handleApiResponse<{ request_id: string }>(response);
     return { 
       success: true, 
       generationRequestId: result.request_id 
@@ -57,7 +54,7 @@ export async function getImageGeneration(requestId: string): Promise<ImageGenera
       throw new Error('Failed to get image generation');
     }
 
-    return response.json();
+    return handleApiResponse<ImageGeneration>(response);
   } catch (error) {
     console.error(error);
     return null;
@@ -77,7 +74,7 @@ export async function getImageGenerationStatus(requestId: string): Promise<Image
       throw new Error('Failed to get image generation status');
     }
 
-    return response.json();
+    return handleApiResponse<ImageGenerationStatus>(response);
   } catch (error) {
     console.error(error);
     return { accepted: false, requestId, outputUrl: "" };

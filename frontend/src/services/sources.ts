@@ -1,4 +1,5 @@
 import { VITE_API_BASE_URL } from './constants';
+import { handleApiResponse } from './apiHelpers';
 import type { 
   ArticleSource, 
   CreateSourceRequest, 
@@ -15,11 +16,7 @@ export async function getArticleSources(articleId: string): Promise<ArticleSourc
     },
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch sources: ${response.statusText}`);
-  }
-
-  const data = await response.json();
+  const data = await handleApiResponse<{ sources: ArticleSource[] }>(response);
   return data.sources || [];
 }
 
@@ -33,11 +30,7 @@ export async function createSource(request: CreateSourceRequest): Promise<Articl
     body: JSON.stringify(request),
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to create source: ${response.statusText}`);
-  }
-
-  return response.json();
+  return handleApiResponse<ArticleSource>(response);
 }
 
 // Scrape a URL and create a source
@@ -50,11 +43,7 @@ export async function scrapeAndCreateSource(request: ScrapeSourceRequest): Promi
     body: JSON.stringify(request),
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to scrape and create source: ${response.statusText}`);
-  }
-
-  return response.json();
+  return handleApiResponse<ArticleSource>(response);
 }
 
 // Get a specific source
@@ -66,11 +55,7 @@ export async function getSource(sourceId: string): Promise<ArticleSource> {
     },
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch source: ${response.statusText}`);
-  }
-
-  return response.json();
+  return handleApiResponse<ArticleSource>(response);
 }
 
 // Update a source
@@ -83,11 +68,7 @@ export async function updateSource(sourceId: string, request: UpdateSourceReques
     body: JSON.stringify(request),
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to update source: ${response.statusText}`);
-  }
-
-  return response.json();
+  return handleApiResponse<ArticleSource>(response);
 }
 
 // Delete a source
@@ -99,9 +80,7 @@ export async function deleteSource(sourceId: string): Promise<void> {
     },
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to delete source: ${response.statusText}`);
-  }
+  await handleApiResponse<{ success: boolean }>(response);
 }
 
 // Search for similar sources
@@ -122,10 +101,6 @@ export async function searchSimilarSources(
     },
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to search sources: ${response.statusText}`);
-  }
-
-  const data = await response.json();
+  const data = await handleApiResponse<{ sources: ArticleSource[] }>(response);
   return data.sources || [];
 }

@@ -1,5 +1,6 @@
 import { Article, ArticleChatHistory } from '../types';
 import { VITE_API_BASE_URL } from '../constants';
+import { handleApiResponse } from '../apiHelpers';
 export async function generateArticle(prompt: string, title: string, authorId: number, draft?: boolean) {
   const response = await fetch(`${VITE_API_BASE_URL}/blog/generate`, {
     method: 'POST',
@@ -14,12 +15,7 @@ export async function generateArticle(prompt: string, title: string, authorId: n
     }),
   });
 
-  if (!response.ok) {
-    throw new Error('Failed to generate article');
-  }
-
-  const article: Article = await response.json();
-  return article;
+  return handleApiResponse<Article>(response);
 }
 
 export async function getArticleChatHistory(articleId: number): Promise<ArticleChatHistory | null> {
@@ -37,8 +33,7 @@ export async function getArticleChatHistory(articleId: number): Promise<ArticleC
     throw new Error('Failed to get article chat history');
   }
 
-  const history: ArticleChatHistory = await response.json();
-  return history;
+  return handleApiResponse<ArticleChatHistory>(response);
 }
 
 export async function updateWithContext(articleId: number): Promise<{ content: string, success: boolean } | null> {
@@ -56,7 +51,7 @@ export async function updateWithContext(articleId: number): Promise<{ content: s
     throw new Error('Failed to update article with context');
   }
 
-  const article: Article = await response.json();
+  const article = await handleApiResponse<Article>(response);
   return {
     content: article.content,
     success: true,
