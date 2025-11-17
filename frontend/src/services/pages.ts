@@ -1,4 +1,5 @@
 import { VITE_API_BASE_URL } from '@/services/constants';
+import { getAuthHeadersWithContentType } from './auth/utils';
 
 export interface Page {
   id: string;
@@ -40,18 +41,6 @@ export interface PageUpdateRequest {
   is_published?: boolean;
 }
 
-// Helper to get auth headers
-function getAuthHeaders(): HeadersInit {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    throw new Error('Not authenticated');
-  }
-  return {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  };
-}
-
 // Dashboard CRUD operations (authenticated)
 export async function getAllPages(page: number = 1, perPage: number = 20, isPublished?: boolean): Promise<PageListResponse> {
   const params = new URLSearchParams({
@@ -64,7 +53,7 @@ export async function getAllPages(page: number = 1, perPage: number = 20, isPubl
   }
 
   const response = await fetch(`${VITE_API_BASE_URL}/dashboard/pages?${params}`, {
-    headers: getAuthHeaders(),
+    headers: getAuthHeadersWithContentType(),
   });
 
   if (!response.ok) {
@@ -76,7 +65,7 @@ export async function getAllPages(page: number = 1, perPage: number = 20, isPubl
 
 export async function getPage(id: string): Promise<Page> {
   const response = await fetch(`${VITE_API_BASE_URL}/dashboard/pages/${id}`, {
-    headers: getAuthHeaders(),
+    headers: getAuthHeadersWithContentType(),
   });
 
   if (!response.ok) {
@@ -89,7 +78,7 @@ export async function getPage(id: string): Promise<Page> {
 export async function createPage(data: PageCreateRequest): Promise<Page> {
   const response = await fetch(`${VITE_API_BASE_URL}/dashboard/pages`, {
     method: 'POST',
-    headers: getAuthHeaders(),
+    headers: getAuthHeadersWithContentType(),
     body: JSON.stringify(data),
   });
 
@@ -104,7 +93,7 @@ export async function createPage(data: PageCreateRequest): Promise<Page> {
 export async function updatePage(id: string, data: PageUpdateRequest): Promise<Page> {
   const response = await fetch(`${VITE_API_BASE_URL}/dashboard/pages/${id}`, {
     method: 'PUT',
-    headers: getAuthHeaders(),
+    headers: getAuthHeadersWithContentType(),
     body: JSON.stringify(data),
   });
 
@@ -119,7 +108,7 @@ export async function updatePage(id: string, data: PageUpdateRequest): Promise<P
 export async function deletePage(id: string): Promise<{ success: boolean }> {
   const response = await fetch(`${VITE_API_BASE_URL}/dashboard/pages/${id}`, {
     method: 'DELETE',
-    headers: getAuthHeaders(),
+    headers: getAuthHeadersWithContentType(),
   });
 
   if (!response.ok) {
