@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"blog-agent-go/backend/internal/errors"
+	"blog-agent-go/backend/internal/response"
 	"blog-agent-go/backend/internal/services"
 
 	"github.com/gofiber/fiber/v2"
@@ -15,24 +17,18 @@ func AuthMiddleware(authService *services.AuthService) fiber.Handler {
 		token := c.Get("Authorization")
 		
 		if token == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Not authenticated",
-			})
+			return response.Error(c, errors.NewUnauthorizedError("Not authenticated"))
 		}
 
 		if len(token) < 7 || token[:7] != "Bearer " {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Invalid token format",
-			})
+			return response.Error(c, errors.NewUnauthorizedError("Invalid token format"))
 		}
 
 		token = token[7:]
 		
 		validToken, err := authService.ValidateToken(token)
 		if err != nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "Invalid token",
-			})
+			return response.Error(c, err)
 		}
 
 		claims := validToken.Claims.(jwt.MapClaims)
