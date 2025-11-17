@@ -19,10 +19,9 @@ func GenerateArticleHandler(blogService *services.ArticleService) fiber.Handler 
 		if err := c.BodyParser(&req); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 		}
-		userIDStr := c.Locals("userID").(string)
-		userID, err := uuid.Parse(userIDStr)
-		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid user ID"})
+		userID, ok := c.Locals("userID").(uuid.UUID)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User not authenticated"})
 		}
 		article, err := blogService.GenerateArticle(c.Context(), req.Prompt, req.Title, userID, req.IsDraft)
 		if err != nil {
