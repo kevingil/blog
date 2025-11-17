@@ -8,19 +8,12 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// FiberServer represents the Fiber web server
 type FiberServer struct {
-	App             *fiber.App
-	db              database.Service
-	authService     *services.AuthService
-	blogService     *services.ArticleService
-	projectsService *services.ProjectsService
-	imageService    *services.ImageGenerationService
-	storageService  *services.StorageService
-	pagesService    *services.PagesService
-	sourcesService  *services.ArticleSourceService
-	agentCopilotMgr *services.AgentAsyncCopilotManager
+	App *fiber.App
 }
 
+// NewFiberServer creates and configures a new Fiber server with all routes and middleware
 func NewFiberServer(
 	db database.Service,
 	authService *services.AuthService,
@@ -33,19 +26,10 @@ func NewFiberServer(
 	agentCopilotMgr *services.AgentAsyncCopilotManager,
 ) *FiberServer {
 	server := &FiberServer{
-		App:             fiber.New(),
-		db:              db,
-		authService:     authService,
-		blogService:     blogService,
-		projectsService: projectsService,
-		imageService:    imageService,
-		storageService:  storageService,
-		pagesService:    pagesService,
-		sourcesService:  sourcesService,
-		agentCopilotMgr: agentCopilotMgr,
+		App: fiber.New(),
 	}
 
-	// Register routes
+	// Register routes with dependencies
 	router.RegisterRoutes(server.App, router.RouteDeps{
 		AuthService:     authService,
 		BlogService:     blogService,
