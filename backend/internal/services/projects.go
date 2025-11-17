@@ -4,21 +4,23 @@ import (
 	"blog-agent-go/backend/internal/database"
 	"blog-agent-go/backend/internal/models"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
-	"gorm.io/gorm"
 )
 
 // ProjectsService provides CRUD operations for Project model
 type ProjectsService struct {
-	db database.Service
+	db         database.Service
+	tagService *TagService
 }
 
 func NewProjectsService(db database.Service) *ProjectsService {
-	return &ProjectsService{db: db}
+	return &ProjectsService{
+		db:         db,
+		tagService: NewTagService(db),
+	}
 }
 
 type ProjectCreateRequest struct {
@@ -77,24 +79,10 @@ func (s *ProjectsService) CreateProject(req ProjectCreateRequest) (*models.Proje
 	if req.Title == "" || req.Description == "" {
 		return nil, fmt.Errorf("title and description are required")
 	}
-	// Handle tags: ensure tag records exist and collect IDs
-	var tagIDs []int64
-	for _, name := range req.Tags {
-		t := strings.ToLower(strings.TrimSpace(name))
-		if t == "" {
-			continue
-		}
-		var tag models.Tag
-		res := db.Where("LOWER(name) = ?", t).First(&tag)
-		if res.Error == gorm.ErrRecordNotFound {
-			tag = models.Tag{Name: t}
-			if err := db.Create(&tag).Error; err != nil {
-				return nil, fmt.Errorf("failed creating tag '%s': %w", t, err)
-			}
-		} else if res.Error != nil {
-			return nil, fmt.Errorf("failed checking tag '%s': %w", t, res.Error)
-		}
-		tagIDs = append(tagIDs, int64(tag.ID))
+	// Handle tags using tag service
+	tagIDs, err := s.tagService.EnsureTagsExist(req.Tags)
+	if err != nil {
+		return nil, err
 	}
 	project := &models.Project{
 		Title:       req.Title,
@@ -126,23 +114,9 @@ func (s *ProjectsService) UpdateProject(id uuid.UUID, req ProjectUpdateRequest) 
 		project.Content = *req.Content
 	}
 	if req.Tags != nil {
-		var tagIDs []int64
-		for _, name := range *req.Tags {
-			t := strings.ToLower(strings.TrimSpace(name))
-			if t == "" {
-				continue
-			}
-			var tag models.Tag
-			res := db.Where("LOWER(name) = ?", t).First(&tag)
-			if res.Error == gorm.ErrRecordNotFound {
-				tag = models.Tag{Name: t}
-				if err := db.Create(&tag).Error; err != nil {
-					return nil, fmt.Errorf("failed creating tag '%s': %w", t, err)
-				}
-			} else if res.Error != nil {
-				return nil, fmt.Errorf("failed checking tag '%s': %w", t, res.Error)
-			}
-			tagIDs = append(tagIDs, int64(tag.ID))
+		tagIDs, err := s.tagService.EnsureTagsExist(*req.Tags)
+		if err != nil {
+			return nil, err
 		}
 		project.TagIDs = pq.Int64Array(tagIDs)
 	}
