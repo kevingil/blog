@@ -1,6 +1,5 @@
-import { IconCirclePlusFilled, IconMail, type Icon } from "@tabler/icons-react"
+import { type Icon } from "@tabler/icons-react"
 
-import { Button } from "@/components/ui/button"
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -8,8 +7,9 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { GenerateArticleDrawer } from "@/components/blog/GenerateArticleDrawer"
+import { Button } from "@/components/ui/button"
 import { Plus, Sparkles } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 import { Link, useLocation } from "@tanstack/react-router"
 
@@ -28,24 +28,27 @@ export function NavMain({
     <SidebarGroup>
       <SidebarGroupContent className="flex flex-col gap-2">
         <SidebarMenu>
-          <SidebarMenuItem className="flex items-center gap-2">
-            <GenerateArticleDrawer>
-              <SidebarMenuButton
-                tooltip="Quick Generate"
-                className="bg-primary shadow-md text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground min-w-8 duration-200 ease-linear"
-              >
+          <SidebarMenuItem className="flex flex-row items-center gap-2">
+            <SidebarMenuButton
+              asChild
+              tooltip="AI Copilot"
+              isActive={location.pathname === '/dashboard' || location.pathname === '/dashboard/'}
+              className="bg-gradient-to-r from-violet-600 to-indigo-600 shadow-md text-white hover:from-violet-700 hover:to-indigo-700 active:from-violet-700 active:to-indigo-700 transition-all duration-200 flex-1"
+            >
+              <Link to="/dashboard">
                 <Sparkles className="h-4 w-4" />
-                <span>Quick Generate</span>
-              </SidebarMenuButton>
-            </GenerateArticleDrawer>
-            <Link to="/dashboard/blog/new">
-            <Button
-              size="icon"
-                className={`outline-1 outline-gray-400 shadow-md size-8 group-data-[collapsible=icon]:opacity-0 ${
+                <span>Copilot</span>
+              </Link>
+            </SidebarMenuButton>
+            <Link to="/dashboard/blog/new" className="group-data-[collapsible=icon]:hidden">
+              <Button
+                size="icon"
+                className={cn(
+                  "outline-1 outline-gray-400 shadow-md size-8",
                   location.pathname === '/dashboard/blog/new' 
                     ? 'bg-accent text-accent-foreground' 
                     : ''
-                }`}
+                )}
                 variant="outline"
               >
                 <Plus className="h-4 w-4" />

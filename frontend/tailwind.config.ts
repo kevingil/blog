@@ -7,6 +7,7 @@ const config: Config = {
 	content: [
 		"./components/**/*.{js,ts,jsx,tsx,mdx}",
 		"./app/**/*.{js,ts,jsx,tsx,mdx}",
+		"./src/**/*.{js,ts,jsx,tsx,mdx}",
 	],
 	theme: {
 		extend: {
@@ -89,11 +90,36 @@ const config: Config = {
 					  backgroundPosition: "350% 50%, 350% 50%",
 					},
 				},
+				'fade-in': {
+					from: {
+						opacity: '0'
+					},
+					to: {
+						opacity: '1'
+					}
+				},
+				'slide-in-from-bottom-4': {
+					from: {
+						transform: 'translateY(1rem)'
+					},
+					to: {
+						transform: 'translateY(0)'
+					}
+				},
+				'slide-in-from-top-2': {
+					from: {
+						transform: 'translateY(-0.5rem)'
+					},
+					to: {
+						transform: 'translateY(0)'
+					}
+				},
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
 				'accordion-up': 'accordion-up 0.2s ease-out',
-				'aurora': "aurora 60s linear infinite"
+				'aurora': "aurora 60s linear infinite",
+				'in': 'fade-in 0.3s ease-out'
 			}
 		}
 	},

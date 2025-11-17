@@ -6,9 +6,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { createPage } from '@/services/pages';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
+import { useAdminDashboard } from '@/services/dashboard/dashboard';
 
 export const Route = createFileRoute('/dashboard/pages/new')({
   component: NewPagePage,
@@ -17,6 +18,7 @@ export const Route = createFileRoute('/dashboard/pages/new')({
 function NewPagePage() {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { setPageTitle } = useAdminDashboard();
   const [formData, setFormData] = useState({
     slug: '',
     title: '',
@@ -25,6 +27,10 @@ function NewPagePage() {
     image_url: '',
     is_published: true,
   });
+
+  useEffect(() => {
+    setPageTitle("New Page");
+  }, [setPageTitle]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

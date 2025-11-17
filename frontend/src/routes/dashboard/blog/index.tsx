@@ -7,6 +7,7 @@ import { DataTable } from '@/components/blog/data-table/data-table';
 import { createColumns } from '@/components/blog/data-table/columns';
 import { useState, useMemo, useEffect } from 'react';
 import { SortingState } from '@tanstack/react-table';
+import { useAdminDashboard } from '@/services/dashboard/dashboard';
 
 export type GetArticlesResponse = {
   articles: ArticleListItem[];
@@ -26,6 +27,12 @@ function ArticlesPage() {
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'article.created_at', desc: true }
   ]);
+  const { setPageTitle } = useAdminDashboard();
+
+  // Set page title
+  useEffect(() => {
+    setPageTitle("Articles");
+  }, [setPageTitle]);
 
   // Debounce search query
   useEffect(() => {

@@ -7,7 +7,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { DataTable } from '@/components/blog/data-table/data-table';
 import { createColumns } from '@/components/pages/data-table/columns';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { SortingState } from '@tanstack/react-table';
 import { Input } from '@/components/ui/input';
 import {
@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Filter, X } from 'lucide-react';
+import { useAdminDashboard } from '@/services/dashboard/dashboard';
 
 export const Route = createFileRoute('/dashboard/pages/')({
   component: PagesPage,
@@ -25,6 +26,11 @@ export const Route = createFileRoute('/dashboard/pages/')({
 
 function PagesPage() {
   const [page, setPage] = useState(1);
+  const { setPageTitle } = useAdminDashboard();
+
+  useEffect(() => {
+    setPageTitle("Pages");
+  }, [setPageTitle]);
   const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sorting, setSorting] = useState<SortingState>([
