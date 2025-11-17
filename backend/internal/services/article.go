@@ -14,18 +14,19 @@ import (
 	"github.com/lib/pq"
 	openai "github.com/openai/openai-go"
 	"github.com/pgvector/pgvector-go"
-	"gorm.io/gorm"
 )
 
 type ArticleService struct {
 	db          database.Service
 	writerAgent *WriterAgent
+	tagService  *TagService
 }
 
 func NewArticleService(db database.Service, writerAgent *WriterAgent) *ArticleService {
 	return &ArticleService{
 		db:          db,
 		writerAgent: writerAgent,
+		tagService:  NewTagService(db),
 	}
 }
 
@@ -101,24 +102,10 @@ func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uuid.UUID,
 		return nil, fmt.Errorf("failed to find article: %w", result.Error)
 	}
 
-	// Process tags: ensure all exist, collect their IDs
-	var tagIDs []int64
-	for _, tagName := range req.Tags {
-		tagName = strings.ToLower(strings.TrimSpace(tagName))
-		if tagName == "" {
-			continue
-		}
-		var tag models.Tag
-		result := db.Where("LOWER(name) = ?", tagName).First(&tag)
-		if result.Error == gorm.ErrRecordNotFound {
-			tag = models.Tag{Name: tagName}
-			if err := db.Create(&tag).Error; err != nil {
-				return nil, fmt.Errorf("failed to create tag '%s': %w", tagName, err)
-			}
-		} else if result.Error != nil {
-			return nil, fmt.Errorf("failed to check tag existence: %w", result.Error)
-		}
-		tagIDs = append(tagIDs, int64(tag.ID))
+	// Process tags using tag service
+	tagIDs, err := s.tagService.EnsureTagsExist(req.Tags)
+	if err != nil {
+		return nil, err
 	}
 
 	// Update article fields directly
@@ -218,6 +205,67 @@ func (s *ArticleService) GetArticleIDBySlug(slug string) (uuid.UUID, error) {
 // For author, fetch from account table using author_id.
 // Only use fields present in the new schema.
 
+// getAuthorData fetches author information for an article
+func (s *ArticleService) getAuthorData(authorID uuid.UUID) (AuthorData, error) {
+	db := s.db.GetDB()
+	var account models.Account
+	
+	if err := db.First(&account, "id = ?", authorID).Error; err != nil {
+		// Return empty author data if not found, rather than failing
+		return AuthorData{
+			ID:   authorID,
+			Name: "",
+		}, nil
+	}
+
+	return AuthorData{
+		ID:   authorID,
+		Name: account.Name,
+	}, nil
+}
+
+// getTagsData fetches tag information for an article
+func (s *ArticleService) getTagsData(articleID uuid.UUID, tagIDs []int64) ([]TagData, error) {
+	if len(tagIDs) == 0 {
+		return []TagData{}, nil
+	}
+
+	tags, err := s.tagService.GetTagsByIDs(tagIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	var tagData []TagData
+	for _, t := range tags {
+		tagData = append(tagData, TagData{
+			ArticleID: articleID,
+			TagID:     int(t.ID),
+			TagName:   t.Name,
+		})
+	}
+
+	return tagData, nil
+}
+
+// enrichArticleWithMetadata adds author and tag metadata to an article
+func (s *ArticleService) enrichArticleWithMetadata(article models.Article) (*ArticleListItem, error) {
+	author, err := s.getAuthorData(article.AuthorID)
+	if err != nil {
+		return nil, err
+	}
+
+	tags, err := s.getTagsData(article.ID, article.TagIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ArticleListItem{
+		Article: article,
+		Author:  author,
+		Tags:    tags,
+	}, nil
+}
+
 func (s *ArticleService) GetArticle(id uuid.UUID) (*ArticleListItem, error) {
 	db := s.db.GetDB()
 	var article models.Article
@@ -225,40 +273,7 @@ func (s *ArticleService) GetArticle(id uuid.UUID) (*ArticleListItem, error) {
 		return nil, err
 	}
 
-	// Parse tag IDs
-	var tagIDs []int64
-	tagIDs = article.TagIDs
-
-	// Fetch tag names
-	var tags []TagData
-	if len(tagIDs) > 0 {
-		var dbTags []models.Tag
-		if err := db.Where("id IN ?", tagIDs).Find(&dbTags).Error; err == nil {
-			for _, t := range dbTags {
-				tags = append(tags, TagData{
-					ArticleID: article.ID,
-					TagID:     int(t.ID),
-					TagName:   t.Name,
-				})
-			}
-		}
-	}
-
-	// Fetch author
-	var authorName string
-	var account models.Account
-	if err := db.First(&account, "id = ?", article.AuthorID).Error; err == nil {
-		authorName = account.Name
-	}
-
-	return &ArticleListItem{
-		Article: article,
-		Author: AuthorData{
-			ID:   article.AuthorID,
-			Name: authorName,
-		},
-		Tags: tags,
-	}, nil
+	return s.enrichArticleWithMetadata(article)
 }
 
 func (s *ArticleService) GetArticles(page int, tag string, status string, articlesPerPage int, sortBy string, sortOrder string) (*ArticleListResponse, error) {
@@ -306,37 +321,11 @@ func (s *ArticleService) GetArticles(page int, tag string, status string, articl
 
 	articleItems := make([]ArticleListItem, 0)
 	for _, article := range articles {
-		// Parse tag IDs
-		var tagIDs []int64
-		tagIDs = article.TagIDs
-		// Fetch tag names
-		var tags []TagData
-		if len(tagIDs) > 0 {
-			var dbTags []models.Tag
-			if err := db.Where("id IN ?", tagIDs).Find(&dbTags).Error; err == nil {
-				for _, t := range dbTags {
-					tags = append(tags, TagData{
-						ArticleID: article.ID,
-						TagID:     int(t.ID),
-						TagName:   t.Name,
-					})
-				}
-			}
+		enriched, err := s.enrichArticleWithMetadata(article)
+		if err != nil {
+			return nil, err
 		}
-		// Fetch author
-		var authorName string
-		var account models.Account
-		if err := db.First(&account, "id = ?", article.AuthorID).Error; err == nil {
-			authorName = account.Name
-		}
-		articleItems = append(articleItems, ArticleListItem{
-			Article: article,
-			Author: AuthorData{
-				ID:   article.AuthorID,
-				Name: authorName,
-			},
-			Tags: tags,
-		})
+		articleItems = append(articleItems, *enriched)
 	}
 
 	return &ArticleListResponse{
@@ -388,34 +377,11 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string, stat
 
 	articleItems := make([]ArticleListItem, 0)
 	for _, article := range articles {
-		var tagIDs []int64
-		tagIDs = article.TagIDs
-		var tags []TagData
-		if len(tagIDs) > 0 {
-			var dbTags []models.Tag
-			if err := db.Where("id IN ?", tagIDs).Find(&dbTags).Error; err == nil {
-				for _, t := range dbTags {
-					tags = append(tags, TagData{
-						ArticleID: article.ID,
-						TagID:     int(t.ID),
-						TagName:   t.Name,
-					})
-				}
-			}
+		enriched, err := s.enrichArticleWithMetadata(article)
+		if err != nil {
+			return nil, err
 		}
-		var authorName string
-		var account models.Account
-		if err := db.First(&account, "id = ?", article.AuthorID).Error; err == nil {
-			authorName = account.Name
-		}
-		articleItems = append(articleItems, ArticleListItem{
-			Article: article,
-			Author: AuthorData{
-				ID:   article.AuthorID,
-				Name: authorName,
-			},
-			Tags: tags,
-		})
+		articleItems = append(articleItems, *enriched)
 	}
 
 	return &ArticleListResponse{
@@ -502,36 +468,20 @@ func (s *ArticleService) GetArticleData(slug string) (*ArticleData, error) {
 		return nil, err
 	}
 
-	var tagIDs []int64
-	tagIDs = article.TagIDs
-
-	var tags []TagData
-	if len(tagIDs) > 0 {
-		var dbTags []models.Tag
-		if err := db.Where("id IN ?", tagIDs).Find(&dbTags).Error; err == nil {
-			for _, t := range dbTags {
-				tags = append(tags, TagData{
-					ArticleID: article.ID,
-					TagID:     int(t.ID),
-					TagName:   t.Name,
-				})
-			}
-		}
+	author, err := s.getAuthorData(article.AuthorID)
+	if err != nil {
+		return nil, err
 	}
 
-	var authorName string
-	var account models.Account
-	if err := db.First(&account, "id = ?", article.AuthorID).Error; err == nil {
-		authorName = account.Name
+	tags, err := s.getTagsData(article.ID, article.TagIDs)
+	if err != nil {
+		return nil, err
 	}
 
 	return &ArticleData{
 		Article: article,
-		Author: AuthorData{
-			ID:   article.AuthorID,
-			Name: authorName,
-		},
-		Tags: tags,
+		Author:  author,
+		Tags:    tags,
 	}, nil
 }
 
@@ -592,24 +542,10 @@ type ArticleCreateRequest struct {
 func (s *ArticleService) CreateArticle(ctx context.Context, req ArticleCreateRequest) (*ArticleListItem, error) {
 	db := s.db.GetDB()
 
-	// Process tags: ensure all exist, collect their IDs
-	var tagIDs []int64
-	for _, tagName := range req.Tags {
-		tagName = strings.ToLower(strings.TrimSpace(tagName))
-		if tagName == "" {
-			continue
-		}
-		var tag models.Tag
-		result := db.Where("LOWER(name) = ?", tagName).First(&tag)
-		if result.Error == gorm.ErrRecordNotFound {
-			tag = models.Tag{Name: tagName}
-			if err := db.Create(&tag).Error; err != nil {
-				return nil, fmt.Errorf("failed to create tag '%s': %w", tagName, err)
-			}
-		} else if result.Error != nil {
-			return nil, fmt.Errorf("failed to check tag existence: %w", result.Error)
-		}
-		tagIDs = append(tagIDs, int64(tag.ID))
+	// Process tags using tag service
+	tagIDs, err := s.tagService.EnsureTagsExist(req.Tags)
+	if err != nil {
+		return nil, err
 	}
 
 	// Create article
