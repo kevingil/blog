@@ -29,25 +29,17 @@ func NewMessageService(db database.Service) *MessageService {
 	}
 }
 
-// SaveMessageRequest represents a request to save a chat message
-type SaveMessageRequest struct {
-	ArticleID uuid.UUID
-	Role      string
-	Content   string
-	MetaData  *metadata.MessageMetaData
-}
-
 // SaveMessage saves a new chat message to the database
-func (s *MessageService) SaveMessage(ctx context.Context, req SaveMessageRequest) (*models.ChatMessage, error) {
+func (s *MessageService) SaveMessage(ctx context.Context, articleID uuid.UUID, role, content string, metaData *metadata.MessageMetaData) (*models.ChatMessage, error) {
 	// Marshal metadata to JSON
 	var metaDataJSON datatypes.JSON
-	if req.MetaData != nil {
+	if metaData != nil {
 		// Validate metadata
-		if err := metadata.ValidateMetaData(req.MetaData); err != nil {
+		if err := metadata.ValidateMetaData(metaData); err != nil {
 			return nil, errors.NewValidationError(fmt.Sprintf("Invalid metadata: %v", err))
 		}
-		
-		jsonBytes, err := json.Marshal(req.MetaData)
+
+		jsonBytes, err := json.Marshal(metaData)
 		if err != nil {
 			return nil, errors.NewInternalError("Failed to marshal metadata")
 		}
@@ -57,9 +49,9 @@ func (s *MessageService) SaveMessage(ctx context.Context, req SaveMessageRequest
 	}
 
 	message := &models.ChatMessage{
-		ArticleID: req.ArticleID,
-		Role:      req.Role,
-		Content:   req.Content,
+		ArticleID: articleID,
+		Role:      role,
+		Content:   content,
 		MetaData:  metaDataJSON,
 	}
 
@@ -256,3 +248,51 @@ func (s *MessageService) RejectArtifact(ctx context.Context, messageID uuid.UUID
 	return s.UpdateMessageMetadata(ctx, messageID, &metaData)
 }
 
+// GetArtifactContent retrieves the artifact content from a message
+func (s *MessageService) GetArtifactContent(ctx context.Context, messageID uuid.UUID) (string, error) {
+	message, err := s.GetMessageByID(ctx, messageID)
+	if err != nil {
+		return "", err
+	}
+
+	// Parse metadata
+	var metaData metadata.MessageMetaData
+	if len(message.MetaData) > 0 && string(message.MetaData) != "{}" {
+		if err := json.Unmarshal(message.MetaData, &metaData); err != nil {
+			return "", errors.NewInternalError("Failed to parse metadata")
+		}
+	}
+
+	if metaData.Artifact == nil {
+		return "", errors.NewNotFoundError("Artifact")
+	}
+
+	return metaData.Artifact.Content, nil
+}
+
+// MarkArtifactAsApplied marks an artifact as applied after it's been successfully applied
+func (s *MessageService) MarkArtifactAsApplied(ctx context.Context, messageID uuid.UUID) error {
+	message, err := s.GetMessageByID(ctx, messageID)
+	if err != nil {
+		return err
+	}
+
+	// Parse metadata
+	var metaData metadata.MessageMetaData
+	if len(message.MetaData) > 0 && string(message.MetaData) != "{}" {
+		if err := json.Unmarshal(message.MetaData, &metaData); err != nil {
+			return errors.NewInternalError("Failed to parse metadata")
+		}
+	}
+
+	if metaData.Artifact == nil {
+		return errors.NewNotFoundError("Artifact")
+	}
+
+	// Mark artifact as applied
+	metaData.Artifact.Status = metadata.ArtifactStatusApplied
+	now := time.Now()
+	metaData.Artifact.AppliedAt = &now
+
+	return s.UpdateMessageMetadata(ctx, messageID, &metaData)
+}
