@@ -1,6 +1,7 @@
 package server
 
 import (
+	"blog-agent-go/backend/internal/core/chat"
 	"blog-agent-go/backend/internal/database"
 	"blog-agent-go/backend/internal/router"
 	"blog-agent-go/backend/internal/services"
@@ -23,6 +24,7 @@ func NewFiberServer(
 	storageService *services.StorageService,
 	pagesService *services.PagesService,
 	sourcesService *services.ArticleSourceService,
+	chatService *chat.MessageService,
 	agentCopilotMgr *services.AgentAsyncCopilotManager,
 ) *FiberServer {
 	server := &FiberServer{
@@ -38,6 +40,7 @@ func NewFiberServer(
 		StorageService:  storageService,
 		PagesService:    pagesService,
 		SourcesService:  sourcesService,
+		ChatService:     chatService,
 		AgentCopilotMgr: agentCopilotMgr,
 	})
 

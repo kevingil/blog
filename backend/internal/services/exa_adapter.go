@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 
-	"blog-agent-go/backend/internal/llm/tools"
+	"blog-agent-go/backend/internal/core/ml/llm/tools"
 )
 
 // ExaServiceAdapter adapts ExaSearchService to match the tools.ExaSearchService interface

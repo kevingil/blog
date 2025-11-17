@@ -2,6 +2,7 @@ package router
 
 import (
 	"blog-agent-go/backend/internal/controller"
+	"blog-agent-go/backend/internal/core/chat"
 	"blog-agent-go/backend/internal/middleware"
 	"blog-agent-go/backend/internal/services"
 	"fmt"
@@ -18,6 +19,7 @@ type RouteDeps struct {
 	StorageService  *services.StorageService
 	PagesService    *services.PagesService
 	SourcesService  *services.ArticleSourceService
+	ChatService     *chat.MessageService
 	AgentCopilotMgr *services.AgentAsyncCopilotManager
 }
 
@@ -31,6 +33,13 @@ func RegisterRoutes(app *fiber.App, deps RouteDeps) {
 	// Copilot - Agent-powered writing assistant (requires authentication)
 	app.Post("/agent", middleware.AuthMiddleware(deps.AuthService), controller.AgentCopilotHandler())
 	app.Get("/websocket", websocket.New(controller.WebsocketHandler()))
+
+	// Agent - Conversation and artifact management (requires authentication)
+	agentGroup := app.Group("/agent", middleware.AuthMiddleware(deps.AuthService))
+	agentGroup.Get("/conversations/:articleId", controller.GetConversationHistoryHandler(deps.ChatService))
+	agentGroup.Get("/artifacts/:articleId/pending", controller.GetPendingArtifactsHandler(deps.ChatService))
+	agentGroup.Post("/artifacts/:messageId/accept", controller.AcceptArtifactHandler(deps.ChatService, deps.BlogService))
+	agentGroup.Post("/artifacts/:messageId/reject", controller.RejectArtifactHandler(deps.ChatService))
 
 	// Pages - Public routes
 	pages := app.Group("/pages")

@@ -52,8 +52,17 @@ export async function handleApiResponse<T>(response: Response): Promise<T> {
 export function getAuthHeaders(): HeadersInit {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   return {
-    'Content-Type': 'application/json',
     ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+  };
+}
+
+/**
+ * Gets the authorization header with Content-Type
+ */
+export function getAuthHeadersWithContentType(): HeadersInit {
+  return {
+    ...getAuthHeaders(),
+    'Content-Type': 'application/json',
   };
 }
 

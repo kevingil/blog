@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"blog-agent-go/backend/internal/core/ml"
 	"blog-agent-go/backend/internal/database"
 	"blog-agent-go/backend/internal/errors"
 	"blog-agent-go/backend/internal/models"
@@ -17,18 +18,18 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/google/uuid"
 	"github.com/ledongthuc/pdf"
-	"github.com/openai/openai-go"
-	"github.com/pgvector/pgvector-go"
 	"gorm.io/gorm"
 )
 
 type ArticleSourceService struct {
-	db database.Service
+	db               database.Service
+	embeddingService *ml.EmbeddingService
 }
 
 func NewArticleSourceService(db database.Service) *ArticleSourceService {
 	return &ArticleSourceService{
-		db: db,
+		db:               db,
+		embeddingService: ml.NewEmbeddingService(),
 	}
 }
 
@@ -67,7 +68,7 @@ func (s *ArticleSourceService) CreateSource(ctx context.Context, req CreateSourc
 	}
 
 	// Generate embedding for the content
-	embedding, err := s.generateEmbedding(ctx, req.Content)
+	embedding, err := s.embeddingService.GenerateEmbedding(ctx, req.Content)
 	if err != nil {
 		return nil, errors.NewAppError(errors.ErrCodeExternalService, "Failed to generate embedding", 500)
 	}
@@ -188,7 +189,7 @@ func (s *ArticleSourceService) UpdateSource(ctx context.Context, sourceID uuid.U
 
 	// Regenerate embedding if content changed
 	if needsEmbeddingUpdate {
-		embedding, err := s.generateEmbedding(ctx, source.Content)
+		embedding, err := s.embeddingService.GenerateEmbedding(ctx, source.Content)
 		if err != nil {
 			return nil, errors.NewAppError(errors.ErrCodeExternalService, "Failed to generate embedding", 500)
 		}
@@ -424,59 +425,10 @@ func (s *ArticleSourceService) extractMainContent(doc *goquery.Document) string 
 	return result
 }
 
-// generateEmbedding generates an embedding vector for the given text using OpenAI's API
-func (s *ArticleSourceService) generateEmbedding(ctx context.Context, text string) (pgvector.Vector, error) {
-	if text == "" {
-		return pgvector.Vector{}, fmt.Errorf("text cannot be empty")
-	}
-
-	// Truncate text if too long (OpenAI has token limits)
-	// text-embedding-3-small supports up to 8192 tokens (~6000 characters)
-	originalLength := len(text)
-	if len(text) > 8000 {
-		text = text[:8000]
-	}
-
-	// Create OpenAI client
-	client := openai.NewClient()
-
-	// Generate embedding using OpenAI's text-embedding-3-small model
-	// This model produces 1536-dimensional embeddings
-	resp, err := client.Embeddings.New(ctx, openai.EmbeddingNewParams{
-		Input: openai.EmbeddingNewParamsInputUnion{
-			OfArrayOfStrings: []string{text},
-		},
-		Model: openai.EmbeddingModelTextEmbedding3Small,
-		// Optionally set dimensions to 1536 explicitly (default for text-embedding-3-small)
-		// Dimensions: param.Int(1536),
-	})
-	if err != nil {
-		return pgvector.Vector{}, fmt.Errorf("failed to generate embedding from OpenAI (text length: %d): %w", originalLength, err)
-	}
-
-	if len(resp.Data) == 0 {
-		return pgvector.Vector{}, fmt.Errorf("no embedding data returned from OpenAI")
-	}
-
-	// Validate embedding dimensions
-	embeddingData := resp.Data[0].Embedding
-	if len(embeddingData) != 1536 {
-		return pgvector.Vector{}, fmt.Errorf("unexpected embedding dimensions: got %d, expected 1536", len(embeddingData))
-	}
-
-	// Convert []float64 to []float32 for pgvector compatibility
-	embedding := make([]float32, len(embeddingData))
-	for i, v := range embeddingData {
-		embedding[i] = float32(v)
-	}
-
-	return pgvector.NewVector(embedding), nil
-}
-
 // SearchSimilarSources finds sources similar to the given query using vector similarity
 func (s *ArticleSourceService) SearchSimilarSources(ctx context.Context, articleID uuid.UUID, query string, limit int) ([]*models.ArticleSource, error) {
 	// Generate embedding for the query
-	queryEmbedding, err := s.generateEmbedding(ctx, query)
+	queryEmbedding, err := s.embeddingService.GenerateEmbedding(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate query embedding: %w", err)
 	}

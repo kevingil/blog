@@ -1,7 +1,7 @@
 package services
 
 import (
-	"blog-agent-go/backend/internal/llm/tools"
+	"blog-agent-go/backend/internal/core/ml/llm/tools"
 	"blog-agent-go/backend/internal/models"
 	"context"
 
