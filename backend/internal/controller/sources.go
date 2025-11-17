@@ -1,11 +1,12 @@
 package controller
 
 import (
+	"blog-agent-go/backend/internal/errors"
+	"blog-agent-go/backend/internal/response"
 	"blog-agent-go/backend/internal/services"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 // CreateSourceHandler creates a new article source
@@ -13,32 +14,24 @@ func CreateSourceHandler(sourcesService *services.ArticleSourceService) fiber.Ha
 	return func(c *fiber.Ctx) error {
 		var req services.CreateSourceRequest
 		if err := c.BodyParser(&req); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Invalid request body",
-			})
+			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
 		}
 
 		// Validate required fields
 		if req.ArticleID == uuid.Nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Article ID is required",
-			})
+			return response.Error(c, errors.NewValidationError("Article ID is required"))
 		}
 
 		if req.Content == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Content is required",
-			})
+			return response.Error(c, errors.NewValidationError("Content is required"))
 		}
 
 		source, err := sourcesService.CreateSource(c.Context(), req)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return response.Error(c, err)
 		}
 
-		return c.Status(fiber.StatusCreated).JSON(source)
+		return response.Created(c, source)
 	}
 }
 
@@ -51,32 +44,24 @@ func ScrapeAndCreateSourceHandler(sourcesService *services.ArticleSourceService)
 		}
 
 		if err := c.BodyParser(&req); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Invalid request body",
-			})
+			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
 		}
 
 		// Validate required fields
 		if req.ArticleID == uuid.Nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Article ID is required",
-			})
+			return response.Error(c, errors.NewValidationError("Article ID is required"))
 		}
 
 		if req.URL == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "URL is required",
-			})
+			return response.Error(c, errors.NewValidationError("URL is required"))
 		}
 
 		source, err := sourcesService.ScrapeAndCreateSource(c.Context(), req.ArticleID, req.URL)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return response.Error(c, err)
 		}
 
-		return c.Status(fiber.StatusCreated).JSON(source)
+		return response.Created(c, source)
 	}
 }
 
@@ -86,19 +71,15 @@ func GetArticleSourcesHandler(sourcesService *services.ArticleSourceService) fib
 		articleIDStr := c.Params("articleId")
 		articleID, err := uuid.Parse(articleIDStr)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Invalid article ID",
-			})
+			return response.Error(c, errors.NewInvalidInputError("Invalid article ID"))
 		}
 
 		sources, err := sourcesService.GetSourcesByArticleID(articleID)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return response.Error(c, err)
 		}
 
-		return c.JSON(fiber.Map{
+		return response.Success(c, fiber.Map{
 			"sources": sources,
 		})
 	}
@@ -110,24 +91,15 @@ func GetSourceHandler(sourcesService *services.ArticleSourceService) fiber.Handl
 		sourceIDStr := c.Params("sourceId")
 		sourceID, err := uuid.Parse(sourceIDStr)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Invalid source ID",
-			})
+			return response.Error(c, errors.NewInvalidInputError("Invalid source ID"))
 		}
 
 		source, err := sourcesService.GetSource(sourceID)
 		if err != nil {
-			if err == gorm.ErrRecordNotFound {
-				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-					"error": "Source not found",
-				})
-			}
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return response.Error(c, err)
 		}
 
-		return c.JSON(source)
+		return response.Success(c, source)
 	}
 }
 
@@ -137,31 +109,20 @@ func UpdateSourceHandler(sourcesService *services.ArticleSourceService) fiber.Ha
 		sourceIDStr := c.Params("sourceId")
 		sourceID, err := uuid.Parse(sourceIDStr)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Invalid source ID",
-			})
+			return response.Error(c, errors.NewInvalidInputError("Invalid source ID"))
 		}
 
 		var req services.UpdateSourceRequest
 		if err := c.BodyParser(&req); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Invalid request body",
-			})
+			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
 		}
 
 		source, err := sourcesService.UpdateSource(c.Context(), sourceID, req)
 		if err != nil {
-			if err == gorm.ErrRecordNotFound {
-				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-					"error": "Source not found",
-				})
-			}
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return response.Error(c, err)
 		}
 
-		return c.JSON(source)
+		return response.Success(c, source)
 	}
 }
 
@@ -171,24 +132,15 @@ func DeleteSourceHandler(sourcesService *services.ArticleSourceService) fiber.Ha
 		sourceIDStr := c.Params("sourceId")
 		sourceID, err := uuid.Parse(sourceIDStr)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Invalid source ID",
-			})
+			return response.Error(c, errors.NewInvalidInputError("Invalid source ID"))
 		}
 
 		err = sourcesService.DeleteSource(sourceID)
 		if err != nil {
-			if err == gorm.ErrRecordNotFound {
-				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-					"error": "Source not found",
-				})
-			}
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return response.Error(c, err)
 		}
 
-		return c.Status(fiber.StatusNoContent).Send(nil)
+		return response.Success(c, fiber.Map{"success": true})
 	}
 }
 
@@ -198,16 +150,12 @@ func SearchSimilarSourcesHandler(sourcesService *services.ArticleSourceService) 
 		articleIDStr := c.Params("articleId")
 		articleID, err := uuid.Parse(articleIDStr)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Invalid article ID",
-			})
+			return response.Error(c, errors.NewInvalidInputError("Invalid article ID"))
 		}
 
 		query := c.Query("q", "")
 		if query == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Query parameter 'q' is required",
-			})
+			return response.Error(c, errors.NewInvalidInputError("Query parameter 'q' is required"))
 		}
 
 		limit := c.QueryInt("limit", 5)
@@ -217,12 +165,10 @@ func SearchSimilarSourcesHandler(sourcesService *services.ArticleSourceService) 
 
 		sources, err := sourcesService.SearchSimilarSources(c.Context(), articleID, query, limit)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return response.Error(c, err)
 		}
 
-		return c.JSON(fiber.Map{
+		return response.Success(c, fiber.Map{
 			"sources": sources,
 			"query":   query,
 		})

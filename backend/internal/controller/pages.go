@@ -1,8 +1,10 @@
 package controller
 
 import (
+	"blog-agent-go/backend/internal/errors"
+	"blog-agent-go/backend/internal/response"
 	"blog-agent-go/backend/internal/services"
-	"fmt"
+	"blog-agent-go/backend/internal/validation"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -10,36 +12,23 @@ import (
 
 func ListPagesHandler(pagesService *services.PagesService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		fmt.Println("\n=== ListPagesHandler ===")
-		fmt.Printf("Request URL: %s\n", c.OriginalURL())
-		fmt.Printf("Request Method: %s\n", c.Method())
-
 		page := c.QueryInt("page", 1)
 		perPage := c.QueryInt("perPage", 20)
-		fmt.Printf("Parsed query params - page: %d, perPage: %d\n", page, perPage)
 
 		var isPublished *bool
 		isPublishedStr := c.Query("isPublished")
-		fmt.Printf("isPublished query param: '%s'\n", isPublishedStr)
 
 		if isPublishedStr != "" {
 			val := c.QueryBool("isPublished", true)
 			isPublished = &val
-			fmt.Printf("Parsed isPublished: %v\n", *isPublished)
-		} else {
-			fmt.Println("No isPublished filter")
 		}
 
-		fmt.Println("Calling pagesService.ListPagesWithPagination...")
-		response, err := pagesService.ListPagesWithPagination(page, perPage, isPublished)
+		pages, err := pagesService.ListPagesWithPagination(page, perPage, isPublished)
 		if err != nil {
-			fmt.Printf("ERROR from service: %v\n", err)
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			return response.Error(c, err)
 		}
 
-		fmt.Printf("Success! Returning %d pages\n", len(response.Pages))
-		fmt.Println("=== End ListPagesHandler ===")
-		return c.JSON(response)
+		return response.Success(c, pages)
 	}
 }
 
@@ -48,17 +37,17 @@ func GetPageByIDHandler(pagesService *services.PagesService) fiber.Handler {
 		idStr := c.Params("id")
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid page ID"})
+			return response.Error(c, errors.NewInvalidInputError("Invalid page ID"))
 		}
 
 		page, err := pagesService.GetPageByID(id)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			return response.Error(c, err)
 		}
 		if page == nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Page not found"})
+			return response.Error(c, errors.NewNotFoundError("Page"))
 		}
-		return c.JSON(page)
+		return response.Success(c, page)
 	}
 }
 
@@ -66,14 +55,17 @@ func CreatePageHandler(pagesService *services.PagesService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req services.PageCreateRequest
 		if err := c.BodyParser(&req); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+		}
+		if err := validation.ValidateStruct(req); err != nil {
+			return response.Error(c, err)
 		}
 
 		page, err := pagesService.CreatePage(req)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+			return response.Error(c, err)
 		}
-		return c.Status(fiber.StatusCreated).JSON(page)
+		return response.Created(c, page)
 	}
 }
 
@@ -82,19 +74,19 @@ func UpdatePageHandler(pagesService *services.PagesService) fiber.Handler {
 		idStr := c.Params("id")
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid page ID"})
+			return response.Error(c, errors.NewInvalidInputError("Invalid page ID"))
 		}
 
 		var req services.PageUpdateRequest
 		if err := c.BodyParser(&req); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
 		}
 
 		page, err := pagesService.UpdatePage(id, req)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+			return response.Error(c, err)
 		}
-		return c.JSON(page)
+		return response.Success(c, page)
 	}
 }
 
@@ -103,12 +95,12 @@ func DeletePageHandler(pagesService *services.PagesService) fiber.Handler {
 		idStr := c.Params("id")
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid page ID"})
+			return response.Error(c, errors.NewInvalidInputError("Invalid page ID"))
 		}
 
 		if err := pagesService.DeletePage(id); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			return response.Error(c, err)
 		}
-		return c.JSON(fiber.Map{"success": true})
+		return response.Success(c, fiber.Map{"success": true})
 	}
 }
