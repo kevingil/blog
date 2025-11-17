@@ -9,11 +9,14 @@ import (
 	"sync"
 	"time"
 
-	"blog-agent-go/backend/internal/llm/agent"
-	"blog-agent-go/backend/internal/llm/config"
-	"blog-agent-go/backend/internal/llm/message"
-	"blog-agent-go/backend/internal/llm/session"
-	"blog-agent-go/backend/internal/llm/tools"
+	agentTypes "blog-agent-go/backend/internal/core/agent"
+	"blog-agent-go/backend/internal/core/agent/metadata"
+	"blog-agent-go/backend/internal/core/ml/llm/agent"
+	"blog-agent-go/backend/internal/core/ml/llm/config"
+	"blog-agent-go/backend/internal/core/ml/llm/message"
+	"blog-agent-go/backend/internal/core/ml/llm/session"
+	"blog-agent-go/backend/internal/core/ml/llm/tools"
+	"blog-agent-go/backend/internal/models"
 
 	"github.com/google/uuid"
 )
@@ -23,106 +26,28 @@ import (
 // we want to create our own endpoints instead of using CopilotKit APIs
 // """
 
-// ChatMessage is a simplified representation of a chat message that we
-// receive from the CopilotKit frontend. It intentionally mirrors the
-// OpenAI message schema but without the more advanced fields (tool calls, etc.)
-// We only expose what we currently need. If in the future you want to surface
-// tool/function-call information, simply extend this struct.
-//
-// NOTE: CopilotKit always sends role + content – function calls are encoded
-// inside the assistant messages as required by the OpenAI wire-format.
-// That means we can round-trip the messages without losing any information.
-// For now, we map the three common roles to the corresponding helpers that
-// ship with the official openai-go SDK (SystemMessage, UserMessage, AssistantMessage).
-// Everything else is treated as a plain user message.
-//
-// We deliberately keep this struct extremely small – avoid over-abstraction as
-// requested in the user rules.
-type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-// ChatRequest is what the /api/copilotkit endpoint receives from the React
-// runtime.
-//
-//   - Messages – full chat transcript
-//   - Model    – allow the caller to pick a model (optional, defaults to GPT-4o)
-//   - DocumentContent – the current article content to provide context (optional)
-//
-// In the reference CopilotKit implementation there are also fields for
-//
-//	"actions", "state" and so on. We do not need them yet for a minimal viable
-//
-// prototype, so they are omitted. Feel free to extend later.
-//
-// Keeping the shape small reduces the amount of JSON unmarshalling code we
-// have to maintain without losing forward compatibility (unknown fields are
-// ignored by encoding/json).
-type ChatRequest struct {
-	Messages        []ChatMessage `json:"messages"`
-	Model           string        `json:"model"`
-	DocumentContent string        `json:"documentContent,omitempty"`
-	ArticleID       string        `json:"articleId,omitempty"`
-}
-
-// ChatRequestResponse is the immediate response returned when a chat request is submitted
-type ChatRequestResponse struct {
-	RequestID string `json:"requestId"`
-	Status    string `json:"status"`
-}
-
-// WebSocket streaming types - Block-based streaming for structured agent responses
-//
-// This struct supports streaming agent responses as individual message blocks, where each
-// block represents a specific part of the agent's response (text, tool calls, tool results).
-// Blocks belonging to the same request are grouped by RequestID on the frontend.
-//
-// Supported block types:
-// - "text": Assistant text responses
-// - "tool_use": Tool/function calls made by the agent
-// - "tool_result": Results returned from tool executions
-// - "user": User messages (streamed as initial context)
-// - "system": System messages (streamed as initial context)
-// - "error": Error messages
-// - "done": Completion signal
-type StreamResponse struct {
-	RequestID string `json:"requestId,omitempty"`
-	Type      string `json:"type"` // "text", "tool_use", "tool_result", "error", "done"
-	Content   string `json:"content,omitempty"`
-	Iteration int    `json:"iteration,omitempty"`
-
-	// Tool-specific fields for tool_use blocks
-	ToolID    string      `json:"tool_id,omitempty"`
-	ToolName  string      `json:"tool_name,omitempty"`
-	ToolInput interface{} `json:"tool_input,omitempty"`
-
-	// Tool result fields for tool_result blocks
-	ToolResult interface{} `json:"tool_result,omitempty"`
-
-	// Legacy fields for backward compatibility
-	Role  string `json:"role,omitempty"`
-	Data  any    `json:"data,omitempty"`
-	Done  bool   `json:"done,omitempty"`
-	Error string `json:"error,omitempty"`
-}
-
-// Artifact represents tool execution status shown to user
-type ArtifactUpdate struct {
-	ToolName string      `json:"tool_name"`
-	Status   string      `json:"status"` // "starting", "in_progress", "completed", "error"
-	Message  string      `json:"message"`
-	Result   interface{} `json:"result,omitempty"`
-	Error    string      `json:"error,omitempty"`
-}
+// Type aliases for backward compatibility
+type ChatMessage = agentTypes.ChatMessage
+type ChatRequest = agentTypes.ChatRequest
+type ChatRequestResponse = agentTypes.ChatRequestResponse
+type StreamResponse = agentTypes.StreamResponse
+type ArtifactUpdate = agentTypes.ArtifactUpdate
 
 // AgentAsyncCopilotManager - LLM Agent Framework powered copilot manager
 type AgentAsyncCopilotManager struct {
-	requests   map[string]*AgentAsyncRequest
-	mu         sync.RWMutex
-	agent      agent.Service
-	sessionSvc session.Service
-	messageSvc message.Service
+	requests    map[string]*AgentAsyncRequest
+	mu          sync.RWMutex
+	agent       agent.Service
+	sessionSvc  session.Service
+	messageSvc  message.Service
+	chatService ChatMessageServiceInterface
+	config      agentTypes.Config
+}
+
+// ChatMessageServiceInterface defines the interface for chat message operations
+// This interface is satisfied by core/chat.MessageService
+type ChatMessageServiceInterface interface {
+	SaveMessage(ctx context.Context, articleID uuid.UUID, role, content string, metaData *metadata.MessageMetaData) (*models.ChatMessage, error)
 }
 
 type AgentAsyncRequest struct {
@@ -137,30 +62,47 @@ type AgentAsyncRequest struct {
 	iteration    int // Track iteration number for message blocks
 }
 
+// Global singleton for backward compatibility
 var (
 	globalAgentManager *AgentAsyncCopilotManager
 	agentManagerOnce   sync.Once
 )
 
-// GetAgentAsyncCopilotManager returns the singleton agent-based async manager
+// NewAgentAsyncCopilotManager creates a new agent manager with configuration
+func NewAgentAsyncCopilotManager(cfg agentTypes.Config, agentSvc agent.Service, sessionSvc session.Service, messageSvc message.Service, chatService ChatMessageServiceInterface) *AgentAsyncCopilotManager {
+	return &AgentAsyncCopilotManager{
+		requests:    make(map[string]*AgentAsyncRequest),
+		agent:       agentSvc,
+		sessionSvc:  sessionSvc,
+		messageSvc:  messageSvc,
+		chatService: chatService,
+		config:      cfg,
+	}
+}
+
+// GetAgentAsyncCopilotManager returns the singleton agent-based async manager (deprecated)
+// Kept for backward compatibility. New code should use NewAgentAsyncCopilotManager.
 func GetAgentAsyncCopilotManager() *AgentAsyncCopilotManager {
-	agentManagerOnce.Do(func() {
+	if globalAgentManager == nil {
+		// Initialize with default config if not set
 		globalAgentManager = &AgentAsyncCopilotManager{
 			requests: make(map[string]*AgentAsyncRequest),
-			// Services will be injected when needed
+			config:   agentTypes.LoadConfig(),
 		}
-	})
+	}
 	return globalAgentManager
 }
 
-func (m *AgentAsyncCopilotManager) SetAgentServices(agentSvc agent.Service, sessionSvc session.Service, messageSvc message.Service) {
-	m.agent = agentSvc
-	m.sessionSvc = sessionSvc
-	m.messageSvc = messageSvc
+// SetGlobalAgentManager sets the global agent manager instance
+func SetGlobalAgentManager(manager *AgentAsyncCopilotManager) {
+	globalAgentManager = manager
 }
 
 // InitializeAgentCopilotManager initializes the agent copilot manager with real services
-func InitializeAgentCopilotManager(articleSourceService *ArticleSourceService) error {
+func InitializeAgentCopilotManager(articleSourceService *ArticleSourceService, chatService ChatMessageServiceInterface) error {
+	// Load agent configuration
+	cfg := agentTypes.LoadConfig()
+
 	// Create session and message services
 	sessionSvc := session.NewInMemorySessionService()
 	messageSvc := message.NewInMemoryMessageService()
@@ -210,11 +152,11 @@ func InitializeAgentCopilotManager(articleSourceService *ArticleSourceService) e
 		return fmt.Errorf("failed to create agent: %w", err)
 	}
 
-	// Get the manager and set the services directly
-	manager := GetAgentAsyncCopilotManager()
-	manager.SetAgentServices(agentSvc, sessionSvc, messageSvc)
+	// Create and set the global manager with configuration
+	manager := NewAgentAsyncCopilotManager(cfg, agentSvc, sessionSvc, messageSvc, chatService)
+	SetGlobalAgentManager(manager)
 
-	log.Printf("AgentAsyncCopilotManager: Initialized with real LLM agent framework")
+	log.Printf("[Agent] Initialized with configuration (max_concurrent=%d, timeout=%v)", cfg.MaxConcurrentRequests, cfg.RequestTimeout)
 	return nil
 }
 
@@ -227,15 +169,24 @@ func (m *AgentAsyncCopilotManager) SubmitChatRequest(req ChatRequest) (string, e
 		return "", errors.New("agent service not initialized")
 	}
 
+	// Check concurrent request limit
+	m.mu.RLock()
+	currentRequests := len(m.requests)
+	m.mu.RUnlock()
+
+	if currentRequests >= m.config.MaxConcurrentRequests {
+		return "", fmt.Errorf("maximum concurrent requests reached (%d)", m.config.MaxConcurrentRequests)
+	}
+
 	requestID := uuid.New().String()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), m.config.RequestTimeout)
 
 	asyncReq := &AgentAsyncRequest{
 		ID:           requestID,
 		Request:      req,
 		Status:       "processing",
 		StartTime:    time.Now(),
-		ResponseChan: make(chan StreamResponse, 100),
+		ResponseChan: make(chan StreamResponse, m.config.ChannelBuffer),
 		ctx:          ctx,
 		cancel:       cancel,
 		SessionID:    requestID, // Use requestID as sessionID for simplicity
@@ -262,26 +213,75 @@ func (m *AgentAsyncCopilotManager) GetResponseChannel(requestID string) (<-chan 
 	return req.ResponseChan, true
 }
 
+// Shutdown gracefully shuts down the agent manager, waiting for in-flight requests
+func (m *AgentAsyncCopilotManager) Shutdown(timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+
+	log.Printf("[Agent] Shutting down, waiting for %d in-flight requests...", m.ActiveRequests())
+
+	// Cancel all requests
+	m.mu.RLock()
+	for _, req := range m.requests {
+		req.cancel()
+	}
+	m.mu.RUnlock()
+
+	// Wait for all requests to complete or timeout
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for time.Now().Before(deadline) {
+		if m.ActiveRequests() == 0 {
+			log.Printf("[Agent] All requests completed, shutdown successful")
+			return nil
+		}
+		<-ticker.C
+	}
+
+	log.Printf("[Agent] Shutdown timeout reached, %d requests still active", m.ActiveRequests())
+	return fmt.Errorf("shutdown timeout: %d requests still active", m.ActiveRequests())
+}
+
+// ActiveRequests returns the number of active requests
+func (m *AgentAsyncCopilotManager) ActiveRequests() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.requests)
+}
+
+// CancelRequest cancels a specific request by ID
+func (m *AgentAsyncCopilotManager) CancelRequest(requestID string) error {
+	m.mu.RLock()
+	req, exists := m.requests[requestID]
+	m.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("request not found")
+	}
+
+	req.cancel()
+	return nil
+}
+
 func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncRequest) {
 	defer func() {
 		asyncReq.cancel()
 		close(asyncReq.ResponseChan)
 
-		// Clean up after 15 minutes
-		time.AfterFunc(15*time.Minute, func() {
+		// Clean up after configured delay
+		time.AfterFunc(m.config.CleanupDelay, func() {
 			m.mu.Lock()
 			delete(m.requests, asyncReq.ID)
 			m.mu.Unlock()
 		})
 	}()
 
-	log.Printf("AgentAsyncCopilotManager: Starting agent processing for request %s", asyncReq.ID)
-	log.Printf("AgentAsyncCopilotManager: Request details - Article ID: %q, Messages: %d", asyncReq.Request.ArticleID, len(asyncReq.Request.Messages))
+	log.Printf("[Agent] Starting request %s", asyncReq.ID)
 
 	// Create session for this request
 	session, err := m.sessionSvc.Create(asyncReq.ctx, "Writing Copilot Session")
 	if err != nil {
-		log.Printf("AgentAsyncCopilotManager: Failed to create session: %v", err)
+		log.Printf("[Agent] Failed to create session for request %s: %v", asyncReq.ID, err)
 		asyncReq.ResponseChan <- StreamResponse{
 			RequestID: asyncReq.ID,
 			Type:      "error",
@@ -293,18 +293,17 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 
 	// Add article ID to context if provided
 	ctx := asyncReq.ctx
+	var articleID uuid.UUID
 	if asyncReq.Request.ArticleID != "" {
 		ctx = tools.WithArticleID(ctx, asyncReq.Request.ArticleID)
-		log.Printf("AgentAsyncCopilotManager: Added article ID %s to context", asyncReq.Request.ArticleID)
-
-		// Verify the article ID was set correctly
-		testArticleID := tools.GetArticleIDFromContext(ctx)
-		log.Printf("AgentAsyncCopilotManager: Verified article ID in context: %q", testArticleID)
-	} else {
-		log.Printf("AgentAsyncCopilotManager: No article ID provided in request")
+		// Parse article ID for database operations
+		if parsedID, err := uuid.Parse(asyncReq.Request.ArticleID); err == nil {
+			articleID = parsedID
+		}
 	}
 
 	// Convert request messages to agent format and add them to session
+	// Also save user messages to database if chatService is available and articleID is valid
 	for _, msg := range asyncReq.Request.Messages {
 		var role message.Role
 		switch msg.Role {
@@ -334,7 +333,24 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 			Model: "user",
 		})
 		if err != nil {
-			log.Printf("AgentAsyncCopilotManager: Failed to create message: %v", err)
+			log.Printf("[Agent] Failed to create message for request %s: %v", asyncReq.ID, err)
+		}
+
+		// Save user messages to database if chat service is available and we have a valid article ID
+		if m.chatService != nil && articleID != uuid.Nil && msg.Role == "user" {
+			msgContext := metadata.NewMessageContext(
+				asyncReq.Request.ArticleID,
+				session.ID,
+				asyncReq.ID,
+				"", // User ID can be added if available
+			)
+
+			msgMetadata := metadata.BuildMetaData().WithContext(msgContext)
+
+			_, err := m.chatService.SaveMessage(ctx, articleID, "user", msg.Content, msgMetadata)
+			if err != nil {
+				log.Printf("[Agent] Failed to save user message to database: %v", err)
+			}
 		}
 	}
 
@@ -381,45 +397,13 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 		}
 	}
 
-	// Log the final prompt that will be sent to the LLM
-	log.Printf("📝 [FinalPrompt] Complete prompt being sent to LLM:")
-	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	log.Printf("%s", userPrompt)
-	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
 	// Run agent request with article ID context
-	// Final verification before running agent
-	finalArticleID := tools.GetArticleIDFromContext(ctx)
-	log.Printf("AgentAsyncCopilotManager: Final context check - Article ID: %q", finalArticleID)
-
 	resultChan, err := m.agent.Run(ctx, session.ID, userPrompt)
 
 	startTime := time.Now()
-	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	log.Printf("🚀 [Agent] Starting request %s for session %s", asyncReq.ID, session.ID)
-	log.Printf("   ⏰ Started at: %s", startTime.Format("15:04:05.000"))
-	log.Printf("   👤 Session Title: %s", session.Title)
-	if len(asyncReq.Request.Messages) > 0 {
-		log.Printf("   💬 Message Count: %d", len(asyncReq.Request.Messages))
-	}
-	if asyncReq.Request.DocumentContent != "" {
-		log.Printf("   📄 Document Content: %d characters", len(asyncReq.Request.DocumentContent))
-	}
-	log.Printf("   📝 User prompt: %.100s%s", userPrompt, func() string {
-		if len(userPrompt) > 100 {
-			return "..."
-		}
-		return ""
-	}())
-	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 	if err != nil {
-		duration := time.Since(startTime)
-		log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-		log.Printf("❌ [Agent] Failed to start agent for request %s", asyncReq.ID)
-		log.Printf("   🚨 Error: %v", err)
-		log.Printf("   ⏱️  Failed after: %v", duration)
-		log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		log.Printf("[Agent] Failed to start request %s: %v", asyncReq.ID, err)
 		asyncReq.ResponseChan <- StreamResponse{
 			RequestID: asyncReq.ID,
 			Type:      "error",
@@ -432,12 +416,7 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	// Stream agent events directly from the result channel
 	for event := range resultChan {
 		if event.Error != nil {
-			duration := time.Since(startTime)
-			log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-			log.Printf("❌ [Agent] Error during processing for request %s", asyncReq.ID)
-			log.Printf("   🚨 Error: %v", event.Error)
-			log.Printf("   ⏱️  Failed after: %v", duration)
-			log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+			log.Printf("[Agent] Error processing request %s: %v", asyncReq.ID, event.Error)
 			asyncReq.ResponseChan <- StreamResponse{
 				RequestID: asyncReq.ID,
 				Type:      "error",
@@ -450,8 +429,10 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 		switch event.Type {
 		case agent.AgentEventTypeResponse:
 			if event.Message.ID != "" {
-				m.logMessageDetails(event.Message, asyncReq.ID)
 				asyncReq.iteration++
+
+				// Save assistant message to database
+				m.saveAssistantMessage(ctx, asyncReq, event.Message, articleID)
 
 				// Check if this message has tool calls - if so, stream them separately
 				toolCalls := event.Message.ToolCalls()
@@ -502,8 +483,6 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 			}
 		case agent.AgentEventTypeTool:
 			if event.Message.ID != "" {
-				m.logMessageDetails(event.Message, asyncReq.ID)
-
 				// This event contains tool results - stream each as a separate tool_result block
 				toolResults := event.Message.ToolResults()
 				for _, toolResult := range toolResults {
@@ -523,7 +502,7 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 		case agent.AgentEventTypeError:
 			// Error is already handled above
 		case agent.AgentEventTypeSummarize:
-			log.Printf("📊 [Agent] Summarization progress: %s", event.Progress)
+			// Summarization progress - no logging needed
 		}
 	}
 
@@ -535,83 +514,55 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	}
 
 	duration := time.Since(startTime)
-	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	log.Printf("✅ [Agent] Completed processing for request %s", asyncReq.ID)
-	log.Printf("   ⏱️  Total duration: %v", duration)
-	log.Printf("   🏁 Finished at: %s", time.Now().Format("15:04:05.000"))
-	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	log.Printf("[Agent] Completed request %s in %v", asyncReq.ID, duration)
 }
 
-// logMessageDetails provides comprehensive logging for agent messages
-func (m *AgentAsyncCopilotManager) logMessageDetails(msg message.Message, requestID string) {
-	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	log.Printf("📨 [Agent] Message Details for Request: %s", requestID)
-	log.Printf("   📋 Message ID: %s", msg.ID)
-	log.Printf("   🤖 Model: %s", func() string {
-		if msg.Model != "" {
-			return msg.Model
-		}
-		return "default"
-	}())
-	log.Printf("   🏁 Finish Reason: %s", msg.FinishReason())
+// saveAssistantMessage saves an assistant message to the database with metadata
+func (m *AgentAsyncCopilotManager) saveAssistantMessage(ctx context.Context, asyncReq *AgentAsyncRequest, msg message.Message, articleID uuid.UUID) {
+	if m.chatService == nil || articleID == uuid.Nil {
+		return
+	}
 
-	// Log tool calls if present
+	content := msg.Content().String()
+
+	// Build metadata
+	msgContext := metadata.NewMessageContext(
+		asyncReq.Request.ArticleID,
+		asyncReq.SessionID,
+		asyncReq.ID,
+		"",
+	)
+
+	msgMetadata := metadata.BuildMetaData().WithContext(msgContext)
+
+	// Add tool execution metadata if there are tool calls
 	toolCalls := msg.ToolCalls()
 	if len(toolCalls) > 0 {
-		log.Printf("   🔧 Tool Calls (%d):", len(toolCalls))
-		for i, toolCall := range toolCalls {
-			log.Printf("      %d. 🛠️  %s", i+1, toolCall.Name)
-			log.Printf("         📝 ID: %s", toolCall.ID)
-			if len(toolCall.Input) > 200 {
-				log.Printf("         📊 Input: %.200s...", toolCall.Input)
+		// Save the first tool call as metadata (simplified approach)
+		toolCall := toolCalls[0]
+
+		var toolInput interface{}
+		if toolCall.Input != "" {
+			var jsonInput map[string]interface{}
+			if err := json.Unmarshal([]byte(toolCall.Input), &jsonInput); err == nil {
+				toolInput = jsonInput
 			} else {
-				log.Printf("         📊 Input: %s", toolCall.Input)
-			}
-			log.Printf("         ✅ Finished: %t", toolCall.Finished)
-		}
-	}
-
-	// Log tool results if present
-	toolResults := msg.ToolResults()
-	if len(toolResults) > 0 {
-		log.Printf("   📋 Tool Results (%d):", len(toolResults))
-		for i, result := range toolResults {
-			status := "✅"
-			if result.IsError {
-				status = "❌"
-			}
-			log.Printf("      %d. %s Tool Call ID: %s", i+1, status, result.ToolCallID)
-			if len(result.Content) > 300 {
-				log.Printf("         📄 Content: %.300s...", result.Content)
-			} else {
-				log.Printf("         📄 Content: %s", result.Content)
-			}
-			if result.Metadata != "" {
-				log.Printf("         🏷️  Metadata: %s", result.Metadata)
+				toolInput = toolCall.Input
 			}
 		}
-	}
 
-	// Log message content
-	content := msg.Content().String()
-	if content != "" {
-		log.Printf("   💬 Response Content:")
-		if len(content) > 500 {
-			log.Printf("      %.500s...", content)
-			log.Printf("      📏 Total length: %d characters", len(content))
-		} else {
-			log.Printf("      %s", content)
+		toolExec := &metadata.ToolExecution{
+			ToolName:   toolCall.Name,
+			ToolID:     toolCall.ID,
+			Input:      toolInput,
+			ExecutedAt: time.Now(),
+			Success:    toolCall.Finished,
 		}
+		msgMetadata.WithToolExecution(toolExec)
 	}
 
-	// Log binary content if present
-	binaryContent := msg.BinaryContent()
-	if len(binaryContent) > 0 {
-		log.Printf("   📎 Binary Attachments (%d):", len(binaryContent))
-		for i, binary := range binaryContent {
-			log.Printf("      %d. 📁 %s (%s) - %d bytes", i+1, binary.Path, binary.MIMEType, len(binary.Data))
-		}
+	_, err := m.chatService.SaveMessage(ctx, articleID, "assistant", content, msgMetadata)
+	if err != nil {
+		log.Printf("[Agent] Failed to save assistant message to database: %v", err)
 	}
-
-	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 }
