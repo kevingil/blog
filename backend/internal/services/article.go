@@ -8,12 +8,14 @@ import (
 	"time"
 
 	"blog-agent-go/backend/internal/database"
+	"blog-agent-go/backend/internal/errors"
 	"blog-agent-go/backend/internal/models"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	openai "github.com/openai/openai-go"
 	"github.com/pgvector/pgvector-go"
+	"gorm.io/gorm"
 )
 
 type ArticleService struct {
@@ -49,10 +51,10 @@ type ArticleListItem struct {
 }
 
 type ArticleUpdateRequest struct {
-	Title       string   `json:"title"`
-	Content     string   `json:"content"`
-	ImageURL    string   `json:"image_url"`
-	Tags        []string `json:"tags"`
+	Title       string   `json:"title" validate:"required,min=3,max=200"`
+	Content     string   `json:"content" validate:"required,min=10"`
+	ImageURL    string   `json:"image_url" validate:"omitempty,url"`
+	Tags        []string `json:"tags" validate:"max=10,dive,min=2,max=30"`
 	IsDraft     bool     `json:"is_draft"`
 	PublishedAt *int64   `json:"published_at"`
 }
@@ -192,7 +194,10 @@ func (s *ArticleService) GetArticleIDBySlug(slug string) (uuid.UUID, error) {
 
 	result := db.Select("id").Where("slug = ?", slug).First(&article)
 	if result.Error != nil {
-		return uuid.UUID{}, result.Error
+		if result.Error == gorm.ErrRecordNotFound {
+			return uuid.UUID{}, errors.NewNotFoundError("Article")
+		}
+		return uuid.UUID{}, errors.NewInternalError("Failed to fetch article by slug")
 	}
 
 	return article.ID, nil
@@ -209,7 +214,7 @@ func (s *ArticleService) GetArticleIDBySlug(slug string) (uuid.UUID, error) {
 func (s *ArticleService) getAuthorData(authorID uuid.UUID) (AuthorData, error) {
 	db := s.db.GetDB()
 	var account models.Account
-	
+
 	if err := db.First(&account, "id = ?", authorID).Error; err != nil {
 		// Return empty author data if not found, rather than failing
 		return AuthorData{
@@ -270,7 +275,10 @@ func (s *ArticleService) GetArticle(id uuid.UUID) (*ArticleListItem, error) {
 	db := s.db.GetDB()
 	var article models.Article
 	if err := db.First(&article, id).Error; err != nil {
-		return nil, err
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.NewNotFoundError("Article")
+		}
+		return nil, errors.NewInternalError("Failed to fetch article")
 	}
 
 	return s.enrichArticleWithMetadata(article)
@@ -465,7 +473,10 @@ func (s *ArticleService) GetArticleData(slug string) (*ArticleData, error) {
 	db := s.db.GetDB()
 	var article models.Article
 	if err := db.Where("slug = ?", slug).First(&article).Error; err != nil {
-		return nil, err
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.NewNotFoundError("Article")
+		}
+		return nil, errors.NewInternalError("Failed to fetch article")
 	}
 
 	author, err := s.getAuthorData(article.AuthorID)
@@ -527,16 +538,23 @@ func (s *ArticleService) GetRecommendedArticles(currentArticleID uuid.UUID) ([]R
 
 func (s *ArticleService) DeleteArticle(id uuid.UUID) error {
 	db := s.db.GetDB()
-	return db.Delete(&models.Article{}, id).Error
+	result := db.Delete(&models.Article{}, id)
+	if result.Error != nil {
+		return errors.NewInternalError("Failed to delete article")
+	}
+	if result.RowsAffected == 0 {
+		return errors.NewNotFoundError("Article")
+	}
+	return nil
 }
 
 type ArticleCreateRequest struct {
-	Title    string    `json:"title"`
-	Content  string    `json:"content"`
-	ImageURL string    `json:"image_url"`
-	Tags     []string  `json:"tags"`
+	Title    string    `json:"title" validate:"required,min=3,max=200"`
+	Content  string    `json:"content" validate:"required,min=10"`
+	ImageURL string    `json:"image_url" validate:"omitempty,url"`
+	Tags     []string  `json:"tags" validate:"max=10,dive,min=2,max=30"`
 	IsDraft  bool      `json:"isDraft"`
-	AuthorID uuid.UUID `json:"authorId"`
+	AuthorID uuid.UUID `json:"authorId" validate:"required"`
 }
 
 func (s *ArticleService) CreateArticle(ctx context.Context, req ArticleCreateRequest) (*ArticleListItem, error) {

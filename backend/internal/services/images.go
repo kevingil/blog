@@ -8,10 +8,12 @@ import (
 	"time"
 
 	"blog-agent-go/backend/internal/database"
+	"blog-agent-go/backend/internal/errors"
 	"blog-agent-go/backend/internal/models"
 
 	"github.com/google/uuid"
 	"github.com/openai/openai-go"
+	"gorm.io/gorm"
 )
 
 type ImageGenerationService struct {
@@ -45,12 +47,15 @@ func (s *ImageGenerationService) GenerateArticleImage(ctx context.Context, promp
 		var article models.Article
 		result := db.Select("content").First(&article, articleID)
 		if result.Error != nil {
-			return nil, result.Error
+			if result.Error == gorm.ErrRecordNotFound {
+				return nil, errors.NewNotFoundError("Article")
+			}
+			return nil, errors.NewInternalError("Failed to fetch article")
 		}
 
 		generatedPrompt, err := textGen.GenerateImagePrompt(ctx, article.Content)
 		if err != nil {
-			return nil, err
+			return nil, errors.NewAppError(errors.ErrCodeExternalService, "Failed to generate image prompt", 500)
 		}
 		prompt = generatedPrompt
 	}
@@ -67,11 +72,11 @@ func (s *ImageGenerationService) GenerateArticleImage(ctx context.Context, promp
 		Moderation:   openai.ImageGenerateParamsModerationAuto,  // Default content moderation
 	})
 	if err != nil {
-		return nil, err
+		return nil, errors.NewAppError(errors.ErrCodeExternalService, "Failed to generate image from OpenAI", 500)
 	}
 
 	if len(imgResp.Data) == 0 {
-		return nil, fmt.Errorf("no data returned from openai image generation")
+		return nil, errors.NewInternalError("No data returned from OpenAI image generation")
 	}
 
 	b64Img := imgResp.Data[0].B64JSON
@@ -79,14 +84,14 @@ func (s *ImageGenerationService) GenerateArticleImage(ctx context.Context, promp
 	// Decode base64
 	imgBytes, err := base64.StdEncoding.DecodeString(b64Img)
 	if err != nil {
-		return nil, err
+		return nil, errors.NewInternalError("Failed to decode image data")
 	}
 
 	// Build storage key and upload
 	timestamp := time.Now().Unix()
 	key := fmt.Sprintf("images/articles/%s/%d.png", articleID, timestamp)
 	if err := s.storage.UploadFile(ctx, key, imgBytes); err != nil {
-		return nil, err
+		return nil, errors.NewInternalError("Failed to upload image to storage")
 	}
 
 	imageURL := fmt.Sprintf("%s/%s", os.Getenv("S3_URL_PREFIX"), key)
@@ -97,7 +102,7 @@ func (s *ImageGenerationService) GenerateArticleImage(ctx context.Context, promp
 		"imagen_request_id": nil,
 	})
 	if result.Error != nil {
-		return nil, result.Error
+		return nil, errors.NewInternalError("Failed to update article with image URL")
 	}
 
 	imageGen := &models.ImageGeneration{
@@ -112,7 +117,7 @@ func (s *ImageGenerationService) GenerateArticleImage(ctx context.Context, promp
 	// Save to database
 	result = db.Create(imageGen)
 	if result.Error != nil {
-		return nil, result.Error
+		return nil, errors.NewInternalError("Failed to save image generation record")
 	}
 
 	return imageGen, nil
@@ -124,7 +129,10 @@ func (s *ImageGenerationService) GetImageGeneration(ctx context.Context, request
 
 	result := db.Where("request_id = ?", requestID).First(&imageGen)
 	if result.Error != nil {
-		return nil, result.Error
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, errors.NewNotFoundError("Image generation")
+		}
+		return nil, errors.NewInternalError("Failed to fetch image generation")
 	}
 
 	return &imageGen, nil
