@@ -2,6 +2,7 @@
 package validation
 
 import (
+	"blog-agent-go/backend/internal/errors"
 	"fmt"
 	"strings"
 
@@ -15,7 +16,7 @@ func init() {
 }
 
 // ValidateStruct validates a struct using struct tags.
-// Returns a formatted error message if validation fails.
+// Returns an AppError with validation details if validation fails.
 func ValidateStruct(s interface{}) error {
 	err := validate.Struct(s)
 	if err == nil {
@@ -23,12 +24,28 @@ func ValidateStruct(s interface{}) error {
 	}
 
 	// Format validation errors
-	var errors []string
-	for _, err := range err.(validator.ValidationErrors) {
-		errors = append(errors, formatValidationError(err))
+	validationErrors, ok := err.(validator.ValidationErrors)
+	if !ok {
+		return errors.NewValidationError("Invalid input")
 	}
 
-	return fmt.Errorf("validation failed: %s", strings.Join(errors, "; "))
+	// Build error details map
+	details := make(map[string]interface{})
+	var errorMessages []string
+	for _, fieldErr := range validationErrors {
+		errorMsg := formatValidationError(fieldErr)
+		errorMessages = append(errorMessages, errorMsg)
+		details[fieldErr.Field()] = map[string]string{
+			"tag":     fieldErr.Tag(),
+			"message": errorMsg,
+		}
+	}
+
+	// Create AppError with detailed field information
+	validationErr := errors.NewValidationError(strings.Join(errorMessages, "; "))
+	validationErr.WithDetails("fields", details)
+
+	return validationErr
 }
 
 // formatValidationError formats a validation error into a human-readable message

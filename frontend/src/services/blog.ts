@@ -1,6 +1,7 @@
 import { ArticleListItem, ArticleData, RecommendedArticle  } from '@/services/types';
 import { GetArticlesResponse } from '@/routes/dashboard/blog/index';
 import { VITE_API_BASE_URL } from '@/services/constants';
+import { handleApiResponse } from '@/services/apiHelpers';
 
 // Article listing and search
 export async function getArticles(
@@ -21,10 +22,7 @@ export async function getArticles(
   });
 
   const response = await fetch(`${VITE_API_BASE_URL}/blog/articles?${params}`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch articles');
-  }
-  const data: GetArticlesResponse = await response.json();
+  const data: GetArticlesResponse = await handleApiResponse<GetArticlesResponse>(response);
   
   // Debug: Log API response
   console.log('articlesPayload API response:', {
@@ -59,10 +57,7 @@ export async function searchArticles(
   });
 
   const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/search?${params}`);
-  if (!response.ok) {
-    throw new Error('Failed to search articles');
-  }
-  const data: GetArticlesResponse = await response.json();
+  const data: GetArticlesResponse = await handleApiResponse<GetArticlesResponse>(response);
   
   return {
     articles: data.articles,
@@ -73,10 +68,7 @@ export async function searchArticles(
 
 export async function getPopularTags(): Promise<{ tags: string[] }> {
   const response = await fetch(`${VITE_API_BASE_URL}/blog/tags/popular`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch popular tags');
-  }
-  return response.json();
+  return handleApiResponse<{ tags: string[] }>(response);
 }
 
 // Article CRUD operations
@@ -85,10 +77,7 @@ export async function getArticle(slug: string): Promise<ArticleListItem | null> 
   if (response.status === 404) {
     return null;
   }
-  if (!response.ok) {
-    throw new Error('Failed to fetch article');
-  }
-  return response.json();
+  return handleApiResponse<ArticleListItem>(response);
 }
 
 export async function getArticleById(blogId: string): Promise<ArticleListItem | null> {
@@ -96,10 +85,7 @@ export async function getArticleById(blogId: string): Promise<ArticleListItem | 
   if (response.status === 404) {
     return null;
   }
-  if (!response.ok) {
-    throw new Error('Failed to fetch article');
-  }
-  return response.json();
+  return handleApiResponse<ArticleListItem>(response);
 }
 
 export async function createArticle(article: {
@@ -117,10 +103,7 @@ export async function createArticle(article: {
     },
     body: JSON.stringify(article),
   });
-  if (!response.ok) {
-    throw new Error('Failed to create article');
-  }
-  return response.json();
+  return handleApiResponse<ArticleListItem>(response);
 }
 
 export async function updateArticle(slug: string, article: {
@@ -138,10 +121,7 @@ export async function updateArticle(slug: string, article: {
     },
     body: JSON.stringify(article),
   });
-  if (!response.ok) {
-    throw new Error('Failed to update article');
-  }
-  return response.json();
+  return handleApiResponse<ArticleListItem>(response);
 }
 
 // Article image operations
@@ -157,10 +137,7 @@ export async function generateArticleImage(prompt: string, articleId: string): P
       generate_prompt: false
     }),
   });
-  if (!response.ok) {
-    throw new Error('Failed to generate article image');
-  }
-  const result = await response.json();
+  const result = await handleApiResponse<{ request_id: string }>(response);
   return { 
     success: true, 
     generationRequestId: result.request_id
@@ -169,10 +146,7 @@ export async function generateArticleImage(prompt: string, articleId: string): P
 
 export async function getImageGeneration(requestId: string): Promise<{ outputUrl: string | null }> {
   const response = await fetch(`${VITE_API_BASE_URL}/images/${requestId}`);
-  if (!response.ok) {
-    throw new Error('Failed to get image generation status');
-  }
-  const result = await response.json();
+  const result = await handleApiResponse<{ output_url?: string }>(response);
   return {
     outputUrl: result.output_url || null
   };
@@ -180,10 +154,7 @@ export async function getImageGeneration(requestId: string): Promise<{ outputUrl
 
 export async function getImageGenerationStatus(requestId: string): Promise<{ outputUrl: string | null }> {
   const response = await fetch(`${VITE_API_BASE_URL}/images/${requestId}/status`);
-  if (!response.ok) {
-    throw new Error('Failed to get image generation status');
-  }
-  const result = await response.json();
+  const result = await handleApiResponse<{ output_url?: string; outputUrl?: string }>(response);
   return {
     outputUrl: result.output_url || result.outputUrl || null
   };
@@ -194,10 +165,7 @@ export async function updateArticleWithContext(articleId: string): Promise<{ con
   const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${articleId}/context`, {
     method: 'PUT',
   });
-  if (!response.ok) {
-    throw new Error('Failed to update article with context');
-  }
-  return response.json();
+  return handleApiResponse<{ content: string; success: boolean }>(response);
 }
 
 export async function getArticleData(slug: string): Promise<ArticleData | null> {
@@ -205,26 +173,17 @@ export async function getArticleData(slug: string): Promise<ArticleData | null> 
   if (response.status === 404) {
     return null;
   }
-  if (!response.ok) {
-    throw new Error('Failed to fetch article data');
-  }
-  return response.json();
+  return handleApiResponse<ArticleData>(response);
 }
 
 export async function getRecommendedArticles(currentArticleId: number): Promise<RecommendedArticle[] | null> {
   const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${currentArticleId}/recommended`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch recommended articles');
-  }
-  return response.json();
+  return handleApiResponse<RecommendedArticle[]>(response);
 }
 
 export async function deleteArticle(id: string): Promise<{ success: boolean }> {
   const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${id}`, {
     method: 'DELETE',
   });
-  if (!response.ok) {
-    throw new Error('Failed to delete article');
-  }
-  return response.json();
+  return handleApiResponse<{ success: boolean }>(response);
 }

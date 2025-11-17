@@ -1,8 +1,6 @@
 package services
 
 import (
-	"errors"
-	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -10,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"blog-agent-go/backend/internal/database"
+	"blog-agent-go/backend/internal/errors"
 	"blog-agent-go/backend/internal/models"
 
 	"github.com/google/uuid"
@@ -29,7 +28,7 @@ func NewAuthService(db database.Service, secretKey string) *AuthService {
 
 type LoginRequest struct {
 	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min=8"`
+	Password string `json:"password" validate:"required,min=6"`
 }
 
 type LoginResponse struct {
@@ -38,19 +37,19 @@ type LoginResponse struct {
 }
 
 type RegisterRequest struct {
-	Name     string `json:"name" validate:"required"`
+	Name     string `json:"name" validate:"required,min=2,max=100"`
 	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min=8"`
+	Password string `json:"password" validate:"required,min=6"`
 }
 
 type UpdateAccountRequest struct {
-	Name  string `json:"name" validate:"required"`
+	Name  string `json:"name" validate:"required,min=2,max=100"`
 	Email string `json:"email" validate:"required,email"`
 }
 
 type UpdatePasswordRequest struct {
-	CurrentPassword string `json:"currentPassword" validate:"required,min=8"`
-	NewPassword     string `json:"newPassword" validate:"required,min=8"`
+	CurrentPassword string `json:"currentPassword" validate:"required,min=6"`
+	NewPassword     string `json:"newPassword" validate:"required,min=6"`
 }
 
 type SessionData struct {
@@ -66,17 +65,16 @@ type UserData struct {
 }
 
 func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
-	fmt.Printf("Login request received for email:'%s'\n", req.Email)
 	account, err := s.db.GetAccountByEmail(req.Email)
 	if err != nil {
-		return nil, errors.New("invalid account credentials")
+		return nil, errors.NewUnauthorizedError("Invalid credentials")
 	}
 	if account == nil {
-		return nil, errors.New("invalid account credentials")
+		return nil, errors.NewUnauthorizedError("Invalid credentials")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(req.Password)); err != nil {
-		return nil, errors.New("invalid user credentials")
+		return nil, errors.NewUnauthorizedError("Invalid credentials")
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
@@ -119,17 +117,17 @@ func (s *AuthService) Register(req RegisterRequest) error {
 func (s *AuthService) ValidateToken(tokenString string) (*jwt.Token, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected signing method")
+			return nil, errors.NewInvalidInputError("Unexpected signing method")
 		}
 		return s.secretKey, nil
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, errors.NewAppError(errors.ErrCodeInvalidToken, "Invalid or expired token", 401)
 	}
 
 	if !token.Valid {
-		return nil, errors.New("invalid token")
+		return nil, errors.NewAppError(errors.ErrCodeInvalidToken, "Invalid token", 401)
 	}
 
 	return token, nil
@@ -143,9 +141,9 @@ func (s *AuthService) UpdateAccount(accountID uuid.UUID, req UpdateAccountReques
 	result := db.First(&account, accountID)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			return errors.New("account not found")
+			return errors.NewNotFoundError("Account")
 		}
-		return result.Error
+		return errors.NewInternalError("Failed to fetch account")
 	}
 
 	// Check if email is already taken by another account
@@ -153,7 +151,7 @@ func (s *AuthService) UpdateAccount(accountID uuid.UUID, req UpdateAccountReques
 		var count int64
 		db.Model(&models.Account{}).Where("email = ? AND id != ?", req.Email, accountID).Count(&count)
 		if count > 0 {
-			return errors.New("email already taken")
+			return errors.NewAlreadyExistsError("Email")
 		}
 	}
 
@@ -173,14 +171,14 @@ func (s *AuthService) UpdatePassword(accountID uuid.UUID, req UpdatePasswordRequ
 	result := db.First(&account, accountID)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			return errors.New("account not found")
+			return errors.NewNotFoundError("Account")
 		}
-		return result.Error
+		return errors.NewInternalError("Failed to fetch account")
 	}
 
 	// Verify current password
 	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(req.CurrentPassword)); err != nil {
-		return errors.New("current password is incorrect")
+		return errors.NewUnauthorizedError("Current password is incorrect")
 	}
 
 	// Hash new password
@@ -202,14 +200,14 @@ func (s *AuthService) DeleteAccount(accountID uuid.UUID, password string) error 
 	result := db.First(&account, accountID)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			return errors.New("account not found")
+			return errors.NewNotFoundError("Account")
 		}
-		return result.Error
+		return errors.NewInternalError("Failed to fetch account")
 	}
 
 	// Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(password)); err != nil {
-		return errors.New("password is incorrect")
+		return errors.NewUnauthorizedError("Password is incorrect")
 	}
 
 	// Delete account

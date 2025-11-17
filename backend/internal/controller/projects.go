@@ -1,7 +1,10 @@
 package controller
 
 import (
+	"blog-agent-go/backend/internal/errors"
+	"blog-agent-go/backend/internal/response"
 	"blog-agent-go/backend/internal/services"
+	"blog-agent-go/backend/internal/validation"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -13,9 +16,9 @@ func ListProjectsHandler(svc *services.ProjectsService) fiber.Handler {
 		perPage := c.QueryInt("perPage", 20)
 		projects, total, err := svc.ListProjects(page, perPage)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			return response.Error(c, err)
 		}
-		return c.JSON(fiber.Map{
+		return response.Success(c, fiber.Map{
 			"projects":     projects,
 			"total":        total,
 			"current_page": page,
@@ -29,13 +32,13 @@ func GetProjectHandler(svc *services.ProjectsService) fiber.Handler {
 		idStr := c.Params("id")
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid id"})
+			return response.Error(c, errors.NewInvalidInputError("Invalid project ID"))
 		}
 		project, err := svc.GetProjectDetail(id)
 		if err != nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "project not found"})
+			return response.Error(c, err)
 		}
-		return c.JSON(project)
+		return response.Success(c, project)
 	}
 }
 
@@ -43,13 +46,16 @@ func CreateProjectHandler(svc *services.ProjectsService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req services.ProjectCreateRequest
 		if err := c.BodyParser(&req); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+		}
+		if err := validation.ValidateStruct(req); err != nil {
+			return response.Error(c, err)
 		}
 		project, err := svc.CreateProject(req)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+			return response.Error(c, err)
 		}
-		return c.Status(fiber.StatusCreated).JSON(project)
+		return response.Created(c, project)
 	}
 }
 
@@ -58,17 +64,17 @@ func UpdateProjectHandler(svc *services.ProjectsService) fiber.Handler {
 		idStr := c.Params("id")
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid id"})
+			return response.Error(c, errors.NewInvalidInputError("Invalid project ID"))
 		}
 		var req services.ProjectUpdateRequest
 		if err := c.BodyParser(&req); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
 		}
 		project, err := svc.UpdateProject(id, req)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			return response.Error(c, err)
 		}
-		return c.JSON(project)
+		return response.Success(c, project)
 	}
 }
 
@@ -77,11 +83,11 @@ func DeleteProjectHandler(svc *services.ProjectsService) fiber.Handler {
 		idStr := c.Params("id")
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid id"})
+			return response.Error(c, errors.NewInvalidInputError("Invalid project ID"))
 		}
 		if err := svc.DeleteProject(id); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			return response.Error(c, err)
 		}
-		return c.JSON(fiber.Map{"success": true})
+		return response.Success(c, fiber.Map{"success": true})
 	}
 }

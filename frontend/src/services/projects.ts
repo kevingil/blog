@@ -1,4 +1,5 @@
 import { VITE_API_BASE_URL } from '@/services/constants';
+import { handleApiResponse } from '@/services/apiHelpers';
 
 export type Project = {
   id: string;
@@ -27,14 +28,12 @@ export type ListProjectsResponse = {
 export async function listProjects(page: number = 1, perPage: number = 20): Promise<ListProjectsResponse> {
   const params = new URLSearchParams({ page: String(page), perPage: String(perPage) });
   const res = await fetch(`${VITE_API_BASE_URL}/projects/?${params}`);
-  if (!res.ok) throw new Error('Failed to list projects');
-  return res.json();
+  return handleApiResponse<ListProjectsResponse>(res);
 }
 
 export async function getProject(id: string): Promise<ProjectDetail> {
   const res = await fetch(`${VITE_API_BASE_URL}/projects/${id}`);
-  if (!res.ok) throw new Error('Failed to fetch project');
-  return res.json();
+  return handleApiResponse<ProjectDetail>(res);
 }
 
 export async function createProject(payload: {
@@ -50,8 +49,7 @@ export async function createProject(payload: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error('Failed to create project');
-  return res.json();
+  return handleApiResponse<Project>(res);
 }
 
 export async function updateProject(id: string, payload: {
@@ -68,14 +66,12 @@ export async function updateProject(id: string, payload: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error('Failed to update project');
-  return res.json();
+  return handleApiResponse<Project>(res);
 }
 
 export async function deleteProject(id: string): Promise<{ success: boolean }> {
   const res = await fetch(`${VITE_API_BASE_URL}/projects/${id}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error('Failed to delete project');
-  return res.json();
+  return handleApiResponse<{ success: boolean }>(res);
 }
 
 

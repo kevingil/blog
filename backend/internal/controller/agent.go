@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"blog-agent-go/backend/internal/errors"
+	"blog-agent-go/backend/internal/response"
 	"blog-agent-go/backend/internal/services"
 	"context"
 	"encoding/json"
@@ -16,7 +18,7 @@ func AgentCopilotHandler() fiber.Handler {
 		var req services.ChatRequest
 		if err := c.BodyParser(&req); err != nil {
 			log.Printf("WritingCopilotHandler: Failed to parse request body: %v", err)
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
 		}
 
 		log.Printf("WritingCopilotHandler: Received request with %d messages", len(req.Messages))
@@ -29,13 +31,13 @@ func AgentCopilotHandler() fiber.Handler {
 		requestID, err := manager.SubmitChatRequest(req)
 		if err != nil {
 			log.Printf("WritingCopilotHandler: Failed to submit request: %v", err)
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			return response.Error(c, err)
 		}
 
 		log.Printf("WritingCopilotHandler: Submitted async agent request with ID: %s", requestID)
 
 		// Return immediately with the request ID
-		return c.JSON(services.ChatRequestResponse{
+		return response.Success(c, services.ChatRequestResponse{
 			RequestID: requestID,
 			Status:    "processing",
 		})

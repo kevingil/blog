@@ -2,6 +2,7 @@ import { atom, useAtomValue, useSetAtom } from 'jotai';
 import { User } from '../types';
 import { createContext, useContext, ReactNode, useEffect } from 'react';
 import { VITE_API_BASE_URL } from '../constants';
+import { handleApiResponse } from '../apiHelpers';
 
 const initialToken: string | null = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 const storedUser = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
@@ -69,24 +70,20 @@ export async function performLogin(email: string, password: string): Promise<{ u
     body: JSON.stringify({ email, password }),
   });
 
-  if (!response.ok) {
-    throw new Error('Login failed');
-  }
-
-  const data = await response.json();
-  return data;
+  return handleApiResponse<{ user: User; token: string }>(response);
 }
 
 export async function performLogout(): Promise<void> {
   const token = localStorage.getItem('token');
   if (token) {
     try {
-      await fetch(`${VITE_API_BASE_URL}/auth/logout`, {
+      const response = await fetch(`${VITE_API_BASE_URL}/auth/logout`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
+      await handleApiResponse<{ message: string }>(response);
     } catch (error) {
       console.error('Logout failed:', error);
     }
@@ -111,7 +108,7 @@ export async function getCurrentUser(token: string): Promise<User | null> {
       return null;
     }
 
-    const data = await response.json();
+    const data = await handleApiResponse<{ user: User }>(response);
     return data.user;
   } catch {
     return null;
@@ -131,7 +128,7 @@ export async function refreshToken(token: string): Promise<string | null> {
       return null;
     }
 
-    const data = await response.json();
+    const data = await handleApiResponse<{ token: string }>(response);
     return data.token;
   } catch {
     return null;
@@ -152,9 +149,7 @@ export async function updateAccount(formData: FormData): Promise<void> {
     body: formData,
   });
 
-  if (!response.ok) {
-    throw new Error('Failed to update account');
-  }
+  await handleApiResponse<{ message: string }>(response);
 }
 
 export async function updatePassword(formData: FormData): Promise<void> {
@@ -171,10 +166,7 @@ export async function updatePassword(formData: FormData): Promise<void> {
     body: formData,
   });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to update password');
-  }
+  await handleApiResponse<{ message: string }>(response);
 }
 
 export async function deleteAccount(formData: FormData): Promise<void> {
@@ -191,10 +183,7 @@ export async function deleteAccount(formData: FormData): Promise<void> {
     body: formData,
   });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to delete account');
-  }
+  await handleApiResponse<{ message: string }>(response);
 }
 
 // Custom hook for auth state

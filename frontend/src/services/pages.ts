@@ -1,4 +1,5 @@
 import { VITE_API_BASE_URL } from '@/services/constants';
+import { handleApiResponse } from '@/services/apiHelpers';
 import { getAuthHeadersWithContentType } from './auth/utils';
 
 export interface Page {
@@ -56,11 +57,7 @@ export async function getAllPages(page: number = 1, perPage: number = 20, isPubl
     headers: getAuthHeadersWithContentType(),
   });
 
-  if (!response.ok) {
-    throw new Error('Failed to fetch pages');
-  }
-
-  return response.json();
+  return handleApiResponse<PageListResponse>(response);
 }
 
 export async function getPage(id: string): Promise<Page> {
@@ -68,11 +65,7 @@ export async function getPage(id: string): Promise<Page> {
     headers: getAuthHeadersWithContentType(),
   });
 
-  if (!response.ok) {
-    throw new Error('Failed to fetch page');
-  }
-
-  return response.json();
+  return handleApiResponse<Page>(response);
 }
 
 export async function createPage(data: PageCreateRequest): Promise<Page> {
@@ -82,12 +75,7 @@ export async function createPage(data: PageCreateRequest): Promise<Page> {
     body: JSON.stringify(data),
   });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to create page');
-  }
-
-  return response.json();
+  return handleApiResponse<Page>(response);
 }
 
 export async function updatePage(id: string, data: PageUpdateRequest): Promise<Page> {
@@ -97,12 +85,7 @@ export async function updatePage(id: string, data: PageUpdateRequest): Promise<P
     body: JSON.stringify(data),
   });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to update page');
-  }
-
-  return response.json();
+  return handleApiResponse<Page>(response);
 }
 
 export async function deletePage(id: string): Promise<{ success: boolean }> {
@@ -111,11 +94,7 @@ export async function deletePage(id: string): Promise<{ success: boolean }> {
     headers: getAuthHeadersWithContentType(),
   });
 
-  if (!response.ok) {
-    throw new Error('Failed to delete page');
-  }
-
-  return response.json();
+  return handleApiResponse<{ success: boolean }>(response);
 }
 
 // Public page retrieval (for display on public pages)
@@ -130,7 +109,7 @@ export async function getPageBySlug(slug: string): Promise<Page | null> {
       throw new Error('Failed to fetch page');
     }
     
-    return response.json();
+    return handleApiResponse<Page>(response);
   } catch (error) {
     console.error(`Error fetching page by slug ${slug}:`, error);
     return null;

@@ -81,3 +81,20 @@ func SendPaginated(c *fiber.Ctx, data interface{}, meta PaginationMeta) error {
 	})
 }
 
+// Convenient aliases for cleaner code
+
+// Success is an alias for SendSuccess - sends a 200 OK response with data
+func Success(c *fiber.Ctx, data interface{}) error {
+	return SendSuccess(c, data)
+}
+
+// Created is an alias for SendCreated - sends a 201 Created response with data
+func Created(c *fiber.Ctx, data interface{}) error {
+	return SendCreated(c, data)
+}
+
+// Error is an alias for SendError - handles error responses with proper status codes
+func Error(c *fiber.Ctx, err error) error {
+	return SendError(c, err)
+}
+

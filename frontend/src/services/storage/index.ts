@@ -1,5 +1,6 @@
 import { VITE_API_BASE_URL } from "../constants";
 import { getAuthHeaders, getAuthHeadersWithContentType } from "../auth/utils";
+import { handleApiResponse } from "../apiHelpers";
 
 export type FileData = {
     key: string;
@@ -30,13 +31,7 @@ export async function listFiles(prefix: string | null): Promise<{ files: FileDat
         headers: getAuthHeaders(),
     });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        const errorMessage = JSON.parse(errorText);
-        console.log('Error message:', errorMessage.error);
-        throw new Error(errorMessage.error);
-    }
-    return response.json();
+    return handleApiResponse<{ files: FileData[], folders: FolderData[] }>(response);
 }
 
 export async function uploadFile(key: string, file: File) {
@@ -50,10 +45,7 @@ export async function uploadFile(key: string, file: File) {
         body: formData,
     });
 
-    if (!response.ok) {
-        throw new Error('Failed to upload file');
-    }
-    return response.json();
+    return handleApiResponse<any>(response);
 }
 
 export async function deleteFile(key: string) {
@@ -62,9 +54,7 @@ export async function deleteFile(key: string) {
         headers: getAuthHeaders(),
     });
 
-    if (!response.ok) {
-        throw new Error('Failed to delete file');
-    }
+    await handleApiResponse<{ success: boolean }>(response);
 }
 
 export async function createFolder(folderPath: string) {
@@ -74,9 +64,7 @@ export async function createFolder(folderPath: string) {
         body: JSON.stringify({ path: folderPath }),
     });
 
-    if (!response.ok) {
-        throw new Error('Failed to create folder');
-    }
+    await handleApiResponse<{ success: boolean }>(response);
 }
 
 export async function updateFolder(oldPath: string, newPath: string) {
@@ -86,8 +74,6 @@ export async function updateFolder(oldPath: string, newPath: string) {
         body: JSON.stringify({ oldPath, newPath }),
     });
 
-    if (!response.ok) {
-        throw new Error('Failed to update folder');
-    }
+    await handleApiResponse<{ success: boolean }>(response);
 }
 
