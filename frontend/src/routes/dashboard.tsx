@@ -36,9 +36,6 @@ export const Route = createFileRoute('/dashboard')({
 });
 
 function DashboardLayout() {
-  const location = useLocation();
-  const isRootDashboard = location.pathname === '/dashboard';
-
   return (
     <AdminDashboardProvider>
       <SidebarProvider
