@@ -19,6 +19,7 @@ import MarkdownIt from 'markdown-it';
 import { diffWords } from 'diff';
 import type { Editor as TiptapEditor } from '@tiptap/core';
 import { VITE_API_BASE_URL } from "@/services/constants";
+import { apiPost, isAuthError } from '@/services/authenticatedFetch';
 import '@/tiptap.css';
 
 import { Card } from "@/components/ui/card";
@@ -1160,9 +1161,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const performChatRequest = async (apiMessages: ChatMessage[], assistantIndex: number, isEditRequest: boolean, documentContent: string) => {
     setChatLoading(true);
     try {
-      const apiUrl = `${VITE_API_BASE_URL}/agent`;
-      console.log('API Base URL:', VITE_API_BASE_URL);
-      console.log('Full API URL:', apiUrl);
       console.log('Sending chat request:', { 
         messages: apiMessages.map(m => ({ role: m.role, content: m.content.substring(0, 100) + (m.content.length > 100 ? '...' : '') })),
         documentContent: documentContent ? `${documentContent.substring(0, 100)}...` : 'none',
@@ -1170,30 +1168,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       });
       
       // Submit the request and get immediate response with request ID
-      const resp = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          messages: apiMessages,
-          documentContent: documentContent,
-          articleId: article?.article?.id || null  // Include article ID for source search
-        }),
+      const result = await apiPost<{ requestId: string; status: string }>('/agent', {
+        messages: apiMessages,
+        documentContent: documentContent,
+        articleId: article?.article?.id || null  // Include article ID for source search
       });
 
-      console.log('Response status:', resp.status);
-      
-      if (!resp.ok) {
-        const errorText = await resp.text();
-        console.error('Response error:', errorText);
-        toast({ 
-          title: "Connection Error", 
-          description: `Failed to connect to writing assistant: ${resp.status} ${errorText}`,
-          variant: "destructive"
-        });
-        throw new Error(`HTTP ${resp.status}: ${errorText}`);
-      }
-
-      const result = await resp.json();
       console.log('Got request response:', result);
       
       if (!result.requestId) {
@@ -1210,11 +1190,23 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       setChatMessages((prev) => prev.slice(0, -1));
       
       // Show user-friendly error
-      if (err instanceof Error) {
+      if (isAuthError(err)) {
+        toast({ 
+          title: "Session Expired", 
+          description: "Your session has expired. Please log in again.",
+          variant: "destructive"
+        });
+      } else if (err instanceof Error) {
         if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
           toast({ 
             title: "Connection Error", 
-            description: "Cannot connect to the writing assistant. Make sure the backend server is running on http://localhost:8080",
+            description: "Cannot connect to the writing assistant. Make sure the backend server is running.",
+            variant: "destructive"
+          });
+        } else {
+          toast({ 
+            title: "Error", 
+            description: err.message || "An error occurred while processing your request.",
             variant: "destructive"
           });
         }
