@@ -1,6 +1,5 @@
 import { VITE_API_BASE_URL } from "../constants";
-import { getAuthHeaders, getAuthHeadersWithContentType } from "../auth/utils";
-import { handleApiResponse } from "../apiHelpers";
+import { apiGet, apiPost, apiPut, apiDelete, authenticatedFetch } from "../authenticatedFetch";
 
 export type FileData = {
     key: string;
@@ -19,19 +18,9 @@ export type FolderData = {
     fileCount: number;
 };
 
-declare const process: {
-    env: {
-        NEXT_PUBLIC_API_URL?: string;
-    };
-};
-
 export async function listFiles(prefix: string | null): Promise<{ files: FileData[], folders: FolderData[] }> {
-    const url = `${VITE_API_BASE_URL}/storage/files${prefix ? `?prefix=${encodeURIComponent(prefix)}` : ''}`;
-    const response = await fetch(url, {
-        headers: getAuthHeaders(),
-    });
-
-    return handleApiResponse<{ files: FileData[], folders: FolderData[] }>(response);
+    const url = `/storage/files${prefix ? `?prefix=${encodeURIComponent(prefix)}` : ''}`;
+    return apiGet<{ files: FileData[], folders: FolderData[] }>(url);
 }
 
 export async function uploadFile(key: string, file: File) {
@@ -39,41 +28,23 @@ export async function uploadFile(key: string, file: File) {
     formData.append('file', file);
     formData.append('key', key);
 
-    const response = await fetch(`${VITE_API_BASE_URL}/storage/upload`, {
+    // For FormData, we need to use authenticatedFetch directly without Content-Type
+    return authenticatedFetch<any>(`${VITE_API_BASE_URL}/storage/upload`, {
         method: 'POST',
-        headers: getAuthHeaders(),
         body: formData,
+        headers: {}, // Let browser set Content-Type with boundary for FormData
     });
-
-    return handleApiResponse<any>(response);
 }
 
 export async function deleteFile(key: string) {
-    const response = await fetch(`${VITE_API_BASE_URL}/storage/${encodeURIComponent(key)}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders(),
-    });
-
-    await handleApiResponse<{ success: boolean }>(response);
+    await apiDelete<{ success: boolean }>(`/storage/${encodeURIComponent(key)}`);
 }
 
 export async function createFolder(folderPath: string) {
-    const response = await fetch(`${VITE_API_BASE_URL}/storage/folders`, {
-        method: 'POST',
-        headers: getAuthHeadersWithContentType(),
-        body: JSON.stringify({ path: folderPath }),
-    });
-
-    await handleApiResponse<{ success: boolean }>(response);
+    await apiPost<{ success: boolean }>('/storage/folders', { path: folderPath });
 }
 
 export async function updateFolder(oldPath: string, newPath: string) {
-    const response = await fetch(`${VITE_API_BASE_URL}/storage/folders`, {
-        method: 'PUT',
-        headers: getAuthHeadersWithContentType(),
-        body: JSON.stringify({ oldPath, newPath }),
-    });
-
-    await handleApiResponse<{ success: boolean }>(response);
+    await apiPut<{ success: boolean }>('/storage/folders', { oldPath, newPath });
 }
 

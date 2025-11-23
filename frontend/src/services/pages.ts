@@ -1,6 +1,4 @@
-import { VITE_API_BASE_URL } from '@/services/constants';
-import { handleApiResponse } from '@/services/apiHelpers';
-import { getAuthHeadersWithContentType } from './auth/utils';
+import { apiGet, apiPost, apiPut, apiDelete } from '@/services/authenticatedFetch';
 
 export interface Page {
   id: string;
@@ -53,64 +51,34 @@ export async function getAllPages(page: number = 1, perPage: number = 20, isPubl
     params.append('isPublished', isPublished.toString());
   }
 
-  const response = await fetch(`${VITE_API_BASE_URL}/dashboard/pages?${params}`, {
-    headers: getAuthHeadersWithContentType(),
-  });
-
-  return handleApiResponse<PageListResponse>(response);
+  return apiGet<PageListResponse>(`/dashboard/pages?${params}`);
 }
 
 export async function getPage(id: string): Promise<Page> {
-  const response = await fetch(`${VITE_API_BASE_URL}/dashboard/pages/${id}`, {
-    headers: getAuthHeadersWithContentType(),
-  });
-
-  return handleApiResponse<Page>(response);
+  return apiGet<Page>(`/dashboard/pages/${id}`);
 }
 
 export async function createPage(data: PageCreateRequest): Promise<Page> {
-  const response = await fetch(`${VITE_API_BASE_URL}/dashboard/pages`, {
-    method: 'POST',
-    headers: getAuthHeadersWithContentType(),
-    body: JSON.stringify(data),
-  });
-
-  return handleApiResponse<Page>(response);
+  return apiPost<Page>('/dashboard/pages', data);
 }
 
 export async function updatePage(id: string, data: PageUpdateRequest): Promise<Page> {
-  const response = await fetch(`${VITE_API_BASE_URL}/dashboard/pages/${id}`, {
-    method: 'PUT',
-    headers: getAuthHeadersWithContentType(),
-    body: JSON.stringify(data),
-  });
-
-  return handleApiResponse<Page>(response);
+  return apiPut<Page>(`/dashboard/pages/${id}`, data);
 }
 
 export async function deletePage(id: string): Promise<{ success: boolean }> {
-  const response = await fetch(`${VITE_API_BASE_URL}/dashboard/pages/${id}`, {
-    method: 'DELETE',
-    headers: getAuthHeadersWithContentType(),
-  });
-
-  return handleApiResponse<{ success: boolean }>(response);
+  return apiDelete<{ success: boolean }>(`/dashboard/pages/${id}`);
 }
 
 // Public page retrieval (for display on public pages)
 export async function getPageBySlug(slug: string): Promise<Page | null> {
   try {
-    const response = await fetch(`${VITE_API_BASE_URL}/pages/${slug}`);
-    
-    if (!response.ok) {
-      if (response.status === 404) {
-        return null;
-      }
-      throw new Error('Failed to fetch page');
+    // Public endpoint - skip auth
+    return await apiGet<Page>(`/pages/${slug}`, { skipAuth: true });
+  } catch (error: any) {
+    if (error.status === 404) {
+      return null;
     }
-    
-    return handleApiResponse<Page>(response);
-  } catch (error) {
     console.error(`Error fetching page by slug ${slug}:`, error);
     return null;
   }

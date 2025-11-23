@@ -1,5 +1,4 @@
-import { VITE_API_BASE_URL } from './constants';
-import { handleApiResponse, getAuthHeaders } from './apiHelpers';
+import { apiGet } from './authenticatedFetch';
 import type { ChatMessage } from './artifacts';
 
 export interface ConversationHistory {
@@ -17,14 +16,9 @@ export async function getConversationHistory(
     limit: limit.toString(),
   });
 
-  const response = await fetch(
-    `${VITE_API_BASE_URL}/agent/conversations/${articleId}?${params}`,
-    {
-      headers: getAuthHeaders(),
-    }
+  return apiGet<ConversationHistory>(
+    `/agent/conversations/${articleId}?${params}`
   );
-
-  return handleApiResponse<ConversationHistory>(response);
 }
 
 // Get recent conversations (most recent messages across all articles)
