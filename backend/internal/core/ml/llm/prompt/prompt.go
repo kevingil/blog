@@ -13,14 +13,12 @@ import (
 func GetAgentPrompt(agentName config.AgentName, provider models.ModelProvider) string {
 	basePrompt := ""
 	switch agentName {
+	case config.AgentCopilot:
+		basePrompt = CopilotPrompt(provider)
 	case config.AgentWriter:
 		basePrompt = WriterPrompt(provider)
-	case config.AgentTitle:
-		basePrompt = TitlePrompt(provider)
-	case config.AgentSummarizer:
-		basePrompt = SummarizerPrompt(provider)
 	default:
-		basePrompt = WriterPrompt(provider) // Default to writer for blog agent
+		basePrompt = CopilotPrompt(provider)
 	}
 
 	return basePrompt

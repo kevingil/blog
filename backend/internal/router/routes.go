@@ -37,9 +37,20 @@ func RegisterRoutes(app *fiber.App, deps RouteDeps) {
 	// Agent - Conversation and artifact management (requires authentication)
 	agentGroup := app.Group("/agent", middleware.AuthMiddleware(deps.AuthService))
 	agentGroup.Get("/conversations/:articleId", controller.GetConversationHistoryHandler(deps.ChatService))
-	agentGroup.Get("/artifacts/:articleId/pending", controller.GetPendingArtifactsHandler(deps.ChatService))
-	agentGroup.Post("/artifacts/:messageId/accept", controller.AcceptArtifactHandler(deps.ChatService, deps.BlogService))
-	agentGroup.Post("/artifacts/:messageId/reject", controller.RejectArtifactHandler(deps.ChatService))
+	
+	// Artifact endpoints with chat service injection
+	agentGroup.Get("/artifacts/:articleId/pending", func(c *fiber.Ctx) error {
+		c.Locals("chatService", deps.ChatService)
+		return controller.GetPendingArtifacts()(c)
+	})
+	agentGroup.Post("/artifacts/:messageId/accept", func(c *fiber.Ctx) error {
+		c.Locals("chatService", deps.ChatService)
+		return controller.AcceptArtifact()(c)
+	})
+	agentGroup.Post("/artifacts/:messageId/reject", func(c *fiber.Ctx) error {
+		c.Locals("chatService", deps.ChatService)
+		return controller.RejectArtifact()(c)
+	})
 
 	// Pages - Public routes
 	pages := app.Group("/pages")

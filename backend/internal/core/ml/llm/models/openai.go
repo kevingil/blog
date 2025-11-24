@@ -16,6 +16,7 @@ const (
 	O3Mini       ModelID = "o3-mini"
 	O4Mini       ModelID = "o4-mini"
 	GPT5         ModelID = "gpt-5"
+	GPT51        ModelID = "gpt-5.1"
 )
 
 var OpenAIModels = map[ModelID]Model{
@@ -189,6 +190,20 @@ var OpenAIModels = map[ModelID]Model{
 		CostPer1MOutCached:  0.0,
 		CostPer1MOut:        20.00,
 		ContextWindow:       200_000,
+		DefaultMaxTokens:    8192,
+		CanReason:           true,
+		SupportsAttachments: true,
+	},
+	GPT51: {
+		ID:                  GPT51,
+		Name:                "GPT 5.1",
+		Provider:            ProviderOpenAI,
+		APIModel:            "gpt-5.1-2025-11-13",
+		CostPer1MIn:         1.25,
+		CostPer1MInCached:   0.125,
+		CostPer1MOutCached:  0.0,
+		CostPer1MOut:        10.00,
+		ContextWindow:       400_000,
 		DefaultMaxTokens:    8192,
 		CanReason:           true,
 		SupportsAttachments: true,

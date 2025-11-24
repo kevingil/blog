@@ -1,7 +1,7 @@
 import { ArticleListItem, ArticleData, RecommendedArticle  } from '@/services/types';
 import { GetArticlesResponse } from '@/routes/dashboard/blog/index';
 import { VITE_API_BASE_URL } from '@/services/constants';
-import { handleApiResponse } from '@/services/apiHelpers';
+import { apiGet, apiPost, apiPut, apiDelete, authenticatedFetch } from '@/services/authenticatedFetch';
 
 // Article listing and search
 export async function getArticles(
@@ -21,8 +21,8 @@ export async function getArticles(
     ...(sortOrder ? { sortOrder } : {})
   });
 
-  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles?${params}`);
-  const data: GetArticlesResponse = await handleApiResponse<GetArticlesResponse>(response);
+  // Public endpoint - skip auth
+  const data = await apiGet<GetArticlesResponse>(`/blog/articles?${params}`, { skipAuth: true });
   
   // Debug: Log API response
   console.log('articlesPayload API response:', {
@@ -56,8 +56,8 @@ export async function searchArticles(
     ...(sortOrder ? { sortOrder } : {})
   });
 
-  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/search?${params}`);
-  const data: GetArticlesResponse = await handleApiResponse<GetArticlesResponse>(response);
+  // Public endpoint - skip auth
+  const data = await apiGet<GetArticlesResponse>(`/blog/articles/search?${params}`, { skipAuth: true });
   
   return {
     articles: data.articles,
@@ -67,25 +67,33 @@ export async function searchArticles(
 }
 
 export async function getPopularTags(): Promise<{ tags: string[] }> {
-  const response = await fetch(`${VITE_API_BASE_URL}/blog/tags/popular`);
-  return handleApiResponse<{ tags: string[] }>(response);
+  // Public endpoint - skip auth
+  return apiGet<{ tags: string[] }>('/blog/tags/popular', { skipAuth: true });
 }
 
 // Article CRUD operations
 export async function getArticle(slug: string): Promise<ArticleListItem | null> {
-  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${slug}`);
-  if (response.status === 404) {
-    return null;
+  try {
+    // Public endpoint - skip auth
+    return await apiGet<ArticleListItem>(`/blog/articles/${slug}`, { skipAuth: true });
+  } catch (error: any) {
+    if (error.status === 404) {
+      return null;
+    }
+    throw error;
   }
-  return handleApiResponse<ArticleListItem>(response);
 }
 
 export async function getArticleById(blogId: string): Promise<ArticleListItem | null> {
-  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${blogId}`);
-  if (response.status === 404) {
-    return null;
+  try {
+    // Public endpoint - skip auth
+    return await apiGet<ArticleListItem>(`/blog/articles/${blogId}`, { skipAuth: true });
+  } catch (error: any) {
+    if (error.status === 404) {
+      return null;
+    }
+    throw error;
   }
-  return handleApiResponse<ArticleListItem>(response);
 }
 
 export async function createArticle(article: {
@@ -96,14 +104,8 @@ export async function createArticle(article: {
   isDraft: boolean;
   authorId: number;
 }): Promise<ArticleListItem> {
-  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(article),
-  });
-  return handleApiResponse<ArticleListItem>(response);
+  // Protected endpoint - requires auth
+  return apiPost<ArticleListItem>('/blog/articles', article);
 }
 
 export async function updateArticle(slug: string, article: {
@@ -114,30 +116,18 @@ export async function updateArticle(slug: string, article: {
   is_draft: boolean;
   published_at: number | null;
 }): Promise<ArticleListItem> {
-  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${slug}/update`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(article),
-  });
-  return handleApiResponse<ArticleListItem>(response);
+  // Protected endpoint - requires auth
+  return apiPost<ArticleListItem>(`/blog/articles/${slug}/update`, article);
 }
 
 // Article image operations
 export async function generateArticleImage(prompt: string, articleId: string): Promise<{ success: boolean; generationRequestId: string }> {
-  const response = await fetch(`${VITE_API_BASE_URL}/images/generate`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ 
-      prompt,
-      article_id: articleId,
-      generate_prompt: false
-    }),
+  // Protected endpoint - requires auth
+  const result = await apiPost<{ request_id: string }>('/images/generate', {
+    prompt,
+    article_id: articleId,
+    generate_prompt: false
   });
-  const result = await handleApiResponse<{ request_id: string }>(response);
   return { 
     success: true, 
     generationRequestId: result.request_id
@@ -145,16 +135,16 @@ export async function generateArticleImage(prompt: string, articleId: string): P
 }
 
 export async function getImageGeneration(requestId: string): Promise<{ outputUrl: string | null }> {
-  const response = await fetch(`${VITE_API_BASE_URL}/images/${requestId}`);
-  const result = await handleApiResponse<{ output_url?: string }>(response);
+  // Protected endpoint - requires auth
+  const result = await apiGet<{ output_url?: string }>(`/images/${requestId}`);
   return {
     outputUrl: result.output_url || null
   };
 }
 
 export async function getImageGenerationStatus(requestId: string): Promise<{ outputUrl: string | null }> {
-  const response = await fetch(`${VITE_API_BASE_URL}/images/${requestId}/status`);
-  const result = await handleApiResponse<{ output_url?: string; outputUrl?: string }>(response);
+  // Protected endpoint - requires auth
+  const result = await apiGet<{ output_url?: string; outputUrl?: string }>(`/images/${requestId}/status`);
   return {
     outputUrl: result.output_url || result.outputUrl || null
   };
@@ -162,28 +152,28 @@ export async function getImageGenerationStatus(requestId: string): Promise<{ out
 
 // Article context operations
 export async function updateArticleWithContext(articleId: string): Promise<{ content: string; success: boolean }> {
-  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${articleId}/context`, {
-    method: 'PUT',
-  });
-  return handleApiResponse<{ content: string; success: boolean }>(response);
+  // Protected endpoint - requires auth
+  return apiPut<{ content: string; success: boolean }>(`/blog/articles/${articleId}/context`);
 }
 
 export async function getArticleData(slug: string): Promise<ArticleData | null> {
-  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${slug}`);
-  if (response.status === 404) {
-    return null;
+  try {
+    // Public endpoint - skip auth
+    return await apiGet<ArticleData>(`/blog/articles/${slug}`, { skipAuth: true });
+  } catch (error: any) {
+    if (error.status === 404) {
+      return null;
+    }
+    throw error;
   }
-  return handleApiResponse<ArticleData>(response);
 }
 
 export async function getRecommendedArticles(currentArticleId: number): Promise<RecommendedArticle[] | null> {
-  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${currentArticleId}/recommended`);
-  return handleApiResponse<RecommendedArticle[]>(response);
+  // Public endpoint - skip auth
+  return apiGet<RecommendedArticle[]>(`/blog/articles/${currentArticleId}/recommended`, { skipAuth: true });
 }
 
 export async function deleteArticle(id: string): Promise<{ success: boolean }> {
-  const response = await fetch(`${VITE_API_BASE_URL}/blog/articles/${id}`, {
-    method: 'DELETE',
-  });
-  return handleApiResponse<{ success: boolean }>(response);
+  // Protected endpoint - requires auth
+  return apiDelete<{ success: boolean }>(`/blog/articles/${id}`);
 }

@@ -2,12 +2,11 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"strings"
 	"sync"
-	"time"
 
 	"blog-agent-go/backend/internal/core/ml/llm/config"
 	"blog-agent-go/backend/internal/core/ml/llm/logging"
@@ -28,10 +27,11 @@ var (
 type AgentEventType string
 
 const (
-	AgentEventTypeError     AgentEventType = "error"
-	AgentEventTypeResponse  AgentEventType = "response"
-	AgentEventTypeTool      AgentEventType = "tool"
-	AgentEventTypeSummarize AgentEventType = "summarize"
+	AgentEventTypeError        AgentEventType = "error"
+	AgentEventTypeResponse     AgentEventType = "response"
+	AgentEventTypeTool         AgentEventType = "tool"
+	AgentEventTypeThinking     AgentEventType = "thinking"
+	AgentEventTypeContentDelta AgentEventType = "content_delta"
 )
 
 type AgentEvent struct {
@@ -43,6 +43,13 @@ type AgentEvent struct {
 	SessionID string
 	Progress  string
 	Done      bool
+
+	// When thinking
+	ThinkingMessage string
+	Iteration       int
+
+	// When streaming content
+	ContentDelta string
 }
 
 type Service interface {
@@ -52,7 +59,6 @@ type Service interface {
 	IsSessionBusy(sessionID string) bool
 	IsBusy() bool
 	Update(agentName config.AgentName, modelID models.ModelID) (models.Model, error)
-	Summarize(ctx context.Context, sessionID string) error
 }
 
 type agent struct {
@@ -61,9 +67,6 @@ type agent struct {
 
 	tools    []tools.BaseTool
 	provider provider.Provider
-
-	titleProvider     provider.Provider
-	summarizeProvider provider.Provider
 
 	activeRequests sync.Map
 }
@@ -78,30 +81,13 @@ func NewAgent(
 	if err != nil {
 		return nil, err
 	}
-	var titleProvider provider.Provider
-	// Only generate titles for the coder agent
-	if agentName == config.AgentCoder {
-		titleProvider, err = createAgentProvider(config.AgentTitle)
-		if err != nil {
-			return nil, err
-		}
-	}
-	var summarizeProvider provider.Provider
-	if agentName == config.AgentCoder {
-		summarizeProvider, err = createAgentProvider(config.AgentSummarizer)
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	agent := &agent{
-		provider:          agentProvider,
-		messages:          messages,
-		sessions:          sessions,
-		tools:             agentTools,
-		titleProvider:     titleProvider,
-		summarizeProvider: summarizeProvider,
-		activeRequests:    sync.Map{},
+		provider:       agentProvider,
+		messages:       messages,
+		sessions:       sessions,
+		tools:          agentTools,
+		activeRequests: sync.Map{},
 	}
 
 	return agent, nil
@@ -116,14 +102,6 @@ func (a *agent) Cancel(sessionID string) {
 	if cancelFunc, exists := a.activeRequests.LoadAndDelete(sessionID); exists {
 		if cancel, ok := cancelFunc.(context.CancelFunc); ok {
 			logging.InfoPersist(fmt.Sprintf("Request cancellation initiated for session: %s", sessionID))
-			cancel()
-		}
-	}
-
-	// Also check for summarize requests
-	if cancelFunc, exists := a.activeRequests.LoadAndDelete(sessionID + "-summarize"); exists {
-		if cancel, ok := cancelFunc.(context.CancelFunc); ok {
-			logging.InfoPersist(fmt.Sprintf("Summarize cancellation initiated for session: %s", sessionID))
 			cancel()
 		}
 	}
@@ -146,43 +124,6 @@ func (a *agent) IsBusy() bool {
 func (a *agent) IsSessionBusy(sessionID string) bool {
 	_, busy := a.activeRequests.Load(sessionID)
 	return busy
-}
-
-func (a *agent) generateTitle(ctx context.Context, sessionID string, content string) error {
-	if content == "" {
-		return nil
-	}
-	if a.titleProvider == nil {
-		return nil
-	}
-	session, err := a.sessions.Get(ctx, sessionID)
-	if err != nil {
-		return err
-	}
-	ctx = context.WithValue(ctx, tools.SessionIDContextKey, sessionID)
-	parts := []message.ContentPart{message.TextContent{Text: content}}
-	response, err := a.titleProvider.SendMessages(
-		ctx,
-		[]message.Message{
-			{
-				Role:  message.User,
-				Parts: parts,
-			},
-		},
-		make([]tools.BaseTool, 0),
-	)
-	if err != nil {
-		return err
-	}
-
-	title := strings.TrimSpace(strings.ReplaceAll(response.Content, "\n", " "))
-	if title == "" {
-		return nil
-	}
-
-	session.Title = title
-	_, err = a.sessions.Save(ctx, session)
-	return err
 }
 
 func (a *agent) err(err error) AgentEvent {
@@ -227,86 +168,6 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 	return events, nil
 }
 
-func (a *agent) processGeneration(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart) AgentEvent {
-	cfg := config.Get()
-	// List existing messages; if none, start title generation asynchronously.
-	msgs, err := a.messages.List(ctx, sessionID)
-	if err != nil {
-		return a.err(fmt.Errorf("failed to list messages: %w", err))
-	}
-	if len(msgs) == 0 {
-		go func() {
-			defer logging.RecoverPanic("agent.Run", func() {
-				logging.ErrorPersist("panic while generating title")
-			})
-			titleErr := a.generateTitle(context.Background(), sessionID, content)
-			if titleErr != nil {
-				logging.ErrorPersist(fmt.Sprintf("failed to generate title: %v", titleErr))
-			}
-		}()
-	}
-	session, err := a.sessions.Get(ctx, sessionID)
-	if err != nil {
-		return a.err(fmt.Errorf("failed to get session: %w", err))
-	}
-	if session.SummaryMessageID != "" {
-		summaryMsgInex := -1
-		for i, msg := range msgs {
-			if msg.ID == session.SummaryMessageID {
-				summaryMsgInex = i
-				break
-			}
-		}
-		if summaryMsgInex != -1 {
-			msgs = msgs[summaryMsgInex:]
-			msgs[0].Role = message.User
-		}
-	}
-
-	userMsg, err := a.createUserMessage(ctx, sessionID, content, attachmentParts)
-	if err != nil {
-		return a.err(fmt.Errorf("failed to create user message: %w", err))
-	}
-	// Append the new user message to the conversation history.
-	msgHistory := append(msgs, userMsg)
-
-	for {
-		// Check for cancellation before each iteration
-		select {
-		case <-ctx.Done():
-			return a.err(ctx.Err())
-		default:
-			// Continue processing
-		}
-		agentMessage, toolResults, err := a.streamAndHandleEvents(ctx, sessionID, msgHistory)
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				agentMessage.AddFinish(message.FinishReasonCanceled)
-				a.messages.Update(context.Background(), agentMessage)
-				return a.err(ErrRequestCancelled)
-			}
-			return a.err(fmt.Errorf("failed to process events: %w", err))
-		}
-		if cfg.Debug {
-			seqId := (len(msgHistory) + 1) / 2
-			toolResultFilepath := logging.WriteToolResultsJson(sessionID, seqId, toolResults)
-			logging.Info("Result", "message", agentMessage.FinishReason(), "toolResults", "{}", "filepath", toolResultFilepath)
-		} else {
-			logging.Info("Result", "message", agentMessage.FinishReason(), "toolResults", toolResults)
-		}
-		if (agentMessage.FinishReason() == message.FinishReasonToolUse) && toolResults != nil {
-			// We are not done, we need to respond with the tool response
-			msgHistory = append(msgHistory, agentMessage, *toolResults)
-			continue
-		}
-		return AgentEvent{
-			Type:    AgentEventTypeResponse,
-			Message: agentMessage,
-			Done:    true,
-		}
-	}
-}
-
 func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart, events chan<- AgentEvent) AgentEvent {
 	cfg := config.Get()
 
@@ -315,15 +176,7 @@ func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, cont
 	if err != nil {
 		return a.err(fmt.Errorf("failed to list messages: %w", err))
 	}
-	if len(msgs) == 0 {
-		go func() {
-			titleCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			if a.titleProvider != nil {
-				_ = a.generateTitle(titleCtx, sessionID, content)
-			}
-		}()
-	}
+	// Removed automatic title generation - copilot agent doesn't need this
 
 	userMsg, err := a.createUserMessage(ctx, sessionID, content, attachmentParts)
 	if err != nil {
@@ -332,6 +185,7 @@ func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, cont
 
 	msgHistory := append(msgs, userMsg)
 
+	iteration := 0
 	for {
 		// Check for cancellation before each iteration
 		select {
@@ -340,7 +194,18 @@ func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, cont
 		default:
 			// Continue processing
 		}
-		agentMessage, toolResults, err := a.streamAndHandleEvents(ctx, sessionID, msgHistory)
+
+		// Emit thinking event at the start of each iteration
+		iteration++
+		thinkingEvent := AgentEvent{
+			Type:            AgentEventTypeThinking,
+			ThinkingMessage: "Thinking...",
+			Iteration:       iteration,
+			Done:            false,
+		}
+		events <- thinkingEvent
+
+		agentMessage, toolResults, err := a.streamAndHandleEvents(ctx, sessionID, msgHistory, events)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				agentMessage.AddFinish(message.FinishReasonCanceled)
@@ -399,7 +264,10 @@ func (a *agent) createUserMessage(ctx context.Context, sessionID, content string
 	})
 }
 
-func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msgHistory []message.Message) (message.Message, *message.Message, error) {
+func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msgHistory []message.Message, events chan<- AgentEvent) (message.Message, *message.Message, error) {
+	// Log the complete context being sent to the LLM
+	a.logRequestContext(sessionID, msgHistory)
+
 	// Preserve any existing context values (like article ID) and add session ID
 	ctx = context.WithValue(ctx, tools.SessionIDContextKey, sessionID)
 	eventChan := a.provider.StreamResponse(ctx, msgHistory, a.tools)
@@ -418,7 +286,7 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 
 	// Process each event in the stream.
 	for event := range eventChan {
-		if processErr := a.processEvent(ctx, sessionID, &assistantMsg, event); processErr != nil {
+		if processErr := a.processEvent(ctx, sessionID, &assistantMsg, event, events); processErr != nil {
 			a.finishMessage(ctx, &assistantMsg, message.FinishReasonCanceled)
 			return assistantMsg, nil, processErr
 		}
@@ -513,7 +381,7 @@ func (a *agent) finishMessage(ctx context.Context, msg *message.Message, finishR
 	_ = a.messages.Update(ctx, *msg)
 }
 
-func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg *message.Message, event provider.ProviderEvent) error {
+func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg *message.Message, event provider.ProviderEvent, events chan<- AgentEvent) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -527,9 +395,16 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 		assistantMsg.AppendReasoningContent(event.Content)
 		return a.messages.Update(ctx, *assistantMsg)
 	case provider.EventContentDelta:
-		logging.Info("[STREAM] Content delta", "content", event.Content)
+		//logging.Info("[STREAM] Content delta", "content", event.Content)
 		assistantMsg.AppendContent(event.Content)
-		return a.messages.Update(ctx, *assistantMsg)
+		a.messages.Update(ctx, *assistantMsg)
+
+		// Emit content delta event for real-time streaming
+		events <- AgentEvent{
+			Type:         AgentEventTypeContentDelta,
+			ContentDelta: event.Content,
+		}
+		return nil
 	case provider.EventContentStart:
 		logging.Info("[STREAM] Content block started")
 	case provider.EventToolUseStart:
@@ -612,110 +487,117 @@ func (a *agent) Update(agentName config.AgentName, modelID models.ModelID) (mode
 	return a.provider.Model(), nil
 }
 
-func (a *agent) Summarize(ctx context.Context, sessionID string) error {
-	if a.summarizeProvider == nil {
-		return fmt.Errorf("summarize provider not available")
+// logRequestContext logs the complete context being sent to the LLM for debugging
+func (a *agent) logRequestContext(sessionID string, msgHistory []message.Message) {
+	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	log.Printf("🤖 [AGENT REQUEST CONTEXT] Session: %s", sessionID)
+	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+	// Log system prompt
+	systemPrompt := a.getSystemPrompt()
+	log.Printf("\n📋 SYSTEM PROMPT:")
+	log.Printf("────────────────────────────────────────────────────────────")
+	log.Printf("%s", systemPrompt)
+	log.Printf("────────────────────────────────────────────────────────────\n")
+
+	// Log message history
+	log.Printf("💬 MESSAGE HISTORY (%d messages):", len(msgHistory))
+	log.Printf("────────────────────────────────────────────────────────────")
+
+	for i, msg := range msgHistory {
+		roleStr := string(msg.Role)
+		content := msg.Content().String()
+
+		// Truncate very long content for readability
+		preview := content
+		if len(preview) > 200 {
+			preview = preview[:200] + "..."
+		}
+
+		log.Printf("\n[%d] %s:", i+1, roleStr)
+		log.Printf("    Content: %s", preview)
+
+		// Log tool calls if present
+		toolCalls := msg.ToolCalls()
+		if len(toolCalls) > 0 {
+			log.Printf("    Tool Calls:")
+			for _, tc := range toolCalls {
+				log.Printf("      - %s (ID: %s)", tc.Name, tc.ID)
+			}
+		}
+
+		// Log tool results if present
+		toolResults := msg.ToolResults()
+		if len(toolResults) > 0 {
+			log.Printf("    Tool Results:")
+			for _, tr := range toolResults {
+				log.Printf("      - %s: %s", tr.ToolCallID, tr.Content[:min(100, len(tr.Content))])
+
+				// Try to extract artifact info from tool result
+				if !tr.IsError && len(tr.Content) > 0 && tr.Content[0] == '{' {
+					var resultData map[string]interface{}
+					if err := json.Unmarshal([]byte(tr.Content), &resultData); err == nil {
+						if toolName, ok := resultData["tool_name"].(string); ok {
+							log.Printf("        Tool: %s", toolName)
+
+							// Log artifact state if this is an edit/rewrite tool
+							if toolName == "edit_text" || toolName == "rewrite_document" {
+								log.Printf("        ✏️  ARTIFACT DETECTED:")
+								if reason, ok := resultData["reason"].(string); ok {
+									log.Printf("          Reason: %s", reason)
+								}
+								if toolName == "edit_text" {
+									if editType, ok := resultData["edit_type"].(string); ok {
+										log.Printf("          Edit Type: %s", editType)
+									}
+								}
+							}
+
+							// Log search results if this is a search tool
+							if toolName == "search_web_sources" {
+								log.Printf("        🔍 SEARCH RESULTS:")
+								if totalFound, ok := resultData["total_found"].(float64); ok {
+									log.Printf("          Total Found: %.0f", totalFound)
+								}
+								if sourcesCreated, ok := resultData["sources_successful"].(float64); ok {
+									log.Printf("          Sources Created: %.0f", sourcesCreated)
+								}
+								if query, ok := resultData["query"].(string); ok {
+									log.Printf("          Query: %s", query)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 
-	// Check if session is busy
-	if a.IsSessionBusy(sessionID) {
-		log.Println("Session is busy")
-		return ErrSessionBusy
+	log.Printf("\n────────────────────────────────────────────────────────────")
+	log.Printf("📊 Total tokens being sent: ~%d (estimated)", a.estimateTokens(msgHistory))
+	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+}
+
+// getSystemPrompt returns the system prompt from the provider
+func (a *agent) getSystemPrompt() string {
+	return a.provider.GetSystemMessage()
+}
+
+// estimateTokens provides a rough token estimate for logging
+func (a *agent) estimateTokens(msgs []message.Message) int {
+	total := 0
+	for _, msg := range msgs {
+		// Rough estimate: 1 token per 4 characters
+		total += len(msg.Content().String()) / 4
 	}
+	return total
+}
 
-	// Create a new context with cancellation
-	summarizeCtx, cancel := context.WithCancel(ctx)
-
-	// Store the cancel function in activeRequests to allow cancellation
-	a.activeRequests.Store(sessionID+"-summarize", cancel)
-
-	go func() {
-		defer a.activeRequests.Delete(sessionID + "-summarize")
-		defer cancel()
-
-		// Get all messages from the session
-		msgs, err := a.messages.List(summarizeCtx, sessionID)
-		if err != nil {
-			log.Println("Failed to list messages:", err)
-			return
-		}
-		summarizeCtx = context.WithValue(summarizeCtx, tools.SessionIDContextKey, sessionID)
-
-		if len(msgs) == 0 {
-			log.Println("No messages to summarize")
-			return
-		}
-
-		// Add a system message to guide the summarization
-		summarizePrompt := "Provide a detailed but concise summary of our conversation above. Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next."
-
-		// Create a new message with the summarize prompt
-		promptMsg := message.Message{
-			Role:  message.User,
-			Parts: []message.ContentPart{message.TextContent{Text: summarizePrompt}},
-		}
-
-		// Append the prompt to the messages
-		msgsWithPrompt := append(msgs, promptMsg)
-
-		// Send the messages to the summarize provider
-		response, err := a.summarizeProvider.SendMessages(
-			summarizeCtx,
-			msgsWithPrompt,
-			make([]tools.BaseTool, 0),
-		)
-		if err != nil {
-			log.Println("Failed to create summary message:", err)
-			return
-		}
-
-		summary := strings.TrimSpace(response.Content)
-		if summary == "" {
-
-			return
-		}
-
-		oldSession, err := a.sessions.Get(summarizeCtx, sessionID)
-		if err != nil {
-			log.Println("Failed to get session:", err)
-			return
-		}
-		// Create a message in the new session with the summary
-		msg, err := a.messages.Create(summarizeCtx, oldSession.ID, message.CreateMessageParams{
-			Role: message.Assistant,
-			Parts: []message.ContentPart{
-				message.TextContent{Text: summary},
-				message.Finish{
-					Reason: message.FinishReasonEndTurn,
-					Time:   time.Now().Unix(),
-				},
-			},
-			Model: string(a.summarizeProvider.Model().ID),
-		})
-		if err != nil {
-			log.Println("Failed to create summary message:", err)
-			return
-		}
-		oldSession.SummaryMessageID = msg.ID
-		oldSession.CompletionTokens = response.Usage.OutputTokens
-		oldSession.PromptTokens = 0
-		model := a.summarizeProvider.Model()
-		usage := response.Usage
-		cost := model.CostPer1MInCached/1e6*float64(usage.CacheCreationTokens) +
-			model.CostPer1MOutCached/1e6*float64(usage.CacheReadTokens) +
-			model.CostPer1MIn/1e6*float64(usage.InputTokens) +
-			model.CostPer1MOut/1e6*float64(usage.OutputTokens)
-		oldSession.Cost += cost
-		_, err = a.sessions.Save(summarizeCtx, oldSession)
-		if err != nil {
-			log.Println("Failed to save session:", err)
-		}
-
-		// Summary complete
-		log.Println("Summary complete")
-	}()
-
-	return nil
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func createAgentProvider(agentName config.AgentName) (provider.Provider, error) {
@@ -753,7 +635,7 @@ func createAgentProvider(agentName config.AgentName) (provider.Provider, error) 
 				provider.WithReasoningEffort(fmt.Sprintf("%d", agentConfig.ReasoningEffort)),
 			),
 		)
-	} else if model.Provider == models.ProviderAnthropic && model.CanReason && agentName == config.AgentCoder {
+	} else if model.Provider == models.ProviderAnthropic && model.CanReason {
 		opts = append(
 			opts,
 			provider.WithAnthropicOptions(

@@ -7,7 +7,6 @@ import * as z from 'zod';
 import { format } from "date-fns"
 import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo, ChevronDown as ChevronDownIcon, ChevronUp as ChevronUpIcon } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
-import { IconLoader2 } from '@tabler/icons-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -19,6 +18,7 @@ import MarkdownIt from 'markdown-it';
 import { diffWords } from 'diff';
 import type { Editor as TiptapEditor } from '@tiptap/core';
 import { VITE_API_BASE_URL } from "@/services/constants";
+import { apiPost, isAuthError } from '@/services/authenticatedFetch';
 import '@/tiptap.css';
 
 import { Card } from "@/components/ui/card";
@@ -33,6 +33,10 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { useToast } from "@/hooks/use-toast";
+import { ThinkShimmerBlock } from "@/components/ui/think-shimmer";
+import { getConversationHistory } from "@/services/conversations";
+import { acceptArtifact, rejectArtifact } from "@/services/artifacts";
+import { WebSearchSteps } from "./WebSearchSteps";
 import { cn } from '@/lib/utils';
 import { 
   updateArticle, 
@@ -65,7 +69,6 @@ function getToolDisplayName(toolName: string): string {
     'write_file': 'Writing file',
     'calculate': 'Calculating',
     'translate': 'Translating',
-    'summarize': 'Summarizing',
     'research': 'Researching'
   };
   
@@ -111,7 +114,29 @@ const articleSchema = z.object({
 
 type ArticleFormData = z.infer<typeof articleSchema>;
 
+type SearchResult = {
+  title: string;
+  url: string;
+  summary?: string;
+  author?: string;
+  published_date?: string;
+  favicon?: string;
+  highlights?: string[];
+  text_preview?: string;
+  has_full_text?: boolean;
+};
+
+type SourceInfo = {
+  source_id: string;
+  original_title: string;
+  original_url: string;
+  content_length: number;
+  source_type?: string;
+  search_query?: string;
+};
+
 type ChatMessage = {
+  id?: string;
   role: 'user' | 'assistant' | 'tool';
   content: string;
   diffState?: 'accepted' | 'rejected';
@@ -120,6 +145,34 @@ type ChatMessage = {
     newText: string;
     reason?: string;
   };
+  meta_data?: {
+    artifact?: {
+      id: string;
+      type: string;
+      status: string;
+      content: string;
+      diff_preview?: string;
+      title?: string;
+      description?: string;
+      applied_at?: string;
+    };
+    task_status?: any;
+    tool_execution?: any;
+    context?: any;
+    user_action?: any;
+  };
+  tool_context?: {
+    tool_name: string;
+    tool_id: string;
+    status: 'starting' | 'running' | 'completed' | 'error';
+    search_query?: string;
+    search_results?: SearchResult[];
+    sources_created?: SourceInfo[];
+    total_found?: number;
+    sources_successful?: number;
+    message?: string;
+  };
+  created_at?: string;
 };
 
 // === TipTap Diff Extension ================================================
@@ -605,11 +658,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   /* --------------------------------------------------------------------- */
   /* Chat (right-hand panel)                                               */
   /* --------------------------------------------------------------------- */
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { role: 'assistant', content: 'Hi! I can help you improve your article. Try asking me to "rewrite the introduction" or "make the content more engaging".' },
-  ]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatInput, setChatInput] = useState('');
+  const [isThinking, setIsThinking] = useState(false);
+  const [thinkingMessage, setThinkingMessage] = useState<string>('Thinking...');
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const chatMessagesRef = useRef<HTMLDivElement>(null);
   
@@ -920,6 +973,88 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   }, [article, isNew, reset]);
 
+  // Load conversation history with artifacts when article is loaded
+  useEffect(() => {
+    if (article?.article?.id && !isNew) {
+      console.log('[Editor] 🔄 Loading conversation history for article:', article.article.id);
+      
+      const loadConversations = async () => {
+        try {
+          const result = await getConversationHistory(article.article.id);
+          console.log('[Editor] 📦 API response:', result);
+          console.log('[Editor] 📊 Message count from API:', result.messages?.length || 0);
+          
+          // Backend now handles initial greeting, so always use what it returns
+          if (!result.messages || result.messages.length === 0) {
+            console.log('[Editor] ⚠️  No messages in API response');
+            setChatMessages([]);
+            return;
+          }
+          
+          // Convert database messages to chat messages with artifact metadata and tool_context
+          const loadedMessages = result.messages.map((msg: any, idx: number) => {
+            console.log(`[Editor] 🔄 Transforming message ${idx + 1}:`, {
+              id: msg.id,
+              role: msg.role,
+              contentPreview: msg.content?.substring(0, 50),
+              hasMetadata: !!msg.meta_data,
+              hasArtifact: !!msg.meta_data?.artifact,
+              hasToolExecution: !!msg.meta_data?.tool_execution
+            });
+            
+            const chatMsg: ChatMessage = {
+              id: msg.id,
+              role: msg.role,
+              content: msg.content,
+              meta_data: msg.meta_data,
+              created_at: msg.created_at,
+            };
+            
+            // Reconstruct tool_context from metadata for search tools
+            if (msg.meta_data?.tool_execution?.tool_name === 'search_web_sources') {
+              const output = msg.meta_data.tool_execution.output;
+              console.log(`[Editor]    🔍 Reconstructing search tool_context from metadata`);
+              chatMsg.tool_context = {
+                tool_name: 'search_web_sources',
+                tool_id: msg.meta_data.tool_execution.tool_id || '',
+                status: 'completed',
+                search_query: output?.query || '',
+                search_results: output?.search_results || [],
+                sources_created: output?.sources_created || [],
+                total_found: output?.total_found || 0,
+                sources_successful: output?.sources_successful || 0,
+                message: output?.message
+              };
+            }
+            
+            return chatMsg;
+          }) as ChatMessage[];
+          
+          console.log('[Editor] ✅ Transformed', loadedMessages.length, 'messages');
+          console.log('[Editor] 📋 Transformed messages:', loadedMessages);
+          console.log('[Editor] 🎯 Setting chatMessages state...');
+          
+          setChatMessages(loadedMessages);
+          
+          // Force a small delay to ensure state update completes
+          setTimeout(() => {
+            console.log('[Editor] ✅ chatMessages state should be updated now');
+          }, 100);
+          
+        } catch (error) {
+          console.error('[Editor] ❌ Failed to load conversation history:', error);
+          // Don't show greeting on error - backend handles it
+          setChatMessages([]);
+        }
+      };
+      
+      loadConversations();
+    } else if (isNew) {
+      console.log('[Editor] 📝 New article - no messages to load');
+      setChatMessages([]);
+    }
+  }, [article?.article?.id, isNew]);
+
   // Debug: Log current form values
   useEffect(() => {
     console.log("Current form values:", watchedValues);
@@ -927,6 +1062,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
   // Auto-scroll chat to bottom when messages change
   useEffect(() => {
+    console.log('[Editor] 🔔 chatMessages state changed!');
+    console.log('[Editor]    Count:', chatMessages.length);
+    console.log('[Editor]    Messages:', chatMessages);
     if (chatMessagesRef.current) {
       chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
     }
@@ -1133,13 +1271,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     const assistantIndex = baseMessages.length;
     setChatMessages((prev) => [...prev, { role: 'assistant', content: '' } as ChatMessage]);
 
-    // Create messages for API - only send user messages, not assistant responses
-    // This prevents the backend from streaming back previous assistant messages as context
-    const userMessages = chatMessages.filter(msg => msg.role === 'user');
-    const apiMessages = [...userMessages, { role: 'user', content: text } as ChatMessage];
-
-    // Rest of the chat logic...
-    await performChatRequest(apiMessages, assistantIndex, isEditRequest, currentContent);
+    // Send only the new message text - backend will load context from database
+    await performChatRequest(text, assistantIndex, isEditRequest, currentContent);
   };
 
   const sendChat = async () => {
@@ -1157,43 +1290,26 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     await sendChatWithMessage(text);
   };
 
-  const performChatRequest = async (apiMessages: ChatMessage[], assistantIndex: number, isEditRequest: boolean, documentContent: string) => {
+  const performChatRequest = async (messageText: string, assistantIndex: number, isEditRequest: boolean, documentContent: string) => {
     setChatLoading(true);
     try {
-      const apiUrl = `${VITE_API_BASE_URL}/agent`;
-      console.log('API Base URL:', VITE_API_BASE_URL);
-      console.log('Full API URL:', apiUrl);
-      console.log('Sending chat request:', { 
-        messages: apiMessages.map(m => ({ role: m.role, content: m.content.substring(0, 100) + (m.content.length > 100 ? '...' : '') })),
-        documentContent: documentContent ? `${documentContent.substring(0, 100)}...` : 'none',
-        articleId: article?.article?.id || 'not available'
-      });
-      
-      // Submit the request and get immediate response with request ID
-      const resp = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          messages: apiMessages,
-          documentContent: documentContent,
-          articleId: article?.article?.id || null  // Include article ID for source search
-        }),
-      });
-
-      console.log('Response status:', resp.status);
-      
-      if (!resp.ok) {
-        const errorText = await resp.text();
-        console.error('Response error:', errorText);
-        toast({ 
-          title: "Connection Error", 
-          description: `Failed to connect to writing assistant: ${resp.status} ${errorText}`,
-          variant: "destructive"
-        });
-        throw new Error(`HTTP ${resp.status}: ${errorText}`);
+      if (!article?.article?.id) {
+        throw new Error('Article ID is required');
       }
 
-      const result = await resp.json();
+      console.log('Sending chat request:', { 
+        message: messageText.substring(0, 100) + (messageText.length > 100 ? '...' : ''),
+        documentContent: documentContent ? `${documentContent.substring(0, 100)}...` : 'none',
+        articleId: article.article.id
+      });
+      
+      // Submit the request with single message - backend loads context from DB
+      const result = await apiPost<{ requestId: string; status: string }>('/agent', {
+        message: messageText,  // Single message string
+        documentContent: documentContent,
+        articleId: article.article.id  // Required for loading context
+      });
+
       console.log('Got request response:', result);
       
       if (!result.requestId) {
@@ -1210,11 +1326,23 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       setChatMessages((prev) => prev.slice(0, -1));
       
       // Show user-friendly error
-      if (err instanceof Error) {
+      if (isAuthError(err)) {
+        toast({ 
+          title: "Session Expired", 
+          description: "Your session has expired. Please log in again.",
+          variant: "destructive"
+        });
+      } else if (err instanceof Error) {
         if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
           toast({ 
             title: "Connection Error", 
-            description: "Cannot connect to the writing assistant. Make sure the backend server is running on http://localhost:8080",
+            description: "Cannot connect to the writing assistant. Make sure the backend server is running.",
+            variant: "destructive"
+          });
+        } else {
+          toast({ 
+            title: "Error", 
+            description: err.message || "An error occurred while processing your request.",
             variant: "destructive"
           });
         }
@@ -1263,6 +1391,30 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           // Handle new block-based message types
           if (msg.type) {
             switch (msg.type) {
+              case 'thinking':
+                // Handle thinking state - show shimmer
+                setIsThinking(true);
+                setThinkingMessage(msg.thinking_message || 'Thinking...');
+                console.log('Thinking:', msg.thinking_message);
+                break;
+
+              case 'content_delta':
+                // Handle real-time content chunks
+                setIsThinking(false);
+                if (msg.content) {
+                  setChatMessages((prev) => {
+                    const updated = [...prev];
+                    if (updated[assistantIndex]) {
+                      updated[assistantIndex] = {
+                        ...updated[assistantIndex],
+                        content: (updated[assistantIndex].content || '') + msg.content
+                      };
+                    }
+                    return updated;
+                  });
+                }
+                break;
+
               case 'user':
                 // Display user message blocks (usually shown as context)
                 console.log('User message block:', msg.content);
@@ -1274,6 +1426,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 break;
                 
               case 'text':
+                // Hide thinking state on first text chunk
+                setIsThinking(false);
                 // Handle assistant text responses as separate messages
                 if (msg.content) {
                   // If this is the first text block, update the existing assistant message
@@ -1299,21 +1453,46 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 break;
                 
               case 'tool_use':
+                // Hide thinking state on tool use
+                setIsThinking(false);
+                
                 // Display tool usage feedback as a separate message
                 if (msg.tool_name) {
-                  const toolDisplayName = getToolDisplayName(msg.tool_name);
-                  const toolMessage = `🔧 ${toolDisplayName}...`;
-                  
-                  setChatMessages((prev) => [
-                    ...prev,
-                    { role: 'assistant', content: toolMessage }
-                  ]);
+                  // Special handling for search_web_sources
+                  if (msg.tool_name === 'search_web_sources') {
+                    const searchQuery = msg.tool_input?.query || 'researching...';
+                    setChatMessages((prev) => [
+                      ...prev,
+                      { 
+                        role: 'assistant', 
+                        content: '',
+                        tool_context: {
+                          tool_name: msg.tool_name,
+                          tool_id: msg.tool_id || '',
+                          status: 'starting',
+                          search_query: searchQuery
+                        }
+                      }
+                    ]);
+                  } else {
+                    // Regular tool display
+                    const toolDisplayName = getToolDisplayName(msg.tool_name);
+                    const toolMessage = `🔧 ${toolDisplayName}...`;
+                    
+                    setChatMessages((prev) => [
+                      ...prev,
+                      { role: 'assistant', content: toolMessage }
+                    ]);
+                  }
                   
                   console.log('Tool use:', msg.tool_name, msg.tool_input);
                 }
                 break;
                 
               case 'tool_result':
+                // Hide thinking state on tool result
+                setIsThinking(false);
+                
                 // Handle tool results with structured data
                 if (msg.tool_result) {
                   console.log('Tool result:', msg.tool_result);
@@ -1327,7 +1506,33 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     if (msg.tool_result.content) {
                       const toolResult = JSON.parse(msg.tool_result.content);
                       
-                      if (toolResult.tool_name === 'edit_text' && isNewMessage) {
+                      // Check if this is a search tool result
+                      if (toolResult.tool_name === 'search_web_sources') {
+                        // Find the matching tool_use message and update it with results
+                        setChatMessages((prev) => {
+                          const updated = [...prev];
+                          // Find last search_web_sources tool_use message
+                          for (let i = updated.length - 1; i >= 0; i--) {
+                            if (updated[i].tool_context?.tool_name === 'search_web_sources' 
+                                && updated[i].tool_context?.status === 'starting') {
+                              updated[i] = {
+                                ...updated[i],
+                                tool_context: {
+                                  ...updated[i].tool_context!,
+                                  status: 'completed',
+                                  search_results: toolResult.search_results || [],
+                                  sources_created: toolResult.sources_created || [],
+                                  total_found: toolResult.total_found || 0,
+                                  sources_successful: toolResult.sources_successful || 0,
+                                  message: toolResult.message
+                                }
+                              };
+                              break;
+                            }
+                          }
+                          return updated;
+                        });
+                      } else if (toolResult.tool_name === 'edit_text' && isNewMessage) {
                         // Use inline diff preview and chat actions
                         if (toolResult.edit_type === 'patch' && toolResult.patch) {
                           applyPatch(toolResult.patch, toolResult.original_text, toolResult.new_text, toolResult.reason);
@@ -1369,6 +1574,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 
               case 'done':
                 console.log('Stream completed');
+                setIsThinking(false); // Hide thinking state on completion
                 ws.close();
                 
                 // After response is complete, check if we should show a document edit option
@@ -2122,6 +2328,99 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 }
               }
               case 'assistant': {
+                // Render web search with Steps UI
+                if (m.tool_context?.tool_name === 'search_web_sources') {
+                  return <WebSearchSteps key={i} tool_context={m.tool_context} />;
+                }
+                
+                // Render artifacts from metadata
+                if (m.meta_data?.artifact) {
+                  const artifact = m.meta_data.artifact;
+                  
+                  // Show artifact based on status
+                  if (artifact.status === 'pending') {
+                    return (
+                      <div key={i} className="w-full flex justify-start">
+                        <div className="max-w-sm rounded-lg px-3 py-2 text-sm bg-gray-100 dark:bg-gray-800">
+                          <div className="mb-2">
+                            <div className="font-medium text-sm">{artifact.title || 'Artifact'}</div>
+                            {artifact.description && (
+                              <div className="text-xs text-gray-600 dark:text-gray-400">{artifact.description}</div>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button 
+                              size="sm" 
+                              onClick={async () => {
+                                if (m.id) {
+                                  await acceptArtifact(m.id);
+                                  // Update local state
+                                  setChatMessages(prev => prev.map((msg, idx) => 
+                                    idx === i && msg.meta_data?.artifact 
+                                      ? { ...msg, meta_data: { ...msg.meta_data, artifact: { ...msg.meta_data.artifact, status: 'accepted' } } }
+                                      : msg
+                                  ));
+                                }
+                              }}
+                            >
+                              Accept
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={async () => {
+                                if (m.id) {
+                                  await rejectArtifact(m.id);
+                                  // Update local state
+                                  setChatMessages(prev => prev.map((msg, idx) => 
+                                    idx === i && msg.meta_data?.artifact 
+                                      ? { ...msg, meta_data: { ...msg.meta_data, artifact: { ...msg.meta_data.artifact, status: 'rejected' } } }
+                                      : msg
+                                  ));
+                                }
+                              }}
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  } else if (artifact.status === 'accepted') {
+                    return (
+                      <div key={i} className="w-full flex justify-start">
+                        <div className="max-w-sm rounded-lg px-3 py-2 text-sm bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                          <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                            <span>✅</span>
+                            <div>
+                              <div className="font-medium">{artifact.title || 'Artifact'} - Accepted</div>
+                              {artifact.description && (
+                                <div className="text-xs">{artifact.description}</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  } else if (artifact.status === 'rejected') {
+                    return (
+                      <div key={i} className="w-full flex justify-start">
+                        <div className="max-w-sm rounded-lg px-3 py-2 text-sm bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                          <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
+                            <span>❌</span>
+                            <div>
+                              <div className="font-medium">{artifact.title || 'Artifact'} - Rejected</div>
+                              {artifact.description && (
+                                <div className="text-xs">{artifact.description}</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                }
+                
                 if (m.content === '__DIFF_ACTIONS__') {
                   // Show diff preview if the action has been taken, otherwise show buttons
                   if (m.diffState && m.diffPreview) {
@@ -2146,45 +2445,38 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     );
                   }
                 }
-                
-                // Check if this is an artifact message that should be hidden
-                // Hide artifact messages (📋 Document rewrite: ...) if the next message is a resolved diff action
-                if (m.content.startsWith('📋')) {
-                  const nextMessage = chatMessages[i + 1];
-                  if (nextMessage && nextMessage.content === '__DIFF_ACTIONS__' && nextMessage.diffState && nextMessage.diffPreview) {
-                    // Hide this artifact message since the diff preview will show everything
-                    return null;
-                  }
+                  
+                // Regular assistant message
+                if (!m.content || m.content === '') {
+                  return null; // Don't render empty messages
                 }
                 
                 return (
                   <div key={i} className="w-full flex justify-start">
                     <div className="max-w-xs whitespace-pre-wrap rounded-lg px-3 py-2 text-sm bg-gray-200 dark:bg-gray-700 dark:text-white">
-                      {m.content || (chatLoading ? (
-                        <div className="flex items-center gap-1">
-                          <div className="flex space-x-1">
-                            <IconLoader2 className="w-4 h-4 text-indigo-500 animate-spin" />
-                          </div>
-                          <span className="text-xs opacity-75">thinking...</span>
-                        </div>
-                      ) : m.content)}
-                    </div>
-                  </div>
-                );
-              }
-              case 'user':
-              default: {
-                return (
-                  <div key={i} className="w-full flex justify-end">
-                    <div className="max-w-xs whitespace-pre-wrap rounded-lg px-3 py-2 text-sm bg-indigo-500 text-white">
                       {m.content}
                     </div>
                   </div>
                 );
               }
-            }
-          })}
-        </div>
+              case 'user':
+                default: {
+                  return (
+                    <div key={i} className="w-full flex justify-end">
+                      <div className="max-w-xs whitespace-pre-wrap rounded-lg px-3 py-2 text-sm bg-indigo-500 text-white">
+                        {m.content}
+                      </div>
+                    </div>
+                  );
+                }
+              }
+            })}
+            
+            {/* Thinking state shimmer */}
+            {isThinking && (
+              <ThinkShimmerBlock message={thinkingMessage} />
+            )}
+          </div>
         <div className="p-4 border-t space-y-2">
           <div className="flex gap-1 flex-wrap">
             <Button

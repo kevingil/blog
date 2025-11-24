@@ -9,12 +9,11 @@ type ChatMessage struct {
 }
 
 // ChatRequest is what the /agent endpoint receives from the frontend.
-// It contains the full chat transcript, optional model selection, and document context.
+// It contains a single user message, document context, and the article ID for loading conversation history.
 type ChatRequest struct {
-	Messages        []ChatMessage `json:"messages" validate:"required,min=1"`
-	Model           string        `json:"model"`
-	DocumentContent string        `json:"documentContent,omitempty"`
-	ArticleID       string        `json:"articleId,omitempty"`
+	Message         string `json:"message" validate:"required,min=1"`
+	DocumentContent string `json:"documentContent,omitempty"`
+	ArticleID       string `json:"articleId" validate:"required"` // Required for loading context
 }
 
 // ChatRequestResponse is the immediate response returned when a chat request is submitted
@@ -27,16 +26,18 @@ type ChatRequestResponse struct {
 // Supports block-based streaming for structured agent responses.
 //
 // Supported block types:
-// - "text": Assistant text responses
+// - "content_delta": Real-time content chunks as they're generated
+// - "text": Complete assistant text responses (for backward compatibility)
 // - "tool_use": Tool/function calls made by the agent
 // - "tool_result": Results returned from tool executions
 // - "user": User messages (streamed as initial context)
 // - "system": System messages (streamed as initial context)
+// - "thinking": Thinking state during tool execution
 // - "error": Error messages
 // - "done": Completion signal
 type StreamResponse struct {
 	RequestID string `json:"requestId,omitempty"`
-	Type      string `json:"type"` // "text", "tool_use", "tool_result", "error", "done"
+	Type      string `json:"type"` // "content_delta", "text", "tool_use", "tool_result", "thinking", "error", "done"
 	Content   string `json:"content,omitempty"`
 	Iteration int    `json:"iteration,omitempty"`
 
@@ -47,6 +48,9 @@ type StreamResponse struct {
 
 	// Tool result fields for tool_result blocks
 	ToolResult interface{} `json:"tool_result,omitempty"`
+
+	// Thinking-specific fields
+	ThinkingMessage string `json:"thinking_message,omitempty"`
 
 	// Legacy fields for backward compatibility
 	Role  string `json:"role,omitempty"`

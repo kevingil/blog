@@ -1,5 +1,4 @@
-import { VITE_API_BASE_URL } from '@/services/constants';
-import { handleApiResponse } from '@/services/apiHelpers';
+import { apiGet, apiPost, apiPut, apiDelete } from '@/services/authenticatedFetch';
 
 export type Project = {
   id: string;
@@ -27,13 +26,13 @@ export type ListProjectsResponse = {
 
 export async function listProjects(page: number = 1, perPage: number = 20): Promise<ListProjectsResponse> {
   const params = new URLSearchParams({ page: String(page), perPage: String(perPage) });
-  const res = await fetch(`${VITE_API_BASE_URL}/projects/?${params}`);
-  return handleApiResponse<ListProjectsResponse>(res);
+  // Public endpoint - skip auth
+  return apiGet<ListProjectsResponse>(`/projects/?${params}`, { skipAuth: true });
 }
 
 export async function getProject(id: string): Promise<ProjectDetail> {
-  const res = await fetch(`${VITE_API_BASE_URL}/projects/${id}`);
-  return handleApiResponse<ProjectDetail>(res);
+  // Public endpoint - skip auth
+  return apiGet<ProjectDetail>(`/projects/${id}`, { skipAuth: true });
 }
 
 export async function createProject(payload: {
@@ -44,12 +43,8 @@ export async function createProject(payload: {
   image_url?: string;
   url?: string;
 }): Promise<Project> {
-  const res = await fetch(`${VITE_API_BASE_URL}/projects/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  return handleApiResponse<Project>(res);
+  // Protected endpoint - requires auth
+  return apiPost<Project>('/projects/', payload);
 }
 
 export async function updateProject(id: string, payload: {
@@ -61,17 +56,13 @@ export async function updateProject(id: string, payload: {
   url?: string;
   created_at?: string;
 }): Promise<Project> {
-  const res = await fetch(`${VITE_API_BASE_URL}/projects/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  return handleApiResponse<Project>(res);
+  // Protected endpoint - requires auth
+  return apiPut<Project>(`/projects/${id}`, payload);
 }
 
 export async function deleteProject(id: string): Promise<{ success: boolean }> {
-  const res = await fetch(`${VITE_API_BASE_URL}/projects/${id}`, { method: 'DELETE' });
-  return handleApiResponse<{ success: boolean }>(res);
+  // Protected endpoint - requires auth
+  return apiDelete<{ success: boolean }>(`/projects/${id}`);
 }
 
 

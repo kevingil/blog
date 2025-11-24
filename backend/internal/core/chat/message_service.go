@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"blog-agent-go/backend/internal/core/agent/metadata"
@@ -31,21 +32,45 @@ func NewMessageService(db database.Service) *MessageService {
 
 // SaveMessage saves a new chat message to the database
 func (s *MessageService) SaveMessage(ctx context.Context, articleID uuid.UUID, role, content string, metaData *metadata.MessageMetaData) (*models.ChatMessage, error) {
+	log.Printf("[MessageService] 💾 SaveMessage called")
+	log.Printf("[MessageService]    Article ID: %s", articleID)
+	log.Printf("[MessageService]    Role: %s", role)
+	log.Printf("[MessageService]    Content length: %d chars", len(content))
+
 	// Marshal metadata to JSON
 	var metaDataJSON datatypes.JSON
 	if metaData != nil {
 		// Validate metadata
 		if err := metadata.ValidateMetaData(metaData); err != nil {
+			log.Printf("[MessageService] ❌ Metadata validation failed: %v", err)
 			return nil, errors.NewValidationError(fmt.Sprintf("Invalid metadata: %v", err))
 		}
 
 		jsonBytes, err := json.Marshal(metaData)
 		if err != nil {
+			log.Printf("[MessageService] ❌ Failed to marshal metadata: %v", err)
 			return nil, errors.NewInternalError("Failed to marshal metadata")
 		}
 		metaDataJSON = datatypes.JSON(jsonBytes)
+		log.Printf("[MessageService]    Metadata: %d bytes", len(jsonBytes))
+
+		// Log artifact if present
+		if metaData.Artifact != nil {
+			log.Printf("[MessageService]    📋 Contains ARTIFACT:")
+			log.Printf("[MessageService]       ID: %s", metaData.Artifact.ID)
+			log.Printf("[MessageService]       Type: %s", metaData.Artifact.Type)
+			log.Printf("[MessageService]       Status: %s", metaData.Artifact.Status)
+		}
+
+		// Log tool execution if present
+		if metaData.ToolExecution != nil {
+			log.Printf("[MessageService]    🔧 Contains TOOL EXECUTION:")
+			log.Printf("[MessageService]       Tool: %s", metaData.ToolExecution.ToolName)
+			log.Printf("[MessageService]       Success: %v", metaData.ToolExecution.Success)
+		}
 	} else {
 		metaDataJSON = datatypes.JSON("{}")
+		log.Printf("[MessageService]    Metadata: none")
 	}
 
 	message := &models.ChatMessage{
@@ -57,11 +82,17 @@ func (s *MessageService) SaveMessage(ctx context.Context, articleID uuid.UUID, r
 
 	db := s.db.GetDB()
 	if err := db.Create(message).Error; err != nil {
+		log.Printf("[MessageService] ❌ Database INSERT failed: %v", err)
 		return nil, errors.NewInternalError("Failed to save message")
 	}
 
+	log.Printf("[MessageService] ✅ Message saved successfully (ID: %s)", message.ID)
+
 	return message, nil
 }
+
+// Default initial message for new conversations
+const initialGreeting = "Hi! I can help you improve your article. Try asking me to \"rewrite the introduction\" or \"make the content more engaging\"."
 
 // GetConversationHistory retrieves chat messages for an article
 func (s *MessageService) GetConversationHistory(ctx context.Context, articleID uuid.UUID, limit int) ([]models.ChatMessage, error) {
@@ -72,6 +103,10 @@ func (s *MessageService) GetConversationHistory(ctx context.Context, articleID u
 		limit = 200 // Cap at 200 messages
 	}
 
+	fmt.Printf("[MessageService] 🔍 Querying database for messages...\n")
+	fmt.Printf("[MessageService]    Article ID: %s\n", articleID)
+	fmt.Printf("[MessageService]    Limit: %d\n", limit)
+
 	db := s.db.GetDB()
 	var messages []models.ChatMessage
 
@@ -81,7 +116,49 @@ func (s *MessageService) GetConversationHistory(ctx context.Context, articleID u
 		Find(&messages).Error
 
 	if err != nil {
+		fmt.Printf("[MessageService] ❌ Database query failed: %v\n", err)
 		return nil, errors.NewInternalError("Failed to retrieve conversation history")
+	}
+
+	fmt.Printf("[MessageService] ✅ Fetched %d messages\n", len(messages))
+
+	// If no messages exist, create and save a default initial greeting
+	if len(messages) == 0 {
+		fmt.Printf("[MessageService] 📝 No messages found, creating initial greeting\n")
+
+		initialMessage := &models.ChatMessage{
+			ArticleID: articleID,
+			Role:      "assistant",
+			Content:   initialGreeting,
+			MetaData:  datatypes.JSON("{}"),
+		}
+
+		// Save to database so it persists
+		if err := db.Create(initialMessage).Error; err != nil {
+			fmt.Printf("[MessageService] ⚠️  Failed to save initial greeting: %v\n", err)
+			// Still return it even if save failed
+			initialMessage.ID = uuid.New()
+			initialMessage.CreatedAt = time.Now()
+		} else {
+			fmt.Printf("[MessageService] ✅ Saved initial greeting to database (ID: %s)\n", initialMessage.ID)
+		}
+
+		return []models.ChatMessage{*initialMessage}, nil
+	}
+
+	// Log each message from database
+	for _, msg := range messages {
+		preview := msg.Content
+		if len(preview) > 50 {
+			preview = preview[:50] + "..."
+		}
+		// fmt.Printf("[MessageService]    [%d] %s (ID: %s): %s\n", i+1, msg.Role, msg.ID, preview)
+
+		// Check if metadata is present
+		metadataSize := len(msg.MetaData)
+		if metadataSize > 2 {
+			// fmt.Printf("[MessageService]        Metadata: %d bytes\n", metadataSize)
+		}
 	}
 
 	return messages, nil
