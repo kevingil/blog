@@ -7,7 +7,6 @@ import * as z from 'zod';
 import { format } from "date-fns"
 import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo, ChevronDown as ChevronDownIcon, ChevronUp as ChevronUpIcon } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
-import { IconLoader2 } from '@tabler/icons-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -2430,23 +2429,20 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   }
                 }
                   
-                  // Regular assistant message
-                  return (
-                    <div key={i} className="w-full flex justify-start">
-                      <div className="max-w-xs whitespace-pre-wrap rounded-lg px-3 py-2 text-sm bg-gray-200 dark:bg-gray-700 dark:text-white">
-                        {m.content || (chatLoading && i === chatMessages.length - 1 ? (
-                          <div className="flex items-center gap-1">
-                            <div className="flex space-x-1">
-                              <IconLoader2 className="w-4 h-4 text-indigo-500 animate-spin" />
-                            </div>
-                            <span className="text-xs opacity-75">thinking...</span>
-                          </div>
-                        ) : m.content)}
-                      </div>
-                    </div>
-                  );
+                // Regular assistant message
+                if (!m.content || m.content === '') {
+                  return null; // Don't render empty messages
                 }
-                case 'user':
+                
+                return (
+                  <div key={i} className="w-full flex justify-start">
+                    <div className="max-w-xs whitespace-pre-wrap rounded-lg px-3 py-2 text-sm bg-gray-200 dark:bg-gray-700 dark:text-white">
+                      {m.content}
+                    </div>
+                  </div>
+                );
+              }
+              case 'user':
                 default: {
                   return (
                     <div key={i} className="w-full flex justify-end">

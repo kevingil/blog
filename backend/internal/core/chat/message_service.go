@@ -122,20 +122,28 @@ func (s *MessageService) GetConversationHistory(ctx context.Context, articleID u
 
 	fmt.Printf("[MessageService] ✅ Database returned %d messages\n", len(messages))
 
-	// If no messages exist, return a default initial greeting
+	// If no messages exist, create and save a default initial greeting
 	if len(messages) == 0 {
-		fmt.Printf("[MessageService] 📝 No messages found, returning initial greeting\n")
+		fmt.Printf("[MessageService] 📝 No messages found, creating initial greeting\n")
 
-		initialMessage := models.ChatMessage{
-			ID:        uuid.New(),
+		initialMessage := &models.ChatMessage{
 			ArticleID: articleID,
 			Role:      "assistant",
 			Content:   initialGreeting,
 			MetaData:  datatypes.JSON("{}"),
-			CreatedAt: time.Now(),
 		}
 
-		return []models.ChatMessage{initialMessage}, nil
+		// Save to database so it persists
+		if err := db.Create(initialMessage).Error; err != nil {
+			fmt.Printf("[MessageService] ⚠️  Failed to save initial greeting: %v\n", err)
+			// Still return it even if save failed
+			initialMessage.ID = uuid.New()
+			initialMessage.CreatedAt = time.Now()
+		} else {
+			fmt.Printf("[MessageService] ✅ Saved initial greeting to database (ID: %s)\n", initialMessage.ID)
+		}
+
+		return []models.ChatMessage{*initialMessage}, nil
 	}
 
 	// Log each message from database

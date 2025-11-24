@@ -392,7 +392,7 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 		assistantMsg.AppendReasoningContent(event.Content)
 		return a.messages.Update(ctx, *assistantMsg)
 	case provider.EventContentDelta:
-		logging.Info("[STREAM] Content delta", "content", event.Content)
+		//logging.Info("[STREAM] Content delta", "content", event.Content)
 		assistantMsg.AppendContent(event.Content)
 		return a.messages.Update(ctx, *assistantMsg)
 	case provider.EventContentStart:
