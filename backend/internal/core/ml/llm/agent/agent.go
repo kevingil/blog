@@ -27,11 +27,11 @@ var (
 type AgentEventType string
 
 const (
-	AgentEventTypeError     AgentEventType = "error"
-	AgentEventTypeResponse  AgentEventType = "response"
-	AgentEventTypeTool      AgentEventType = "tool"
-	AgentEventTypeSummarize AgentEventType = "summarize"
-	AgentEventTypeThinking  AgentEventType = "thinking"
+	AgentEventTypeError        AgentEventType = "error"
+	AgentEventTypeResponse     AgentEventType = "response"
+	AgentEventTypeTool         AgentEventType = "tool"
+	AgentEventTypeThinking     AgentEventType = "thinking"
+	AgentEventTypeContentDelta AgentEventType = "content_delta"
 )
 
 type AgentEvent struct {
@@ -47,6 +47,9 @@ type AgentEvent struct {
 	// When thinking
 	ThinkingMessage string
 	Iteration       int
+
+	// When streaming content
+	ContentDelta string
 }
 
 type Service interface {
@@ -202,7 +205,7 @@ func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, cont
 		}
 		events <- thinkingEvent
 
-		agentMessage, toolResults, err := a.streamAndHandleEvents(ctx, sessionID, msgHistory)
+		agentMessage, toolResults, err := a.streamAndHandleEvents(ctx, sessionID, msgHistory, events)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				agentMessage.AddFinish(message.FinishReasonCanceled)
@@ -261,7 +264,7 @@ func (a *agent) createUserMessage(ctx context.Context, sessionID, content string
 	})
 }
 
-func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msgHistory []message.Message) (message.Message, *message.Message, error) {
+func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msgHistory []message.Message, events chan<- AgentEvent) (message.Message, *message.Message, error) {
 	// Log the complete context being sent to the LLM
 	a.logRequestContext(sessionID, msgHistory)
 
@@ -283,7 +286,7 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 
 	// Process each event in the stream.
 	for event := range eventChan {
-		if processErr := a.processEvent(ctx, sessionID, &assistantMsg, event); processErr != nil {
+		if processErr := a.processEvent(ctx, sessionID, &assistantMsg, event, events); processErr != nil {
 			a.finishMessage(ctx, &assistantMsg, message.FinishReasonCanceled)
 			return assistantMsg, nil, processErr
 		}
@@ -378,7 +381,7 @@ func (a *agent) finishMessage(ctx context.Context, msg *message.Message, finishR
 	_ = a.messages.Update(ctx, *msg)
 }
 
-func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg *message.Message, event provider.ProviderEvent) error {
+func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg *message.Message, event provider.ProviderEvent, events chan<- AgentEvent) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -394,7 +397,14 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 	case provider.EventContentDelta:
 		//logging.Info("[STREAM] Content delta", "content", event.Content)
 		assistantMsg.AppendContent(event.Content)
-		return a.messages.Update(ctx, *assistantMsg)
+		a.messages.Update(ctx, *assistantMsg)
+
+		// Emit content delta event for real-time streaming
+		events <- AgentEvent{
+			Type:         AgentEventTypeContentDelta,
+			ContentDelta: event.Content,
+		}
+		return nil
 	case provider.EventContentStart:
 		logging.Info("[STREAM] Content block started")
 	case provider.EventToolUseStart:

@@ -410,6 +410,14 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 				ThinkingMessage: event.ThinkingMessage,
 				Iteration:       event.Iteration,
 			}
+		case agent.AgentEventTypeContentDelta:
+			// Stream content chunks in real-time
+			asyncReq.ResponseChan <- StreamResponse{
+				RequestID: asyncReq.ID,
+				Type:      "content_delta",
+				Content:   event.ContentDelta,
+				Iteration: asyncReq.iteration,
+			}
 		case agent.AgentEventTypeResponse:
 			if event.Message.ID != "" {
 				asyncReq.iteration++

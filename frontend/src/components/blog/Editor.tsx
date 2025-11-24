@@ -1398,6 +1398,23 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 console.log('Thinking:', msg.thinking_message);
                 break;
 
+              case 'content_delta':
+                // Handle real-time content chunks
+                setIsThinking(false);
+                if (msg.content) {
+                  setChatMessages((prev) => {
+                    const updated = [...prev];
+                    if (updated[assistantIndex]) {
+                      updated[assistantIndex] = {
+                        ...updated[assistantIndex],
+                        content: (updated[assistantIndex].content || '') + msg.content
+                      };
+                    }
+                    return updated;
+                  });
+                }
+                break;
+
               case 'user':
                 // Display user message blocks (usually shown as context)
                 console.log('User message block:', msg.content);

@@ -26,7 +26,8 @@ type ChatRequestResponse struct {
 // Supports block-based streaming for structured agent responses.
 //
 // Supported block types:
-// - "text": Assistant text responses
+// - "content_delta": Real-time content chunks as they're generated
+// - "text": Complete assistant text responses (for backward compatibility)
 // - "tool_use": Tool/function calls made by the agent
 // - "tool_result": Results returned from tool executions
 // - "user": User messages (streamed as initial context)
@@ -36,7 +37,7 @@ type ChatRequestResponse struct {
 // - "done": Completion signal
 type StreamResponse struct {
 	RequestID string `json:"requestId,omitempty"`
-	Type      string `json:"type"` // "text", "tool_use", "tool_result", "thinking", "error", "done"
+	Type      string `json:"type"` // "content_delta", "text", "tool_use", "tool_result", "thinking", "error", "done"
 	Content   string `json:"content,omitempty"`
 	Iteration int    `json:"iteration,omitempty"`
 
