@@ -120,7 +120,7 @@ func (s *MessageService) GetConversationHistory(ctx context.Context, articleID u
 		return nil, errors.NewInternalError("Failed to retrieve conversation history")
 	}
 
-	fmt.Printf("[MessageService] ✅ Database returned %d messages\n", len(messages))
+	fmt.Printf("[MessageService] ✅ Fetched %d messages\n", len(messages))
 
 	// If no messages exist, create and save a default initial greeting
 	if len(messages) == 0 {
@@ -147,17 +147,17 @@ func (s *MessageService) GetConversationHistory(ctx context.Context, articleID u
 	}
 
 	// Log each message from database
-	for i, msg := range messages {
+	for _, msg := range messages {
 		preview := msg.Content
 		if len(preview) > 50 {
 			preview = preview[:50] + "..."
 		}
-		fmt.Printf("[MessageService]    [%d] %s (ID: %s): %s\n", i+1, msg.Role, msg.ID, preview)
+		// fmt.Printf("[MessageService]    [%d] %s (ID: %s): %s\n", i+1, msg.Role, msg.ID, preview)
 
 		// Check if metadata is present
 		metadataSize := len(msg.MetaData)
 		if metadataSize > 2 {
-			fmt.Printf("[MessageService]        Metadata: %d bytes\n", metadataSize)
+			// fmt.Printf("[MessageService]        Metadata: %d bytes\n", metadataSize)
 		}
 	}
 
