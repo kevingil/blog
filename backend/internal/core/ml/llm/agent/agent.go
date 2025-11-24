@@ -6,9 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strings"
 	"sync"
-	"time"
 
 	"blog-agent-go/backend/internal/core/ml/llm/config"
 	"blog-agent-go/backend/internal/core/ml/llm/logging"
@@ -58,7 +56,6 @@ type Service interface {
 	IsSessionBusy(sessionID string) bool
 	IsBusy() bool
 	Update(agentName config.AgentName, modelID models.ModelID) (models.Model, error)
-	Summarize(ctx context.Context, sessionID string) error
 }
 
 type agent struct {
@@ -67,9 +64,6 @@ type agent struct {
 
 	tools    []tools.BaseTool
 	provider provider.Provider
-
-	titleProvider     provider.Provider
-	summarizeProvider provider.Provider
 
 	activeRequests sync.Map
 }
@@ -84,30 +78,13 @@ func NewAgent(
 	if err != nil {
 		return nil, err
 	}
-	var titleProvider provider.Provider
-	// Only generate titles for the coder agent
-	if agentName == config.AgentCoder {
-		titleProvider, err = createAgentProvider(config.AgentTitle)
-		if err != nil {
-			return nil, err
-		}
-	}
-	var summarizeProvider provider.Provider
-	if agentName == config.AgentCoder {
-		summarizeProvider, err = createAgentProvider(config.AgentSummarizer)
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	agent := &agent{
-		provider:          agentProvider,
-		messages:          messages,
-		sessions:          sessions,
-		tools:             agentTools,
-		titleProvider:     titleProvider,
-		summarizeProvider: summarizeProvider,
-		activeRequests:    sync.Map{},
+		provider:       agentProvider,
+		messages:       messages,
+		sessions:       sessions,
+		tools:          agentTools,
+		activeRequests: sync.Map{},
 	}
 
 	return agent, nil
@@ -154,41 +131,9 @@ func (a *agent) IsSessionBusy(sessionID string) bool {
 	return busy
 }
 
+// generateTitle is deprecated - copilot agent doesn't auto-generate titles
 func (a *agent) generateTitle(ctx context.Context, sessionID string, content string) error {
-	if content == "" {
-		return nil
-	}
-	if a.titleProvider == nil {
-		return nil
-	}
-	session, err := a.sessions.Get(ctx, sessionID)
-	if err != nil {
-		return err
-	}
-	ctx = context.WithValue(ctx, tools.SessionIDContextKey, sessionID)
-	parts := []message.ContentPart{message.TextContent{Text: content}}
-	response, err := a.titleProvider.SendMessages(
-		ctx,
-		[]message.Message{
-			{
-				Role:  message.User,
-				Parts: parts,
-			},
-		},
-		make([]tools.BaseTool, 0),
-	)
-	if err != nil {
-		return err
-	}
-
-	title := strings.TrimSpace(strings.ReplaceAll(response.Content, "\n", " "))
-	if title == "" {
-		return nil
-	}
-
-	session.Title = title
-	_, err = a.sessions.Save(ctx, session)
-	return err
+	return nil
 }
 
 func (a *agent) err(err error) AgentEvent {
@@ -235,22 +180,12 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 
 func (a *agent) processGeneration(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart) AgentEvent {
 	cfg := config.Get()
-	// List existing messages; if none, start title generation asynchronously.
+	// List existing messages
 	msgs, err := a.messages.List(ctx, sessionID)
 	if err != nil {
 		return a.err(fmt.Errorf("failed to list messages: %w", err))
 	}
-	if len(msgs) == 0 {
-		go func() {
-			defer logging.RecoverPanic("agent.Run", func() {
-				logging.ErrorPersist("panic while generating title")
-			})
-			titleErr := a.generateTitle(context.Background(), sessionID, content)
-			if titleErr != nil {
-				logging.ErrorPersist(fmt.Sprintf("failed to generate title: %v", titleErr))
-			}
-		}()
-	}
+	// Removed automatic title generation - copilot agent doesn't need this
 	session, err := a.sessions.Get(ctx, sessionID)
 	if err != nil {
 		return a.err(fmt.Errorf("failed to get session: %w", err))
@@ -321,15 +256,7 @@ func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, cont
 	if err != nil {
 		return a.err(fmt.Errorf("failed to list messages: %w", err))
 	}
-	if len(msgs) == 0 {
-		go func() {
-			titleCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			if a.titleProvider != nil {
-				_ = a.generateTitle(titleCtx, sessionID, content)
-			}
-		}()
-	}
+	// Removed automatic title generation - copilot agent doesn't need this
 
 	userMsg, err := a.createUserMessage(ctx, sessionID, content, attachmentParts)
 	if err != nil {
@@ -633,110 +560,9 @@ func (a *agent) Update(agentName config.AgentName, modelID models.ModelID) (mode
 	return a.provider.Model(), nil
 }
 
+// Summarize is deprecated - copilot agent doesn't use summarization
 func (a *agent) Summarize(ctx context.Context, sessionID string) error {
-	if a.summarizeProvider == nil {
-		return fmt.Errorf("summarize provider not available")
-	}
-
-	// Check if session is busy
-	if a.IsSessionBusy(sessionID) {
-		log.Println("Session is busy")
-		return ErrSessionBusy
-	}
-
-	// Create a new context with cancellation
-	summarizeCtx, cancel := context.WithCancel(ctx)
-
-	// Store the cancel function in activeRequests to allow cancellation
-	a.activeRequests.Store(sessionID+"-summarize", cancel)
-
-	go func() {
-		defer a.activeRequests.Delete(sessionID + "-summarize")
-		defer cancel()
-
-		// Get all messages from the session
-		msgs, err := a.messages.List(summarizeCtx, sessionID)
-		if err != nil {
-			log.Println("Failed to list messages:", err)
-			return
-		}
-		summarizeCtx = context.WithValue(summarizeCtx, tools.SessionIDContextKey, sessionID)
-
-		if len(msgs) == 0 {
-			log.Println("No messages to summarize")
-			return
-		}
-
-		// Add a system message to guide the summarization
-		summarizePrompt := "Provide a detailed but concise summary of our conversation above. Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next."
-
-		// Create a new message with the summarize prompt
-		promptMsg := message.Message{
-			Role:  message.User,
-			Parts: []message.ContentPart{message.TextContent{Text: summarizePrompt}},
-		}
-
-		// Append the prompt to the messages
-		msgsWithPrompt := append(msgs, promptMsg)
-
-		// Send the messages to the summarize provider
-		response, err := a.summarizeProvider.SendMessages(
-			summarizeCtx,
-			msgsWithPrompt,
-			make([]tools.BaseTool, 0),
-		)
-		if err != nil {
-			log.Println("Failed to create summary message:", err)
-			return
-		}
-
-		summary := strings.TrimSpace(response.Content)
-		if summary == "" {
-
-			return
-		}
-
-		oldSession, err := a.sessions.Get(summarizeCtx, sessionID)
-		if err != nil {
-			log.Println("Failed to get session:", err)
-			return
-		}
-		// Create a message in the new session with the summary
-		msg, err := a.messages.Create(summarizeCtx, oldSession.ID, message.CreateMessageParams{
-			Role: message.Assistant,
-			Parts: []message.ContentPart{
-				message.TextContent{Text: summary},
-				message.Finish{
-					Reason: message.FinishReasonEndTurn,
-					Time:   time.Now().Unix(),
-				},
-			},
-			Model: string(a.summarizeProvider.Model().ID),
-		})
-		if err != nil {
-			log.Println("Failed to create summary message:", err)
-			return
-		}
-		oldSession.SummaryMessageID = msg.ID
-		oldSession.CompletionTokens = response.Usage.OutputTokens
-		oldSession.PromptTokens = 0
-		model := a.summarizeProvider.Model()
-		usage := response.Usage
-		cost := model.CostPer1MInCached/1e6*float64(usage.CacheCreationTokens) +
-			model.CostPer1MOutCached/1e6*float64(usage.CacheReadTokens) +
-			model.CostPer1MIn/1e6*float64(usage.InputTokens) +
-			model.CostPer1MOut/1e6*float64(usage.OutputTokens)
-		oldSession.Cost += cost
-		_, err = a.sessions.Save(summarizeCtx, oldSession)
-		if err != nil {
-			log.Println("Failed to save session:", err)
-		}
-
-		// Summary complete
-		log.Println("Summary complete")
-	}()
-
-	return nil
+	return fmt.Errorf("summarization not supported in copilot agent")
 }
 
 // logRequestContext logs the complete context being sent to the LLM for debugging
@@ -887,7 +713,7 @@ func createAgentProvider(agentName config.AgentName) (provider.Provider, error) 
 				provider.WithReasoningEffort(fmt.Sprintf("%d", agentConfig.ReasoningEffort)),
 			),
 		)
-	} else if model.Provider == models.ProviderAnthropic && model.CanReason && agentName == config.AgentCoder {
+	} else if model.Provider == models.ProviderAnthropic && model.CanReason {
 		opts = append(
 			opts,
 			provider.WithAnthropicOptions(

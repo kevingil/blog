@@ -151,7 +151,7 @@ func InitializeAgentCopilotManager(articleSourceService *ArticleSourceService, c
 
 	// Create the agent using the LLM framework
 	agentSvc, err := agent.NewAgent(
-		config.AgentWriter, // Use the writer agent
+		config.AgentCopilot, // Use the copilot agent for blog writing
 		sessionSvc,
 		messageSvc,
 		writingTools,
@@ -546,8 +546,10 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 			}
 		case agent.AgentEventTypeError:
 			// Error is already handled above
-		case agent.AgentEventTypeSummarize:
-			// Summarization progress - no logging needed
+
+		default:
+			// Unknown event type
+			log.Println("Unknown event type", event.Type)
 		}
 	}
 

@@ -8,10 +8,8 @@ import (
 type AgentName string
 
 const (
-	AgentCoder      AgentName = "coder"
-	AgentTitle      AgentName = "title"
-	AgentSummarizer AgentName = "summarizer"
-	AgentWriter     AgentName = "writer"
+	AgentCopilot AgentName = "copilot" // Blog writing copilot (primary agent)
+	AgentWriter  AgentName = "writer"  // Kept for reference/future automated workflows
 )
 
 type MCPServerType string
@@ -59,19 +57,14 @@ func init() {
 		WorkingDir:   workingDir,
 		ContextPaths: []string{}, // Empty by default for blog agent
 		Agents: map[AgentName]AgentConfig{
-			AgentWriter: {
+			AgentCopilot: {
 				Model:           models.GPT5,
 				MaxTokens:       4000,
 				ReasoningEffort: 1,
 			},
-			AgentTitle: {
-				Model:           models.GPT4oMini,
-				MaxTokens:       100,
-				ReasoningEffort: 1,
-			},
-			AgentSummarizer: {
-				Model:           models.GPT4oMini,
-				MaxTokens:       2000,
+			AgentWriter: {
+				Model:           models.GPT5,
+				MaxTokens:       4000,
 				ReasoningEffort: 1,
 			},
 		},
