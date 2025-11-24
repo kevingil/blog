@@ -1277,13 +1277,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     const assistantIndex = baseMessages.length;
     setChatMessages((prev) => [...prev, { role: 'assistant', content: '' } as ChatMessage]);
 
-    // Create messages for API - only send user messages, not assistant responses
-    // This prevents the backend from streaming back previous assistant messages as context
-    const userMessages = chatMessages.filter(msg => msg.role === 'user');
-    const apiMessages = [...userMessages, { role: 'user', content: text } as ChatMessage];
-
-    // Rest of the chat logic...
-    await performChatRequest(apiMessages, assistantIndex, isEditRequest, currentContent);
+    // Send only the new message text - backend will load context from database
+    await performChatRequest(text, assistantIndex, isEditRequest, currentContent);
   };
 
   const sendChat = async () => {
@@ -1301,20 +1296,24 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     await sendChatWithMessage(text);
   };
 
-  const performChatRequest = async (apiMessages: ChatMessage[], assistantIndex: number, isEditRequest: boolean, documentContent: string) => {
+  const performChatRequest = async (messageText: string, assistantIndex: number, isEditRequest: boolean, documentContent: string) => {
     setChatLoading(true);
     try {
+      if (!article?.article?.id) {
+        throw new Error('Article ID is required');
+      }
+
       console.log('Sending chat request:', { 
-        messages: apiMessages.map(m => ({ role: m.role, content: m.content.substring(0, 100) + (m.content.length > 100 ? '...' : '') })),
+        message: messageText.substring(0, 100) + (messageText.length > 100 ? '...' : ''),
         documentContent: documentContent ? `${documentContent.substring(0, 100)}...` : 'none',
-        articleId: article?.article?.id || 'not available'
+        articleId: article.article.id
       });
       
-      // Submit the request and get immediate response with request ID
+      // Submit the request with single message - backend loads context from DB
       const result = await apiPost<{ requestId: string; status: string }>('/agent', {
-        messages: apiMessages,
+        message: messageText,  // Single message string
         documentContent: documentContent,
-        articleId: article?.article?.id || null  // Include article ID for source search
+        articleId: article.article.id  // Required for loading context
       });
 
       console.log('Got request response:', result);

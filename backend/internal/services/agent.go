@@ -56,6 +56,7 @@ type AgentAsyncCopilotManager struct {
 // This interface is satisfied by core/chat.MessageService
 type ChatMessageServiceInterface interface {
 	SaveMessage(ctx context.Context, articleID uuid.UUID, role, content string, metaData *metadata.MessageMetaData) (*models.ChatMessage, error)
+	GetConversationHistory(ctx context.Context, articleID uuid.UUID, limit int) ([]models.ChatMessage, error)
 }
 
 type AgentAsyncRequest struct {
@@ -169,8 +170,12 @@ func InitializeAgentCopilotManager(articleSourceService *ArticleSourceService, c
 }
 
 func (m *AgentAsyncCopilotManager) SubmitChatRequest(req ChatRequest) (string, error) {
-	if len(req.Messages) == 0 {
-		return "", errors.New("no messages provided")
+	if req.Message == "" {
+		return "", errors.New("message is required")
+	}
+
+	if req.ArticleID == "" {
+		return "", errors.New("articleId is required")
 	}
 
 	if m.agent == nil {
@@ -316,107 +321,56 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 		}
 	}
 
-	// Convert request messages to agent format and add them to session
-	// Also save user messages to database if chatService is available and articleID is valid
-	for _, msg := range asyncReq.Request.Messages {
-		var role message.Role
-		switch msg.Role {
-		case "user":
-			role = message.User
-		case "assistant":
-			role = message.Assistant
-		default:
-			role = message.User
-		}
+	// Load conversation context from database (last 12 messages)
+	log.Printf("[Agent] Loading conversation context from database...")
+	dbMessages, err := m.loadConversationContext(ctx, articleID, 12)
+	if err != nil {
+		log.Printf("[Agent] Failed to load conversation context: %v", err)
+		// Continue with empty context rather than failing
+		dbMessages = []message.Message{}
+	}
+	log.Printf("[Agent] ✅ Loaded %d messages from database as context", len(dbMessages))
 
-		parts := []message.ContentPart{
-			message.TextContent{Text: msg.Content},
-		}
-
-		// Add document content to first user message if provided
-		if role == message.User && asyncReq.Request.DocumentContent != "" {
-			parts = append(parts, message.TextContent{
-				Text: "\n\n--- Current Document ---\n" + asyncReq.Request.DocumentContent,
-			})
-			asyncReq.Request.DocumentContent = "" // Only add once
-		}
-
+	// Add loaded messages to in-memory session
+	for _, msg := range dbMessages {
 		_, err := m.messageSvc.Create(ctx, session.ID, message.CreateMessageParams{
-			Role:  role,
-			Parts: parts,
-			Model: "user",
+			Role:  msg.Role,
+			Parts: msg.Parts,
+			Model: "loaded",
 		})
 		if err != nil {
-			log.Printf("[Agent] Failed to create message for request %s: %v", asyncReq.ID, err)
-		}
-
-		// Save ALL messages to database if chat service is available and we have a valid article ID
-		// This ensures conversation history is preserved
-		if m.chatService != nil && articleID != uuid.Nil {
-			log.Printf("[Agent] 📝 Saving %s message to database...", msg.Role)
-			log.Printf("[Agent]    Article ID: %s", articleID)
-			log.Printf("[Agent]    Content preview: %s", truncate(msg.Content, 100))
-
-			msgContext := metadata.NewMessageContext(
-				asyncReq.Request.ArticleID,
-				session.ID,
-				asyncReq.ID,
-				"", // User ID can be added if available
-			)
-
-			msgMetadata := metadata.BuildMetaData().WithContext(msgContext)
-
-			savedMsg, err := m.chatService.SaveMessage(ctx, articleID, msg.Role, msg.Content, msgMetadata)
-			if err != nil {
-				log.Printf("[Agent] ❌ Failed to save %s message to database: %v", msg.Role, err)
-			} else {
-				log.Printf("[Agent] ✅ Saved %s message (ID: %s) to database for article %s", msg.Role, savedMsg.ID, articleID)
-			}
+			log.Printf("[Agent] Warning: Failed to add loaded message to session: %v", err)
 		}
 	}
 
-	// Stream initial messages as separate blocks before starting agent processing
-	// Only stream user and system messages as context - skip assistant messages to avoid duplication
+	// Save the NEW user message to database
+	log.Printf("[Agent] 📝 Saving NEW user message to database...")
+	log.Printf("[Agent]    Article ID: %s", articleID)
+	log.Printf("[Agent]    Content preview: %s", truncate(asyncReq.Request.Message, 100))
+
+	msgContext := metadata.NewMessageContext(
+		asyncReq.Request.ArticleID,
+		session.ID,
+		asyncReq.ID,
+		"", // User ID can be added if available
+	)
+
+	msgMetadata := metadata.BuildMetaData().WithContext(msgContext)
+
+	savedMsg, err := m.chatService.SaveMessage(ctx, articleID, "user", asyncReq.Request.Message, msgMetadata)
+	if err != nil {
+		log.Printf("[Agent] ❌ Failed to save user message to database: %v", err)
+	} else {
+		log.Printf("[Agent] ✅ Saved user message (ID: %s) to database for article %s", savedMsg.ID, articleID)
+	}
+
+	// Build user prompt with document content
+	userPrompt := asyncReq.Request.Message
+	if asyncReq.Request.DocumentContent != "" {
+		userPrompt += "\n\n--- Current Document ---\n" + asyncReq.Request.DocumentContent
+	}
+
 	asyncReq.iteration = 1
-	for _, msg := range asyncReq.Request.Messages {
-		// Skip assistant messages - they are responses that have already been shown to the user
-		if msg.Role == "assistant" {
-			continue
-		}
-
-		var blockType string
-		switch msg.Role {
-		case "system":
-			blockType = "system"
-		case "user":
-			blockType = "user"
-		default:
-			blockType = "user" // Default to user for unknown roles
-		}
-
-		content := msg.Content
-		// Add document content to user messages if provided
-		if msg.Role == "user" && asyncReq.Request.DocumentContent != "" {
-			content += "\n\n--- Current Document ---\n" + asyncReq.Request.DocumentContent
-		}
-
-		// Stream the message block
-		asyncReq.ResponseChan <- StreamResponse{
-			RequestID: asyncReq.ID,
-			Type:      blockType,
-			Content:   content,
-			Iteration: asyncReq.iteration,
-		}
-	}
-
-	// Start agent processing
-	userPrompt := ""
-	if len(asyncReq.Request.Messages) > 0 {
-		userPrompt = asyncReq.Request.Messages[len(asyncReq.Request.Messages)-1].Content
-		if asyncReq.Request.DocumentContent != "" {
-			userPrompt += "\n\n--- Current Document ---\n" + asyncReq.Request.DocumentContent
-		}
-	}
 
 	// Run agent request with article ID context
 	resultChan, err := m.agent.Run(ctx, session.ID, userPrompt)
@@ -562,6 +516,105 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 
 	duration := time.Since(startTime)
 	log.Printf("[Agent] Completed request %s in %v", asyncReq.ID, duration)
+}
+
+// loadConversationContext loads the last N messages from database and reconstructs them for agent context
+func (m *AgentAsyncCopilotManager) loadConversationContext(ctx context.Context, articleID uuid.UUID, limit int) ([]message.Message, error) {
+	if m.chatService == nil {
+		return []message.Message{}, nil
+	}
+
+	// Get messages from database
+	dbMessages, err := m.chatService.GetConversationHistory(ctx, articleID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load conversation history: %w", err)
+	}
+
+	log.Printf("[Agent] 📚 Reconstructing %d messages from database metadata...", len(dbMessages))
+
+	// Convert to agent message format
+	agentMessages := make([]message.Message, 0, len(dbMessages))
+
+	for i, dbMsg := range dbMessages {
+		var role message.Role
+		switch dbMsg.Role {
+		case "user":
+			role = message.User
+		case "assistant":
+			role = message.Assistant
+		case "tool":
+			role = message.Tool
+		default:
+			role = message.User
+		}
+
+		parts := []message.ContentPart{
+			message.TextContent{Text: dbMsg.Content},
+		}
+
+		msg := message.Message{
+			ID:        dbMsg.ID.String(),
+			Role:      role,
+			Parts:     parts,
+			SessionID: "", // Will be set when added to session
+		}
+
+		// Reconstruct tool calls from metadata
+		if len(dbMsg.MetaData) > 2 {
+			var metaData metadata.MessageMetaData
+			if err := json.Unmarshal(dbMsg.MetaData, &metaData); err == nil {
+
+				// If this message has tool execution metadata, it means it called a tool
+				if metaData.ToolExecution != nil {
+					log.Printf("[Agent]    [%d] Reconstructing tool call: %s", i+1, metaData.ToolExecution.ToolName)
+
+					// Add tool call to message
+					inputJSON, _ := json.Marshal(metaData.ToolExecution.Input)
+					toolCall := message.ToolCall{
+						ID:       metaData.ToolExecution.ToolID,
+						Name:     metaData.ToolExecution.ToolName,
+						Input:    string(inputJSON),
+						Finished: metaData.ToolExecution.Success,
+					}
+					msg.AddToolCall(toolCall)
+					msg.FinishToolCall(toolCall.ID)
+				}
+
+				// If this message has artifact, reconstruct the tool result
+				if metaData.Artifact != nil {
+					log.Printf("[Agent]    [%d] Reconstructing artifact: %s (%s)", i+1, metaData.Artifact.Type, metaData.Artifact.Status)
+
+					// Create a tool result message for the artifact
+					// This will be added as a separate message after the assistant message
+					if metaData.ToolExecution != nil && metaData.ToolExecution.Output != nil {
+						outputJSON, _ := json.Marshal(metaData.ToolExecution.Output)
+						toolResult := message.ToolResult{
+							ToolCallID: metaData.ToolExecution.ToolID,
+							Content:    string(outputJSON),
+							IsError:    !metaData.ToolExecution.Success,
+						}
+
+						// Add as next message
+						toolMsg := message.Message{
+							Role: message.Tool,
+							Parts: []message.ContentPart{
+								toolResult,
+							},
+						}
+						agentMessages = append(agentMessages, msg)     // Add assistant message first
+						agentMessages = append(agentMessages, toolMsg) // Then tool result
+						continue                                       // Skip adding msg again below
+					}
+				}
+			}
+		}
+
+		agentMessages = append(agentMessages, msg)
+	}
+
+	log.Printf("[Agent] ✅ Reconstructed %d messages (%d from DB)", len(agentMessages), len(dbMessages))
+
+	return agentMessages, nil
 }
 
 // saveAssistantMessage saves an assistant message to the database with metadata
