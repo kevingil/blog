@@ -32,11 +32,12 @@ type ChatRequestResponse struct {
 // - "tool_result": Results returned from tool executions
 // - "user": User messages (streamed as initial context)
 // - "system": System messages (streamed as initial context)
+// - "thinking": Thinking state during tool execution
 // - "error": Error messages
 // - "done": Completion signal
 type StreamResponse struct {
 	RequestID string `json:"requestId,omitempty"`
-	Type      string `json:"type"` // "text", "tool_use", "tool_result", "error", "done"
+	Type      string `json:"type"` // "text", "tool_use", "tool_result", "thinking", "error", "done"
 	Content   string `json:"content,omitempty"`
 	Iteration int    `json:"iteration,omitempty"`
 
@@ -47,6 +48,9 @@ type StreamResponse struct {
 
 	// Tool result fields for tool_result blocks
 	ToolResult interface{} `json:"tool_result,omitempty"`
+
+	// Thinking-specific fields
+	ThinkingMessage string `json:"thinking_message,omitempty"`
 
 	// Legacy fields for backward compatibility
 	Role  string `json:"role,omitempty"`

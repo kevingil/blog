@@ -56,6 +56,8 @@ type Provider interface {
 	StreamResponse(ctx context.Context, messages []message.Message, tools []tools.BaseTool) <-chan ProviderEvent
 
 	Model() models.Model
+	
+	GetSystemMessage() string
 }
 
 type providerClientOptions struct {
@@ -168,6 +170,10 @@ func (p *baseProvider[C]) SendMessages(ctx context.Context, messages []message.M
 
 func (p *baseProvider[C]) Model() models.Model {
 	return p.options.model
+}
+
+func (p *baseProvider[C]) GetSystemMessage() string {
+	return p.options.systemMessage
 }
 
 func (p *baseProvider[C]) StreamResponse(ctx context.Context, messages []message.Message, tools []tools.BaseTool) <-chan ProviderEvent {

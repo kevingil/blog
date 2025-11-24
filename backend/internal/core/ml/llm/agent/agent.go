@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -32,6 +33,7 @@ const (
 	AgentEventTypeResponse  AgentEventType = "response"
 	AgentEventTypeTool      AgentEventType = "tool"
 	AgentEventTypeSummarize AgentEventType = "summarize"
+	AgentEventTypeThinking  AgentEventType = "thinking"
 )
 
 type AgentEvent struct {
@@ -43,6 +45,10 @@ type AgentEvent struct {
 	SessionID string
 	Progress  string
 	Done      bool
+
+	// When thinking
+	ThinkingMessage string
+	Iteration       int
 }
 
 type Service interface {
@@ -332,6 +338,7 @@ func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, cont
 
 	msgHistory := append(msgs, userMsg)
 
+	iteration := 0
 	for {
 		// Check for cancellation before each iteration
 		select {
@@ -340,6 +347,17 @@ func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, cont
 		default:
 			// Continue processing
 		}
+
+		// Emit thinking event at the start of each iteration
+		iteration++
+		thinkingEvent := AgentEvent{
+			Type:            AgentEventTypeThinking,
+			ThinkingMessage: "Thinking...",
+			Iteration:       iteration,
+			Done:            false,
+		}
+		events <- thinkingEvent
+
 		agentMessage, toolResults, err := a.streamAndHandleEvents(ctx, sessionID, msgHistory)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
@@ -400,6 +418,9 @@ func (a *agent) createUserMessage(ctx context.Context, sessionID, content string
 }
 
 func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msgHistory []message.Message) (message.Message, *message.Message, error) {
+	// Log the complete context being sent to the LLM
+	a.logRequestContext(sessionID, msgHistory)
+
 	// Preserve any existing context values (like article ID) and add session ID
 	ctx = context.WithValue(ctx, tools.SessionIDContextKey, sessionID)
 	eventChan := a.provider.StreamResponse(ctx, msgHistory, a.tools)
@@ -716,6 +737,119 @@ func (a *agent) Summarize(ctx context.Context, sessionID string) error {
 	}()
 
 	return nil
+}
+
+// logRequestContext logs the complete context being sent to the LLM for debugging
+func (a *agent) logRequestContext(sessionID string, msgHistory []message.Message) {
+	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	log.Printf("🤖 [AGENT REQUEST CONTEXT] Session: %s", sessionID)
+	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+	// Log system prompt
+	systemPrompt := a.getSystemPrompt()
+	log.Printf("\n📋 SYSTEM PROMPT:")
+	log.Printf("────────────────────────────────────────────────────────────")
+	log.Printf("%s", systemPrompt)
+	log.Printf("────────────────────────────────────────────────────────────\n")
+
+	// Log message history
+	log.Printf("💬 MESSAGE HISTORY (%d messages):", len(msgHistory))
+	log.Printf("────────────────────────────────────────────────────────────")
+
+	for i, msg := range msgHistory {
+		roleStr := string(msg.Role)
+		content := msg.Content().String()
+
+		// Truncate very long content for readability
+		preview := content
+		if len(preview) > 200 {
+			preview = preview[:200] + "..."
+		}
+
+		log.Printf("\n[%d] %s:", i+1, roleStr)
+		log.Printf("    Content: %s", preview)
+
+		// Log tool calls if present
+		toolCalls := msg.ToolCalls()
+		if len(toolCalls) > 0 {
+			log.Printf("    Tool Calls:")
+			for _, tc := range toolCalls {
+				log.Printf("      - %s (ID: %s)", tc.Name, tc.ID)
+			}
+		}
+
+		// Log tool results if present
+		toolResults := msg.ToolResults()
+		if len(toolResults) > 0 {
+			log.Printf("    Tool Results:")
+			for _, tr := range toolResults {
+				log.Printf("      - %s: %s", tr.ToolCallID, tr.Content[:min(100, len(tr.Content))])
+
+				// Try to extract artifact info from tool result
+				if !tr.IsError && len(tr.Content) > 0 && tr.Content[0] == '{' {
+					var resultData map[string]interface{}
+					if err := json.Unmarshal([]byte(tr.Content), &resultData); err == nil {
+						if toolName, ok := resultData["tool_name"].(string); ok {
+							log.Printf("        Tool: %s", toolName)
+
+							// Log artifact state if this is an edit/rewrite tool
+							if toolName == "edit_text" || toolName == "rewrite_document" {
+								log.Printf("        ✏️  ARTIFACT DETECTED:")
+								if reason, ok := resultData["reason"].(string); ok {
+									log.Printf("          Reason: %s", reason)
+								}
+								if toolName == "edit_text" {
+									if editType, ok := resultData["edit_type"].(string); ok {
+										log.Printf("          Edit Type: %s", editType)
+									}
+								}
+							}
+
+							// Log search results if this is a search tool
+							if toolName == "search_web_sources" {
+								log.Printf("        🔍 SEARCH RESULTS:")
+								if totalFound, ok := resultData["total_found"].(float64); ok {
+									log.Printf("          Total Found: %.0f", totalFound)
+								}
+								if sourcesCreated, ok := resultData["sources_successful"].(float64); ok {
+									log.Printf("          Sources Created: %.0f", sourcesCreated)
+								}
+								if query, ok := resultData["query"].(string); ok {
+									log.Printf("          Query: %s", query)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	log.Printf("\n────────────────────────────────────────────────────────────")
+	log.Printf("📊 Total tokens being sent: ~%d (estimated)", a.estimateTokens(msgHistory))
+	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+}
+
+// getSystemPrompt returns the system prompt from the provider
+func (a *agent) getSystemPrompt() string {
+	return a.provider.GetSystemMessage()
+}
+
+// estimateTokens provides a rough token estimate for logging
+func (a *agent) estimateTokens(msgs []message.Message) int {
+	total := 0
+	for _, msg := range msgs {
+		// Rough estimate: 1 token per 4 characters
+		total += len(msg.Content().String()) / 4
+	}
+	return total
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func createAgentProvider(agentName config.AgentName) (provider.Provider, error) {

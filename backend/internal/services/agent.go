@@ -21,6 +21,14 @@ import (
 	"github.com/google/uuid"
 )
 
+// truncate truncates a string to maxLen characters
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
+
 // """
 // Python Reference
 // we want to create our own endpoints instead of using CopilotKit APIs
@@ -278,6 +286,12 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 
 	log.Printf("[Agent] Starting request %s", asyncReq.ID)
 
+	// Start timeout monitoring goroutine
+	timeoutCtx, timeoutCancel := context.WithCancel(asyncReq.ctx)
+	defer timeoutCancel()
+
+	go m.monitorTimeout(timeoutCtx, asyncReq)
+
 	// Create session for this request
 	session, err := m.sessionSvc.Create(asyncReq.ctx, "Writing Copilot Session")
 	if err != nil {
@@ -336,8 +350,13 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 			log.Printf("[Agent] Failed to create message for request %s: %v", asyncReq.ID, err)
 		}
 
-		// Save user messages to database if chat service is available and we have a valid article ID
-		if m.chatService != nil && articleID != uuid.Nil && msg.Role == "user" {
+		// Save ALL messages to database if chat service is available and we have a valid article ID
+		// This ensures conversation history is preserved
+		if m.chatService != nil && articleID != uuid.Nil {
+			log.Printf("[Agent] 📝 Saving %s message to database...", msg.Role)
+			log.Printf("[Agent]    Article ID: %s", articleID)
+			log.Printf("[Agent]    Content preview: %s", truncate(msg.Content, 100))
+
 			msgContext := metadata.NewMessageContext(
 				asyncReq.Request.ArticleID,
 				session.ID,
@@ -347,9 +366,11 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 
 			msgMetadata := metadata.BuildMetaData().WithContext(msgContext)
 
-			_, err := m.chatService.SaveMessage(ctx, articleID, "user", msg.Content, msgMetadata)
+			savedMsg, err := m.chatService.SaveMessage(ctx, articleID, msg.Role, msg.Content, msgMetadata)
 			if err != nil {
-				log.Printf("[Agent] Failed to save user message to database: %v", err)
+				log.Printf("[Agent] ❌ Failed to save %s message to database: %v", msg.Role, err)
+			} else {
+				log.Printf("[Agent] ✅ Saved %s message (ID: %s) to database for article %s", msg.Role, savedMsg.ID, articleID)
 			}
 		}
 	}
@@ -427,6 +448,14 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 		}
 
 		switch event.Type {
+		case agent.AgentEventTypeThinking:
+			// Stream thinking state to client
+			asyncReq.ResponseChan <- StreamResponse{
+				RequestID:       asyncReq.ID,
+				Type:            "thinking",
+				ThinkingMessage: event.ThinkingMessage,
+				Iteration:       event.Iteration,
+			}
 		case agent.AgentEventTypeResponse:
 			if event.Message.ID != "" {
 				asyncReq.iteration++
@@ -485,16 +514,32 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 			if event.Message.ID != "" {
 				// This event contains tool results - stream each as a separate tool_result block
 				toolResults := event.Message.ToolResults()
+
+				// Save tool result messages with artifact metadata
+				m.saveToolResultMessage(ctx, asyncReq, event.Message, toolResults, articleID)
+
 				for _, toolResult := range toolResults {
+					// Detect if this is a search tool result
+					isSearchTool := false
+					if !toolResult.IsError {
+						var resultData map[string]interface{}
+						if err := json.Unmarshal([]byte(toolResult.Content), &resultData); err == nil {
+							if toolName, ok := resultData["tool_name"].(string); ok {
+								isSearchTool = toolName == "search_web_sources"
+							}
+						}
+					}
+
 					asyncReq.ResponseChan <- StreamResponse{
 						RequestID: asyncReq.ID,
 						Type:      "tool_result",
 						Iteration: asyncReq.iteration,
 						ToolID:    toolResult.ToolCallID,
 						ToolResult: map[string]interface{}{
-							"content":  toolResult.Content,
-							"metadata": toolResult.Metadata,
-							"is_error": toolResult.IsError,
+							"content":   toolResult.Content,
+							"metadata":  toolResult.Metadata,
+							"is_error":  toolResult.IsError,
+							"is_search": isSearchTool,
 						},
 					}
 				}
@@ -525,6 +570,10 @@ func (m *AgentAsyncCopilotManager) saveAssistantMessage(ctx context.Context, asy
 
 	content := msg.Content().String()
 
+	log.Printf("[Agent] 💾 Saving assistant message...")
+	log.Printf("[Agent]    Article ID: %s", articleID)
+	log.Printf("[Agent]    Content preview: %s", truncate(content, 100))
+
 	// Build metadata
 	msgContext := metadata.NewMessageContext(
 		asyncReq.Request.ArticleID,
@@ -538,6 +587,8 @@ func (m *AgentAsyncCopilotManager) saveAssistantMessage(ctx context.Context, asy
 	// Add tool execution metadata if there are tool calls
 	toolCalls := msg.ToolCalls()
 	if len(toolCalls) > 0 {
+		log.Printf("[Agent]    Has %d tool call(s): %v", len(toolCalls), toolCalls[0].Name)
+
 		// Save the first tool call as metadata (simplified approach)
 		toolCall := toolCalls[0]
 
@@ -561,8 +612,201 @@ func (m *AgentAsyncCopilotManager) saveAssistantMessage(ctx context.Context, asy
 		msgMetadata.WithToolExecution(toolExec)
 	}
 
-	_, err := m.chatService.SaveMessage(ctx, articleID, "assistant", content, msgMetadata)
+	savedMsg, err := m.chatService.SaveMessage(ctx, articleID, "assistant", content, msgMetadata)
 	if err != nil {
-		log.Printf("[Agent] Failed to save assistant message to database: %v", err)
+		log.Printf("[Agent] ❌ Failed to save assistant message to database: %v", err)
+	} else {
+		log.Printf("[Agent] ✅ Saved assistant message (ID: %s) to database", savedMsg.ID)
+	}
+}
+
+// monitorTimeout sends periodic thinking updates and timeout warnings
+func (m *AgentAsyncCopilotManager) monitorTimeout(ctx context.Context, asyncReq *AgentAsyncRequest) {
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	lastActivityTime := time.Now()
+	updateCount := 0
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			updateCount++
+			elapsed := time.Since(lastActivityTime)
+
+			// Send "still working" message after 1 minute
+			if elapsed > 1*time.Minute && elapsed < 2*time.Minute {
+				asyncReq.ResponseChan <- StreamResponse{
+					RequestID:       asyncReq.ID,
+					Type:            "thinking",
+					ThinkingMessage: "Still working on your request...",
+					Iteration:       updateCount,
+				}
+			}
+
+			// Send timeout warning after 2 minutes
+			if elapsed > 2*time.Minute {
+				asyncReq.ResponseChan <- StreamResponse{
+					RequestID:       asyncReq.ID,
+					Type:            "thinking",
+					ThinkingMessage: "This is taking longer than expected. You can wait or cancel the request.",
+					Iteration:       updateCount,
+				}
+			}
+		}
+	}
+}
+
+// saveToolResultMessage saves tool result messages with artifact metadata
+func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, asyncReq *AgentAsyncRequest, msg message.Message, toolResults []message.ToolResult, articleID uuid.UUID) {
+	if m.chatService == nil || articleID == uuid.Nil {
+		return
+	}
+
+	log.Printf("[Agent] 🔧 Processing %d tool result(s) for database save...", len(toolResults))
+
+	// Build metadata context
+	msgContext := metadata.NewMessageContext(
+		asyncReq.Request.ArticleID,
+		asyncReq.SessionID,
+		asyncReq.ID,
+		"",
+	)
+
+	msgMetadata := metadata.BuildMetaData().WithContext(msgContext)
+
+	// Process each tool result to detect artifacts and save tool execution metadata
+	for idx, toolResult := range toolResults {
+		log.Printf("[Agent]    Tool Result #%d:", idx+1)
+		log.Printf("[Agent]       Call ID: %s", toolResult.ToolCallID)
+		log.Printf("[Agent]       Is Error: %v", toolResult.IsError)
+
+		if toolResult.IsError {
+			log.Printf("[Agent]       ⚠️  Skipping error result")
+			continue
+		}
+
+		// Parse tool result content
+		var toolResultData map[string]interface{}
+		if err := json.Unmarshal([]byte(toolResult.Content), &toolResultData); err != nil {
+			log.Printf("[Agent]       ⚠️  Failed to parse tool result: %v", err)
+			continue
+		}
+
+		toolName, _ := toolResultData["tool_name"].(string)
+		log.Printf("[Agent]       Tool Name: %s", toolName)
+
+		// Save tool execution metadata for ALL tools
+		toolExec := &metadata.ToolExecution{
+			ToolName:   toolName,
+			ToolID:     toolResult.ToolCallID,
+			Output:     toolResultData,
+			ExecutedAt: time.Now(),
+			Success:    true,
+		}
+		msgMetadata.WithToolExecution(toolExec)
+
+		// Create artifact for edit_text and rewrite_document tools
+		if toolName == "edit_text" || toolName == "rewrite_document" {
+			log.Printf("[Agent]       ✏️  ARTIFACT TOOL DETECTED")
+
+			artifactID := uuid.New().String()
+			artifactType := metadata.ArtifactTypeCodeEdit
+			if toolName == "rewrite_document" {
+				artifactType = metadata.ArtifactTypeRewrite
+			}
+
+			// Extract content and diff information
+			var artifactContent string
+			var diffPreview string
+			var description string
+
+			if toolName == "edit_text" {
+				if newText, ok := toolResultData["new_text"].(string); ok {
+					artifactContent = newText
+				}
+				if oldText, ok := toolResultData["original_text"].(string); ok {
+					diffPreview = fmt.Sprintf("Old: %s\nNew: %s", truncate(oldText, 50), truncate(artifactContent, 50))
+				}
+				if reason, ok := toolResultData["reason"].(string); ok {
+					description = reason
+				}
+			} else if toolName == "rewrite_document" {
+				if newContent, ok := toolResultData["new_content"].(string); ok {
+					artifactContent = newContent
+				}
+				if originalContent, ok := toolResultData["original_content"].(string); ok {
+					diffPreview = fmt.Sprintf("Original: %s\nNew: %s", truncate(originalContent, 50), truncate(artifactContent, 50))
+				}
+				if reason, ok := toolResultData["reason"].(string); ok {
+					description = reason
+				}
+			}
+
+			log.Printf("[Agent]          Artifact ID: %s", artifactID)
+			log.Printf("[Agent]          Type: %s", artifactType)
+			log.Printf("[Agent]          Status: %s", metadata.ArtifactStatusPending)
+			log.Printf("[Agent]          Description: %s", description)
+
+			// Create artifact info
+			artifact := &metadata.ArtifactInfo{
+				ID:          artifactID,
+				Type:        artifactType,
+				Status:      metadata.ArtifactStatusPending,
+				Content:     artifactContent,
+				DiffPreview: diffPreview,
+				Title:       fmt.Sprintf("%s result", toolName),
+				Description: description,
+			}
+
+			msgMetadata.WithArtifact(artifact)
+
+			// Save message with artifact metadata
+			content := fmt.Sprintf("📋 %s: %s", toolName, description)
+			savedMsg, err := m.chatService.SaveMessage(ctx, articleID, "assistant", content, msgMetadata)
+			if err != nil {
+				log.Printf("[Agent] ❌ Failed to save tool result message with artifact: %v", err)
+			} else {
+				log.Printf("[Agent] ✅ Saved artifact message (ID: %s) with status: %s", savedMsg.ID, metadata.ArtifactStatusPending)
+			}
+
+			// Only process first artifact-producing tool
+			break
+		}
+
+		// Save search tool results with metadata (no artifact, but save tool execution)
+		if toolName == "search_web_sources" {
+			log.Printf("[Agent]       🔍 SEARCH TOOL DETECTED")
+
+			// Build a summary message
+			totalFound := 0
+			sourcesCreated := 0
+			query := ""
+			if val, ok := toolResultData["total_found"].(float64); ok {
+				totalFound = int(val)
+			}
+			if val, ok := toolResultData["sources_successful"].(float64); ok {
+				sourcesCreated = int(val)
+			}
+			if val, ok := toolResultData["query"].(string); ok {
+				query = val
+			}
+
+			log.Printf("[Agent]          Query: %s", query)
+			log.Printf("[Agent]          Results Found: %d", totalFound)
+			log.Printf("[Agent]          Sources Created: %d", sourcesCreated)
+
+			content := fmt.Sprintf("🔍 Web search completed: Found %d results, created %d sources", totalFound, sourcesCreated)
+			savedMsg, err := m.chatService.SaveMessage(ctx, articleID, "assistant", content, msgMetadata)
+			if err != nil {
+				log.Printf("[Agent] ❌ Failed to save search tool result message: %v", err)
+			} else {
+				log.Printf("[Agent] ✅ Saved search result message (ID: %s)", savedMsg.ID)
+			}
+
+			break
+		}
 	}
 }
