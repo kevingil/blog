@@ -77,7 +77,6 @@ export interface SessionState {
 export interface UseSessionOptions {
   articleId?: string;
   autoLoad?: boolean;
-  initialMessages?: ChatMessage[];
 }
 
 export interface UseSessionReturn extends SessionState {
@@ -95,13 +94,13 @@ export interface UseSessionReturn extends SessionState {
  * Handles message loading, WebSocket connections, and state management
  */
 export function useSession(options: UseSessionOptions = {}): UseSessionReturn {
-  const { articleId, autoLoad = true, initialMessages = [] } = options;
+  const { articleId, autoLoad = true } = options;
   
   const queryClient = useQueryClient();
   const [state, setState] = useState<SessionState>({
     sessionId: articleId || null, // Article ID IS the session ID
     articleId: articleId || null,
-    messages: initialMessages,
+    messages: [], // Backend handles initial greeting
     isLoading: false,
     isConnected: false,
     error: null,
@@ -157,7 +156,7 @@ export function useSession(options: UseSessionOptions = {}): UseSessionReturn {
       
       setState(prev => ({
         ...prev,
-        messages: [...initialMessages, ...transformedMessages],
+        messages: transformedMessages, // Backend includes initial greeting if needed
         isLoading: false,
         articleId,
         sessionId: articleId, // Article ID IS the session ID
@@ -204,9 +203,9 @@ export function useSession(options: UseSessionOptions = {}): UseSessionReturn {
   const clearMessages = useCallback(() => {
     setState(prev => ({
       ...prev,
-      messages: initialMessages,
+      messages: [],
     }));
-  }, [initialMessages]);
+  }, []);
 
   // Connect to WebSocket for real-time updates
   const connectWebSocket = useCallback(async (requestId: string): Promise<void> => {

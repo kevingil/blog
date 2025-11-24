@@ -985,11 +985,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           console.log('[Editor] 📦 API response:', result);
           console.log('[Editor] 📊 Message count from API:', result.messages?.length || 0);
           
+          // Backend now handles initial greeting, so always use what it returns
           if (!result.messages || result.messages.length === 0) {
-            console.log('[Editor] ⚠️  No messages in API response, showing greeting');
-            setChatMessages([
-              { role: 'assistant', content: 'Hi! I can help you improve your article. Try asking me to "rewrite the introduction" or "make the content more engaging".' }
-            ]);
+            console.log('[Editor] ⚠️  No messages in API response');
+            setChatMessages([]);
             return;
           }
           
@@ -1045,19 +1044,15 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           
         } catch (error) {
           console.error('[Editor] ❌ Failed to load conversation history:', error);
-          // Show greeting on error
-          setChatMessages([
-            { role: 'assistant', content: 'Hi! I can help you improve your article. Try asking me to "rewrite the introduction" or "make the content more engaging".' }
-          ]);
+          // Don't show greeting on error - backend handles it
+          setChatMessages([]);
         }
       };
       
       loadConversations();
     } else if (isNew) {
-      console.log('[Editor] 📝 New article - showing greeting only');
-      setChatMessages([
-        { role: 'assistant', content: 'Hi! I can help you improve your article. Try asking me to "rewrite the introduction" or "make the content more engaging".' }
-      ]);
+      console.log('[Editor] 📝 New article - no messages to load');
+      setChatMessages([]);
     }
   }, [article?.article?.id, isNew]);
 

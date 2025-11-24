@@ -91,6 +91,9 @@ func (s *MessageService) SaveMessage(ctx context.Context, articleID uuid.UUID, r
 	return message, nil
 }
 
+// Default initial message for new conversations
+const initialGreeting = "Hi! I can help you improve your article. Try asking me to \"rewrite the introduction\" or \"make the content more engaging\"."
+
 // GetConversationHistory retrieves chat messages for an article
 func (s *MessageService) GetConversationHistory(ctx context.Context, articleID uuid.UUID, limit int) ([]models.ChatMessage, error) {
 	if limit <= 0 {
@@ -118,6 +121,22 @@ func (s *MessageService) GetConversationHistory(ctx context.Context, articleID u
 	}
 
 	fmt.Printf("[MessageService] ✅ Database returned %d messages\n", len(messages))
+
+	// If no messages exist, return a default initial greeting
+	if len(messages) == 0 {
+		fmt.Printf("[MessageService] 📝 No messages found, returning initial greeting\n")
+
+		initialMessage := models.ChatMessage{
+			ID:        uuid.New(),
+			ArticleID: articleID,
+			Role:      "assistant",
+			Content:   initialGreeting,
+			MetaData:  datatypes.JSON("{}"),
+			CreatedAt: time.Now(),
+		}
+
+		return []models.ChatMessage{initialMessage}, nil
+	}
 
 	// Log each message from database
 	for i, msg := range messages {
