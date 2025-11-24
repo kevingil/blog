@@ -102,14 +102,6 @@ func (a *agent) Cancel(sessionID string) {
 			cancel()
 		}
 	}
-
-	// Also check for summarize requests
-	if cancelFunc, exists := a.activeRequests.LoadAndDelete(sessionID + "-summarize"); exists {
-		if cancel, ok := cancelFunc.(context.CancelFunc); ok {
-			logging.InfoPersist(fmt.Sprintf("Summarize cancellation initiated for session: %s", sessionID))
-			cancel()
-		}
-	}
 }
 
 func (a *agent) IsBusy() bool {
@@ -129,11 +121,6 @@ func (a *agent) IsBusy() bool {
 func (a *agent) IsSessionBusy(sessionID string) bool {
 	_, busy := a.activeRequests.Load(sessionID)
 	return busy
-}
-
-// generateTitle is deprecated - copilot agent doesn't auto-generate titles
-func (a *agent) generateTitle(ctx context.Context, sessionID string, content string) error {
-	return nil
 }
 
 func (a *agent) err(err error) AgentEvent {
@@ -176,76 +163,6 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 		close(events)
 	}()
 	return events, nil
-}
-
-func (a *agent) processGeneration(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart) AgentEvent {
-	cfg := config.Get()
-	// List existing messages
-	msgs, err := a.messages.List(ctx, sessionID)
-	if err != nil {
-		return a.err(fmt.Errorf("failed to list messages: %w", err))
-	}
-	// Removed automatic title generation - copilot agent doesn't need this
-	session, err := a.sessions.Get(ctx, sessionID)
-	if err != nil {
-		return a.err(fmt.Errorf("failed to get session: %w", err))
-	}
-	if session.SummaryMessageID != "" {
-		summaryMsgInex := -1
-		for i, msg := range msgs {
-			if msg.ID == session.SummaryMessageID {
-				summaryMsgInex = i
-				break
-			}
-		}
-		if summaryMsgInex != -1 {
-			msgs = msgs[summaryMsgInex:]
-			msgs[0].Role = message.User
-		}
-	}
-
-	userMsg, err := a.createUserMessage(ctx, sessionID, content, attachmentParts)
-	if err != nil {
-		return a.err(fmt.Errorf("failed to create user message: %w", err))
-	}
-	// Append the new user message to the conversation history.
-	msgHistory := append(msgs, userMsg)
-
-	for {
-		// Check for cancellation before each iteration
-		select {
-		case <-ctx.Done():
-			return a.err(ctx.Err())
-		default:
-			// Continue processing
-		}
-		agentMessage, toolResults, err := a.streamAndHandleEvents(ctx, sessionID, msgHistory)
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				agentMessage.AddFinish(message.FinishReasonCanceled)
-				a.messages.Update(context.Background(), agentMessage)
-				return a.err(ErrRequestCancelled)
-			}
-			return a.err(fmt.Errorf("failed to process events: %w", err))
-		}
-		if cfg.Debug {
-			seqId := (len(msgHistory) + 1) / 2
-			toolResultFilepath := logging.WriteToolResultsJson(sessionID, seqId, toolResults)
-			logging.Info("Result", "message", agentMessage.FinishReason(), "toolResults", "{}", "filepath", toolResultFilepath)
-		} else {
-			logging.Info("Result", "message", agentMessage.FinishReason(), "toolResults", toolResults)
-		}
-		if (agentMessage.FinishReason() == message.FinishReasonToolUse) && toolResults != nil {
-			// We are not done, we need to respond with the tool response
-			msgHistory = append(msgHistory, agentMessage, *toolResults)
-			continue
-		}
-		return AgentEvent{
-			Type:    AgentEventTypeResponse,
-			Message: agentMessage,
-			Done:    true,
-		}
-	}
 }
 
 func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart, events chan<- AgentEvent) AgentEvent {
@@ -558,11 +475,6 @@ func (a *agent) Update(agentName config.AgentName, modelID models.ModelID) (mode
 	a.provider = provider
 
 	return a.provider.Model(), nil
-}
-
-// Summarize is deprecated - copilot agent doesn't use summarization
-func (a *agent) Summarize(ctx context.Context, sessionID string) error {
-	return fmt.Errorf("summarization not supported in copilot agent")
 }
 
 // logRequestContext logs the complete context being sent to the LLM for debugging

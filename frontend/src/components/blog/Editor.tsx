@@ -70,7 +70,6 @@ function getToolDisplayName(toolName: string): string {
     'write_file': 'Writing file',
     'calculate': 'Calculating',
     'translate': 'Translating',
-    'summarize': 'Summarizing',
     'research': 'Researching'
   };
   
