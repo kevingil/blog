@@ -11,6 +11,7 @@ const (
 	Llama4Maverick            ModelID = "meta-llama/llama-4-maverick-17b-128e-instruct"
 	Llama3_3_70BVersatile     ModelID = "llama-3.3-70b-versatile"
 	DeepseekR1DistillLlama70b ModelID = "deepseek-r1-distill-llama-70b"
+	GptOss120b                ModelID = "openai/gpt-oss-120b"
 )
 
 var GroqModels = map[ModelID]Model{
@@ -83,5 +84,20 @@ var GroqModels = map[ModelID]Model{
 		ContextWindow:       128_000,
 		CanReason:           true,
 		SupportsAttachments: false,
+	},
+
+	GptOss120b: {
+		ID:                  GptOss120b,
+		Name:                "GPT-OSS 120B",
+		Provider:            ProviderGROQ,
+		APIModel:            "openai/gpt-oss-120b",
+		CostPer1MIn:         0.00,  // Free during preview
+		CostPer1MInCached:   0,
+		CostPer1MOutCached:  0,
+		CostPer1MOut:        0.00, // Free during preview
+		ContextWindow:       131_072,
+		DefaultMaxTokens:    8192,
+		CanReason:           true,
+		SupportsAttachments: true,
 	},
 }
