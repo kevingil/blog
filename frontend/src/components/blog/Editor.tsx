@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/popover"
 import { useToast } from "@/hooks/use-toast";
 import { ThinkShimmerBlock } from "@/components/ui/think-shimmer";
+import { Markdown } from "@/components/ui/markdown";
 import { getConversationHistory } from "@/services/conversations";
 import { acceptArtifact, rejectArtifact } from "@/services/artifacts";
 import { WebSearchSteps } from "./WebSearchSteps";
@@ -2452,9 +2453,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 }
                 
                 return (
-                  <div key={i} className="w-full flex justify-start">
-                    <div className="max-w-xs whitespace-pre-wrap rounded-lg px-3 py-2 text-sm bg-gray-200 dark:bg-gray-700 dark:text-white">
-                      {m.content}
+                  <div key={i} className="w-full">
+                    <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
+                      <Markdown>{m.content}</Markdown>
                     </div>
                   </div>
                 );
