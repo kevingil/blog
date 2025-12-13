@@ -70,6 +70,19 @@ func (o *openaiClient) convertMessages(messages []message.Message) (openaiMessag
 	// Add system message first
 	openaiMessages = append(openaiMessages, openai.SystemMessage(o.providerOptions.systemMessage))
 
+	// First pass: collect all valid tool_call_ids from assistant messages
+	// This helps us filter out orphaned tool results that would cause Groq errors
+	validToolCallIDs := make(map[string]bool)
+	for _, msg := range messages {
+		if msg.Role == message.Assistant {
+			for _, call := range msg.ToolCalls() {
+				if call.Name != "" && call.ID != "" {
+					validToolCallIDs[call.ID] = true
+				}
+			}
+		}
+	}
+
 	for _, msg := range messages {
 		switch msg.Role {
 		case message.User:
@@ -97,16 +110,21 @@ func (o *openaiClient) convertMessages(messages []message.Message) (openaiMessag
 			}
 
 			if len(msg.ToolCalls()) > 0 {
-				assistantMsg.ToolCalls = make([]openai.ChatCompletionMessageToolCallParam, len(msg.ToolCalls()))
-				for i, call := range msg.ToolCalls() {
-					assistantMsg.ToolCalls[i] = openai.ChatCompletionMessageToolCallParam{
-						ID:   call.ID,
-						Type: "function",
+				var validToolCalls []openai.ChatCompletionMessageToolCallParam
+				for _, call := range msg.ToolCalls() {
+					if call.Name == "" {
+						continue // Skip tool calls without names to avoid Groq API errors
+					}
+					validToolCalls = append(validToolCalls, openai.ChatCompletionMessageToolCallParam{
+						ID: call.ID,
 						Function: openai.ChatCompletionMessageToolCallFunctionParam{
 							Name:      call.Name,
 							Arguments: call.Input,
 						},
-					}
+					})
+				}
+				if len(validToolCalls) > 0 {
+					assistantMsg.ToolCalls = validToolCalls
 				}
 			}
 
@@ -116,6 +134,12 @@ func (o *openaiClient) convertMessages(messages []message.Message) (openaiMessag
 
 		case message.Tool:
 			for _, result := range msg.ToolResults() {
+				// Skip tool results that don't have a corresponding tool call
+				// This can happen when tool calls are lost during message storage/retrieval
+				if !validToolCallIDs[result.ToolCallID] {
+					fmt.Printf("[WARN] Skipping orphaned tool result with ID %s - no matching tool call found\n", result.ToolCallID)
+					continue
+				}
 				openaiMessages = append(openaiMessages,
 					openai.ToolMessage(result.Content, result.ToolCallID),
 				)
@@ -127,12 +151,14 @@ func (o *openaiClient) convertMessages(messages []message.Message) (openaiMessag
 }
 
 func (o *openaiClient) convertTools(tools []tools.BaseTool) []openai.ChatCompletionToolParam {
-	openaiTools := make([]openai.ChatCompletionToolParam, len(tools))
+	var openaiTools []openai.ChatCompletionToolParam
 
-	for i, tool := range tools {
+	for _, tool := range tools {
 		info := tool.Info()
-		openaiTools[i] = openai.ChatCompletionToolParam{
-			Type: "function",
+		if info.Name == "" {
+			continue // Skip tools without names to avoid Groq API errors
+		}
+		openaiTools = append(openaiTools, openai.ChatCompletionToolParam{
 			Function: openai.FunctionDefinitionParam{
 				Name:        info.Name,
 				Description: openai.String(info.Description),
@@ -142,7 +168,7 @@ func (o *openaiClient) convertTools(tools []tools.BaseTool) []openai.ChatComplet
 					"required":   info.Required,
 				},
 			},
-		}
+		})
 	}
 
 	return openaiTools
@@ -165,7 +191,11 @@ func (o *openaiClient) preparedParams(messages []openai.ChatCompletionMessagePar
 	params := openai.ChatCompletionNewParams{
 		Model:    openai.ChatModel(o.providerOptions.model.APIModel),
 		Messages: messages,
-		Tools:    tools,
+	}
+
+	// Only include Tools if there are actual tools to avoid Groq API errors with empty arrays
+	if len(tools) > 0 {
+		params.Tools = tools
 	}
 
 	if o.providerOptions.model.CanReason == true {

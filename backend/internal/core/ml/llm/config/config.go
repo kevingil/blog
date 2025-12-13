@@ -59,7 +59,7 @@ func init() {
 		Agents: map[AgentName]AgentConfig{
 			AgentCopilot: {
 				Model:           models.GptOss120b,
-				MaxTokens:       8192,
+				MaxTokens:       18192,
 				ReasoningEffort: 1, // medium
 			},
 			AgentWriter: {

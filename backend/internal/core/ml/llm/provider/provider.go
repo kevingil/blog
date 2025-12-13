@@ -56,7 +56,7 @@ type Provider interface {
 	StreamResponse(ctx context.Context, messages []message.Message, tools []tools.BaseTool) <-chan ProviderEvent
 
 	Model() models.Model
-	
+
 	GetSystemMessage() string
 }
 
