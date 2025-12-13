@@ -132,6 +132,7 @@ func (o *openaiClient) convertTools(tools []tools.BaseTool) []openai.ChatComplet
 	for i, tool := range tools {
 		info := tool.Info()
 		openaiTools[i] = openai.ChatCompletionToolParam{
+			Type: "function",
 			Function: openai.FunctionDefinitionParam{
 				Name:        info.Name,
 				Description: openai.String(info.Description),
@@ -271,14 +272,15 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 				acc.AddChunk(chunk)
 
 				for _, choice := range chunk.Choices {
+					// Stream content deltas
 					if choice.Delta.Content != "" {
-						//logging.Debug("[OPENAI] Content delta received", "content", choice.Delta.Content)
 						eventChan <- ProviderEvent{
 							Type:    EventContentDelta,
 							Content: choice.Delta.Content,
 						}
 						currentContent += choice.Delta.Content
 					}
+					// Log tool call deltas
 					if len(choice.Delta.ToolCalls) > 0 {
 						logging.Debug("[OPENAI] Tool call delta received", "toolCalls", choice.Delta.ToolCalls)
 					}

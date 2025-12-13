@@ -46,7 +46,7 @@ func (t *GetRelevantSourcesTool) Info() ToolInfo {
 				"description": "The query to search for relevant sources (e.g., main topics, keywords from the document)",
 			},
 			"limit": map[string]any{
-				"type":        "number",
+				"type":        []string{"number", "null"},
 				"description": "Maximum number of relevant sources to return (default: 5)",
 			},
 		},
@@ -252,7 +252,7 @@ func (t *RewriteDocumentTool) Info() ToolInfo {
 				"description": "Brief explanation of the changes made",
 			},
 			"original_content": map[string]any{
-				"type":        "string",
+				"type":        []string{"string", "null"},
 				"description": "Optional: Original document content for generating diff patches. When provided, enables diff preview functionality.",
 			},
 		},
@@ -566,7 +566,7 @@ func (t *AnalyzeDocumentTool) Info() ToolInfo {
 		Description: "Analyze document and provide improvement suggestions. Can focus on specific areas or provide general analysis.",
 		Parameters: map[string]any{
 			"focus_area": map[string]any{
-				"type":        "string",
+				"type":        []string{"string", "null"},
 				"description": "Optional: What aspect to focus on (structure, clarity, engagement, grammar, flow, technical_accuracy). If not provided, will analyze overall document quality.",
 			},
 			"user_request": map[string]any{
@@ -644,7 +644,7 @@ func (t *AddContextFromSourcesTool) Info() ToolInfo {
 				"description": "Current document content to provide context for search",
 			},
 			"limit": map[string]any{
-				"type":        "number",
+				"type":        []string{"number", "null"},
 				"description": "Maximum number of relevant sources to return (default: 5)",
 			},
 		},
@@ -903,14 +903,14 @@ func (t *GenerateTextContentTool) Info() ToolInfo {
 				"description": "The generation prompt or instructions for the LLM",
 			},
 			"context_sources": map[string]any{
-				"type":        "array",
+				"type":        []string{"array", "null"},
 				"description": "Optional: Array of relevant source chunks to provide context",
 				"items": map[string]any{
 					"type": "object",
 				},
 			},
 			"original_content": map[string]any{
-				"type":        "string",
+				"type":        []string{"string", "null"},
 				"description": "Optional: Original content for reference",
 			},
 		},

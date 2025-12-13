@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+// this is a request handling session
+// we might want to change the name to RequestSession
 type Session struct {
 	ID               string  `json:"id"`
 	Title            string  `json:"title"`

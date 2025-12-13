@@ -81,7 +81,7 @@ func (t *ExaSearchTool) Info() ToolInfo {
 				"description": "The search query to find relevant web content (e.g., topics, concepts, recent developments related to the document)",
 			},
 			"create_sources": map[string]any{
-				"type":        "boolean",
+				"type":        []string{"boolean", "null"},
 				"description": "Whether to automatically create sources from the search results (default: true)",
 			},
 		},

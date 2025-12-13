@@ -85,7 +85,7 @@ func (t *fetchTool) Info() ToolInfo {
 				"enum":        []string{"text", "markdown", "html"},
 			},
 			"timeout": map[string]any{
-				"type":        "number",
+				"type":        []string{"number", "null"},
 				"description": "Optional timeout in seconds (max 120)",
 			},
 		},
