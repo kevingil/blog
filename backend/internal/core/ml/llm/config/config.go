@@ -58,9 +58,9 @@ func init() {
 		ContextPaths: []string{}, // Empty by default for blog agent
 		Agents: map[AgentName]AgentConfig{
 			AgentCopilot: {
-				Model:           models.GPT51,
-				MaxTokens:       4000,
-				ReasoningEffort: 1,
+				Model:           models.GptOss120b,
+				MaxTokens:       8192,
+				ReasoningEffort: 1, // medium
 			},
 			AgentWriter: {
 				Model:           models.GPT5,
@@ -77,6 +77,10 @@ func init() {
 				APIKey:   os.Getenv("ANTHROPIC_API_KEY"),
 				Disabled: true, // Default disabled unless API key is provided
 			},
+			models.ProviderGROQ: {
+				APIKey:   os.Getenv("GROQ_API_KEY"),
+				Disabled: true, // Default disabled unless API key is provided
+			},
 		},
 		MCPServers: map[string]MCPServer{}, // Empty by default for blog agent
 	}
@@ -86,6 +90,13 @@ func init() {
 		providerConfig := globalConfig.Providers[models.ProviderAnthropic]
 		providerConfig.Disabled = false
 		globalConfig.Providers[models.ProviderAnthropic] = providerConfig
+	}
+
+	// Enable Groq if API key is provided
+	if globalConfig.Providers[models.ProviderGROQ].APIKey != "" {
+		providerConfig := globalConfig.Providers[models.ProviderGROQ]
+		providerConfig.Disabled = false
+		globalConfig.Providers[models.ProviderGROQ] = providerConfig
 	}
 }
 
