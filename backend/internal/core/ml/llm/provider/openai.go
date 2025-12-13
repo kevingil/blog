@@ -70,19 +70,6 @@ func (o *openaiClient) convertMessages(messages []message.Message) (openaiMessag
 	// Add system message first
 	openaiMessages = append(openaiMessages, openai.SystemMessage(o.providerOptions.systemMessage))
 
-	// First pass: collect all valid tool_call_ids from assistant messages
-	// This helps us filter out orphaned tool results that would cause Groq errors
-	validToolCallIDs := make(map[string]bool)
-	for _, msg := range messages {
-		if msg.Role == message.Assistant {
-			for _, call := range msg.ToolCalls() {
-				if call.Name != "" && call.ID != "" {
-					validToolCallIDs[call.ID] = true
-				}
-			}
-		}
-	}
-
 	for _, msg := range messages {
 		switch msg.Role {
 		case message.User:
@@ -134,12 +121,6 @@ func (o *openaiClient) convertMessages(messages []message.Message) (openaiMessag
 
 		case message.Tool:
 			for _, result := range msg.ToolResults() {
-				// Skip tool results that don't have a corresponding tool call
-				// This can happen when tool calls are lost during message storage/retrieval
-				if !validToolCallIDs[result.ToolCallID] {
-					fmt.Printf("[WARN] Skipping orphaned tool result with ID %s - no matching tool call found\n", result.ToolCallID)
-					continue
-				}
 				openaiMessages = append(openaiMessages,
 					openai.ToolMessage(result.Content, result.ToolCallID),
 				)

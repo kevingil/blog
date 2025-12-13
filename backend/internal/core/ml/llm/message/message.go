@@ -59,6 +59,9 @@ type ToolCall struct {
 	Finished bool   `json:"finished,omitempty"`
 }
 
+// ToolCall implements ContentPart so it can be stored in Parts for persistence
+func (t ToolCall) isContentPart() {}
+
 type ToolResult struct {
 	ToolCallID string `json:"tool_call_id"`
 	Content    string `json:"content"`
@@ -89,20 +92,36 @@ type Message struct {
 	Model       string        `json:"model,omitempty"`
 	CreatedAt   int64         `json:"created_at"`
 	UpdatedAt   int64         `json:"updated_at"`
-	toolCalls   []ToolCall    `json:"-"`
 	finishParts []Finish      `json:"-"`
 }
 
 func (m *Message) AddToolCall(call ToolCall) {
-	m.toolCalls = append(m.toolCalls, call)
+	m.Parts = append(m.Parts, call)
 }
 
 func (m *Message) ToolCalls() []ToolCall {
-	return m.toolCalls
+	var calls []ToolCall
+	for _, part := range m.Parts {
+		if tc, ok := part.(ToolCall); ok {
+			calls = append(calls, tc)
+		}
+	}
+	return calls
 }
 
 func (m *Message) SetToolCalls(calls []ToolCall) {
-	m.toolCalls = calls
+	// Remove existing tool calls from Parts
+	var newParts []ContentPart
+	for _, part := range m.Parts {
+		if _, ok := part.(ToolCall); !ok {
+			newParts = append(newParts, part)
+		}
+	}
+	m.Parts = newParts
+	// Add new tool calls
+	for _, call := range calls {
+		m.Parts = append(m.Parts, call)
+	}
 }
 
 func (m *Message) FinishToolCall(id string) {
