@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"time"
 
 	"blog-agent-go/backend/internal/core/ml/llm/config"
@@ -24,6 +25,7 @@ type openaiOptions struct {
 	disableCache    bool
 	reasoningEffort string
 	extraHeaders    map[string]string
+	isGroq          bool
 }
 
 type OpenAIOption func(*openaiOptions)
@@ -181,21 +183,38 @@ func (o *openaiClient) preparedParams(messages []openai.ChatCompletionMessagePar
 
 	if o.providerOptions.model.CanReason == true {
 		params.MaxCompletionTokens = openai.Int(o.providerOptions.maxTokens)
-		switch o.options.reasoningEffort {
-		case "low":
-			params.ReasoningEffort = shared.ReasoningEffortLow
-		case "medium":
-			params.ReasoningEffort = shared.ReasoningEffortMedium
-		case "high":
-			params.ReasoningEffort = shared.ReasoningEffortHigh
-		default:
-			params.ReasoningEffort = shared.ReasoningEffortMedium
+
+		// Only set reasoning effort for non-Groq providers (Groq uses WithJSONSet in request options)
+		if !o.options.isGroq {
+			switch o.options.reasoningEffort {
+			case "low":
+				params.ReasoningEffort = shared.ReasoningEffortLow
+			case "medium":
+				params.ReasoningEffort = shared.ReasoningEffortMedium
+			case "high":
+				params.ReasoningEffort = shared.ReasoningEffortHigh
+			default:
+				params.ReasoningEffort = shared.ReasoningEffortMedium
+			}
 		}
 	} else {
 		params.MaxTokens = openai.Int(o.providerOptions.maxTokens)
 	}
 
 	return params
+}
+
+func (o *openaiClient) getRequestOptions() []option.RequestOption {
+	var opts []option.RequestOption
+
+	// Add Groq-specific reasoning parameters
+	if o.options.isGroq && o.providerOptions.model.CanReason {
+		opts = append(opts,
+			option.WithJSONSet("reasoning_format", "parsed"),
+		)
+	}
+
+	return opts
 }
 
 func (o *openaiClient) send(ctx context.Context, messages []message.Message, tools []tools.BaseTool) (response *ProviderResponse, err error) {
@@ -205,12 +224,19 @@ func (o *openaiClient) send(ctx context.Context, messages []message.Message, too
 		jsonData, _ := json.Marshal(params)
 		logging.Debug("Prepared messages", "messages", string(jsonData))
 	}
+	requestOpts := o.getRequestOptions()
+
+	// Log raw JSON request
+	rawRequest, _ := json.Marshal(params)
+	log.Printf("[RAW REQUEST]\n %s \n", string(rawRequest))
+
 	attempts := 0
 	for {
 		attempts++
 		openaiResponse, err := o.client.Chat.Completions.New(
 			ctx,
 			params,
+			requestOpts...,
 		)
 		// If there is an error we are going to see if we can retry the call
 		if err != nil {
@@ -263,6 +289,11 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 		logging.Debug("Prepared messages", "messages", string(jsonData))
 	}
 
+	// Log raw JSON request
+	rawRequest, _ := json.Marshal(params)
+	log.Printf("[RAW REQUEST]\n %s \n", string(rawRequest))
+
+	requestOpts := o.getRequestOptions()
 	attempts := 0
 	eventChan := make(chan ProviderEvent)
 
@@ -272,15 +303,22 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 			openaiStream := o.client.Chat.Completions.NewStreaming(
 				ctx,
 				params,
+				requestOpts...,
 			)
 
 			acc := openai.ChatCompletionAccumulator{}
 			currentContent := ""
 			toolCalls := make([]message.ToolCall, 0)
+			chunkNum := 0
 
 			for openaiStream.Next() {
 				chunk := openaiStream.Current()
 				acc.AddChunk(chunk)
+				chunkNum++
+
+				// RAW LOGGING: Dump raw JSON of every chunk
+				rawJSON, _ := json.Marshal(chunk)
+				log.Printf("[RAW #%d]\n %s \n", chunkNum, string(rawJSON))
 
 				for _, choice := range chunk.Choices {
 					// Stream content deltas
@@ -290,10 +328,6 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 							Content: choice.Delta.Content,
 						}
 						currentContent += choice.Delta.Content
-					}
-					// Log tool call deltas
-					if len(choice.Delta.ToolCalls) > 0 {
-						logging.Debug("[OPENAI] Tool call delta received", "toolCalls", choice.Delta.ToolCalls)
 					}
 				}
 			}
@@ -439,5 +473,11 @@ func WithReasoningEffort(effort string) OpenAIOption {
 			logging.Warn("Invalid reasoning effort, using default: medium")
 		}
 		options.reasoningEffort = defaultReasoningEffort
+	}
+}
+
+func WithGroq() OpenAIOption {
+	return func(options *openaiOptions) {
+		options.isGroq = true
 	}
 }

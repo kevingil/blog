@@ -107,6 +107,7 @@ func NewProvider(providerName models.ModelProvider, opts ...ProviderClientOption
 	case models.ProviderGROQ:
 		clientOptions.openaiOptions = append(clientOptions.openaiOptions,
 			WithOpenAIBaseURL("https://api.groq.com/openai/v1"),
+			WithGroq(),
 		)
 		return &baseProvider[OpenAIClient]{
 			options: clientOptions,

@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -216,21 +215,16 @@ func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, cont
 		}
 		if cfg.Debug {
 			seqId := (len(msgHistory) + 1) / 2
-			toolResultFilepath := logging.WriteToolResultsJson(sessionID, seqId, toolResults)
-			logging.Info("Result", "message", agentMessage.FinishReason(), "toolResults", "{}", "filepath", toolResultFilepath)
-		} else {
-			logging.Info("Result", "message", agentMessage.FinishReason(), "toolResults", toolResults)
+			logging.WriteToolResultsJson(sessionID, seqId, toolResults)
 		}
 		if (agentMessage.FinishReason() == message.FinishReasonToolUse) && toolResults != nil {
 			// Stream the acknowledgment message to the user before continuing with tool execution
 			if agentMessage.Content().String() != "" {
-				// Send acknowledgment message directly to the events channel
 				responseEvent := AgentEvent{
 					Type:    AgentEventTypeResponse,
 					Message: agentMessage,
-					Done:    false, // Not done yet, we still have tool results to process
+					Done:    false,
 				}
-				logging.Info("[AGENT] Streaming acknowledgment message", "content", agentMessage.Content().String())
 				events <- responseEvent
 			}
 
@@ -240,7 +234,7 @@ func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, cont
 				Message: *toolResults,
 				Done:    false,
 			}
-			logging.Info("[AGENT] Streaming tool results message", "toolResults", len(toolResults.ToolResults()))
+			log.Printf("│ ✅ Tool results: %d", len(toolResults.ToolResults()))
 			events <- toolEvent
 
 			// We are not done, we need to respond with the tool response
@@ -391,11 +385,9 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 
 	switch event.Type {
 	case provider.EventThinkingDelta:
-		logging.Debug("[STREAM] Thinking delta", "content", event.Thinking)
 		assistantMsg.AppendReasoningContent(event.Content)
 		return a.messages.Update(ctx, *assistantMsg)
 	case provider.EventContentDelta:
-		//logging.Info("[STREAM] Content delta", "content", event.Content)
 		assistantMsg.AppendContent(event.Content)
 		a.messages.Update(ctx, *assistantMsg)
 
@@ -406,41 +398,41 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 		}
 		return nil
 	case provider.EventContentStart:
-		logging.Info("[STREAM] Content block started")
+		// Content block started
 	case provider.EventToolUseStart:
-		logging.Info("[STREAM] Tool call started", "tool", event.ToolCall.Name, "id", event.ToolCall.ID)
+		log.Printf("│ 🔧 Tool call: %s", event.ToolCall.Name)
 		assistantMsg.AddToolCall(*event.ToolCall)
 		return a.messages.Update(ctx, *assistantMsg)
-	// TODO: see how to handle this
-	// case provider.EventToolUseDelta:
-	// 	tm := time.Unix(assistantMsg.UpdatedAt, 0)
-	// 	assistantMsg.AppendToolCallInput(event.ToolCall.ID, event.ToolCall.Input)
-	// 	if time.Since(tm) > 1000*time.Millisecond {
-	// 		err := a.messages.Update(ctx, *assistantMsg)
-	// 		assistantMsg.UpdatedAt = time.Now().Unix()
-	// 		return err
-	// 	}
 	case provider.EventToolUseStop:
-		logging.Info("[STREAM] Tool call finished", "id", event.ToolCall.ID)
 		assistantMsg.FinishToolCall(event.ToolCall.ID)
 		return a.messages.Update(ctx, *assistantMsg)
 	case provider.EventError:
 		if errors.Is(event.Error, context.Canceled) {
-			logging.InfoPersist(fmt.Sprintf("Event processing canceled for session: %s", sessionID))
+			log.Printf("│ ⚠️  Canceled")
 			return context.Canceled
 		}
-		logging.ErrorPersist(event.Error.Error())
+		log.Printf("│ ❌ Error: %s", event.Error.Error())
 		return event.Error
 	case provider.EventComplete:
-		logging.Info("[STREAM] Stream complete", "finishReason", event.Response.FinishReason, "content", event.Response.Content, "toolCallCount", len(event.Response.ToolCalls))
+		contentPreview := event.Response.Content
+		if len(contentPreview) > 80 {
+			contentPreview = contentPreview[:80] + "..."
+		}
+		log.Println("┌─────────────────────────────────────────────────────────────")
+		log.Printf("│ 📥 LLM RESPONSE")
+		log.Printf("│    Finish: %s", event.Response.FinishReason)
+		log.Printf("│    Tools: %d", len(event.Response.ToolCalls))
+		if contentPreview != "" {
+			log.Printf("│    Content: %s", contentPreview)
+		}
+		log.Println("└─────────────────────────────────────────────────────────────")
+
 		assistantMsg.SetToolCalls(event.Response.ToolCalls)
 		assistantMsg.AddFinish(event.Response.FinishReason)
 		if err := a.messages.Update(ctx, *assistantMsg); err != nil {
 			return fmt.Errorf("failed to update message: %w", err)
 		}
 		return a.TrackUsage(ctx, sessionID, a.provider.Model(), event.Response.Usage)
-	default:
-		logging.Debug("[STREAM] Unknown event type", "type", string(event.Type))
 	}
 
 	return nil
@@ -487,100 +479,40 @@ func (a *agent) Update(agentName config.AgentName, modelID models.ModelID) (mode
 	return a.provider.Model(), nil
 }
 
-// logRequestContext logs the complete context being sent to the LLM for debugging
+// logRequestContext logs a brief summary of the request
 func (a *agent) logRequestContext(sessionID string, msgHistory []message.Message) {
-	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	log.Printf("🤖 [AGENT REQUEST CONTEXT] Session: %s", sessionID)
-	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
-	// Log system prompt
-	systemPrompt := a.getSystemPrompt()
-	log.Printf("\n📋 SYSTEM PROMPT:")
-	log.Printf("────────────────────────────────────────────────────────────")
-	log.Printf("%s", systemPrompt)
-	log.Printf("────────────────────────────────────────────────────────────\n")
-
-	// Log message history
-	log.Printf("💬 MESSAGE HISTORY (%d messages):", len(msgHistory))
-	log.Printf("────────────────────────────────────────────────────────────")
-
-	for i, msg := range msgHistory {
-		roleStr := string(msg.Role)
-		content := msg.Content().String()
-
-		// Truncate very long content for readability
-		preview := content
-		if len(preview) > 200 {
-			preview = preview[:200] + "..."
-		}
-
-		log.Printf("\n[%d] %s:", i+1, roleStr)
-		log.Printf("    Content: %s", preview)
-
-		// Log tool calls if present
-		toolCalls := msg.ToolCalls()
-		if len(toolCalls) > 0 {
-			log.Printf("    Tool Calls:")
-			for _, tc := range toolCalls {
-				log.Printf("      - %s (ID: %s)", tc.Name, tc.ID)
-			}
-		}
-
-		// Log tool results if present
-		toolResults := msg.ToolResults()
-		if len(toolResults) > 0 {
-			log.Printf("    Tool Results:")
-			for _, tr := range toolResults {
-				log.Printf("      - %s: %s", tr.ToolCallID, tr.Content[:min(100, len(tr.Content))])
-
-				// Try to extract artifact info from tool result
-				if !tr.IsError && len(tr.Content) > 0 && tr.Content[0] == '{' {
-					var resultData map[string]interface{}
-					if err := json.Unmarshal([]byte(tr.Content), &resultData); err == nil {
-						if toolName, ok := resultData["tool_name"].(string); ok {
-							log.Printf("        Tool: %s", toolName)
-
-							// Log artifact state if this is an edit/rewrite tool
-							if toolName == "edit_text" || toolName == "rewrite_document" {
-								log.Printf("        ✏️  ARTIFACT DETECTED:")
-								if reason, ok := resultData["reason"].(string); ok {
-									log.Printf("          Reason: %s", reason)
-								}
-								if toolName == "edit_text" {
-									if editType, ok := resultData["edit_type"].(string); ok {
-										log.Printf("          Edit Type: %s", editType)
-									}
-								}
-							}
-
-							// Log search results if this is a search tool
-							if toolName == "search_web_sources" {
-								log.Printf("        🔍 SEARCH RESULTS:")
-								if totalFound, ok := resultData["total_found"].(float64); ok {
-									log.Printf("          Total Found: %.0f", totalFound)
-								}
-								if sourcesCreated, ok := resultData["sources_successful"].(float64); ok {
-									log.Printf("          Sources Created: %.0f", sourcesCreated)
-								}
-								if query, ok := resultData["query"].(string); ok {
-									log.Printf("          Query: %s", query)
-								}
-							}
-						}
-					}
-				}
-			}
+	// Count message types
+	userMsgs, assistantMsgs, toolMsgs := 0, 0, 0
+	for _, msg := range msgHistory {
+		switch msg.Role {
+		case message.User:
+			userMsgs++
+		case message.Assistant:
+			assistantMsgs++
+		case message.Tool:
+			toolMsgs++
 		}
 	}
 
-	log.Printf("\n────────────────────────────────────────────────────────────")
-	log.Printf("📊 Total tokens being sent: ~%d (estimated)", a.estimateTokens(msgHistory))
-	log.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-}
+	// Get last user message preview
+	lastUserContent := ""
+	for i := len(msgHistory) - 1; i >= 0; i-- {
+		if msgHistory[i].Role == message.User {
+			lastUserContent = msgHistory[i].Content().String()
+			if len(lastUserContent) > 100 {
+				lastUserContent = lastUserContent[:100] + "..."
+			}
+			break
+		}
+	}
 
-// getSystemPrompt returns the system prompt from the provider
-func (a *agent) getSystemPrompt() string {
-	return a.provider.GetSystemMessage()
+	log.Println("")
+	log.Println("┌─────────────────────────────────────────────────────────────")
+	log.Printf("│ 📤 SENDING TO LLM")
+	log.Printf("│    Messages: %d user, %d assistant, %d tool", userMsgs, assistantMsgs, toolMsgs)
+	log.Printf("│    Tokens: ~%d (estimated)", a.estimateTokens(msgHistory))
+	log.Printf("│    User: %s", lastUserContent)
+	log.Println("└─────────────────────────────────────────────────────────────")
 }
 
 // estimateTokens provides a rough token estimate for logging
@@ -591,13 +523,6 @@ func (a *agent) estimateTokens(msgs []message.Message) int {
 		total += len(msg.Content().String()) / 4
 	}
 	return total
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func createAgentProvider(agentName config.AgentName) (provider.Provider, error) {
