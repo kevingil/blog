@@ -477,8 +477,31 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 				// This event contains tool results - stream each as a separate tool_result block
 				toolResults := event.Message.ToolResults()
 
-				// Save tool result messages with artifact metadata
-				m.saveToolResultMessage(ctx, asyncReq, event.Message, toolResults, articleID)
+				// Save tool result messages with artifact metadata and stream full message if saved
+				savedMsg := m.saveToolResultMessage(ctx, asyncReq, event.Message, toolResults, articleID)
+				if savedMsg != nil {
+					// Convert MetaData from JSON bytes to map for streaming
+					var metaDataMap map[string]interface{}
+					if err := json.Unmarshal(savedMsg.MetaData, &metaDataMap); err != nil {
+						log.Printf("[Agent] ⚠️ Failed to unmarshal meta_data for streaming: %v", err)
+						metaDataMap = make(map[string]interface{})
+					}
+
+					// Stream the full message so frontend can render DiffArtifact immediately
+					asyncReq.ResponseChan <- StreamResponse{
+						RequestID: asyncReq.ID,
+						Type:      "full_message",
+						Iteration: asyncReq.iteration,
+						FullMessage: &agentTypes.FullMessagePayload{
+							ID:        savedMsg.ID.String(),
+							ArticleID: savedMsg.ArticleID.String(),
+							Role:      savedMsg.Role,
+							Content:   savedMsg.Content,
+							MetaData:  metaDataMap,
+							CreatedAt: savedMsg.CreatedAt.Format(time.RFC3339),
+						},
+					}
+				}
 
 				for _, toolResult := range toolResults {
 					// Detect if this is a search tool result
@@ -723,9 +746,10 @@ func (m *AgentAsyncCopilotManager) monitorTimeout(ctx context.Context, asyncReq 
 }
 
 // saveToolResultMessage saves tool result messages with artifact metadata
-func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, asyncReq *AgentAsyncRequest, msg message.Message, toolResults []message.ToolResult, articleID uuid.UUID) {
+// Returns the saved message if one was created (for artifact tools), nil otherwise
+func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, asyncReq *AgentAsyncRequest, msg message.Message, toolResults []message.ToolResult, articleID uuid.UUID) *models.ChatMessage {
 	if m.chatService == nil || articleID == uuid.Nil {
-		return
+		return nil
 	}
 
 	log.Printf("[Agent] 🔧 Processing %d tool result(s) for database save...", len(toolResults))
@@ -831,12 +855,10 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 			savedMsg, err := m.chatService.SaveMessage(ctx, articleID, "assistant", content, msgMetadata)
 			if err != nil {
 				log.Printf("[Agent] ❌ Failed to save tool result message with artifact: %v", err)
-			} else {
-				log.Printf("[Agent] ✅ Saved artifact message (ID: %s) with status: %s", savedMsg.ID, metadata.ArtifactStatusPending)
+				return nil
 			}
-
-			// Only process first artifact-producing tool
-			break
+			log.Printf("[Agent] ✅ Saved artifact message (ID: %s) with status: %s", savedMsg.ID, metadata.ArtifactStatusPending)
+			return savedMsg
 		}
 
 		// Save search tool results with metadata (no artifact, but save tool execution)
@@ -865,11 +887,11 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 			savedMsg, err := m.chatService.SaveMessage(ctx, articleID, "assistant", content, msgMetadata)
 			if err != nil {
 				log.Printf("[Agent] ❌ Failed to save search tool result message: %v", err)
-			} else {
-				log.Printf("[Agent] ✅ Saved search result message (ID: %s)", savedMsg.ID)
+				return nil
 			}
-
-			break
+			log.Printf("[Agent] ✅ Saved search result message (ID: %s)", savedMsg.ID)
+			return savedMsg
 		}
 	}
+	return nil
 }
