@@ -110,14 +110,20 @@ func (s *MessageService) GetConversationHistory(ctx context.Context, articleID u
 	db := s.db.GetDB()
 	var messages []models.ChatMessage
 
+	// Get the most recent N messages by ordering DESC, then reverse for chronological order
 	err := db.Where("article_id = ?", articleID).
-		Order("created_at ASC").
+		Order("created_at DESC").
 		Limit(limit).
 		Find(&messages).Error
 
 	if err != nil {
 		fmt.Printf("[MessageService] ❌ Database query failed: %v\n", err)
 		return nil, errors.NewInternalError("Failed to retrieve conversation history")
+	}
+
+	// Reverse to get chronological order (oldest first for display)
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
 	}
 
 	fmt.Printf("[MessageService] ✅ Fetched %d messages\n", len(messages))
