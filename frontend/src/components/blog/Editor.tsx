@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo, ChevronDown as ChevronDownIcon, ChevronUp as ChevronUpIcon } from "lucide-react"
+import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -36,10 +36,10 @@ import { useToast } from "@/hooks/use-toast";
 import { ThinkShimmerBlock } from "@/components/ui/think-shimmer";
 import { Markdown } from "@/components/ui/markdown";
 import { getConversationHistory } from "@/services/conversations";
-import { acceptArtifact, rejectArtifact } from "@/services/artifacts";
+// Artifact accept/reject is now handled by the sticky DiffActionBar
 import { WebSearchSteps, WebSearchToolContext } from "./WebSearchSteps";
-// DiffPreviewContent is available if needed for custom diff rendering
-// import { DiffPreviewContent, getDiffToolIcon, getDiffToolDisplayName } from "./DiffPreviewContent";
+import { DiffActionBar } from "./DiffActionBar";
+import { DiffArtifact } from "./DiffArtifact";
 import { 
   ToolCall, 
   ToolCallTrigger, 
@@ -53,7 +53,7 @@ import {
   StepsItem 
 } from "@/components/prompt-kit/steps";
 import { cn } from '@/lib/utils';
-import { FileEdit, FileDiff, Wrench, BookOpen, FileSearch, PlusCircle, FileText, ImageIcon } from "lucide-react";
+import { FileDiff, Wrench, BookOpen, FileSearch, PlusCircle, FileText, ImageIcon } from "lucide-react";
 import { 
   updateArticle, 
   getArticle, 
@@ -319,105 +319,6 @@ const DiffHighlighter = Extension.create({
     ];
   },
 });
-
-// Diff preview component for chat messages
-function DiffPreview({ diffPreview, diffState }: { 
-  diffPreview: { oldText: string; newText: string; reason?: string }, 
-  diffState: 'accepted' | 'rejected' 
-}) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const parts = diffWords(diffPreview.oldText, diffPreview.newText);
-  const maxLines = 3; // Show first 3 lines by default
-  
-  type DiffPart = { added?: boolean; removed?: boolean; value: string; truncated?: boolean };
-  
-  // Split parts into lines to determine if we need truncation
-  let currentLine = 0;
-  let truncatedParts: DiffPart[] = [];
-  let hasMoreContent = false;
-  
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i];
-    const lines = part.value.split('\n');
-    
-    if (currentLine + lines.length <= maxLines || isExpanded) {
-      // Include the whole part
-      truncatedParts.push(part);
-      currentLine += lines.length - 1; // -1 because last line doesn't count as a new line
-    } else {
-      // Truncate this part
-      const remainingLines = maxLines - currentLine;
-      if (remainingLines > 0) {
-        const truncatedValue = lines.slice(0, remainingLines).join('\n');
-        truncatedParts.push({
-          ...part,
-          value: truncatedValue,
-          truncated: true
-        });
-      }
-      hasMoreContent = true;
-      break;
-    }
-  }
-  
-  // If we're not expanded and there's more content, show the expand button
-  const showExpandButton = !isExpanded && (hasMoreContent || parts.some(p => p.value.split('\n').length > maxLines));
-  
-  return (
-    <div className={cn(
-      "mt-2 p-0 rounded-md text-xs"
-    )}>
-      <div className={cn(
-        "flex flex-col items-start gap-1 mb-1 font-medium",
-        diffState === 'accepted' ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300"
-      )}>
-        <div className="flex flex-row items-center gap-1">
-          <span>{diffState === 'accepted' ? '✅' : '❌'}</span>
-          <span>{diffState === 'accepted' ? 'Accepted' : 'Rejected'}</span>
-        </div>
-        {diffPreview.reason && <span>• {diffPreview.reason}</span>}
-      </div>
-      <div className="font-mono text-xs whitespace-pre-wrap">
-        {(isExpanded ? parts : truncatedParts).map((part, index) => (
-          <span
-            key={index}
-            className={cn(
-              part.added ? "bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100" : 
-              part.removed ? "bg-red-200 dark:bg-red-800 text-red-900 dark:text-red-100 line-through" : 
-              "text-gray-700 dark:text-gray-300"
-            )}
-          >
-            {part.value}
-            {'truncated' in part && part.truncated && <span className="text-gray-500">...</span>}
-          </span>
-        ))}
-      </div>
-      {/* Show expand/collapse button at bottom */}
-      {(showExpandButton || isExpanded) && (
-        <div className="flex justify-center mt-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="h-6 px-2 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          >
-            {isExpanded ? (
-              <>
-                <ChevronUpIcon className="h-3 w-3 mr-1" />
-                Show less
-              </>
-            ) : (
-              <>
-                <ChevronDownIcon className="h-3 w-3 mr-1" />
-                Show more
-              </>
-            )}
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // Formatting toolbar component
 function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
@@ -787,10 +688,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [originalDocument, setOriginalDocument] = useState<string>('');
   const [pendingNewDocument, setPendingNewDocument] = useState<string>('');
   const [currentDiffReason, setCurrentDiffReason] = useState<string>('');
-  const [activeDiffMessageIndex, setActiveDiffMessageIndex] = useState<number | null>(null);
-  
 
-  
+
   // Inline diff lifecycle helpers
   const enterDiffPreview = (oldHtml: string, newHtml: string, reason?: string) => {
     if (!editor) return;
@@ -823,71 +722,25 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const acceptDiff = () => {
     if (!editor) return;
     
-    // Save diff preview data before clearing - use full HTML content
-    const oldText = originalDocument;
-    const newText = pendingNewDocument;
-    
-    // Update the __DIFF_ACTIONS__ message with accepted state
-    if (activeDiffMessageIndex !== null) {
-      setChatMessages((prev) => {
-        const updated = [...prev];
-        if (updated[activeDiffMessageIndex]?.content === '__DIFF_ACTIONS__') {
-          updated[activeDiffMessageIndex] = {
-            ...updated[activeDiffMessageIndex],
-            diffState: 'accepted',
-            diffPreview: {
-              oldText,
-              newText,
-              reason: currentDiffReason,
-            },
-          };
-        }
-        return updated;
-      });
-    }
-    
+    // Apply the pending changes
     editor.commands.setContent(pendingNewDocument || editor.getHTML());
     setValue('content', editor.getHTML());
     clearDiffDecorations();
     setDiffing(false);
     setPendingNewDocument('');
     setCurrentDiffReason('');
-    setActiveDiffMessageIndex(null);
   };
 
   const rejectDiff = () => {
     if (!editor) return;
     
-    // Save diff preview data before clearing - use full HTML content
-    const oldText = originalDocument;
-    const newText = pendingNewDocument;
-    
-    // Update the __DIFF_ACTIONS__ message with rejected state
-    if (activeDiffMessageIndex !== null) {
-      setChatMessages((prev) => {
-        const updated = [...prev];
-        if (updated[activeDiffMessageIndex]?.content === '__DIFF_ACTIONS__') {
-          updated[activeDiffMessageIndex] = {
-            ...updated[activeDiffMessageIndex],
-            diffState: 'rejected',
-            diffPreview: {
-              oldText,
-              newText,
-              reason: currentDiffReason,
-            },
-          };
-        }
-        return updated;
-      });
-    }
-    
+    // Revert to original content
     editor.commands.setContent(originalDocument || editor.getHTML());
     setValue('content', originalDocument || editor.getHTML());
     clearDiffDecorations();
     setDiffing(false);
     setPendingNewDocument('');
     setCurrentDiffReason('');
-    setActiveDiffMessageIndex(null);
   };
 
   const editor = useEditor({
@@ -1154,16 +1007,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         const newHtml = result.content;
         const reason = 'Full-document rewrite';
         enterDiffPreview(oldHtml, newHtml, reason);
-        setChatMessages((prev) => {
-          const newMessages: ChatMessage[] = [
-            ...prev,
-            { role: 'assistant', content: '📋 Proposed full-document changes' },
-            { role: 'assistant', content: '__DIFF_ACTIONS__' },
-          ];
-          // Set the active diff message index (last message)
-          setActiveDiffMessageIndex(newMessages.length - 1);
-          return newMessages;
-        });
+        // Add a simple message about the proposed changes
+        setChatMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: '📋 I\'ve prepared a full-document rewrite. Review the changes in the editor and use "Keep All" or "Reject" below.' }
+        ]);
       }
     } catch (error) {
       console.error('Error rewriting article:', error);
@@ -1196,16 +1044,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     editor.chain().focus().setTextSelection({ from, to }).insertContent(newText).run();
     const newHtml = editor.getHTML();
     enterDiffPreview(oldHtml, newHtml, reason);
-    setChatMessages((prev) => {
-      const newMessages: ChatMessage[] = [
-        ...prev,
-        { role: 'assistant', content: `📋 Proposed changes: ${reason}` },
-        { role: 'assistant', content: '__DIFF_ACTIONS__' },
-      ];
-      // Set the active diff message index (last message)
-      setActiveDiffMessageIndex(newMessages.length - 1);
-      return newMessages;
-    });
   };
 
   // Apply patch from AI assistant (new implementation)
@@ -1231,16 +1069,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     editor.chain().focus().setTextSelection({ from, to }).insertContent(newText).run();
     const newHtml = editor.getHTML();
     enterDiffPreview(oldHtml, newHtml, reason);
-    setChatMessages((prev) => {
-      const newMessages: ChatMessage[] = [
-        ...prev,
-        { role: 'assistant', content: `📋 Proposed changes: ${reason}` },
-        { role: 'assistant', content: '__DIFF_ACTIONS__' },
-      ];
-      // Set the active diff message index (last message)
-      setActiveDiffMessageIndex(newMessages.length - 1);
-      return newMessages;
-    });
   };
 
   // Apply document rewrite from AI assistant
@@ -1256,16 +1084,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     
     // Create diff preview
     enterDiffPreview(oldHtml, newHtml, reason);
-    setChatMessages((prev) => {
-      const newMessages: ChatMessage[] = [
-        ...prev,
-        { role: 'assistant', content: `📋 Document rewrite: ${reason}` },
-        { role: 'assistant', content: '__DIFF_ACTIONS__' },
-      ];
-      // Set the active diff message index (last message)
-      setActiveDiffMessageIndex(newMessages.length - 1);
-      return newMessages;
-    });
   };
 
   const sendChatWithMessage = async (message: string) => {
@@ -1390,6 +1208,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
       let currentAssistantContent = '';
       let hasInitialContent = false;
+      let placeholderRemoved = false; // Track if the assistant placeholder was removed by a tool message
 
       ws.onmessage = (event) => {
         try {
@@ -1451,18 +1270,28 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 setIsThinking(false);
                 // Handle assistant text responses as separate messages
                 if (msg.content) {
-                  // If this is the first text block, update the existing assistant message
+                  // If this is the first text block
                   if (!hasInitialContent) {
                     currentAssistantContent = msg.content;
                     hasInitialContent = true;
-                    setChatMessages((prev) => {
-                      const updated = [...prev];
-                      updated[assistantIndex] = { 
-                        role: 'assistant', 
-                        content: currentAssistantContent 
-                      } as ChatMessage;
-                      return updated;
-                    });
+                    
+                    // If placeholder was removed by a tool message, append to end
+                    // Otherwise update the placeholder in place
+                    if (placeholderRemoved) {
+                      setChatMessages((prev) => [
+                        ...prev,
+                        { role: 'assistant', content: currentAssistantContent } as ChatMessage
+                      ]);
+                    } else {
+                      setChatMessages((prev) => {
+                        const updated = [...prev];
+                        updated[assistantIndex] = { 
+                          role: 'assistant', 
+                          content: currentAssistantContent 
+                        } as ChatMessage;
+                        return updated;
+                      });
+                    }
                   } else {
                     // For subsequent text blocks, add as new messages
                     setChatMessages((prev) => [
@@ -1598,6 +1427,48 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   }
                 }
                 break;
+
+              case 'full_message':
+                // Handle full message with complete meta_data for artifact tools
+                setIsThinking(false);
+                if (msg.full_message) {
+                  console.log('Full message received:', msg.full_message);
+                  
+                  // Remove the empty assistant placeholder and add the full message
+                  // This ensures correct ordering: tool message comes before any follow-up text
+                  placeholderRemoved = true;
+                  setChatMessages((prev) => {
+                    const updated = [...prev];
+                    // Remove the empty placeholder at assistantIndex if it exists and is empty
+                    if (updated[assistantIndex]?.content === '' && 
+                        !updated[assistantIndex]?.tool_context && 
+                        !updated[assistantIndex]?.meta_data) {
+                      updated.splice(assistantIndex, 1);
+                    }
+                    // Add the full message
+                    updated.push({
+                      id: msg.full_message.id,
+                      role: msg.full_message.role as 'assistant',
+                      content: msg.full_message.content,
+                      meta_data: msg.full_message.meta_data,
+                      created_at: msg.full_message.created_at,
+                    });
+                    return updated;
+                  });
+                  
+                  // Apply diff if it's an edit tool
+                  const artifact = msg.full_message.meta_data?.artifact;
+                  const toolExec = msg.full_message.meta_data?.tool_execution;
+                  if (artifact && toolExec?.output) {
+                    const toolName = toolExec.tool_name;
+                    if (toolName === 'edit_text') {
+                      applyTextEdit(toolExec.output.original_text, toolExec.output.new_text, toolExec.output.reason);
+                    } else if (toolName === 'rewrite_document') {
+                      applyDocumentRewrite(toolExec.output.new_content, toolExec.output.reason, toolExec.output.original_content);
+                    }
+                  }
+                }
+                break;
                 
               case 'done':
                 console.log('Stream completed');
@@ -1614,16 +1485,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       const newHtml = mdParser.render(suggestedContent);
                       const reason = 'AI-suggested content from code block';
                       enterDiffPreview(oldHtml, newHtml, reason);
-                      setChatMessages((prev) => {
-                        const newMessages: ChatMessage[] = [
-                          ...prev,
-                          { role: 'assistant', content: '📋 Proposed full-document changes' },
-                          { role: 'assistant', content: '__DIFF_ACTIONS__' },
-                        ];
-                        // Set the active diff message index (last message)
-                        setActiveDiffMessageIndex(newMessages.length - 1);
-                        return newMessages;
-                      });
                     }
                   }
                 }
@@ -1727,16 +1588,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   const newHtml = mdParser.render(suggestedContent);
                   const reason = 'AI-suggested content from code block (legacy)';
                   enterDiffPreview(oldHtml, newHtml, reason);
-                  setChatMessages((prev) => {
-                    const newMessages: ChatMessage[] = [
-                      ...prev,
-                      { role: 'assistant', content: '📋 Proposed full-document changes' },
-                      { role: 'assistant', content: '__DIFF_ACTIONS__' },
-                    ];
-                    // Set the active diff message index (last message)
-                    setActiveDiffMessageIndex(newMessages.length - 1);
-                    return newMessages;
-                  });
                 }
               }
             }
@@ -2276,7 +2127,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 {/* Hidden input to keep react-hook-form registration for content */}
                 <input type="hidden" {...register('content')} value={watchedValues.content} />
                 {errors.content && <p className="text-red-500">{errors.content.message}</p>}
-                {/* Diff preview is inline; accept/decline in chat */}
               </div>
 
 <div className="w-full flex flex-row gap-2 justify-between mt-4">
@@ -2292,7 +2142,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   type="submit"
                   onClick={() => {
                     if (diffing) {
-                      // Discard diff changes
+                      // Reject pending diff changes before saving
                       rejectDiff();
                     }
                     handleSubmit((data) => onSubmit(data, false))();
@@ -2303,7 +2153,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 }
               <Button type='submit' disabled={createArticleMutation.isPending || updateArticleMutation.isPending} onClick={() => {
                 if (diffing) {
-                  // Discard diff changes
+                  // Reject pending diff changes before saving
                   rejectDiff();
                 }
                 handleSubmit((data) => onSubmit(data, true))();
@@ -2340,30 +2190,50 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   return <WebSearchSteps key={i} tool_context={m.tool_context as WebSearchToolContext} />;
                 }
                 
-                // Edit/rewrite tools - these use ToolCall with DiffPreviewContent
-                // Note: The actual diff is shown in __DIFF_ACTIONS__ messages, 
-                // this shows the tool execution status
-                const icon = tool_name === 'edit_text' 
-                  ? <FileEdit className="h-4 w-4" />
-                  : <FileDiff className="h-4 w-4" />;
+                // Edit/rewrite tools - use DiffArtifact for unified diff display
                 const displayName = tool_name === 'edit_text' ? 'Text edit' : 'Document rewrite';
                 
-                return (
-                  <ToolCall key={i} status={toolStatus} defaultOpen={false}>
-                    <ToolCallTrigger icon={icon}>
-                      {displayName}{reason ? `: ${reason}` : ''}
-                    </ToolCallTrigger>
-                    <ToolCallContent>
-                      <ToolCallStatusItem status={toolStatus === 'running' ? 'running' : 'completed'}>
-                        {tool_name === 'edit_text' ? 'Analyzing text selection...' : 'Analyzing document...'}
-                      </ToolCallStatusItem>
-                      {toolStatus === 'completed' && (
-                        <ToolCallStatusItem status="completed">
-                          {tool_name === 'edit_text' ? 'Generated text edit' : 'Generated document rewrite'}
+                // While running, show a loading state
+                if (toolStatus === 'running') {
+                  return (
+                    <ToolCall key={i} status="running" defaultOpen={true}>
+                      <ToolCallTrigger icon={<FileDiff className="h-4 w-4" />}>
+                        {displayName}{reason ? `: ${reason}` : ''}
+                      </ToolCallTrigger>
+                      <ToolCallContent>
+                        <ToolCallStatusItem status="running">
+                          {tool_name === 'edit_text' ? 'Analyzing text selection...' : 'Analyzing document...'}
                         </ToolCallStatusItem>
-                      )}
-                    </ToolCallContent>
-                  </ToolCall>
+                      </ToolCallContent>
+                    </ToolCall>
+                  );
+                }
+                
+                // Get diff data from tool_context.output
+                const toolOutput = m.tool_context?.output as { 
+                  original_content?: string; 
+                  new_content?: string 
+                } | undefined;
+                const oldText = toolOutput?.original_content || '';
+                const newText = toolOutput?.new_content || '';
+                
+                // Show DiffArtifact with diff preview and Apply button
+                return (
+                  <DiffArtifact
+                    key={i}
+                    title={`${displayName}${reason ? `: ${reason}` : ''}`}
+                    description={reason}
+                    oldText={oldText}
+                    newText={newText}
+                    onApply={() => {
+                      // Apply this tool's new content to editor
+                      if (editor && newText) {
+                        const currentHtml = editor.getHTML();
+                        const newHtml = mdParser.render(newText);
+                        enterDiffPreview(currentHtml, newHtml, reason || '');
+                      }
+                    }}
+                  />
                 );
               }
               
@@ -2435,96 +2305,40 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   return renderToolMessage();
                 }
                 
-                // Render artifacts from metadata
+                // Render artifacts from metadata using unified DiffArtifact component
                 if (m.meta_data?.artifact) {
                   const artifact = m.meta_data.artifact;
+                  const toolOutput = m.meta_data?.tool_execution?.output as { 
+                    original_content?: string; 
+                    new_content?: string 
+                  } | undefined;
                   
-                  // Show artifact based on status using ToolCall
-                  const artifactStatus = artifact.status === 'pending' ? 'pending' 
-                    : artifact.status === 'accepted' ? 'completed' 
-                    : artifact.status === 'rejected' ? 'error' : 'pending';
+                  // Get diff data from tool_execution.output
+                  const oldText = toolOutput?.original_content || '';
+                  const newText = toolOutput?.new_content || artifact.content || '';
                   
                   return (
-                    <ToolCall key={i} status={artifactStatus} defaultOpen={artifact.status === 'pending'}>
-                      <ToolCallTrigger icon={<FileText className="h-4 w-4" />}>
-                        {artifact.title || 'Artifact'}
-                      </ToolCallTrigger>
-                      <ToolCallContent>
-                        {artifact.description && (
-                          <p className="text-xs text-muted-foreground mb-2">{artifact.description}</p>
-                        )}
-                        {artifact.status === 'pending' && (
-                          <div className="flex gap-2">
-                            <Button 
-                              size="sm" 
-                              onClick={async () => {
-                                if (m.id) {
-                                  await acceptArtifact(m.id);
-                                  setChatMessages(prev => prev.map((msg, idx) => 
-                                    idx === i && msg.meta_data?.artifact 
-                                      ? { ...msg, meta_data: { ...msg.meta_data, artifact: { ...msg.meta_data.artifact, status: 'accepted' } } }
-                                      : msg
-                                  ));
-                                }
-                              }}
-                            >
-                              Accept
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              onClick={async () => {
-                                if (m.id) {
-                                  await rejectArtifact(m.id);
-                                  setChatMessages(prev => prev.map((msg, idx) => 
-                                    idx === i && msg.meta_data?.artifact 
-                                      ? { ...msg, meta_data: { ...msg.meta_data, artifact: { ...msg.meta_data.artifact, status: 'rejected' } } }
-                                      : msg
-                                  ));
-                                }
-                              }}
-                            >
-                              Reject
-                            </Button>
-                          </div>
-                        )}
-                        {artifact.status === 'accepted' && (
-                          <ToolCallStatusItem status="completed">
-                            Changes applied
-                          </ToolCallStatusItem>
-                        )}
-                        {artifact.status === 'rejected' && (
-                          <ToolCallStatusItem status="error">
-                            Changes rejected
-                          </ToolCallStatusItem>
-                        )}
-                      </ToolCallContent>
-                    </ToolCall>
+                    <DiffArtifact
+                      key={i}
+                      title={artifact.title || 'Document changes'}
+                      description={artifact.description}
+                      oldText={oldText}
+                      newText={newText}
+                      onApply={() => {
+                        // Apply this artifact's new content to editor
+                        if (editor && newText) {
+                          const currentHtml = editor.getHTML();
+                          const newHtml = mdParser.render(newText);
+                          enterDiffPreview(currentHtml, newHtml, artifact.description || '');
+                        }
+                      }}
+                    />
                   );
                 }
                 
+                // Skip __DIFF_ACTIONS__ messages - diff actions are now handled by the sticky DiffActionBar
                 if (m.content === '__DIFF_ACTIONS__') {
-                  // Show diff preview using ToolCall
-                  const diffStatus = m.diffState === 'accepted' ? 'completed' 
-                    : m.diffState === 'rejected' ? 'error' : 'pending';
-                  
-                  return (
-                    <ToolCall key={i} status={diffStatus} defaultOpen={!m.diffState}>
-                      <ToolCallTrigger icon={<FileDiff className="h-4 w-4" />}>
-                        Proposed changes{m.diffPreview?.reason ? `: ${m.diffPreview.reason}` : ''}
-                      </ToolCallTrigger>
-                      <ToolCallContent>
-                        {m.diffState && m.diffPreview ? (
-                          <DiffPreview diffPreview={m.diffPreview} diffState={m.diffState} />
-                        ) : (
-                          <div className="flex gap-2">
-                            <Button size="sm" onClick={acceptDiff} disabled={!diffing}>Accept</Button>
-                            <Button size="sm" variant="outline" onClick={rejectDiff} disabled={!diffing}>Discard</Button>
-                          </div>
-                        )}
-                      </ToolCallContent>
-                    </ToolCall>
-                  );
+                  return null;
                 }
                   
                 // Regular assistant message
@@ -2558,6 +2372,15 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               <ThinkShimmerBlock message={thinkingMessage} />
             )}
           </div>
+          
+          {/* Sticky diff action bar - shows when there are pending changes */}
+          {diffing && !chatLoading && (
+            <DiffActionBar 
+              onKeepAll={acceptDiff}
+              onReject={rejectDiff}
+            />
+          )}
+          
         <div className="p-4 border-t space-y-2">
           <div className="flex gap-1 flex-wrap">
             <Button
