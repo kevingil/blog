@@ -18,6 +18,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { Link } from "@tanstack/react-router"
 import { useInfiniteQuery } from "@tanstack/react-query"
@@ -156,6 +157,8 @@ const navigationData = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { state } = useSidebar()
+  
   // Fetch articles for the sidebar with infinite scrolling
   const {
     data,
@@ -178,7 +181,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <div className="text-base font-semibold">Dashboard</div>
+        {state === "expanded" && (
+          <div className="text-base font-semibold">Dashboard</div>
+        )}
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navigationData.navMain} />
