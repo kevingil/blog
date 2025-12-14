@@ -14,15 +14,12 @@ type DiffPart = {
 
 interface DiffPreviewContentProps {
   toolName: 'edit_text' | 'rewrite_document'
-  status: 'pending' | 'running' | 'completed' | 'error'
+  status: 'running' | 'completed' | 'error'
   reason?: string
   diffPreview?: {
     oldText: string
     newText: string
   }
-  diffState?: 'accepted' | 'rejected'
-  onAccept?: () => void
-  onReject?: () => void
   className?: string
 }
 
@@ -31,15 +28,11 @@ export function DiffPreviewContent({
   status,
   reason,
   diffPreview,
-  diffState,
-  onAccept,
-  onReject,
   className
 }: DiffPreviewContentProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   
   const isEditText = toolName === 'edit_text'
-  const toolLabel = isEditText ? 'Text edit' : 'Document rewrite'
 
   // Compute diff parts if we have diff preview
   const parts = diffPreview ? diffWords(diffPreview.oldText, diffPreview.newText) : []
@@ -111,17 +104,9 @@ export function DiffPreviewContent({
         </div>
       )}
 
-      {/* Diff preview (when available) */}
-      {diffPreview && diffState && (
+      {/* Expandable diff preview (when available) */}
+      {diffPreview && (
         <div className="rounded-md border bg-muted/30 p-2">
-          <div className={cn(
-            "flex items-center gap-1.5 mb-2 text-xs font-medium",
-            diffState === 'accepted' ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300"
-          )}>
-            <span>{diffState === 'accepted' ? '✅' : '❌'}</span>
-            <span>{diffState === 'accepted' ? 'Accepted' : 'Rejected'}</span>
-          </div>
-          
           <div className="font-mono text-xs whitespace-pre-wrap overflow-hidden">
             {(isExpanded ? parts : truncatedParts).map((part, index) => (
               <span
@@ -160,18 +145,6 @@ export function DiffPreviewContent({
               </Button>
             </div>
           )}
-        </div>
-      )}
-
-      {/* Action buttons (when pending) */}
-      {status === 'pending' && onAccept && onReject && (
-        <div className="flex gap-2">
-          <Button size="sm" onClick={onAccept} className="flex-1">
-            Accept
-          </Button>
-          <Button size="sm" variant="outline" onClick={onReject} className="flex-1">
-            Discard
-          </Button>
         </div>
       )}
 
