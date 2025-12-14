@@ -37,8 +37,23 @@ import { ThinkShimmerBlock } from "@/components/ui/think-shimmer";
 import { Markdown } from "@/components/ui/markdown";
 import { getConversationHistory } from "@/services/conversations";
 import { acceptArtifact, rejectArtifact } from "@/services/artifacts";
-import { WebSearchSteps } from "./WebSearchSteps";
+import { WebSearchSteps, WebSearchToolContext } from "./WebSearchSteps";
+// DiffPreviewContent is available if needed for custom diff rendering
+// import { DiffPreviewContent, getDiffToolIcon, getDiffToolDisplayName } from "./DiffPreviewContent";
+import { 
+  ToolCall, 
+  ToolCallTrigger, 
+  ToolCallContent, 
+  ToolCallStatusItem 
+} from "@/components/prompt-kit/tool-call";
+import { 
+  Steps, 
+  StepsTrigger, 
+  StepsContent, 
+  StepsItem 
+} from "@/components/prompt-kit/steps";
 import { cn } from '@/lib/utils';
+import { FileEdit, FileDiff, Wrench, BookOpen, FileSearch, PlusCircle, FileText, ImageIcon } from "lucide-react";
 import { 
   updateArticle, 
   getArticle, 
@@ -166,12 +181,17 @@ type ChatMessage = {
     tool_name: string;
     tool_id: string;
     status: 'starting' | 'running' | 'completed' | 'error';
+    // Web search specific
     search_query?: string;
     search_results?: SearchResult[];
     sources_created?: SourceInfo[];
     total_found?: number;
     sources_successful?: number;
+    // Generic tool fields
     message?: string;
+    input?: Record<string, unknown>;
+    output?: Record<string, unknown>;
+    reason?: string;
   };
   created_at?: string;
 };
@@ -1457,34 +1477,31 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 // Hide thinking state on tool use
                 setIsThinking(false);
                 
-                // Display tool usage feedback as a separate message
+                // Display tool usage feedback using tool_context for all tools
                 if (msg.tool_name) {
-                  // Special handling for search_web_sources
+                  // All tools now use tool_context for unified rendering
+                  const toolContext: ChatMessage['tool_context'] = {
+                    tool_name: msg.tool_name,
+                    tool_id: msg.tool_id || '',
+                    status: 'running',
+                    input: msg.tool_input,
+                  };
+                  
+                  // Add tool-specific fields
                   if (msg.tool_name === 'search_web_sources') {
-                    const searchQuery = msg.tool_input?.query || 'researching...';
-                    setChatMessages((prev) => [
-                      ...prev,
-                      { 
-                        role: 'assistant', 
-                        content: '',
-                        tool_context: {
-                          tool_name: msg.tool_name,
-                          tool_id: msg.tool_id || '',
-                          status: 'starting',
-                          search_query: searchQuery
-                        }
-                      }
-                    ]);
-                  } else {
-                    // Regular tool display
-                    const toolDisplayName = getToolDisplayName(msg.tool_name);
-                    const toolMessage = `🔧 ${toolDisplayName}...`;
-                    
-                    setChatMessages((prev) => [
-                      ...prev,
-                      { role: 'assistant', content: toolMessage }
-                    ]);
+                    toolContext.search_query = msg.tool_input?.query || 'researching...';
+                  } else if (msg.tool_name === 'edit_text' || msg.tool_name === 'rewrite_document') {
+                    toolContext.reason = msg.tool_input?.reason || '';
                   }
+                  
+                  setChatMessages((prev) => [
+                    ...prev,
+                    { 
+                      role: 'assistant', 
+                      content: '',
+                      tool_context: toolContext
+                    }
+                  ]);
                   
                   console.log('Tool use:', msg.tool_name, msg.tool_input);
                 }
@@ -1503,72 +1520,81 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   const isNewMessage = !processedToolMessages.has(toolMessageId);
                   
                   try {
-                    // Check if this is an edit_text tool result
                     if (msg.tool_result.content) {
                       const toolResult = JSON.parse(msg.tool_result.content);
                       
-                      // Check if this is a search tool result
-                      if (toolResult.tool_name === 'search_web_sources') {
-                        // Find the matching tool_use message and update it with results
-                        setChatMessages((prev) => {
-                          const updated = [...prev];
-                          // Find last search_web_sources tool_use message
-                          for (let i = updated.length - 1; i >= 0; i--) {
-                            if (updated[i].tool_context?.tool_name === 'search_web_sources' 
-                                && updated[i].tool_context?.status === 'starting') {
-                              updated[i] = {
-                                ...updated[i],
-                                tool_context: {
-                                  ...updated[i].tool_context!,
-                                  status: 'completed',
-                                  search_results: toolResult.search_results || [],
-                                  sources_created: toolResult.sources_created || [],
-                                  total_found: toolResult.total_found || 0,
-                                  sources_successful: toolResult.sources_successful || 0,
-                                  message: toolResult.message
-                                }
-                              };
-                              break;
+                      // Update the matching tool_context message with completed status
+                      setChatMessages((prev) => {
+                        const updated = [...prev];
+                        // Find last matching tool_use message that's still running
+                        for (let i = updated.length - 1; i >= 0; i--) {
+                          if (updated[i].tool_context?.tool_name === toolResult.tool_name 
+                              && (updated[i].tool_context?.status === 'running' || updated[i].tool_context?.status === 'starting')) {
+                            
+                            // Build updated tool context based on tool type
+                            const updatedContext: ChatMessage['tool_context'] = {
+                              ...updated[i].tool_context!,
+                              status: 'completed',
+                              output: toolResult,
+                            };
+                            
+                            // Add tool-specific fields
+                            if (toolResult.tool_name === 'search_web_sources') {
+                              updatedContext.search_results = toolResult.search_results || [];
+                              updatedContext.sources_created = toolResult.sources_created || [];
+                              updatedContext.total_found = toolResult.total_found || 0;
+                              updatedContext.sources_successful = toolResult.sources_successful || 0;
+                              updatedContext.message = toolResult.message;
+                            } else if (toolResult.tool_name === 'edit_text' || toolResult.tool_name === 'rewrite_document') {
+                              updatedContext.reason = toolResult.reason;
                             }
+                            
+                            updated[i] = {
+                              ...updated[i],
+                              tool_context: updatedContext
+                            };
+                            break;
                           }
-                          return updated;
-                        });
-                      } else if (toolResult.tool_name === 'edit_text' && isNewMessage) {
-                        // Use inline diff preview and chat actions
+                        }
+                        return updated;
+                      });
+                      
+                      // For edit tools, also apply the diff preview
+                      if (toolResult.tool_name === 'edit_text' && isNewMessage) {
                         if (toolResult.edit_type === 'patch' && toolResult.patch) {
                           applyPatch(toolResult.patch, toolResult.original_text, toolResult.new_text, toolResult.reason);
                         } else {
                           applyTextEdit(toolResult.original_text, toolResult.new_text, toolResult.reason);
                         }
-                        
-                        // Mark this tool message as processed
                         setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
                       } else if (toolResult.tool_name === 'rewrite_document' && isNewMessage) {
-                        // Handle document rewrite with diff preview
                         applyDocumentRewrite(toolResult.new_content, toolResult.reason, toolResult.original_content);
-                        
-                        // Mark this tool message as processed
                         setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
-                      } else {
-                        // For non-edit tools, add generic completion message
-                        setChatMessages((prev) => [
-                          ...prev,
-                          { role: 'assistant', content: '✅ Task completed' }
-                        ]);
                       }
                     }
                     
-                    // Add the tool result to chat history (but don't display it visually)
-                    // This keeps the technical result available for debugging
                     console.log('Tool result data:', JSON.stringify(msg.tool_result));
                     
                   } catch (error) {
                     console.error('Error parsing tool result:', error);
-                    // Add error message
-                    setChatMessages((prev) => [
-                      ...prev,
-                      { role: 'assistant', content: '⚠️ Tool execution completed with warnings' }
-                    ]);
+                    // Update tool context to error state
+                    setChatMessages((prev) => {
+                      const updated = [...prev];
+                      for (let i = updated.length - 1; i >= 0; i--) {
+                        if (updated[i].tool_context?.status === 'running') {
+                          updated[i] = {
+                            ...updated[i],
+                            tool_context: {
+                              ...updated[i].tool_context!,
+                              status: 'error',
+                              message: 'Tool execution completed with warnings'
+                            }
+                          };
+                          break;
+                        }
+                      }
+                      return updated;
+                    });
                   }
                 }
                 break;
@@ -2298,64 +2324,142 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       <div className="hidden xl:flex flex-col w-96 border rounded-md">
         <div ref={chatMessagesRef} className="flex-1 overflow-y-auto p-4 space-y-3">
           {chatMessages.map((m, i) => {
+            // Helper function to render tool messages with unified UI
+            const renderToolMessage = () => {
+              if (!m.tool_context) return null;
+              
+              const { tool_name, status, reason } = m.tool_context;
+              const toolStatus = status === 'starting' ? 'pending' : status;
+              
+              // Tools with custom UI use ToolCall component
+              const customUITools = ['search_web_sources', 'edit_text', 'rewrite_document'];
+              
+              if (customUITools.includes(tool_name)) {
+                // Web search tool
+                if (tool_name === 'search_web_sources') {
+                  return <WebSearchSteps key={i} tool_context={m.tool_context as WebSearchToolContext} />;
+                }
+                
+                // Edit/rewrite tools - these use ToolCall with DiffPreviewContent
+                // Note: The actual diff is shown in __DIFF_ACTIONS__ messages, 
+                // this shows the tool execution status
+                const icon = tool_name === 'edit_text' 
+                  ? <FileEdit className="h-4 w-4" />
+                  : <FileDiff className="h-4 w-4" />;
+                const displayName = tool_name === 'edit_text' ? 'Text edit' : 'Document rewrite';
+                
+                return (
+                  <ToolCall key={i} status={toolStatus} defaultOpen={false}>
+                    <ToolCallTrigger icon={icon}>
+                      {displayName}{reason ? `: ${reason}` : ''}
+                    </ToolCallTrigger>
+                    <ToolCallContent>
+                      <ToolCallStatusItem status={toolStatus === 'running' ? 'running' : 'completed'}>
+                        {tool_name === 'edit_text' ? 'Analyzing text selection...' : 'Analyzing document...'}
+                      </ToolCallStatusItem>
+                      {toolStatus === 'completed' && (
+                        <ToolCallStatusItem status="completed">
+                          {tool_name === 'edit_text' ? 'Generated text edit' : 'Generated document rewrite'}
+                        </ToolCallStatusItem>
+                      )}
+                    </ToolCallContent>
+                  </ToolCall>
+                );
+              }
+              
+              // Simple tools use Steps component
+              const getToolIcon = () => {
+                switch (tool_name) {
+                  case 'analyze_document': return <BookOpen className="h-4 w-4" />;
+                  case 'get_relevant_sources': return <FileSearch className="h-4 w-4" />;
+                  case 'add_context_from_sources': return <PlusCircle className="h-4 w-4" />;
+                  case 'generate_text_content': return <FileText className="h-4 w-4" />;
+                  case 'generate_image_prompt': return <ImageIcon className="h-4 w-4" />;
+                  default: return <Wrench className="h-4 w-4" />;
+                }
+              };
+              
+              const displayName = getToolDisplayName(tool_name);
+              
+              return (
+                <Steps key={i} defaultOpen={false}>
+                  <StepsTrigger icon={getToolIcon()}>
+                    {displayName}
+                  </StepsTrigger>
+                  <StepsContent>
+                    <StepsItem status={toolStatus === 'running' ? 'running' : toolStatus === 'error' ? 'error' : 'completed'}>
+                      {toolStatus === 'running' ? 'Processing...' : toolStatus === 'error' ? (m.tool_context.message || 'Failed') : 'Completed'}
+                    </StepsItem>
+                  </StepsContent>
+                </Steps>
+              );
+            };
+            
             switch (m.role) {
               case 'tool': {
+                // Legacy tool messages - render as simple Steps
                 try {
                   const toolResult = JSON.parse(m.content);
-                  const label = toolResult.tool_name === 'edit_text'
-                    ? `${toolResult.edit_type === 'patch' ? 'Patch generated' : 'Text edit proposed'}: ${toolResult.reason}`
-                    : 'Tool executed';
+                  const displayName = getToolDisplayName(toolResult.tool_name || 'unknown');
+                  
                   return (
-                    <div key={i} className="w-full flex justify-center">
-                      <div className="max-w-xs bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2 text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className="text-blue-600 dark:text-blue-400">🔧</span>
-                          <span className="text-blue-700 dark:text-blue-300 truncate">{label}</span>
-                        </div>
-                      </div>
-                    </div>
+                    <Steps key={i} defaultOpen={false}>
+                      <StepsTrigger icon={<Wrench className="h-4 w-4" />}>
+                        {displayName}
+                      </StepsTrigger>
+                      <StepsContent>
+                        <StepsItem status="completed">
+                          Completed
+                        </StepsItem>
+                      </StepsContent>
+                    </Steps>
                   );
                 } catch (_e) {
                   return (
-                    <div key={i} className="w-full flex justify-center">
-                      <div className="max-w-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-600 dark:text-gray-400">⚙️</span>
-                          <span className="text-gray-700 dark:text-gray-300 truncate">Tool executed</span>
-                        </div>
-                      </div>
-                    </div>
+                    <Steps key={i} defaultOpen={false}>
+                      <StepsTrigger icon={<Wrench className="h-4 w-4" />}>
+                        Tool executed
+                      </StepsTrigger>
+                      <StepsContent>
+                        <StepsItem status="completed">
+                          Completed
+                        </StepsItem>
+                      </StepsContent>
+                    </Steps>
                   );
                 }
               }
               case 'assistant': {
-                // Render web search with Steps UI
-                if (m.tool_context?.tool_name === 'search_web_sources') {
-                  return <WebSearchSteps key={i} tool_context={m.tool_context} />;
+                // Render tool messages with unified UI
+                if (m.tool_context) {
+                  return renderToolMessage();
                 }
                 
                 // Render artifacts from metadata
                 if (m.meta_data?.artifact) {
                   const artifact = m.meta_data.artifact;
                   
-                  // Show artifact based on status
-                  if (artifact.status === 'pending') {
-                    return (
-                      <div key={i} className="w-full flex justify-start">
-                        <div className="max-w-sm rounded-lg px-3 py-2 text-sm bg-gray-100 dark:bg-gray-800">
-                          <div className="mb-2">
-                            <div className="font-medium text-sm">{artifact.title || 'Artifact'}</div>
-                            {artifact.description && (
-                              <div className="text-xs text-gray-600 dark:text-gray-400">{artifact.description}</div>
-                            )}
-                          </div>
+                  // Show artifact based on status using ToolCall
+                  const artifactStatus = artifact.status === 'pending' ? 'pending' 
+                    : artifact.status === 'accepted' ? 'completed' 
+                    : artifact.status === 'rejected' ? 'error' : 'pending';
+                  
+                  return (
+                    <ToolCall key={i} status={artifactStatus} defaultOpen={artifact.status === 'pending'}>
+                      <ToolCallTrigger icon={<FileText className="h-4 w-4" />}>
+                        {artifact.title || 'Artifact'}
+                      </ToolCallTrigger>
+                      <ToolCallContent>
+                        {artifact.description && (
+                          <p className="text-xs text-muted-foreground mb-2">{artifact.description}</p>
+                        )}
+                        {artifact.status === 'pending' && (
                           <div className="flex gap-2">
                             <Button 
                               size="sm" 
                               onClick={async () => {
                                 if (m.id) {
                                   await acceptArtifact(m.id);
-                                  // Update local state
                                   setChatMessages(prev => prev.map((msg, idx) => 
                                     idx === i && msg.meta_data?.artifact 
                                       ? { ...msg, meta_data: { ...msg.meta_data, artifact: { ...msg.meta_data.artifact, status: 'accepted' } } }
@@ -2372,7 +2476,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                               onClick={async () => {
                                 if (m.id) {
                                   await rejectArtifact(m.id);
-                                  // Update local state
                                   setChatMessages(prev => prev.map((msg, idx) => 
                                     idx === i && msg.meta_data?.artifact 
                                       ? { ...msg, meta_data: { ...msg.meta_data, artifact: { ...msg.meta_data.artifact, status: 'rejected' } } }
@@ -2384,67 +2487,44 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                               Reject
                             </Button>
                           </div>
-                        </div>
-                      </div>
-                    );
-                  } else if (artifact.status === 'accepted') {
-                    return (
-                      <div key={i} className="w-full flex justify-start">
-                        <div className="max-w-sm rounded-lg px-3 py-2 text-sm bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                          <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
-                            <span>✅</span>
-                            <div>
-                              <div className="font-medium">{artifact.title || 'Artifact'} - Accepted</div>
-                              {artifact.description && (
-                                <div className="text-xs">{artifact.description}</div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  } else if (artifact.status === 'rejected') {
-                    return (
-                      <div key={i} className="w-full flex justify-start">
-                        <div className="max-w-sm rounded-lg px-3 py-2 text-sm bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                          <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
-                            <span>❌</span>
-                            <div>
-                              <div className="font-medium">{artifact.title || 'Artifact'} - Rejected</div>
-                              {artifact.description && (
-                                <div className="text-xs">{artifact.description}</div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }
+                        )}
+                        {artifact.status === 'accepted' && (
+                          <ToolCallStatusItem status="completed">
+                            Changes applied
+                          </ToolCallStatusItem>
+                        )}
+                        {artifact.status === 'rejected' && (
+                          <ToolCallStatusItem status="error">
+                            Changes rejected
+                          </ToolCallStatusItem>
+                        )}
+                      </ToolCallContent>
+                    </ToolCall>
+                  );
                 }
                 
                 if (m.content === '__DIFF_ACTIONS__') {
-                  // Show diff preview if the action has been taken, otherwise show buttons
-                  if (m.diffState && m.diffPreview) {
-                    return (
-                      <div key={i} className="w-full flex justify-start">
-                        <div className="max-w-sm rounded-lg px-3 py-2 text-sm bg-gray-100 dark:bg-gray-800">
+                  // Show diff preview using ToolCall
+                  const diffStatus = m.diffState === 'accepted' ? 'completed' 
+                    : m.diffState === 'rejected' ? 'error' : 'pending';
+                  
+                  return (
+                    <ToolCall key={i} status={diffStatus} defaultOpen={!m.diffState}>
+                      <ToolCallTrigger icon={<FileDiff className="h-4 w-4" />}>
+                        Proposed changes{m.diffPreview?.reason ? `: ${m.diffPreview.reason}` : ''}
+                      </ToolCallTrigger>
+                      <ToolCallContent>
+                        {m.diffState && m.diffPreview ? (
                           <DiffPreview diffPreview={m.diffPreview} diffState={m.diffState} />
-                        </div>
-                      </div>
-                    );
-                  } else {
-                    // Show action buttons
-                    return (
-                      <div key={i} className="w-full flex justify-start">
-                        <div className="max-w-xs rounded-lg px-3 py-2 text-sm bg-gray-100 dark:bg-gray-800">
+                        ) : (
                           <div className="flex gap-2">
                             <Button size="sm" onClick={acceptDiff} disabled={!diffing}>Accept</Button>
                             <Button size="sm" variant="outline" onClick={rejectDiff} disabled={!diffing}>Discard</Button>
                           </div>
-                        </div>
-                      </div>
-                    );
-                  }
+                        )}
+                      </ToolCallContent>
+                    </ToolCall>
+                  );
                 }
                   
                 // Regular assistant message
