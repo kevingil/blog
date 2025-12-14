@@ -30,6 +30,7 @@ type ChatRequestResponse struct {
 // - "text": Complete assistant text responses (for backward compatibility)
 // - "tool_use": Tool/function calls made by the agent
 // - "tool_result": Results returned from tool executions
+// - "full_message": Complete message with meta_data for artifact tools (edit_text, rewrite_document)
 // - "user": User messages (streamed as initial context)
 // - "system": System messages (streamed as initial context)
 // - "thinking": Thinking state during tool execution
@@ -37,7 +38,7 @@ type ChatRequestResponse struct {
 // - "done": Completion signal
 type StreamResponse struct {
 	RequestID string `json:"requestId,omitempty"`
-	Type      string `json:"type"` // "content_delta", "text", "tool_use", "tool_result", "thinking", "error", "done"
+	Type      string `json:"type"` // "content_delta", "text", "tool_use", "tool_result", "full_message", "thinking", "error", "done"
 	Content   string `json:"content,omitempty"`
 	Iteration int    `json:"iteration,omitempty"`
 
@@ -49,6 +50,10 @@ type StreamResponse struct {
 	// Tool result fields for tool_result blocks
 	ToolResult interface{} `json:"tool_result,omitempty"`
 
+	// Full message for artifact tools (edit_text, rewrite_document, search_web_sources)
+	// Contains complete meta_data structure matching database format
+	FullMessage *FullMessagePayload `json:"full_message,omitempty"`
+
 	// Thinking-specific fields
 	ThinkingMessage string `json:"thinking_message,omitempty"`
 
@@ -57,6 +62,17 @@ type StreamResponse struct {
 	Data  any    `json:"data,omitempty"`
 	Done  bool   `json:"done,omitempty"`
 	Error string `json:"error,omitempty"`
+}
+
+// FullMessagePayload is the complete message structure matching what's saved to DB
+// Used to stream full messages for artifact tools so frontend can render immediately
+type FullMessagePayload struct {
+	ID        string                 `json:"id"`
+	ArticleID string                 `json:"article_id"`
+	Role      string                 `json:"role"`
+	Content   string                 `json:"content"`
+	MetaData  map[string]interface{} `json:"meta_data"`
+	CreatedAt string                 `json:"created_at"`
 }
 
 // ArtifactUpdate represents tool execution status shown to user
