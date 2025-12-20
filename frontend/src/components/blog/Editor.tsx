@@ -649,9 +649,24 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       };
       returnToDashboard?: boolean;
     }) => updateArticle(data.slug, data.updateData),
-    onSuccess: (_, variables) => {
+    onSuccess: (response, variables) => {
       toast({ title: "Success", description: "Article updated successfully." });
-      queryClient.invalidateQueries({ queryKey: ['article', blogSlug] });
+      
+      // Check if slug changed and update URL without page refresh
+      const newSlug = response?.article?.slug;
+      const oldSlug = variables.slug;
+      
+      if (newSlug && newSlug !== oldSlug) {
+        // Update URL without triggering navigation/refresh
+        const newUrl = `/dashboard/blog/edit/${newSlug}`;
+        window.history.replaceState(null, '', newUrl);
+        
+        // Invalidate the old slug query and set data for new slug
+        queryClient.invalidateQueries({ queryKey: ['article', oldSlug] });
+        queryClient.setQueryData(['article', newSlug], response);
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['article', blogSlug] });
+      }
       queryClient.invalidateQueries({ queryKey: ['articles'] });
       
       if (variables.returnToDashboard) {
