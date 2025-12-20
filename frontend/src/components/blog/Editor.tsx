@@ -40,6 +40,12 @@ import { getConversationHistory } from "@/services/conversations";
 import { WebSearchSteps, WebSearchToolContext } from "./WebSearchSteps";
 import { DiffActionBar } from "./DiffActionBar";
 import { DiffArtifact } from "./DiffArtifact";
+import { ToolGroupDisplay } from "./ToolGroupDisplay";
+import type { 
+  ToolGroup, 
+  ThinkingBlock, 
+  Artifact as NewArtifact,
+} from "./types";
 import { 
   ToolCall, 
   ToolCallTrigger, 
@@ -174,9 +180,17 @@ type ChatMessage = {
     };
     task_status?: any;
     tool_execution?: any;
+    tool_group?: ToolGroup;
+    thinking?: ThinkingBlock;
+    artifacts?: NewArtifact[];
     context?: any;
     user_action?: any;
   };
+  // New: Tool group for unified tool call display
+  tool_group?: ToolGroup;
+  // New: Thinking/chain of thought
+  thinking?: ThinkingBlock;
+  // Legacy tool_context for backward compatibility
   tool_context?: {
     tool_name: string;
     tool_id: string;
@@ -187,6 +201,14 @@ type ChatMessage = {
     sources_created?: SourceInfo[];
     total_found?: number;
     sources_successful?: number;
+    // Ask question specific
+    answer?: string;
+    citations?: Array<{
+      url: string;
+      title: string;
+      author?: string;
+      published_date?: string;
+    }>;
     // Generic tool fields
     message?: string;
     input?: Record<string, unknown>;
@@ -918,20 +940,54 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               created_at: msg.created_at,
             };
             
-            // Reconstruct tool_context from metadata for search tools
-            if (msg.meta_data?.tool_execution?.tool_name === 'search_web_sources') {
-              const output = msg.meta_data.tool_execution.output;
-              chatMsg.tool_context = {
-                tool_name: 'search_web_sources',
-                tool_id: msg.meta_data.tool_execution.tool_id || '',
-                status: 'completed',
-                search_query: output?.query || '',
-                search_results: output?.search_results || [],
-                sources_created: output?.sources_created || [],
-                total_found: output?.total_found || 0,
-                sources_successful: output?.sources_successful || 0,
-                message: output?.message
+            // Check for new tool_group format first
+            if (msg.meta_data?.tool_group) {
+              chatMsg.tool_group = msg.meta_data.tool_group;
+            }
+            // Reconstruct tool_context from legacy metadata for tool execution
+            else if (msg.meta_data?.tool_execution) {
+              const toolExec = msg.meta_data.tool_execution;
+              const output = toolExec.output;
+              const toolName = toolExec.tool_name;
+              
+              // Convert to tool_group format for unified handling
+              chatMsg.tool_group = {
+                group_id: toolExec.tool_id || `group-${msg.id}`,
+                status: toolExec.success ? 'completed' : 'error',
+                calls: [{
+                  id: toolExec.tool_id || `call-${msg.id}`,
+                  name: toolName,
+                  input: typeof toolExec.input === 'object' ? toolExec.input : {},
+                  status: toolExec.success ? 'completed' : 'error',
+                  result: typeof output === 'object' ? output : undefined,
+                  error: toolExec.error,
+                  started_at: toolExec.executed_at || msg.created_at,
+                  duration_ms: toolExec.duration_ms,
+                }],
               };
+              
+              // Also set legacy tool_context for backward compatibility with WebSearchSteps
+              if (toolName === 'search_web_sources') {
+                chatMsg.tool_context = {
+                  tool_name: 'search_web_sources',
+                  tool_id: toolExec.tool_id || '',
+                  status: 'completed',
+                  search_query: output?.query || '',
+                  search_results: output?.search_results || [],
+                  sources_created: output?.sources_created || [],
+                  total_found: output?.total_found || 0,
+                  sources_successful: output?.sources_successful || 0,
+                  message: output?.message
+                };
+              } else if (toolName === 'ask_question') {
+                chatMsg.tool_context = {
+                  tool_name: 'ask_question',
+                  tool_id: toolExec.tool_id || '',
+                  status: 'completed',
+                  answer: output?.answer,
+                  citations: output?.citations || [],
+                };
+              }
             }
             
             return chatMsg;
@@ -2128,18 +2184,74 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           {chatMessages.map((m, i) => {
             // Helper function to render tool messages with unified UI
             const renderToolMessage = () => {
+              // NEW: Use ToolGroupDisplay for tool_group (new architecture)
+              if (m.tool_group) {
+                return (
+                  <ToolGroupDisplay 
+                    key={i} 
+                    group={m.tool_group}
+                    onArtifactAction={(toolId, action) => {
+                      // Handle artifact action for tools like edit_text
+                      const call = m.tool_group?.calls.find(c => c.id === toolId);
+                      if (call && (call.name === 'edit_text' || call.name === 'rewrite_document')) {
+                        const result = call.result;
+                        if (action === 'accept' && result && editor) {
+                          const newContent = (result.new_content || result.new_text) as string;
+                          if (newContent) {
+                            const currentHtml = editor.getHTML();
+                            const newHtml = mdParser.render(newContent);
+                            enterDiffPreview(currentHtml, newHtml, (result.reason as string) || '');
+                          }
+                        }
+                      }
+                    }}
+                  />
+                );
+              }
+              
+              // Legacy: Use tool_context for backward compatibility
               if (!m.tool_context) return null;
               
               const { tool_name, status, reason } = m.tool_context;
               const toolStatus = status === 'starting' ? 'pending' : status;
               
               // Tools with custom UI use ToolCall component
-              const customUITools = ['search_web_sources', 'edit_text', 'rewrite_document'];
+              const customUITools = ['search_web_sources', 'ask_question', 'edit_text', 'rewrite_document'];
               
               if (customUITools.includes(tool_name)) {
                 // Web search tool
                 if (tool_name === 'search_web_sources') {
                   return <WebSearchSteps key={i} tool_context={m.tool_context as WebSearchToolContext} />;
+                }
+                
+                // Ask question tool - use similar display to web search
+                if (tool_name === 'ask_question') {
+                  const { answer, citations } = m.tool_context;
+                  return (
+                    <ToolCall key={i} status={toolStatus === 'running' ? 'running' : 'completed'} defaultOpen={true}>
+                      <ToolCallTrigger icon={<FileSearch className="h-4 w-4" />}>
+                        Ask question
+                      </ToolCallTrigger>
+                      <ToolCallContent>
+                        {toolStatus === 'running' ? (
+                          <ToolCallStatusItem status="running">
+                            Finding answer...
+                          </ToolCallStatusItem>
+                        ) : (
+                          <div className="space-y-2">
+                            <ToolCallStatusItem status="completed">
+                              Answer found with {citations?.length || 0} citations
+                            </ToolCallStatusItem>
+                            {answer && (
+                              <div className="text-sm text-muted-foreground bg-muted/50 rounded-md p-2">
+                                {answer}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </ToolCallContent>
+                    </ToolCall>
+                  );
                 }
                 
                 // Edit/rewrite tools - use DiffArtifact for unified diff display
@@ -2252,7 +2364,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 }
               }
               case 'assistant': {
-                // Render tool messages with unified UI
+                // NEW: Render tool group messages (new architecture)
+                if (m.tool_group) {
+                  return renderToolMessage();
+                }
+                
+                // Render tool messages with unified UI (legacy)
                 if (m.tool_context) {
                   return renderToolMessage();
                 }
