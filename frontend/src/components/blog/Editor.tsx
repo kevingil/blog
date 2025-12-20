@@ -652,22 +652,55 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     onSuccess: (response, variables) => {
       toast({ title: "Success", description: "Article updated successfully." });
       
-      // Check if slug changed and update URL without page refresh
       const newSlug = response?.article?.slug;
       const oldSlug = variables.slug;
+      const articleId = response?.article?.id;
       
+      // Update single article cache
       if (newSlug && newSlug !== oldSlug) {
-        // Update URL without triggering navigation/refresh
+        // Slug changed - update URL without triggering navigation/refresh
         const newUrl = `/dashboard/blog/edit/${newSlug}`;
         window.history.replaceState(null, '', newUrl);
         
-        // Invalidate the old slug query and set data for new slug
-        queryClient.invalidateQueries({ queryKey: ['article', oldSlug] });
+        // Remove old slug cache and set new slug cache
+        queryClient.removeQueries({ queryKey: ['article', oldSlug] });
         queryClient.setQueryData(['article', newSlug], response);
       } else {
-        queryClient.invalidateQueries({ queryKey: ['article', blogSlug] });
+        // Slug unchanged - just update the cache
+        queryClient.setQueryData(['article', oldSlug], response);
       }
-      queryClient.invalidateQueries({ queryKey: ['articles'] });
+      
+      // Update all article list queries by replacing the matching article
+      // This updates dashboard list, sidebar, and any other cached article lists
+      queryClient.setQueriesData<{ articles: ArticleListItem[]; total_pages: number; include_drafts: boolean } | undefined>(
+        { queryKey: ['articles'], exact: false },
+        (oldData) => {
+          if (!oldData?.articles) return oldData;
+          return {
+            ...oldData,
+            articles: oldData.articles.map((item) =>
+              item.article.id === articleId ? response : item
+            ),
+          };
+        }
+      );
+      
+      // Update sidebar infinite query
+      queryClient.setQueriesData<{ pages: { articles: ArticleListItem[] }[] } | undefined>(
+        { queryKey: ['sidebar-articles'], exact: false },
+        (oldData) => {
+          if (!oldData?.pages) return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page) => ({
+              ...page,
+              articles: page.articles.map((item) =>
+                item.article.id === articleId ? response : item
+              ),
+            })),
+          };
+        }
+      );
       
       if (variables.returnToDashboard) {
         navigate({ to: '/dashboard/blog' });
