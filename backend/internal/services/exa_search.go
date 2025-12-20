@@ -186,3 +186,91 @@ func (s *ExaSearchService) SearchWithDefaults(ctx context.Context, query string)
 func (s *ExaSearchService) IsConfigured() bool {
 	return s.apiKey != ""
 }
+
+// =============================================================================
+// Exa Answer API
+// =============================================================================
+
+// ExaAnswerRequest represents the request payload for Exa answer endpoint
+type ExaAnswerRequest struct {
+	Query string `json:"query"`
+	Text  bool   `json:"text,omitempty"` // Include full text content in citations
+}
+
+// ExaCitation represents a citation from the Exa answer API
+type ExaCitation struct {
+	ID            string                 `json:"id"`
+	URL           string                 `json:"url"`
+	Title         string                 `json:"title"`
+	Author        string                 `json:"author,omitempty"`
+	PublishedDate string                 `json:"publishedDate,omitempty"`
+	Text          string                 `json:"text,omitempty"`
+	Image         string                 `json:"image,omitempty"`
+	Favicon       string                 `json:"favicon,omitempty"`
+	Extras        map[string]interface{} `json:"extras,omitempty"`
+}
+
+// ExaAnswerResponse represents the response from Exa answer API
+type ExaAnswerResponse struct {
+	Answer      string                 `json:"answer"`
+	Citations   []ExaCitation          `json:"citations"`
+	CostDollars map[string]interface{} `json:"costDollars,omitempty"`
+}
+
+// Answer gets a direct answer to a question using the Exa /answer endpoint
+func (s *ExaSearchService) Answer(ctx context.Context, question string, includeText bool) (*ExaAnswerResponse, error) {
+	if s.apiKey == "" {
+		return nil, fmt.Errorf("EXA_API_KEY environment variable not set")
+	}
+
+	if question == "" {
+		return nil, fmt.Errorf("question cannot be empty")
+	}
+
+	// Build request payload
+	reqPayload := ExaAnswerRequest{
+		Query: question,
+		Text:  includeText,
+	}
+
+	// Marshal request to JSON
+	jsonData, err := json.Marshal(reqPayload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.exa.ai/answer", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", s.apiKey)
+
+	// Make the request
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Exa Answer API returned status %d", resp.StatusCode)
+	}
+
+	// Parse response
+	var answerResp ExaAnswerResponse
+	if err := json.NewDecoder(resp.Body).Decode(&answerResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &answerResp, nil
+}
+
+// AnswerWithDefaults gets an answer with sensible defaults
+func (s *ExaSearchService) AnswerWithDefaults(ctx context.Context, question string) (*ExaAnswerResponse, error) {
+	return s.Answer(ctx, question, true) // Include full text by default
+}
