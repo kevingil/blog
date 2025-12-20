@@ -241,11 +241,11 @@ func NewRewriteDocumentTool(textGenService TextGenerationService, sourceService 
 func (t *RewriteDocumentTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        "rewrite_document",
-		Description: "Completely rewrite or significantly edit the document content with diff generation support. CRITICAL: Write like a human, not an AI. Avoid AI writing patterns: no puffery ('breathtaking', 'nestled'), no symbolic importance phrases ('stands as a testament'), no editorializing ('it's important to note'), no superficial analyses with -ing phrases, no overused conjunctions, no section summaries, no negative parallelisms, no excessive em dashes, use sentence case headings, avoid vague attributions, write naturally with varied structures and concrete details.",
+		Description: "Completely rewrite or significantly edit the document content with diff generation support. CRITICAL RULES: 1) NEVER include a title/heading at the start of new_content - the editor displays ONLY body content, titles are managed separately. If you have title suggestions, mention them in your follow-up response text, NOT in the rewritten content. 2) Write like a human, not an AI. Avoid AI writing patterns: no puffery ('breathtaking', 'nestled'), no symbolic importance phrases ('stands as a testament'), no editorializing ('it's important to note'), no superficial analyses with -ing phrases, no overused conjunctions, no section summaries, no negative parallelisms, no excessive em dashes, use sentence case headings, avoid vague attributions, write naturally with varied structures and concrete details.",
 		Parameters: map[string]any{
 			"new_content": map[string]any{
 				"type":        "string",
-				"description": "The new document content in markdown format",
+				"description": "The new document body content in markdown format. IMPORTANT: Do NOT include a title or main heading (# Title) - the text area only shows body content. Any title suggestions should be communicated in your response message, not embedded in the content.",
 			},
 			"reason": map[string]any{
 				"type":        "string",
@@ -289,7 +289,7 @@ func (t *RewriteDocumentTool) Run(ctx context.Context, params ToolCall) (ToolRes
 	// If original content is provided, generate diff patch like edit_text tool
 	if input.OriginalContent != "" {
 		log.Printf("📝 [RewriteDocument] Generating diff patch")
-		
+
 		// Generate unified diff patch using diffmatchpatch
 		dmp := diffmatchpatch.New()
 		diffs := dmp.DiffMain(input.OriginalContent, input.NewContent, false)
@@ -307,8 +307,8 @@ func (t *RewriteDocumentTool) Run(ctx context.Context, params ToolCall) (ToolRes
 				"unchanged": countDiffType(diffs, diffmatchpatch.DiffEqual),
 			},
 		}
-		
-		log.Printf("📝 [RewriteDocument] ✅ Diff patch generated - Additions: %d, Deletions: %d", 
+
+		log.Printf("📝 [RewriteDocument] ✅ Diff patch generated - Additions: %d, Deletions: %d",
 			countDiffType(diffs, diffmatchpatch.DiffInsert),
 			countDiffType(diffs, diffmatchpatch.DiffDelete))
 	}
@@ -318,7 +318,6 @@ func (t *RewriteDocumentTool) Run(ctx context.Context, params ToolCall) (ToolRes
 	resultJSON, _ := json.Marshal(result)
 	return NewTextResponse(string(resultJSON)), nil
 }
-
 
 // TextChunk represents a chunk of text with relevance scoring
 type TextChunk struct {
@@ -480,7 +479,7 @@ func NewEditTextTool() *EditTextTool {
 func (t *EditTextTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        "edit_text",
-		Description: "Edit specific text in the document while preserving the rest. Use this for targeted edits, improvements, or changes to specific sections. IMPORTANT: Write like a human - avoid AI patterns like puffery words, symbolic importance phrases, editorializing, superficial analyses, overused conjunctions, section summaries, and negative parallelisms. Use natural, varied sentence structures.",
+		Description: "Edit specific text in the document while preserving the rest. Use this for targeted edits, improvements, or changes to specific sections. CRITICAL: Never add a title/heading to the content - the editor displays ONLY body content, titles are managed separately. If you have title suggestions, mention them in your follow-up response, NOT in the edited content. Write like a human - avoid AI patterns like puffery words, symbolic importance phrases, editorializing, superficial analyses, overused conjunctions, section summaries, and negative parallelisms. Use natural, varied sentence structures.",
 		Parameters: map[string]any{
 			"original_text": map[string]any{
 				"type":        "string",
@@ -488,7 +487,7 @@ func (t *EditTextTool) Info() ToolInfo {
 			},
 			"new_text": map[string]any{
 				"type":        "string",
-				"description": "The new text to replace the original text with",
+				"description": "The new text to replace the original text with. Do NOT include a title or main heading - the text area only shows body content.",
 			},
 			"reason": map[string]any{
 				"type":        "string",
@@ -681,11 +680,11 @@ func (t *AddContextFromSourcesTool) Run(ctx context.Context, params ToolCall) (T
 	if articleIDStr == "" {
 		log.Printf("📚 [AddContextFromSources] WARNING: No article ID in context")
 		result := map[string]interface{}{
-			"relevant_sources":   []map[string]interface{}{},
-			"context_added":      false,
-			"query":              input.Query,
-			"tool_name":          "add_context_from_sources",
-			"warning":            "No article ID available - cannot search for sources",
+			"relevant_sources": []map[string]interface{}{},
+			"context_added":    false,
+			"query":            input.Query,
+			"tool_name":        "add_context_from_sources",
+			"warning":          "No article ID available - cannot search for sources",
 		}
 		resultJSON, _ := json.Marshal(result)
 		return NewTextResponse(string(resultJSON)), nil
@@ -920,9 +919,9 @@ func (t *GenerateTextContentTool) Info() ToolInfo {
 
 func (t *GenerateTextContentTool) Run(ctx context.Context, params ToolCall) (ToolResponse, error) {
 	var input struct {
-		Prompt         string                   `json:"prompt"`
-		ContextSources []map[string]interface{} `json:"context_sources"`
-		OriginalContent string                  `json:"original_content"`
+		Prompt          string                   `json:"prompt"`
+		ContextSources  []map[string]interface{} `json:"context_sources"`
+		OriginalContent string                   `json:"original_content"`
 	}
 
 	if err := json.Unmarshal([]byte(params.Input), &input); err != nil {
@@ -940,7 +939,7 @@ func (t *GenerateTextContentTool) Run(ctx context.Context, params ToolCall) (Too
 
 	// Build enhanced prompt with context sources
 	enhancedPrompt := input.Prompt
-	
+
 	if len(input.ContextSources) > 0 {
 		enhancedPrompt += "\n\n--- Relevant Context Sources ---\n"
 		for i, source := range input.ContextSources {
@@ -965,12 +964,12 @@ func (t *GenerateTextContentTool) Run(ctx context.Context, params ToolCall) (Too
 	// For now, we'll return the enhanced prompt as this tool is meant to be a placeholder
 	// In a real implementation, this would call an LLM service
 	result := map[string]interface{}{
-		"generated_content":  enhancedPrompt, // This would be LLM-generated content
-		"prompt_used":        input.Prompt,
-		"sources_included":   len(input.ContextSources),
-		"has_original":       input.OriginalContent != "",
-		"tool_name":          "generate_text_content",
-		"generation_method":  "enhanced_prompt", // Indicates this is using context enhancement
+		"generated_content": enhancedPrompt, // This would be LLM-generated content
+		"prompt_used":       input.Prompt,
+		"sources_included":  len(input.ContextSources),
+		"has_original":      input.OriginalContent != "",
+		"tool_name":         "generate_text_content",
+		"generation_method": "enhanced_prompt", // Indicates this is using context enhancement
 	}
 
 	log.Printf("✍️ [GenerateTextContent] ✅ Generated content with context enhancement")

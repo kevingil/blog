@@ -89,6 +89,9 @@ Assistant: [directly calls analyze_document tool without any text first]
 ### Tool Usage Requirements
 - **rewrite_document**: When the current document content is available in the context (shown as "--- Current Document ---"), you MUST include it as the original_content parameter to enable visual diff previews for the user. This allows users to see exactly what changes you are proposing.
 
+### CRITICAL: Content vs Title Separation
+**NEVER include a title or main heading (# Title) in the content you generate with edit_text or rewrite_document.** The blog editor displays the title separately from the body content - the text area only shows body content. If you have suggestions for improving the title, mention them in your follow-up response message after the tool call, NOT embedded in the rewritten/edited content itself.
+
 ### Writing Best Practices
 
 **Core Principles:**

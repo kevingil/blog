@@ -74,6 +74,8 @@ Example:
 
 **Important for rewrite_document:** When "--- Current Document ---" is provided, include it as the original_content parameter. This enables diff previews.
 
+**CRITICAL - No titles in content:** NEVER include a title or main heading (# Title) at the start of new_content for edit_text or rewrite_document. The editor displays body content only - the title is managed separately. If you have title suggestions, mention them in your follow-up response text, NOT in the edited/rewritten content.
+
 ### After Tool Results
 
 When you receive tool results:
