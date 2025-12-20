@@ -2493,18 +2493,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             >
               📝 Shorten
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const message = 'Fix any typos and improve the first paragraph to be more engaging';
-                setChatInput(message);
-                sendChatWithMessage(message);
-              }}
-              disabled={chatLoading}
-            >
-              ✏️ Edit Text
-            </Button>
           </div>
           <PromptInput
             value={chatInput}
