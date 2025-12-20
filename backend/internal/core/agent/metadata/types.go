@@ -126,3 +126,152 @@ const (
 	AttachmentTypeImage = "image"
 )
 
+// =============================================================================
+// Turn-based Message Types (New Architecture)
+// =============================================================================
+
+// TurnMetaData represents the complete metadata for an agent turn
+// A turn is a complete agent action cycle: thinking -> tool calls -> response
+type TurnMetaData struct {
+	// Turn tracking
+	TurnID       string `json:"turn_id"`
+	TurnSequence int    `json:"turn_sequence"` // Position within the turn (0 = user, 1+ = assistant parts)
+
+	// Chain of thought (collapsible in UI)
+	Thinking *ThinkingBlock `json:"thinking,omitempty"`
+
+	// Tool execution group (supports parallel calls)
+	ToolGroup *ToolGroup `json:"tool_group,omitempty"`
+
+	// Artifacts (diffs, sources, generated content)
+	Artifacts []Artifact `json:"artifacts,omitempty"`
+
+	// Context information (inherited from MessageMetaData)
+	Context *MessageContext `json:"context,omitempty"`
+}
+
+// ThinkingBlock represents chain-of-thought reasoning
+type ThinkingBlock struct {
+	Content    string `json:"content"`
+	DurationMs int64  `json:"duration_ms,omitempty"`
+	Visible    bool   `json:"visible"` // Whether to show in UI by default
+}
+
+// ToolGroup represents a group of tool calls that can be executed in parallel
+type ToolGroup struct {
+	GroupID string           `json:"group_id"`
+	Status  ToolGroupStatus  `json:"status"`
+	Calls   []ToolCallRecord `json:"calls"`
+}
+
+// ToolGroupStatus represents the status of a tool group
+type ToolGroupStatus string
+
+const (
+	ToolGroupStatusPending   ToolGroupStatus = "pending"
+	ToolGroupStatusRunning   ToolGroupStatus = "running"
+	ToolGroupStatusCompleted ToolGroupStatus = "completed"
+	ToolGroupStatusError     ToolGroupStatus = "error"
+)
+
+// ToolCallRecord represents a single tool call within a group
+type ToolCallRecord struct {
+	ID          string                 `json:"id"`
+	Name        string                 `json:"name"`
+	Input       map[string]interface{} `json:"input"`
+	Status      ToolCallStatus         `json:"status"`
+	Result      map[string]interface{} `json:"result,omitempty"`
+	Error       string                 `json:"error,omitempty"`
+	StartedAt   string                 `json:"started_at"`
+	CompletedAt string                 `json:"completed_at,omitempty"`
+	DurationMs  int64                  `json:"duration_ms,omitempty"`
+}
+
+// ToolCallStatus represents the status of an individual tool call
+type ToolCallStatus string
+
+const (
+	ToolCallStatusPending   ToolCallStatus = "pending"
+	ToolCallStatusRunning   ToolCallStatus = "running"
+	ToolCallStatusCompleted ToolCallStatus = "completed"
+	ToolCallStatusError     ToolCallStatus = "error"
+)
+
+// Artifact represents a UI artifact (diff, sources, answer, etc.)
+type Artifact struct {
+	ID     string                 `json:"id"`
+	Type   ArtifactType           `json:"type"`
+	Status ArtifactStatus         `json:"status"`
+	Data   map[string]interface{} `json:"data"`
+}
+
+// ArtifactType represents the type of artifact
+type ArtifactType string
+
+const (
+	NewArtifactTypeDiff        ArtifactType = "diff"
+	NewArtifactTypeSources     ArtifactType = "sources"
+	NewArtifactTypeAnswer      ArtifactType = "answer"
+	NewArtifactTypeContent     ArtifactType = "content_generation"
+	NewArtifactTypeImagePrompt ArtifactType = "image_prompt"
+)
+
+// ArtifactStatus represents the status of an artifact
+type ArtifactStatus string
+
+const (
+	ArtifactStatusPendingNew  ArtifactStatus = "pending"
+	ArtifactStatusAcceptedNew ArtifactStatus = "accepted"
+	ArtifactStatusRejectedNew ArtifactStatus = "rejected"
+)
+
+// ToolCategory represents the category of a tool for UI grouping
+type ToolCategory string
+
+const (
+	ToolCategoryResearch   ToolCategory = "research"
+	ToolCategoryAnalysis   ToolCategory = "analysis"
+	ToolCategoryEditing    ToolCategory = "editing"
+	ToolCategoryGeneration ToolCategory = "generation"
+)
+
+// ToolCategoryInfo provides metadata about tool categories
+var ToolCategories = map[string]ToolCategory{
+	"search_web_sources":       ToolCategoryResearch,
+	"ask_question":             ToolCategoryResearch,
+	"get_relevant_sources":     ToolCategoryResearch,
+	"fetch_url":                ToolCategoryResearch,
+	"analyze_document":         ToolCategoryAnalysis,
+	"add_context_from_sources": ToolCategoryAnalysis,
+	"rewrite_document":         ToolCategoryEditing,
+	"edit_text":                ToolCategoryEditing,
+	"generate_text_content":    ToolCategoryGeneration,
+	"generate_image_prompt":    ToolCategoryGeneration,
+}
+
+// IsParallelizable returns whether a tool can be executed in parallel with others
+func IsParallelizable(toolName string) bool {
+	parallelTools := map[string]bool{
+		"search_web_sources":       true,
+		"ask_question":             true,
+		"get_relevant_sources":     true,
+		"fetch_url":                true,
+		"analyze_document":         true,
+		"add_context_from_sources": true,
+	}
+	return parallelTools[toolName]
+}
+
+// HasArtifact returns whether a tool produces an artifact
+func HasArtifact(toolName string) bool {
+	artifactTools := map[string]bool{
+		"search_web_sources":    true,
+		"ask_question":          true,
+		"get_relevant_sources":  true,
+		"rewrite_document":      true,
+		"edit_text":             true,
+		"generate_text_content": true,
+		"generate_image_prompt": true,
+	}
+	return artifactTools[toolName]
+}
