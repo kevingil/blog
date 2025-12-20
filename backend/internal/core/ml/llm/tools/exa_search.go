@@ -325,8 +325,25 @@ func (t *ExaSearchTool) Run(ctx context.Context, params ToolCall) (ToolResponse,
 
 	log.Printf("🔍 [ExaSearch] ✅ Web search completed successfully")
 
+	// Create artifact hint for sources display
+	artifactData := map[string]interface{}{
+		"search_results":     searchResults,
+		"sources_created":    sourcesCreated,
+		"query":              input.Query,
+		"total_found":        len(searchResp.Results),
+		"sources_successful": sourcesSuccessful,
+	}
+
 	resultJSON, _ := json.Marshal(result)
-	return NewTextResponse(string(resultJSON)), nil
+	return ToolResponse{
+		Type:    ToolResponseTypeText,
+		Content: string(resultJSON),
+		Result:  result,
+		Artifact: &ArtifactHint{
+			Type: ArtifactHintTypeSources,
+			Data: artifactData,
+		},
+	}, nil
 }
 
 // shouldSkipURL determines if a URL should be skipped for source creation

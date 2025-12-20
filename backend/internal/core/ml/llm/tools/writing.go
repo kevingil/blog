@@ -221,8 +221,23 @@ func (t *GetRelevantSourcesTool) Run(ctx context.Context, params ToolCall) (Tool
 
 	log.Printf("🔍 [GetRelevantSources] ✅ Returning %d relevant chunks from %d sources", len(relevantSources), len(sources))
 
+	// Create artifact hint for sources display
+	artifactData := map[string]interface{}{
+		"sources":     relevantSources,
+		"query":       input.Query,
+		"total_found": len(relevantSources),
+	}
+
 	resultJSON, _ := json.Marshal(result)
-	return NewTextResponse(string(resultJSON)), nil
+	return ToolResponse{
+		Type:    ToolResponseTypeText,
+		Content: string(resultJSON),
+		Result:  result,
+		Artifact: &ArtifactHint{
+			Type: ArtifactHintTypeSources,
+			Data: artifactData,
+		},
+	}, nil
 }
 
 // RewriteDocumentTool rewrites the entire document
@@ -315,8 +330,23 @@ func (t *RewriteDocumentTool) Run(ctx context.Context, params ToolCall) (ToolRes
 
 	log.Printf("📝 [RewriteDocument] ✅ Document rewrite completed")
 
+	// Create artifact hint for diff display
+	artifactData := map[string]interface{}{
+		"original": input.OriginalContent,
+		"proposed": input.NewContent,
+		"reason":   input.Reason,
+	}
+
 	resultJSON, _ := json.Marshal(result)
-	return NewTextResponse(string(resultJSON)), nil
+	return ToolResponse{
+		Type:    ToolResponseTypeText,
+		Content: string(resultJSON),
+		Result:  result,
+		Artifact: &ArtifactHint{
+			Type: ArtifactHintTypeDiff,
+			Data: artifactData,
+		},
+	}, nil
 }
 
 // TextChunk represents a chunk of text with relevance scoring
@@ -537,8 +567,23 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 		},
 	}
 
+	// Create artifact hint for diff display
+	artifactData := map[string]interface{}{
+		"original": input.OriginalText,
+		"proposed": input.NewText,
+		"reason":   input.Reason,
+	}
+
 	resultJSON, _ := json.Marshal(result)
-	return NewTextResponse(string(resultJSON)), nil
+	return ToolResponse{
+		Type:    ToolResponseTypeText,
+		Content: string(resultJSON),
+		Result:  result,
+		Artifact: &ArtifactHint{
+			Type: ArtifactHintTypeDiff,
+			Data: artifactData,
+		},
+	}, nil
 }
 
 // Helper function to count characters by diff type
@@ -974,8 +1019,23 @@ func (t *GenerateTextContentTool) Run(ctx context.Context, params ToolCall) (Too
 
 	log.Printf("✍️ [GenerateTextContent] ✅ Generated content with context enhancement")
 
+	// Create artifact hint for content generation display
+	artifactData := map[string]interface{}{
+		"generated_content": enhancedPrompt,
+		"prompt":            input.Prompt,
+		"section_type":      "generated",
+	}
+
 	resultJSON, _ := json.Marshal(result)
-	return NewTextResponse(string(resultJSON)), nil
+	return ToolResponse{
+		Type:    ToolResponseTypeText,
+		Content: string(resultJSON),
+		Result:  result,
+		Artifact: &ArtifactHint{
+			Type: ArtifactHintTypeContent,
+			Data: artifactData,
+		},
+	}, nil
 }
 
 // GenerateImagePromptTool generates image prompts from content
@@ -1026,6 +1086,28 @@ func (t *GenerateImagePromptTool) Run(ctx context.Context, params ToolCall) (Too
 		"tool_name": "generate_image_prompt",
 	}
 
+	// Create artifact hint for image prompt display
+	artifactData := map[string]interface{}{
+		"prompt":       prompt,
+		"content_hint": input.Content[:min(200, len(input.Content))],
+	}
+
 	resultJSON, _ := json.Marshal(result)
-	return NewTextResponse(string(resultJSON)), nil
+	return ToolResponse{
+		Type:    ToolResponseTypeText,
+		Content: string(resultJSON),
+		Result:  result,
+		Artifact: &ArtifactHint{
+			Type: ArtifactHintTypeImagePrompt,
+			Data: artifactData,
+		},
+	}, nil
+}
+
+// min returns the smaller of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
