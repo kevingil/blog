@@ -140,6 +140,7 @@ func InitializeAgentCopilotManager(articleSourceService *ArticleSourceService, c
 		tools.NewGenerateImagePromptTool(textGenService),         // TextGenService for image prompt generation
 		tools.NewGenerateTextContentTool(textGenService),         // New tool for text generation
 		tools.NewExaSearchTool(exaAdapter, sourceServiceAdapter), // Exa web search with source creation
+		tools.NewExaAnswerTool(exaAdapter),                       // Exa answer for factual Q&A with citations
 	}
 
 	// Add source-related tools if source service is available
@@ -477,6 +478,34 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 				// This event contains tool results - stream each as a separate tool_result block
 				toolResults := event.Message.ToolResults()
 
+				// Build tool group for the new streaming format
+				groupID := uuid.New().String()
+				toolCalls := make([]agentTypes.ToolCallPayload, 0, len(toolResults))
+
+				for _, toolResult := range toolResults {
+					var resultData map[string]interface{}
+					var toolName string
+					if !toolResult.IsError {
+						if err := json.Unmarshal([]byte(toolResult.Content), &resultData); err == nil {
+							if name, ok := resultData["tool_name"].(string); ok {
+								toolName = name
+							}
+						}
+					}
+
+					status := "completed"
+					if toolResult.IsError {
+						status = "error"
+					}
+
+					toolCalls = append(toolCalls, agentTypes.ToolCallPayload{
+						ID:     toolResult.ToolCallID,
+						Name:   toolName,
+						Status: status,
+						Result: resultData,
+					})
+				}
+
 				// Save tool result messages with artifact metadata and stream full message if saved
 				savedMsg := m.saveToolResultMessage(ctx, asyncReq, event.Message, toolResults, articleID)
 				if savedMsg != nil {
@@ -490,7 +519,7 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 					// Stream the full message so frontend can render DiffArtifact immediately
 					asyncReq.ResponseChan <- StreamResponse{
 						RequestID: asyncReq.ID,
-						Type:      "full_message",
+						Type:      agentTypes.StreamTypeFullMessage,
 						Iteration: asyncReq.iteration,
 						FullMessage: &agentTypes.FullMessagePayload{
 							ID:        savedMsg.ID.String(),
@@ -503,6 +532,19 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 					}
 				}
 
+				// Stream tool group complete event (new architecture)
+				asyncReq.ResponseChan <- StreamResponse{
+					RequestID: asyncReq.ID,
+					Type:      agentTypes.StreamTypeToolGroupComplete,
+					Iteration: asyncReq.iteration,
+					ToolGroup: &agentTypes.ToolGroupPayload{
+						GroupID: groupID,
+						Status:  "completed",
+						Calls:   toolCalls,
+					},
+				}
+
+				// Also stream individual tool_result events for backward compatibility
 				for _, toolResult := range toolResults {
 					// Detect if this is a search tool result
 					isSearchTool := false
@@ -510,14 +552,14 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 						var resultData map[string]interface{}
 						if err := json.Unmarshal([]byte(toolResult.Content), &resultData); err == nil {
 							if toolName, ok := resultData["tool_name"].(string); ok {
-								isSearchTool = toolName == "search_web_sources"
+								isSearchTool = toolName == "search_web_sources" || toolName == "ask_question"
 							}
 						}
 					}
 
 					asyncReq.ResponseChan <- StreamResponse{
 						RequestID: asyncReq.ID,
-						Type:      "tool_result",
+						Type:      agentTypes.StreamTypeToolResult,
 						Iteration: asyncReq.iteration,
 						ToolID:    toolResult.ToolCallID,
 						ToolResult: map[string]interface{}{
@@ -890,6 +932,33 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 				return nil
 			}
 			log.Printf("[Agent] ✅ Saved search result message (ID: %s)", savedMsg.ID)
+			return savedMsg
+		}
+
+		// Handle ask_question tool results
+		if toolName == "ask_question" {
+			log.Printf("[Agent]       ❓ ASK QUESTION TOOL DETECTED")
+
+			// Extract answer and citations
+			answer := ""
+			citationCount := 0
+			if val, ok := toolResultData["answer"].(string); ok {
+				answer = val
+			}
+			if citations, ok := toolResultData["citations"].([]interface{}); ok {
+				citationCount = len(citations)
+			}
+
+			log.Printf("[Agent]          Answer preview: %s", truncate(answer, 100))
+			log.Printf("[Agent]          Citations: %d", citationCount)
+
+			content := fmt.Sprintf("❓ Question answered with %d citations", citationCount)
+			savedMsg, err := m.chatService.SaveMessage(ctx, articleID, "assistant", content, msgMetadata)
+			if err != nil {
+				log.Printf("[Agent] ❌ Failed to save ask_question tool result message: %v", err)
+				return nil
+			}
+			log.Printf("[Agent] ✅ Saved ask_question result message (ID: %s)", savedMsg.ID)
 			return savedMsg
 		}
 	}
