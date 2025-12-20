@@ -5,7 +5,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo } from "lucide-react"
+import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo, ArrowUp, Square } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -25,6 +25,12 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import {
+  PromptInput,
+  PromptInputTextarea,
+  PromptInputActions,
+  PromptInputAction,
+} from "@/components/ui/prompt-input";
 import { ChipInput } from "@/components/ui/chip-input";
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -620,7 +626,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [chatInput, setChatInput] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const [thinkingMessage, setThinkingMessage] = useState<string>('Thinking...');
-  const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const chatMessagesRef = useRef<HTMLDivElement>(null);
   
   // (deprecated) pending edit/patch state removed in favor of inline diffs
@@ -2501,25 +2506,37 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               ✏️ Edit Text
             </Button>
           </div>
-          <div className="flex gap-2">
-            <Textarea
-              ref={chatInputRef}
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              rows={2}
+          <PromptInput
+            value={chatInput}
+            onValueChange={setChatInput}
+            onSubmit={sendChat}
+            isLoading={chatLoading}
+            className="flex-1"
+          >
+            <PromptInputTextarea
               placeholder="Ask the assistant or click a quick action above…"
-              className="flex-1 resize-none"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  sendChat();
-                }
-              }}
+              className="min-h-[60px]"
             />
-            <Button onClick={sendChat} disabled={chatLoading}>
-              {chatLoading ? '…' : 'Send'}
-            </Button>
-          </div>
+            <PromptInputActions className="justify-end pt-2">
+              <PromptInputAction
+                tooltip={chatLoading ? "Stop generation" : "Send message"}
+              >
+                <Button
+                  variant="default"
+                  size="icon"
+                  className="h-8 w-8 rounded-full"
+                  disabled={!chatLoading && !chatInput.trim()}
+                  onClick={sendChat}
+                >
+                  {chatLoading ? (
+                    <Square className="size-5 fill-current" />
+                  ) : (
+                    <ArrowUp className="size-5" />
+                  )}
+                </Button>
+              </PromptInputAction>
+            </PromptInputActions>
+          </PromptInput>
         </div>
       </div>
 
