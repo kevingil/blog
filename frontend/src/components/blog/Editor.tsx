@@ -1465,6 +1465,63 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   // Remove the empty assistant placeholder and add the full message
                   // This ensures correct ordering: tool message comes before any follow-up text
                   placeholderRemoved = true;
+                  
+                  // Build the chat message with tool_group conversion (same as loadConversations)
+                  const fullMsg = msg.full_message;
+                  const chatMsg: ChatMessage = {
+                    id: fullMsg.id,
+                    role: fullMsg.role as 'assistant',
+                    content: fullMsg.content,
+                    meta_data: fullMsg.meta_data,
+                    created_at: fullMsg.created_at,
+                  };
+                  
+                  // Convert tool_execution to tool_group format for unified rendering
+                  if (fullMsg.meta_data?.tool_execution) {
+                    const toolExec = fullMsg.meta_data.tool_execution;
+                    const output = toolExec.output;
+                    const toolName = toolExec.tool_name;
+                    
+                    // Convert to tool_group format
+                    chatMsg.tool_group = {
+                      group_id: toolExec.tool_id || `group-${fullMsg.id}`,
+                      status: toolExec.success !== false ? 'completed' : 'error',
+                      calls: [{
+                        id: toolExec.tool_id || `call-${fullMsg.id}`,
+                        name: toolName,
+                        input: typeof toolExec.input === 'object' ? toolExec.input : {},
+                        status: toolExec.success !== false ? 'completed' : 'error',
+                        result: typeof output === 'object' ? output : undefined,
+                        error: toolExec.error,
+                        started_at: toolExec.executed_at || fullMsg.created_at,
+                        duration_ms: toolExec.duration_ms,
+                      }],
+                    };
+                    
+                    // Also set legacy tool_context for backward compatibility
+                    if (toolName === 'search_web_sources') {
+                      chatMsg.tool_context = {
+                        tool_name: 'search_web_sources',
+                        tool_id: toolExec.tool_id || '',
+                        status: 'completed',
+                        search_query: output?.query || '',
+                        search_results: output?.search_results || [],
+                        sources_created: output?.sources_created || [],
+                        total_found: output?.total_found || 0,
+                        sources_successful: output?.sources_successful || 0,
+                        message: output?.message
+                      };
+                    } else if (toolName === 'ask_question') {
+                      chatMsg.tool_context = {
+                        tool_name: 'ask_question',
+                        tool_id: toolExec.tool_id || '',
+                        status: 'completed',
+                        answer: output?.answer,
+                        citations: output?.citations || [],
+                      };
+                    }
+                  }
+                  
                   setChatMessages((prev) => {
                     const updated = [...prev];
                     // Remove the empty placeholder at assistantIndex if it exists and is empty
@@ -1473,20 +1530,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         !updated[assistantIndex]?.meta_data) {
                       updated.splice(assistantIndex, 1);
                     }
-                    // Add the full message
-                    updated.push({
-                      id: msg.full_message.id,
-                      role: msg.full_message.role as 'assistant',
-                      content: msg.full_message.content,
-                      meta_data: msg.full_message.meta_data,
-                      created_at: msg.full_message.created_at,
-                    });
+                    // Add the full message with tool_group
+                    updated.push(chatMsg);
                     return updated;
                   });
                   
                   // Apply diff if it's an edit tool
-                  const artifact = msg.full_message.meta_data?.artifact;
-                  const toolExec = msg.full_message.meta_data?.tool_execution;
+                  const artifact = fullMsg.meta_data?.artifact;
+                  const toolExec = fullMsg.meta_data?.tool_execution;
                   if (artifact && toolExec?.output) {
                     const toolName = toolExec.tool_name;
                     if (toolName === 'edit_text') {
