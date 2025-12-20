@@ -683,10 +683,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   });
 
-  // Watch only the specific fields that need reactive UI updates
+  // Watch only the specific fields that need reactive UI updates (NOT content - that causes re-renders on every keystroke)
   const watchedTags = useWatch({ control, name: 'tags' });
   const watchedIsDraft = useWatch({ control, name: 'isDraft' });
-  const watchedContent = useWatch({ control, name: 'content' });
 
   const [imagePrompt, setImagePrompt] = useState<string | null>(DEFAULT_IMAGE_PROMPT[Math.floor(Math.random() * DEFAULT_IMAGE_PROMPT.length)]);
 
@@ -768,7 +767,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       }),
       DiffHighlighter,
     ],
-    content: watchedContent || '', // Content is already HTML
+    content: '', // Start empty, content is synced when article loads
     editorProps: {
       attributes: {
         class:
@@ -781,18 +780,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       }
     },
   });
-
-  // When form values are externally reset (e.g., after fetching the article or clearing for a new one) we
-  // synchronise those changes into the editor exactly once.
-  useEffect(() => {
-    if (!editor) return;
-    // If the change came from user typing inside the editor, `editor.getHTML()` already matches watchedContent.
-    // We only want to update when the two differ – i.e., an external change.
-    if (watchedContent !== editor.getHTML()) {
-      // Load content directly as HTML since we're now saving as HTML
-      editor.commands.setContent(watchedContent || '');
-    }
-  }, [watchedContent, editor]);
 
   if (!user) {
     return <div>Please log in to edit articles.</div>;
@@ -814,7 +801,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   // Populate form when article data is loaded
   useEffect(() => {
     if (article && !isNew) {
-      console.log("Populating form with article data:", article);
       // Extract tag names from the server response format
       const tagNames = article.tags ? article.tags
         .map((tag: any) => tag?.name?.toUpperCase())
@@ -844,7 +830,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         editor.commands.setContent(newValues.content);
       }
     } else if (isNew) {
-      console.log("Resetting form for new article");
       const blank: ArticleFormData = {
         title: '',
         content: '',
@@ -860,37 +845,23 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         editor.commands.setContent('');
       }
     }
-  }, [article, isNew, reset]);
+  }, [article, isNew, reset, editor]);
 
   // Load conversation history with artifacts when article is loaded
   useEffect(() => {
     if (article?.article?.id && !isNew) {
-      console.log('[Editor] 🔄 Loading conversation history for article:', article.article.id);
-      
       const loadConversations = async () => {
         try {
           const result = await getConversationHistory(article.article.id);
-          console.log('[Editor] 📦 API response:', result);
-          console.log('[Editor] 📊 Message count from API:', result.messages?.length || 0);
           
           // Backend now handles initial greeting, so always use what it returns
           if (!result.messages || result.messages.length === 0) {
-            console.log('[Editor] ⚠️  No messages in API response');
             setChatMessages([]);
             return;
           }
           
           // Convert database messages to chat messages with artifact metadata and tool_context
-          const loadedMessages = result.messages.map((msg: any, idx: number) => {
-            console.log(`[Editor] 🔄 Transforming message ${idx + 1}:`, {
-              id: msg.id,
-              role: msg.role,
-              contentPreview: msg.content?.substring(0, 50),
-              hasMetadata: !!msg.meta_data,
-              hasArtifact: !!msg.meta_data?.artifact,
-              hasToolExecution: !!msg.meta_data?.tool_execution
-            });
-            
+          const loadedMessages = result.messages.map((msg: any) => {
             const chatMsg: ChatMessage = {
               id: msg.id,
               role: msg.role,
@@ -902,7 +873,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             // Reconstruct tool_context from metadata for search tools
             if (msg.meta_data?.tool_execution?.tool_name === 'search_web_sources') {
               const output = msg.meta_data.tool_execution.output;
-              console.log(`[Editor]    🔍 Reconstructing search tool_context from metadata`);
               chatMsg.tool_context = {
                 tool_name: 'search_web_sources',
                 tool_id: msg.meta_data.tool_execution.tool_id || '',
@@ -919,37 +889,21 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             return chatMsg;
           }) as ChatMessage[];
           
-          console.log('[Editor] ✅ Transformed', loadedMessages.length, 'messages');
-          console.log('[Editor] 📋 Transformed messages:', loadedMessages);
-          console.log('[Editor] 🎯 Setting chatMessages state...');
-          
           setChatMessages(loadedMessages);
-          
-          // Force a small delay to ensure state update completes
-          setTimeout(() => {
-            console.log('[Editor] ✅ chatMessages state should be updated now');
-          }, 100);
-          
         } catch (error) {
-          console.error('[Editor] ❌ Failed to load conversation history:', error);
-          // Don't show greeting on error - backend handles it
+          console.error('[Editor] Failed to load conversation history:', error);
           setChatMessages([]);
         }
       };
       
       loadConversations();
     } else if (isNew) {
-      console.log('[Editor] 📝 New article - no messages to load');
       setChatMessages([]);
     }
   }, [article?.article?.id, isNew]);
 
-
   // Auto-scroll chat to bottom when messages change
   useEffect(() => {
-    console.log('[Editor] 🔔 chatMessages state changed!');
-    console.log('[Editor]    Count:', chatMessages.length);
-    console.log('[Editor]    Messages:', chatMessages);
     if (chatMessagesRef.current) {
       chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
     }
@@ -991,13 +945,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         })(),
       };
       
-      console.log('=== ARTICLE UPDATE DATA ===');
-      console.log('Blog Slug:', blogSlug);
-      console.log('Update Data:', updateData);
-      console.log('Staged Image URL:', stagedImageUrl);
-      console.log('Final Image URL:', finalImageUrl);
-      console.log('==========================');
-      
       updateArticleMutation.mutate({
         slug: blogSlug as string,
         updateData,
@@ -1036,13 +983,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const applyTextEdit = (originalText: string, newText: string, reason: string) => {
     if (!editor) return;
     
-    console.log('Applying text edit:', { originalText, newText, reason });
-    
     const oldHtml = editor.getHTML();
     const currentText = editor.getText();
     const index = currentText.indexOf(originalText);
     if (index === -1) {
-      console.warn('Original text not found in document:', originalText);
       toast({
         title: 'Edit Warning',
         description: 'Could not locate the text to edit. The document may have changed.',
@@ -1061,13 +1005,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const applyPatch = (patch: any, originalText: string, newText: string, reason: string) => {
     if (!editor) return;
     
-    console.log('Applying patch:', { patch, originalText, newText, reason });
-    
     const oldHtml = editor.getHTML();
     const currentText = editor.getText();
     const index = currentText.indexOf(originalText);
     if (index === -1) {
-      console.warn('Original text not found in document for patch:', originalText);
       toast({
         title: 'Patch Failed',
         description: 'Could not locate the text to edit. The document may have changed.',
@@ -1086,8 +1027,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const applyDocumentRewrite = (newContent: string, reason: string, originalContent?: string) => {
     if (!editor) return;
     
-    console.log('Applying document rewrite:', { newContent, reason, originalContent });
-    
     const oldHtml = editor.getHTML();
     
     // Convert markdown to HTML for the new content
@@ -1099,10 +1038,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
   const sendChatWithMessage = async (message: string) => {
     const text = message.trim();
-    console.log("Sending chat with message:", text);
     
     if (!text) {
-      console.log("No text to send");
       return;
     }
 
@@ -1126,14 +1063,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   };
 
   const sendChat = async () => {
-    console.log("Sending chat");
     const text = chatInput.trim();
-    console.log("Chat Text:", text);
-    console.log("Chat Input State:", chatInput);
-    console.log("Ref current value:", chatInputRef.current?.value);
     
     if (!text) {
-      console.log("No text to send");
       return;
     }
 
@@ -1146,12 +1078,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       if (!article?.article?.id) {
         throw new Error('Article ID is required');
       }
-
-      console.log('Sending chat request:', { 
-        message: messageText.substring(0, 100) + (messageText.length > 100 ? '...' : ''),
-        documentContent: documentContent ? `${documentContent.substring(0, 100)}...` : 'none',
-        articleId: article.article.id
-      });
       
       // Submit the request with single message - backend loads context from DB
       const result = await apiPost<{ requestId: string; status: string }>('/agent', {
@@ -1159,8 +1085,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         documentContent: documentContent,
         articleId: article.article.id  // Required for loading context
       });
-
-      console.log('Got request response:', result);
       
       if (!result.requestId) {
         throw new Error('No request ID received');
@@ -1205,12 +1129,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const streamChatResponse = async (requestId: string, assistantIndex: number, isEditRequest: boolean) => {
     return new Promise<void>((resolve, reject) => {
       const wsUrl = `${VITE_API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://')}/websocket`;
-      console.log('Connecting to WebSocket:', wsUrl);
       
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        console.log('WebSocket connected, subscribing to request:', requestId);
         ws.send(JSON.stringify({
           action: 'subscribe',
           requestId: requestId
@@ -1224,7 +1146,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
-          console.log('WebSocket message:', msg);
           
           if (msg.error) {
             console.error('Stream error:', msg.error);
@@ -1246,7 +1167,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 // Handle thinking state - show shimmer
                 setIsThinking(true);
                 setThinkingMessage(msg.thinking_message || 'Thinking...');
-                console.log('Thinking:', msg.thinking_message);
                 break;
 
               case 'content_delta':
@@ -1267,13 +1187,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 break;
 
               case 'user':
-                // Display user message blocks (usually shown as context)
-                console.log('User message block:', msg.content);
+                // User message blocks (context) - no action needed
                 break;
                 
               case 'system':
-                // Display system message blocks (usually shown as context)
-                console.log('System message block:', msg.content);
+                // System message blocks (context) - no action needed
                 break;
                 
               case 'text':
@@ -1342,8 +1260,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       tool_context: toolContext
                     }
                   ]);
-                  
-                  console.log('Tool use:', msg.tool_name, msg.tool_input);
                 }
                 break;
                 
@@ -1353,8 +1269,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 
                 // Handle tool results with structured data
                 if (msg.tool_result) {
-                  console.log('Tool result:', msg.tool_result);
-                  
                   // Create a unique identifier for this tool message
                   const toolMessageId = `${requestId}-${Date.now()}-tool-result`;
                   const isNewMessage = !processedToolMessages.has(toolMessageId);
@@ -1412,11 +1326,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
                       }
                     }
-                    
-                    console.log('Tool result data:', JSON.stringify(msg.tool_result));
-                    
                   } catch (error) {
-                    console.error('Error parsing tool result:', error);
                     // Update tool context to error state
                     setChatMessages((prev) => {
                       const updated = [...prev];
@@ -1443,8 +1353,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 // Handle full message with complete meta_data for artifact tools
                 setIsThinking(false);
                 if (msg.full_message) {
-                  console.log('Full message received:', msg.full_message);
-                  
                   // Remove the empty assistant placeholder and add the full message
                   // This ensures correct ordering: tool message comes before any follow-up text
                   placeholderRemoved = true;
@@ -1482,7 +1390,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 break;
                 
               case 'done':
-                console.log('Stream completed');
                 setIsThinking(false); // Hide thinking state on completion
                 ws.close();
                 
@@ -1519,8 +1426,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           
           // Backward compatibility: Handle legacy role-based messages
           else if (msg.role === 'tool' && msg.content) {
-            console.log('Legacy tool message:', msg);
-            
             // Create a unique identifier for this tool message
             const toolMessageId = `${requestId}-${Date.now()}-${msg.content.slice(0, 50)}`;
             const isNewMessage = !processedToolMessages.has(toolMessageId);
@@ -1528,7 +1433,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             try {
               // Parse the tool result content to extract artifacts
               const toolResult = JSON.parse(msg.content);
-              console.log('Parsed tool result:', toolResult);
               
               // Handle edit_text tool specifically - only for new messages
               if (toolResult.tool_name === 'edit_text' && isNewMessage) {
@@ -1547,12 +1451,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 // Mark this tool message as processed
                 setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
               }
-              
-              // Add the tool message to chat history (for debugging, not displayed)
-              console.log('Legacy tool message data:', msg.content);
-              
             } catch (error) {
-              console.error('Error parsing tool result:', error);
               // Add error message
               setChatMessages((prev) => [
                 ...prev,
@@ -1586,7 +1485,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           
           // Backward compatibility: Handle legacy done signal
           else if (msg.done) {
-            console.log('Stream completed');
             ws.close();
             
             // After response is complete, check if we should show a document edit option
@@ -1622,9 +1520,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       };
 
       ws.onclose = (event) => {
-        console.log('WebSocket closed:', event.code, event.reason);
         if (event.code !== 1000) { // 1000 is normal closure
-          console.error('WebSocket closed unexpectedly');
+          console.error('WebSocket closed unexpectedly:', event.code, event.reason);
         }
       };
 
