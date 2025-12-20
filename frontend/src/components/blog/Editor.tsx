@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from '@tanstack/react-router';
 import { useAuth } from '@/services/auth/auth';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from "date-fns"
@@ -330,6 +330,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
     <div className="flex flex-wrap gap-1 p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 rounded-t-md">
       {/* Text formatting */}
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleBold().run()}
@@ -338,6 +339,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
         <Bold className="w-4 h-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleItalic().run()}
@@ -346,6 +348,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
         <Italic className="w-4 h-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleStrike().run()}
@@ -354,6 +357,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
         <Strikethrough className="w-4 h-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleCode().run()}
@@ -367,6 +371,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
 
       {/* Headings */}
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
@@ -375,6 +380,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
         <Heading1 className="w-4 h-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
@@ -383,6 +389,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
         <Heading2 className="w-4 h-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
@@ -396,6 +403,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
 
       {/* Lists */}
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleBulletList().run()}
@@ -404,6 +412,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
         <List className="w-4 h-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
@@ -417,6 +426,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
 
       {/* Code block */}
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleCodeBlock().run()}
@@ -428,6 +438,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
 
       {/* Quote */}
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
@@ -441,6 +452,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
 
       {/* Undo/Redo */}
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().undo().run()}
@@ -449,6 +461,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
         <Undo className="w-4 h-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().redo().run()}
@@ -659,7 +672,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   });
 
-  const { register, handleSubmit, setValue, formState: { errors }, watch, reset } = useForm<ArticleFormData>({
+  const { register, handleSubmit, setValue, formState: { errors }, control, reset } = useForm<ArticleFormData>({
     resolver: zodResolver(articleSchema),
     defaultValues: {
       title: '',
@@ -670,8 +683,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   });
 
-  // Watch form values to ensure UI reflects current state
-  const watchedValues = watch();
+  // Watch only the specific fields that need reactive UI updates
+  const watchedTags = useWatch({ control, name: 'tags' });
+  const watchedIsDraft = useWatch({ control, name: 'isDraft' });
+  const watchedContent = useWatch({ control, name: 'content' });
 
   const [imagePrompt, setImagePrompt] = useState<string | null>(DEFAULT_IMAGE_PROMPT[Math.floor(Math.random() * DEFAULT_IMAGE_PROMPT.length)]);
 
@@ -753,7 +768,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       }),
       DiffHighlighter,
     ],
-    content: watchedValues.content || '', // Content is already HTML
+    content: watchedContent || '', // Content is already HTML
     editorProps: {
       attributes: {
         class:
@@ -771,13 +786,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   // synchronise those changes into the editor exactly once.
   useEffect(() => {
     if (!editor) return;
-    // If the change came from user typing inside the editor, `editor.getHTML()` already matches `watchedValues.content`.
+    // If the change came from user typing inside the editor, `editor.getHTML()` already matches watchedContent.
     // We only want to update when the two differ – i.e., an external change.
-    if (watch('content') !== editor.getHTML()) {
+    if (watchedContent !== editor.getHTML()) {
       // Load content directly as HTML since we're now saving as HTML
-      editor.commands.setContent(watch('content') || '');
+      editor.commands.setContent(watchedContent || '');
     }
-  }, [watch('content'), editor]);
+  }, [watchedContent, editor]);
 
   if (!user) {
     return <div>Please log in to edit articles.</div>;
@@ -929,10 +944,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   }, [article?.article?.id, isNew]);
 
-  // Debug: Log current form values
-  useEffect(() => {
-    console.log("Current form values:", watchedValues);
-  }, [watchedValues]);
 
   // Auto-scroll chat to bottom when messages change
   useEffect(() => {
@@ -1660,8 +1671,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 <div className="flex-1 w-full sm:w-auto">
                   <Input
                     {...register('title')}
-                    value={watchedValues.title}
-                    onChange={(e) => setValue('title', e.target.value)}
                     placeholder="Article Title"
                     className="w-full text-lg font-medium"
                   />
@@ -1929,9 +1938,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     <Card className="p-3 h-32 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                       <div className="h-full flex flex-col">
                         <div className="flex-1 space-y-1">
-                          {watchedValues.tags && watchedValues.tags.length > 0 ? (
+                          {watchedTags && watchedTags.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
-                              {watchedValues.tags.slice(0, 3).map((tag, idx) => (
+                              {watchedTags.slice(0, 3).map((tag, idx) => (
                                 <span
                                   key={idx}
                                   className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200"
@@ -1939,9 +1948,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                   {tag}
                                 </span>
                               ))}
-                              {watchedValues.tags.length > 3 && (
+                              {watchedTags.length > 3 && (
                                 <span className="text-xs text-muted-foreground">
-                                  +{watchedValues.tags.length - 3} more
+                                  +{watchedTags.length - 3} more
                                 </span>
                               )}
                             </div>
@@ -1952,7 +1961,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                           )}
                         </div>
                         <div className="text-xs text-muted-foreground mt-2">
-                          {watchedValues.tags?.length || 0} tag{(watchedValues.tags?.length || 0) !== 1 ? 's' : ''}
+                          {watchedTags?.length || 0} tag{(watchedTags?.length || 0) !== 1 ? 's' : ''}
                         </div>
                       </div>
                     </Card>
@@ -1968,7 +1977,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       <div className="space-y-2">
                         <label className="block text-md font-medium leading-6 text-gray-900 dark:text-white">Article Tags</label>
                         <ChipInput
-                          value={watchedValues.tags}
+                          value={watchedTags}
                           onChange={(tags) => setValue('tags', tags.map((tag: string) => tag.toUpperCase()))}
                           placeholder="Type and press Enter to add tags..."
                         />
@@ -1996,8 +2005,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-medium">Status:</span>
-                            <span className={cn("text-xs font-medium", watchedValues.isDraft ? "text-orange-600" : "text-green-600")}>
-                              {watchedValues.isDraft ? "Draft" : "Published"}
+                            <span className={cn("text-xs font-medium", watchedIsDraft ? "text-orange-600" : "text-green-600")}>
+                              {watchedIsDraft ? "Draft" : "Published"}
                             </span>
                           </div>
                           <div className="flex items-center justify-between">
@@ -2026,12 +2035,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         <div className="flex items-center justify-between">
                           <label htmlFor="isDraft" className="text-sm font-medium">Publication Status</label>
                           <div className="flex items-center gap-2">
-                            <span className={cn("text-sm", watchedValues.isDraft ? "text-muted-foreground" : "text-green-600")}>
-                              {watchedValues.isDraft ? "Draft" : "Published"}
+                            <span className={cn("text-sm", watchedIsDraft ? "text-muted-foreground" : "text-green-600")}>
+                              {watchedIsDraft ? "Draft" : "Published"}
                             </span>
                             <Switch
                               id="isDraft"
-                              checked={!watchedValues.isDraft}
+                              checked={!watchedIsDraft}
                               onCheckedChange={(checked) => {
                                 setValue('isDraft', !checked);
                               }}
@@ -2124,8 +2133,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   editor={editor}
                   className="tiptap w-full border-none rounded-b-md h-[calc(100vh-400px)] overflow-y-auto focus:outline-none"
                 />
-                {/* Hidden input to keep react-hook-form registration for content */}
-                <input type="hidden" {...register('content')} value={watchedValues.content} />
                 {errors.content && <p className="text-red-500">{errors.content.message}</p>}
               </div>
 
