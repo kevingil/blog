@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useMemo, memo } from "react"
 import { ChevronDown, ChevronUp, FileDiff, Check } from "lucide-react"
 import { diffWords } from "diff"
 import { cn } from "@/lib/utils"
@@ -25,12 +25,14 @@ interface DiffArtifactProps {
   className?: string
 }
 
+const MAX_LINES = 3
+
 /**
  * Unified diff artifact component for displaying diff previews in chat.
- * Stateless - always shows diff preview and Apply button.
+ * Memoized to prevent expensive diffWords() recomputation on parent re-renders.
  * Works for any tool that creates diffs (edit_text, rewrite_document, etc.)
  */
-export function DiffArtifact({
+export const DiffArtifact = memo(function DiffArtifact({
   title,
   description,
   oldText,
@@ -40,43 +42,52 @@ export function DiffArtifact({
 }: DiffArtifactProps) {
   const [isExpanded, setIsExpanded] = useState(false)
 
-  // Compute diff parts
-  const parts = diffWords(oldText, newText)
-  const maxLines = 3
+  // Memoize the expensive diff computation - only recompute when text changes
+  const parts = useMemo(
+    () => diffWords(oldText, newText),
+    [oldText, newText]
+  )
 
-  // Truncate logic
-  let currentLine = 0
-  let truncatedParts: DiffPart[] = []
-  let hasMoreContent = false
+  // Memoize derived values that depend on parts
+  const { truncatedParts, hasMoreContent, addedCount, removedCount } = useMemo(() => {
+    let currentLine = 0
+    const truncated: DiffPart[] = []
+    let hasMore = false
 
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i]
-    const lines = part.value.split('\n')
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]
+      const lines = part.value.split('\n')
 
-    if (currentLine + lines.length <= maxLines || isExpanded) {
-      truncatedParts.push(part)
-      currentLine += lines.length - 1
-    } else {
-      const remainingLines = maxLines - currentLine
-      if (remainingLines > 0) {
-        const truncatedValue = lines.slice(0, remainingLines).join('\n')
-        truncatedParts.push({
-          ...part,
-          value: truncatedValue,
-          truncated: true
-        })
+      if (currentLine + lines.length <= MAX_LINES) {
+        truncated.push(part)
+        currentLine += lines.length - 1
+      } else {
+        const remainingLines = MAX_LINES - currentLine
+        if (remainingLines > 0) {
+          const truncatedValue = lines.slice(0, remainingLines).join('\n')
+          truncated.push({
+            ...part,
+            value: truncatedValue,
+            truncated: true
+          })
+        }
+        hasMore = true
+        break
       }
-      hasMoreContent = true
-      break
     }
-  }
 
-  const showExpandButton = !isExpanded && (hasMoreContent || parts.some(p => p.value.split('\n').length > maxLines))
+    const added = parts.filter(p => p.added).reduce((sum, p) => sum + p.value.length, 0)
+    const removed = parts.filter(p => p.removed).reduce((sum, p) => sum + p.value.length, 0)
 
-  // Calculate stats
-  const addedCount = parts.filter(p => p.added).reduce((sum, p) => sum + p.value.length, 0)
-  const removedCount = parts.filter(p => p.removed).reduce((sum, p) => sum + p.value.length, 0)
+    return {
+      truncatedParts: truncated,
+      hasMoreContent: hasMore,
+      addedCount: added,
+      removedCount: removed
+    }
+  }, [parts])
 
+  const showExpandButton = !isExpanded && (hasMoreContent || parts.some(p => p.value.split('\n').length > MAX_LINES))
   const hasDiffData = oldText.length > 0 || newText.length > 0
 
   return (
@@ -156,4 +167,14 @@ export function DiffArtifact({
       </ToolCallContent>
     </ToolCall>
   )
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison: only re-render if data props change, not callbacks
+  // This prevents re-renders when parent recreates onApply inline functions
+  return (
+    prevProps.oldText === nextProps.oldText &&
+    prevProps.newText === nextProps.newText &&
+    prevProps.title === nextProps.title &&
+    prevProps.description === nextProps.description &&
+    prevProps.className === nextProps.className
+  )
+})
