@@ -134,7 +134,6 @@ func InitializeAgentCopilotManager(articleSourceService *ArticleSourceService, c
 
 	// Create writing tools for the agent
 	writingTools := []tools.BaseTool{
-		tools.NewRewriteDocumentTool(textGenService, sourceService), // TextGenService and SourceService
 		tools.NewEditTextTool(),
 		tools.NewAnalyzeDocumentTool(),
 		tools.NewGenerateImagePromptTool(textGenService),         // TextGenService for image prompt generation
