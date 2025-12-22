@@ -434,6 +434,18 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 		return NewTextErrorResponse("original_text and new_text are required"), fmt.Errorf("original_text and new_text are required")
 	}
 
+	// Full logging for debugging
+	log.Printf("✏️ [EditText] Processing text edit")
+	log.Printf("   📝 Reason: %q", input.Reason)
+	log.Printf("   📄 Original text length: %d characters", len(input.OriginalText))
+	log.Printf("   📄 New text length: %d characters", len(input.NewText))
+	log.Printf("   📋 ORIGINAL TEXT START ===")
+	log.Printf("%s", input.OriginalText)
+	log.Printf("   === ORIGINAL TEXT END")
+	log.Printf("   📋 NEW TEXT START ===")
+	log.Printf("%s", input.NewText)
+	log.Printf("   === NEW TEXT END")
+
 	// Generate unified diff patch using diffmatchpatch
 	dmp := diffmatchpatch.New()
 	diffs := dmp.DiffMain(input.OriginalText, input.NewText, false)
