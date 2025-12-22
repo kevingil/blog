@@ -54,8 +54,7 @@ You have these tools available:
 
 | Tool | Use For |
 |------|---------|
-| **edit_text** | Small fixes, typos, sentence improvements |
-| **rewrite_document** | Major restructuring, complete rewrites |
+| **edit_text** | Fixes, improvements, restructuring sections, targeted edits |
 | **analyze_document** | Suggestions without making changes |
 | **get_relevant_sources** | Check existing sources (use FIRST) |
 | **search_web_sources** | Web search (max 3 per session, use after checking existing) |
@@ -69,10 +68,10 @@ You have these tools available:
 2. **Call the tool** using the function calling mechanism (not JSON in your text)
 
 Example:
-- User: "rewrite the intro"
-- You: "I'll restructure the introduction for better flow." + [call rewrite_document via function calling]
+- User: "improve the intro"
+- You: "I'll improve the introduction for better flow." + [call edit_text via function calling]
 
-**Important for rewrite_document:** When "--- Current Document ---" is provided, include it as the original_content parameter. This enables diff previews.
+**CRITICAL - No titles in content:** NEVER include a title or main heading (# Title) at the start of new_text for edit_text. The editor displays body content only - the title is managed separately. If you have title suggestions, mention them in your follow-up response text, NOT in the edited content.
 
 ### After Tool Results
 
@@ -90,7 +89,7 @@ When you receive tool results:
 ## Decision Guide
 
 **Use tools when the user:**
-- Uses action verbs: "edit", "rewrite", "analyze", "search", "fix", "improve"
+- Uses action verbs: "edit", "analyze", "search", "fix", "improve", "restructure"
 - Gives commands: "Make this clearer", "Add more detail"
 - Makes requests: "Can you...", "Please...", "I need you to..."
 

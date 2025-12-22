@@ -34,12 +34,53 @@ type ToolResponse struct {
 	Content  string           `json:"content"`
 	Metadata string           `json:"metadata,omitempty"`
 	IsError  bool             `json:"is_error"`
+	// NEW: Structured result for UI rendering
+	Result map[string]interface{} `json:"result,omitempty"`
+	// NEW: Artifact to create (if any)
+	Artifact *ArtifactHint `json:"artifact,omitempty"`
 }
+
+// ArtifactHint provides hints for creating UI artifacts from tool results
+type ArtifactHint struct {
+	Type string                 `json:"type"` // "diff", "sources", "answer", "content_generation", "image_prompt"
+	Data map[string]interface{} `json:"data"`
+}
+
+// ArtifactHintType constants
+const (
+	ArtifactHintTypeDiff        = "diff"
+	ArtifactHintTypeSources     = "sources"
+	ArtifactHintTypeAnswer      = "answer"
+	ArtifactHintTypeContent     = "content_generation"
+	ArtifactHintTypeImagePrompt = "image_prompt"
+)
 
 func NewTextResponse(content string) ToolResponse {
 	return ToolResponse{
 		Type:    ToolResponseTypeText,
 		Content: content,
+	}
+}
+
+// NewTextResponseWithResult creates a response with structured result data
+func NewTextResponseWithResult(content string, result map[string]interface{}) ToolResponse {
+	return ToolResponse{
+		Type:    ToolResponseTypeText,
+		Content: content,
+		Result:  result,
+	}
+}
+
+// NewTextResponseWithArtifact creates a response with an artifact hint
+func NewTextResponseWithArtifact(content string, result map[string]interface{}, artifactType string, artifactData map[string]interface{}) ToolResponse {
+	return ToolResponse{
+		Type:    ToolResponseTypeText,
+		Content: content,
+		Result:  result,
+		Artifact: &ArtifactHint{
+			Type: artifactType,
+			Data: artifactData,
+		},
 	}
 }
 

@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from '@tanstack/react-router';
 import { useAuth } from '@/services/auth/auth';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo } from "lucide-react"
+import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo, ArrowUp, Square } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -25,6 +25,12 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import {
+  PromptInput,
+  PromptInputTextarea,
+  PromptInputActions,
+  PromptInputAction,
+} from "@/components/ui/prompt-input";
 import { ChipInput } from "@/components/ui/chip-input";
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -40,6 +46,12 @@ import { getConversationHistory } from "@/services/conversations";
 import { WebSearchSteps, WebSearchToolContext } from "./WebSearchSteps";
 import { DiffActionBar } from "./DiffActionBar";
 import { DiffArtifact } from "./DiffArtifact";
+import { ToolGroupDisplay } from "./ToolGroupDisplay";
+import type { 
+  ToolGroup, 
+  ThinkingBlock, 
+  Artifact as NewArtifact,
+} from "./types";
 import { 
   ToolCall, 
   ToolCallTrigger, 
@@ -174,9 +186,17 @@ type ChatMessage = {
     };
     task_status?: any;
     tool_execution?: any;
+    tool_group?: ToolGroup;
+    thinking?: ThinkingBlock;
+    artifacts?: NewArtifact[];
     context?: any;
     user_action?: any;
   };
+  // New: Tool group for unified tool call display
+  tool_group?: ToolGroup;
+  // New: Thinking/chain of thought
+  thinking?: ThinkingBlock;
+  // Legacy tool_context for backward compatibility
   tool_context?: {
     tool_name: string;
     tool_id: string;
@@ -187,6 +207,14 @@ type ChatMessage = {
     sources_created?: SourceInfo[];
     total_found?: number;
     sources_successful?: number;
+    // Ask question specific
+    answer?: string;
+    citations?: Array<{
+      url: string;
+      title: string;
+      author?: string;
+      published_date?: string;
+    }>;
     // Generic tool fields
     message?: string;
     input?: Record<string, unknown>;
@@ -330,6 +358,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
     <div className="flex flex-wrap gap-1 p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 rounded-t-md">
       {/* Text formatting */}
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleBold().run()}
@@ -338,6 +367,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
         <Bold className="w-4 h-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleItalic().run()}
@@ -346,6 +376,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
         <Italic className="w-4 h-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleStrike().run()}
@@ -354,6 +385,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
         <Strikethrough className="w-4 h-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleCode().run()}
@@ -367,6 +399,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
 
       {/* Headings */}
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
@@ -375,6 +408,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
         <Heading1 className="w-4 h-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
@@ -383,6 +417,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
         <Heading2 className="w-4 h-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
@@ -396,6 +431,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
 
       {/* Lists */}
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleBulletList().run()}
@@ -404,6 +440,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
         <List className="w-4 h-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
@@ -417,6 +454,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
 
       {/* Code block */}
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleCodeBlock().run()}
@@ -428,6 +466,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
 
       {/* Quote */}
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
@@ -441,6 +480,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
 
       {/* Undo/Redo */}
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().undo().run()}
@@ -449,6 +489,7 @@ function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
         <Undo className="w-4 h-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         onClick={() => editor.chain().focus().redo().run()}
@@ -585,7 +626,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [chatInput, setChatInput] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const [thinkingMessage, setThinkingMessage] = useState<string>('Thinking...');
-  const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const chatMessagesRef = useRef<HTMLDivElement>(null);
   
   // (deprecated) pending edit/patch state removed in favor of inline diffs
@@ -636,10 +676,58 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       };
       returnToDashboard?: boolean;
     }) => updateArticle(data.slug, data.updateData),
-    onSuccess: (_, variables) => {
+    onSuccess: (response, variables) => {
       toast({ title: "Success", description: "Article updated successfully." });
-      queryClient.invalidateQueries({ queryKey: ['article', blogSlug] });
-      queryClient.invalidateQueries({ queryKey: ['articles'] });
+      
+      const newSlug = response?.article?.slug;
+      const oldSlug = variables.slug;
+      const articleId = response?.article?.id;
+      
+      // Update single article cache
+      if (newSlug && newSlug !== oldSlug) {
+        // Slug changed - update URL without triggering navigation/refresh
+        const newUrl = `/dashboard/blog/edit/${newSlug}`;
+        window.history.replaceState(null, '', newUrl);
+        
+        // Remove old slug cache and set new slug cache
+        queryClient.removeQueries({ queryKey: ['article', oldSlug] });
+        queryClient.setQueryData(['article', newSlug], response);
+      } else {
+        // Slug unchanged - just update the cache
+        queryClient.setQueryData(['article', oldSlug], response);
+      }
+      
+      // Update all article list queries by replacing the matching article
+      // This updates dashboard list, sidebar, and any other cached article lists
+      queryClient.setQueriesData<{ articles: ArticleListItem[]; total_pages: number; include_drafts: boolean } | undefined>(
+        { queryKey: ['articles'], exact: false },
+        (oldData) => {
+          if (!oldData?.articles) return oldData;
+          return {
+            ...oldData,
+            articles: oldData.articles.map((item) =>
+              item.article.id === articleId ? response : item
+            ),
+          };
+        }
+      );
+      
+      // Update sidebar infinite query
+      queryClient.setQueriesData<{ pages: { articles: ArticleListItem[] }[] } | undefined>(
+        { queryKey: ['sidebar-articles'], exact: false },
+        (oldData) => {
+          if (!oldData?.pages) return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page) => ({
+              ...page,
+              articles: page.articles.map((item) =>
+                item.article.id === articleId ? response : item
+              ),
+            })),
+          };
+        }
+      );
       
       if (variables.returnToDashboard) {
         navigate({ to: '/dashboard/blog' });
@@ -659,7 +747,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   });
 
-  const { register, handleSubmit, setValue, formState: { errors }, watch, reset } = useForm<ArticleFormData>({
+  const { register, handleSubmit, setValue, formState: { errors }, control, reset } = useForm<ArticleFormData>({
     resolver: zodResolver(articleSchema),
     defaultValues: {
       title: '',
@@ -670,8 +758,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   });
 
-  // Watch form values to ensure UI reflects current state
-  const watchedValues = watch();
+  // Watch only the specific fields that need reactive UI updates (NOT content - that causes re-renders on every keystroke)
+  const watchedTags = useWatch({ control, name: 'tags' });
+  const watchedIsDraft = useWatch({ control, name: 'isDraft' });
 
   const [imagePrompt, setImagePrompt] = useState<string | null>(DEFAULT_IMAGE_PROMPT[Math.floor(Math.random() * DEFAULT_IMAGE_PROMPT.length)]);
 
@@ -753,7 +842,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       }),
       DiffHighlighter,
     ],
-    content: watchedValues.content || '', // Content is already HTML
+    content: '', // Start empty, content is synced when article loads
     editorProps: {
       attributes: {
         class:
@@ -766,18 +855,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       }
     },
   });
-
-  // When form values are externally reset (e.g., after fetching the article or clearing for a new one) we
-  // synchronise those changes into the editor exactly once.
-  useEffect(() => {
-    if (!editor) return;
-    // If the change came from user typing inside the editor, `editor.getHTML()` already matches `watchedValues.content`.
-    // We only want to update when the two differ – i.e., an external change.
-    if (watch('content') !== editor.getHTML()) {
-      // Load content directly as HTML since we're now saving as HTML
-      editor.commands.setContent(watch('content') || '');
-    }
-  }, [watch('content'), editor]);
 
   if (!user) {
     return <div>Please log in to edit articles.</div>;
@@ -799,7 +876,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   // Populate form when article data is loaded
   useEffect(() => {
     if (article && !isNew) {
-      console.log("Populating form with article data:", article);
       // Extract tag names from the server response format
       const tagNames = article.tags ? article.tags
         .map((tag: any) => tag?.name?.toUpperCase())
@@ -829,7 +905,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         editor.commands.setContent(newValues.content);
       }
     } else if (isNew) {
-      console.log("Resetting form for new article");
       const blank: ArticleFormData = {
         title: '',
         content: '',
@@ -845,37 +920,23 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         editor.commands.setContent('');
       }
     }
-  }, [article, isNew, reset]);
+  }, [article, isNew, reset, editor]);
 
   // Load conversation history with artifacts when article is loaded
   useEffect(() => {
     if (article?.article?.id && !isNew) {
-      console.log('[Editor] 🔄 Loading conversation history for article:', article.article.id);
-      
       const loadConversations = async () => {
         try {
           const result = await getConversationHistory(article.article.id);
-          console.log('[Editor] 📦 API response:', result);
-          console.log('[Editor] 📊 Message count from API:', result.messages?.length || 0);
           
           // Backend now handles initial greeting, so always use what it returns
           if (!result.messages || result.messages.length === 0) {
-            console.log('[Editor] ⚠️  No messages in API response');
             setChatMessages([]);
             return;
           }
           
           // Convert database messages to chat messages with artifact metadata and tool_context
-          const loadedMessages = result.messages.map((msg: any, idx: number) => {
-            console.log(`[Editor] 🔄 Transforming message ${idx + 1}:`, {
-              id: msg.id,
-              role: msg.role,
-              contentPreview: msg.content?.substring(0, 50),
-              hasMetadata: !!msg.meta_data,
-              hasArtifact: !!msg.meta_data?.artifact,
-              hasToolExecution: !!msg.meta_data?.tool_execution
-            });
-            
+          const loadedMessages = result.messages.map((msg: any) => {
             const chatMsg: ChatMessage = {
               id: msg.id,
               role: msg.role,
@@ -884,61 +945,74 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               created_at: msg.created_at,
             };
             
-            // Reconstruct tool_context from metadata for search tools
-            if (msg.meta_data?.tool_execution?.tool_name === 'search_web_sources') {
-              const output = msg.meta_data.tool_execution.output;
-              console.log(`[Editor]    🔍 Reconstructing search tool_context from metadata`);
-              chatMsg.tool_context = {
-                tool_name: 'search_web_sources',
-                tool_id: msg.meta_data.tool_execution.tool_id || '',
-                status: 'completed',
-                search_query: output?.query || '',
-                search_results: output?.search_results || [],
-                sources_created: output?.sources_created || [],
-                total_found: output?.total_found || 0,
-                sources_successful: output?.sources_successful || 0,
-                message: output?.message
+            // Check for new tool_group format first
+            if (msg.meta_data?.tool_group) {
+              chatMsg.tool_group = msg.meta_data.tool_group;
+            }
+            // Reconstruct tool_context from legacy metadata for tool execution
+            else if (msg.meta_data?.tool_execution) {
+              const toolExec = msg.meta_data.tool_execution;
+              const output = toolExec.output;
+              const toolName = toolExec.tool_name;
+              
+              // Convert to tool_group format for unified handling
+              chatMsg.tool_group = {
+                group_id: toolExec.tool_id || `group-${msg.id}`,
+                status: toolExec.success ? 'completed' : 'error',
+                calls: [{
+                  id: toolExec.tool_id || `call-${msg.id}`,
+                  name: toolName,
+                  input: typeof toolExec.input === 'object' ? toolExec.input : {},
+                  status: toolExec.success ? 'completed' : 'error',
+                  result: typeof output === 'object' ? output : undefined,
+                  error: toolExec.error,
+                  started_at: toolExec.executed_at || msg.created_at,
+                  duration_ms: toolExec.duration_ms,
+                }],
               };
+              
+              // Also set legacy tool_context for backward compatibility with WebSearchSteps
+              if (toolName === 'search_web_sources') {
+                chatMsg.tool_context = {
+                  tool_name: 'search_web_sources',
+                  tool_id: toolExec.tool_id || '',
+                  status: 'completed',
+                  search_query: output?.query || '',
+                  search_results: output?.search_results || [],
+                  sources_created: output?.sources_created || [],
+                  total_found: output?.total_found || 0,
+                  sources_successful: output?.sources_successful || 0,
+                  message: output?.message
+                };
+              } else if (toolName === 'ask_question') {
+                chatMsg.tool_context = {
+                  tool_name: 'ask_question',
+                  tool_id: toolExec.tool_id || '',
+                  status: 'completed',
+                  answer: output?.answer,
+                  citations: output?.citations || [],
+                };
+              }
             }
             
             return chatMsg;
           }) as ChatMessage[];
           
-          console.log('[Editor] ✅ Transformed', loadedMessages.length, 'messages');
-          console.log('[Editor] 📋 Transformed messages:', loadedMessages);
-          console.log('[Editor] 🎯 Setting chatMessages state...');
-          
           setChatMessages(loadedMessages);
-          
-          // Force a small delay to ensure state update completes
-          setTimeout(() => {
-            console.log('[Editor] ✅ chatMessages state should be updated now');
-          }, 100);
-          
         } catch (error) {
-          console.error('[Editor] ❌ Failed to load conversation history:', error);
-          // Don't show greeting on error - backend handles it
+          console.error('[Editor] Failed to load conversation history:', error);
           setChatMessages([]);
         }
       };
       
       loadConversations();
     } else if (isNew) {
-      console.log('[Editor] 📝 New article - no messages to load');
       setChatMessages([]);
     }
   }, [article?.article?.id, isNew]);
 
-  // Debug: Log current form values
-  useEffect(() => {
-    console.log("Current form values:", watchedValues);
-  }, [watchedValues]);
-
   // Auto-scroll chat to bottom when messages change
   useEffect(() => {
-    console.log('[Editor] 🔔 chatMessages state changed!');
-    console.log('[Editor]    Count:', chatMessages.length);
-    console.log('[Editor]    Messages:', chatMessages);
     if (chatMessagesRef.current) {
       chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
     }
@@ -980,13 +1054,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         })(),
       };
       
-      console.log('=== ARTICLE UPDATE DATA ===');
-      console.log('Blog Slug:', blogSlug);
-      console.log('Update Data:', updateData);
-      console.log('Staged Image URL:', stagedImageUrl);
-      console.log('Final Image URL:', finalImageUrl);
-      console.log('==========================');
-      
       updateArticleMutation.mutate({
         slug: blogSlug as string,
         updateData,
@@ -1025,13 +1092,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const applyTextEdit = (originalText: string, newText: string, reason: string) => {
     if (!editor) return;
     
-    console.log('Applying text edit:', { originalText, newText, reason });
-    
     const oldHtml = editor.getHTML();
     const currentText = editor.getText();
     const index = currentText.indexOf(originalText);
     if (index === -1) {
-      console.warn('Original text not found in document:', originalText);
       toast({
         title: 'Edit Warning',
         description: 'Could not locate the text to edit. The document may have changed.',
@@ -1050,13 +1114,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const applyPatch = (patch: any, originalText: string, newText: string, reason: string) => {
     if (!editor) return;
     
-    console.log('Applying patch:', { patch, originalText, newText, reason });
-    
     const oldHtml = editor.getHTML();
     const currentText = editor.getText();
     const index = currentText.indexOf(originalText);
     if (index === -1) {
-      console.warn('Original text not found in document for patch:', originalText);
       toast({
         title: 'Patch Failed',
         description: 'Could not locate the text to edit. The document may have changed.',
@@ -1075,8 +1136,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const applyDocumentRewrite = (newContent: string, reason: string, originalContent?: string) => {
     if (!editor) return;
     
-    console.log('Applying document rewrite:', { newContent, reason, originalContent });
-    
     const oldHtml = editor.getHTML();
     
     // Convert markdown to HTML for the new content
@@ -1088,10 +1147,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
   const sendChatWithMessage = async (message: string) => {
     const text = message.trim();
-    console.log("Sending chat with message:", text);
     
     if (!text) {
-      console.log("No text to send");
       return;
     }
 
@@ -1115,14 +1172,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   };
 
   const sendChat = async () => {
-    console.log("Sending chat");
     const text = chatInput.trim();
-    console.log("Chat Text:", text);
-    console.log("Chat Input State:", chatInput);
-    console.log("Ref current value:", chatInputRef.current?.value);
     
     if (!text) {
-      console.log("No text to send");
       return;
     }
 
@@ -1135,12 +1187,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       if (!article?.article?.id) {
         throw new Error('Article ID is required');
       }
-
-      console.log('Sending chat request:', { 
-        message: messageText.substring(0, 100) + (messageText.length > 100 ? '...' : ''),
-        documentContent: documentContent ? `${documentContent.substring(0, 100)}...` : 'none',
-        articleId: article.article.id
-      });
       
       // Submit the request with single message - backend loads context from DB
       const result = await apiPost<{ requestId: string; status: string }>('/agent', {
@@ -1148,8 +1194,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         documentContent: documentContent,
         articleId: article.article.id  // Required for loading context
       });
-
-      console.log('Got request response:', result);
       
       if (!result.requestId) {
         throw new Error('No request ID received');
@@ -1194,12 +1238,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const streamChatResponse = async (requestId: string, assistantIndex: number, isEditRequest: boolean) => {
     return new Promise<void>((resolve, reject) => {
       const wsUrl = `${VITE_API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://')}/websocket`;
-      console.log('Connecting to WebSocket:', wsUrl);
       
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        console.log('WebSocket connected, subscribing to request:', requestId);
         ws.send(JSON.stringify({
           action: 'subscribe',
           requestId: requestId
@@ -1213,7 +1255,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
-          console.log('WebSocket message:', msg);
           
           if (msg.error) {
             console.error('Stream error:', msg.error);
@@ -1235,7 +1276,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 // Handle thinking state - show shimmer
                 setIsThinking(true);
                 setThinkingMessage(msg.thinking_message || 'Thinking...');
-                console.log('Thinking:', msg.thinking_message);
                 break;
 
               case 'content_delta':
@@ -1256,13 +1296,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 break;
 
               case 'user':
-                // Display user message blocks (usually shown as context)
-                console.log('User message block:', msg.content);
+                // User message blocks (context) - no action needed
                 break;
                 
               case 'system':
-                // Display system message blocks (usually shown as context)
-                console.log('System message block:', msg.content);
+                // System message blocks (context) - no action needed
                 break;
                 
               case 'text':
@@ -1331,8 +1369,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       tool_context: toolContext
                     }
                   ]);
-                  
-                  console.log('Tool use:', msg.tool_name, msg.tool_input);
                 }
                 break;
                 
@@ -1342,8 +1378,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 
                 // Handle tool results with structured data
                 if (msg.tool_result) {
-                  console.log('Tool result:', msg.tool_result);
-                  
                   // Create a unique identifier for this tool message
                   const toolMessageId = `${requestId}-${Date.now()}-tool-result`;
                   const isNewMessage = !processedToolMessages.has(toolMessageId);
@@ -1401,11 +1435,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
                       }
                     }
-                    
-                    console.log('Tool result data:', JSON.stringify(msg.tool_result));
-                    
                   } catch (error) {
-                    console.error('Error parsing tool result:', error);
                     // Update tool context to error state
                     setChatMessages((prev) => {
                       const updated = [...prev];
@@ -1432,11 +1462,66 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 // Handle full message with complete meta_data for artifact tools
                 setIsThinking(false);
                 if (msg.full_message) {
-                  console.log('Full message received:', msg.full_message);
-                  
                   // Remove the empty assistant placeholder and add the full message
                   // This ensures correct ordering: tool message comes before any follow-up text
                   placeholderRemoved = true;
+                  
+                  // Build the chat message with tool_group conversion (same as loadConversations)
+                  const fullMsg = msg.full_message;
+                  const chatMsg: ChatMessage = {
+                    id: fullMsg.id,
+                    role: fullMsg.role as 'assistant',
+                    content: fullMsg.content,
+                    meta_data: fullMsg.meta_data,
+                    created_at: fullMsg.created_at,
+                  };
+                  
+                  // Convert tool_execution to tool_group format for unified rendering
+                  if (fullMsg.meta_data?.tool_execution) {
+                    const toolExec = fullMsg.meta_data.tool_execution;
+                    const output = toolExec.output;
+                    const toolName = toolExec.tool_name;
+                    
+                    // Convert to tool_group format
+                    chatMsg.tool_group = {
+                      group_id: toolExec.tool_id || `group-${fullMsg.id}`,
+                      status: toolExec.success !== false ? 'completed' : 'error',
+                      calls: [{
+                        id: toolExec.tool_id || `call-${fullMsg.id}`,
+                        name: toolName,
+                        input: typeof toolExec.input === 'object' ? toolExec.input : {},
+                        status: toolExec.success !== false ? 'completed' : 'error',
+                        result: typeof output === 'object' ? output : undefined,
+                        error: toolExec.error,
+                        started_at: toolExec.executed_at || fullMsg.created_at,
+                        duration_ms: toolExec.duration_ms,
+                      }],
+                    };
+                    
+                    // Also set legacy tool_context for backward compatibility
+                    if (toolName === 'search_web_sources') {
+                      chatMsg.tool_context = {
+                        tool_name: 'search_web_sources',
+                        tool_id: toolExec.tool_id || '',
+                        status: 'completed',
+                        search_query: output?.query || '',
+                        search_results: output?.search_results || [],
+                        sources_created: output?.sources_created || [],
+                        total_found: output?.total_found || 0,
+                        sources_successful: output?.sources_successful || 0,
+                        message: output?.message
+                      };
+                    } else if (toolName === 'ask_question') {
+                      chatMsg.tool_context = {
+                        tool_name: 'ask_question',
+                        tool_id: toolExec.tool_id || '',
+                        status: 'completed',
+                        answer: output?.answer,
+                        citations: output?.citations || [],
+                      };
+                    }
+                  }
+                  
                   setChatMessages((prev) => {
                     const updated = [...prev];
                     // Remove the empty placeholder at assistantIndex if it exists and is empty
@@ -1445,20 +1530,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         !updated[assistantIndex]?.meta_data) {
                       updated.splice(assistantIndex, 1);
                     }
-                    // Add the full message
-                    updated.push({
-                      id: msg.full_message.id,
-                      role: msg.full_message.role as 'assistant',
-                      content: msg.full_message.content,
-                      meta_data: msg.full_message.meta_data,
-                      created_at: msg.full_message.created_at,
-                    });
+                    // Add the full message with tool_group
+                    updated.push(chatMsg);
                     return updated;
                   });
                   
                   // Apply diff if it's an edit tool
-                  const artifact = msg.full_message.meta_data?.artifact;
-                  const toolExec = msg.full_message.meta_data?.tool_execution;
+                  const artifact = fullMsg.meta_data?.artifact;
+                  const toolExec = fullMsg.meta_data?.tool_execution;
                   if (artifact && toolExec?.output) {
                     const toolName = toolExec.tool_name;
                     if (toolName === 'edit_text') {
@@ -1471,7 +1550,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 break;
                 
               case 'done':
-                console.log('Stream completed');
                 setIsThinking(false); // Hide thinking state on completion
                 ws.close();
                 
@@ -1508,8 +1586,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           
           // Backward compatibility: Handle legacy role-based messages
           else if (msg.role === 'tool' && msg.content) {
-            console.log('Legacy tool message:', msg);
-            
             // Create a unique identifier for this tool message
             const toolMessageId = `${requestId}-${Date.now()}-${msg.content.slice(0, 50)}`;
             const isNewMessage = !processedToolMessages.has(toolMessageId);
@@ -1517,7 +1593,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             try {
               // Parse the tool result content to extract artifacts
               const toolResult = JSON.parse(msg.content);
-              console.log('Parsed tool result:', toolResult);
               
               // Handle edit_text tool specifically - only for new messages
               if (toolResult.tool_name === 'edit_text' && isNewMessage) {
@@ -1536,12 +1611,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 // Mark this tool message as processed
                 setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
               }
-              
-              // Add the tool message to chat history (for debugging, not displayed)
-              console.log('Legacy tool message data:', msg.content);
-              
             } catch (error) {
-              console.error('Error parsing tool result:', error);
               // Add error message
               setChatMessages((prev) => [
                 ...prev,
@@ -1575,7 +1645,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           
           // Backward compatibility: Handle legacy done signal
           else if (msg.done) {
-            console.log('Stream completed');
             ws.close();
             
             // After response is complete, check if we should show a document edit option
@@ -1611,9 +1680,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       };
 
       ws.onclose = (event) => {
-        console.log('WebSocket closed:', event.code, event.reason);
         if (event.code !== 1000) { // 1000 is normal closure
-          console.error('WebSocket closed unexpectedly');
+          console.error('WebSocket closed unexpectedly:', event.code, event.reason);
         }
       };
 
@@ -1660,8 +1728,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 <div className="flex-1 w-full sm:w-auto">
                   <Input
                     {...register('title')}
-                    value={watchedValues.title}
-                    onChange={(e) => setValue('title', e.target.value)}
                     placeholder="Article Title"
                     className="w-full text-lg font-medium"
                   />
@@ -1929,9 +1995,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     <Card className="p-3 h-32 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                       <div className="h-full flex flex-col">
                         <div className="flex-1 space-y-1">
-                          {watchedValues.tags && watchedValues.tags.length > 0 ? (
+                          {watchedTags && watchedTags.length > 0 ? (
                             <div className="flex flex-wrap gap-1">
-                              {watchedValues.tags.slice(0, 3).map((tag, idx) => (
+                              {watchedTags.slice(0, 3).map((tag, idx) => (
                                 <span
                                   key={idx}
                                   className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200"
@@ -1939,9 +2005,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                   {tag}
                                 </span>
                               ))}
-                              {watchedValues.tags.length > 3 && (
+                              {watchedTags.length > 3 && (
                                 <span className="text-xs text-muted-foreground">
-                                  +{watchedValues.tags.length - 3} more
+                                  +{watchedTags.length - 3} more
                                 </span>
                               )}
                             </div>
@@ -1952,7 +2018,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                           )}
                         </div>
                         <div className="text-xs text-muted-foreground mt-2">
-                          {watchedValues.tags?.length || 0} tag{(watchedValues.tags?.length || 0) !== 1 ? 's' : ''}
+                          {watchedTags?.length || 0} tag{(watchedTags?.length || 0) !== 1 ? 's' : ''}
                         </div>
                       </div>
                     </Card>
@@ -1968,7 +2034,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       <div className="space-y-2">
                         <label className="block text-md font-medium leading-6 text-gray-900 dark:text-white">Article Tags</label>
                         <ChipInput
-                          value={watchedValues.tags}
+                          value={watchedTags}
                           onChange={(tags) => setValue('tags', tags.map((tag: string) => tag.toUpperCase()))}
                           placeholder="Type and press Enter to add tags..."
                         />
@@ -1996,8 +2062,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-medium">Status:</span>
-                            <span className={cn("text-xs font-medium", watchedValues.isDraft ? "text-orange-600" : "text-green-600")}>
-                              {watchedValues.isDraft ? "Draft" : "Published"}
+                            <span className={cn("text-xs font-medium", watchedIsDraft ? "text-orange-600" : "text-green-600")}>
+                              {watchedIsDraft ? "Draft" : "Published"}
                             </span>
                           </div>
                           <div className="flex items-center justify-between">
@@ -2026,12 +2092,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         <div className="flex items-center justify-between">
                           <label htmlFor="isDraft" className="text-sm font-medium">Publication Status</label>
                           <div className="flex items-center gap-2">
-                            <span className={cn("text-sm", watchedValues.isDraft ? "text-muted-foreground" : "text-green-600")}>
-                              {watchedValues.isDraft ? "Draft" : "Published"}
+                            <span className={cn("text-sm", watchedIsDraft ? "text-muted-foreground" : "text-green-600")}>
+                              {watchedIsDraft ? "Draft" : "Published"}
                             </span>
                             <Switch
                               id="isDraft"
-                              checked={!watchedValues.isDraft}
+                              checked={!watchedIsDraft}
                               onCheckedChange={(checked) => {
                                 setValue('isDraft', !checked);
                               }}
@@ -2124,8 +2190,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   editor={editor}
                   className="tiptap w-full border-none rounded-b-md h-[calc(100vh-400px)] overflow-y-auto focus:outline-none"
                 />
-                {/* Hidden input to keep react-hook-form registration for content */}
-                <input type="hidden" {...register('content')} value={watchedValues.content} />
                 {errors.content && <p className="text-red-500">{errors.content.message}</p>}
               </div>
 
@@ -2176,18 +2240,74 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           {chatMessages.map((m, i) => {
             // Helper function to render tool messages with unified UI
             const renderToolMessage = () => {
+              // NEW: Use ToolGroupDisplay for tool_group (new architecture)
+              if (m.tool_group) {
+                return (
+                  <ToolGroupDisplay 
+                    key={i} 
+                    group={m.tool_group}
+                    onArtifactAction={(toolId, action) => {
+                      // Handle artifact action for tools like edit_text
+                      const call = m.tool_group?.calls.find(c => c.id === toolId);
+                      if (call && (call.name === 'edit_text' || call.name === 'rewrite_document')) {
+                        const result = call.result;
+                        if (action === 'accept' && result && editor) {
+                          const newContent = (result.new_content || result.new_text) as string;
+                          if (newContent) {
+                            const currentHtml = editor.getHTML();
+                            const newHtml = mdParser.render(newContent);
+                            enterDiffPreview(currentHtml, newHtml, (result.reason as string) || '');
+                          }
+                        }
+                      }
+                    }}
+                  />
+                );
+              }
+              
+              // Legacy: Use tool_context for backward compatibility
               if (!m.tool_context) return null;
               
               const { tool_name, status, reason } = m.tool_context;
               const toolStatus = status === 'starting' ? 'pending' : status;
               
               // Tools with custom UI use ToolCall component
-              const customUITools = ['search_web_sources', 'edit_text', 'rewrite_document'];
+              const customUITools = ['search_web_sources', 'ask_question', 'edit_text', 'rewrite_document'];
               
               if (customUITools.includes(tool_name)) {
                 // Web search tool
                 if (tool_name === 'search_web_sources') {
                   return <WebSearchSteps key={i} tool_context={m.tool_context as WebSearchToolContext} />;
+                }
+                
+                // Ask question tool - use similar display to web search
+                if (tool_name === 'ask_question') {
+                  const { answer, citations } = m.tool_context;
+                  return (
+                    <ToolCall key={i} status={toolStatus === 'running' ? 'running' : 'completed'} defaultOpen={true}>
+                      <ToolCallTrigger icon={<FileSearch className="h-4 w-4" />}>
+                        Ask question
+                      </ToolCallTrigger>
+                      <ToolCallContent>
+                        {toolStatus === 'running' ? (
+                          <ToolCallStatusItem status="running">
+                            Finding answer...
+                          </ToolCallStatusItem>
+                        ) : (
+                          <div className="space-y-2">
+                            <ToolCallStatusItem status="completed">
+                              Answer found with {citations?.length || 0} citations
+                            </ToolCallStatusItem>
+                            {answer && (
+                              <div className="text-sm text-muted-foreground bg-muted/50 rounded-md p-2">
+                                {answer}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </ToolCallContent>
+                    </ToolCall>
+                  );
                 }
                 
                 // Edit/rewrite tools - use DiffArtifact for unified diff display
@@ -2300,7 +2420,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 }
               }
               case 'assistant': {
-                // Render tool messages with unified UI
+                // NEW: Render tool group messages (new architecture)
+                if (m.tool_group) {
+                  return renderToolMessage();
+                }
+                
+                // Render tool messages with unified UI (legacy)
                 if (m.tool_context) {
                   return renderToolMessage();
                 }
@@ -2419,38 +2544,38 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             >
               📝 Shorten
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const message = 'Fix any typos and improve the first paragraph to be more engaging';
-                setChatInput(message);
-                sendChatWithMessage(message);
-              }}
-              disabled={chatLoading}
-            >
-              ✏️ Edit Text
-            </Button>
           </div>
-          <div className="flex gap-2">
-            <Textarea
-              ref={chatInputRef}
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              rows={2}
+          <PromptInput
+            value={chatInput}
+            onValueChange={setChatInput}
+            onSubmit={sendChat}
+            isLoading={chatLoading}
+            className="flex-1"
+          >
+            <PromptInputTextarea
               placeholder="Ask the assistant or click a quick action above…"
-              className="flex-1 resize-none"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  sendChat();
-                }
-              }}
+              className="min-h-[60px]"
             />
-            <Button onClick={sendChat} disabled={chatLoading}>
-              {chatLoading ? '…' : 'Send'}
-            </Button>
-          </div>
+            <PromptInputActions className="justify-end pt-2">
+              <PromptInputAction
+                tooltip={chatLoading ? "Stop generation" : "Send message"}
+              >
+                <Button
+                  variant="default"
+                  size="icon"
+                  className="h-8 w-8 rounded-full"
+                  disabled={!chatLoading && !chatInput.trim()}
+                  onClick={sendChat}
+                >
+                  {chatLoading ? (
+                    <Square className="size-5 fill-current" />
+                  ) : (
+                    <ArrowUp className="size-5" />
+                  )}
+                </Button>
+              </PromptInputAction>
+            </PromptInputActions>
+          </PromptInput>
         </div>
       </div>
 

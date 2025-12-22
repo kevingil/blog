@@ -221,104 +221,24 @@ func (t *GetRelevantSourcesTool) Run(ctx context.Context, params ToolCall) (Tool
 
 	log.Printf("🔍 [GetRelevantSources] ✅ Returning %d relevant chunks from %d sources", len(relevantSources), len(sources))
 
-	resultJSON, _ := json.Marshal(result)
-	return NewTextResponse(string(resultJSON)), nil
-}
-
-// RewriteDocumentTool rewrites the entire document
-type RewriteDocumentTool struct {
-	textGenService TextGenerationService
-	sourceService  ArticleSourceService
-}
-
-func NewRewriteDocumentTool(textGenService TextGenerationService, sourceService ArticleSourceService) *RewriteDocumentTool {
-	return &RewriteDocumentTool{
-		textGenService: textGenService,
-		sourceService:  sourceService,
+	// Create artifact hint for sources display
+	artifactData := map[string]interface{}{
+		"sources":     relevantSources,
+		"query":       input.Query,
+		"total_found": len(relevantSources),
 	}
-}
 
-func (t *RewriteDocumentTool) Info() ToolInfo {
-	return ToolInfo{
-		Name:        "rewrite_document",
-		Description: "Completely rewrite or significantly edit the document content with diff generation support. CRITICAL: Write like a human, not an AI. Avoid AI writing patterns: no puffery ('breathtaking', 'nestled'), no symbolic importance phrases ('stands as a testament'), no editorializing ('it's important to note'), no superficial analyses with -ing phrases, no overused conjunctions, no section summaries, no negative parallelisms, no excessive em dashes, use sentence case headings, avoid vague attributions, write naturally with varied structures and concrete details.",
-		Parameters: map[string]any{
-			"new_content": map[string]any{
-				"type":        "string",
-				"description": "The new document content in markdown format",
-			},
-			"reason": map[string]any{
-				"type":        "string",
-				"description": "Brief explanation of the changes made",
-			},
-			"original_content": map[string]any{
-				"type":        []string{"string", "null"},
-				"description": "Optional: Original document content for generating diff patches. When provided, enables diff preview functionality.",
-			},
+	resultJSON, _ := json.Marshal(result)
+	return ToolResponse{
+		Type:    ToolResponseTypeText,
+		Content: string(resultJSON),
+		Result:  result,
+		Artifact: &ArtifactHint{
+			Type: ArtifactHintTypeSources,
+			Data: artifactData,
 		},
-		Required: []string{"new_content", "reason"},
-	}
+	}, nil
 }
-
-func (t *RewriteDocumentTool) Run(ctx context.Context, params ToolCall) (ToolResponse, error) {
-	var input struct {
-		NewContent      string `json:"new_content"`
-		Reason          string `json:"reason"`
-		OriginalContent string `json:"original_content,omitempty"` // Optional for diff generation
-	}
-
-	if err := json.Unmarshal([]byte(params.Input), &input); err != nil {
-		return NewTextErrorResponse("Invalid input format"), err
-	}
-
-	if input.NewContent == "" {
-		return NewTextErrorResponse("new_content is required"), fmt.Errorf("new_content is required")
-	}
-
-	log.Printf("📝 [RewriteDocument] Processing document rewrite")
-	log.Printf("   📄 New content length: %d characters", len(input.NewContent))
-	log.Printf("   📝 Reason: %q", input.Reason)
-
-	result := map[string]interface{}{
-		"new_content": input.NewContent,
-		"reason":      input.Reason,
-		"tool_name":   "rewrite_document",
-		"edit_type":   "rewrite",
-	}
-
-	// If original content is provided, generate diff patch like edit_text tool
-	if input.OriginalContent != "" {
-		log.Printf("📝 [RewriteDocument] Generating diff patch")
-		
-		// Generate unified diff patch using diffmatchpatch
-		dmp := diffmatchpatch.New()
-		diffs := dmp.DiffMain(input.OriginalContent, input.NewContent, false)
-		patch := dmp.PatchMake(input.OriginalContent, diffs)
-		patchText := dmp.PatchToText(patch)
-
-		// Add patch information to result
-		result["original_content"] = input.OriginalContent
-		result["patch"] = map[string]interface{}{
-			"unified_diff": patchText,
-			"diffs":        diffs,
-			"summary": map[string]interface{}{
-				"additions": countDiffType(diffs, diffmatchpatch.DiffInsert),
-				"deletions": countDiffType(diffs, diffmatchpatch.DiffDelete),
-				"unchanged": countDiffType(diffs, diffmatchpatch.DiffEqual),
-			},
-		}
-		
-		log.Printf("📝 [RewriteDocument] ✅ Diff patch generated - Additions: %d, Deletions: %d", 
-			countDiffType(diffs, diffmatchpatch.DiffInsert),
-			countDiffType(diffs, diffmatchpatch.DiffDelete))
-	}
-
-	log.Printf("📝 [RewriteDocument] ✅ Document rewrite completed")
-
-	resultJSON, _ := json.Marshal(result)
-	return NewTextResponse(string(resultJSON)), nil
-}
-
 
 // TextChunk represents a chunk of text with relevance scoring
 type TextChunk struct {
@@ -480,7 +400,7 @@ func NewEditTextTool() *EditTextTool {
 func (t *EditTextTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        "edit_text",
-		Description: "Edit specific text in the document while preserving the rest. Use this for targeted edits, improvements, or changes to specific sections. IMPORTANT: Write like a human - avoid AI patterns like puffery words, symbolic importance phrases, editorializing, superficial analyses, overused conjunctions, section summaries, and negative parallelisms. Use natural, varied sentence structures.",
+		Description: "Edit specific text in the document while preserving the rest. Use this for targeted edits, improvements, or changes to specific sections. CRITICAL: Never add a title/heading to the content - the editor displays ONLY body content, titles are managed separately. If you have title suggestions, mention them in your follow-up response, NOT in the edited content. Write like a human - avoid AI patterns like puffery words, symbolic importance phrases, editorializing, superficial analyses, overused conjunctions, section summaries, and negative parallelisms. Use natural, varied sentence structures.",
 		Parameters: map[string]any{
 			"original_text": map[string]any{
 				"type":        "string",
@@ -488,7 +408,7 @@ func (t *EditTextTool) Info() ToolInfo {
 			},
 			"new_text": map[string]any{
 				"type":        "string",
-				"description": "The new text to replace the original text with",
+				"description": "The new text to replace the original text with. Do NOT include a title or main heading - the text area only shows body content.",
 			},
 			"reason": map[string]any{
 				"type":        "string",
@@ -514,6 +434,18 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 		return NewTextErrorResponse("original_text and new_text are required"), fmt.Errorf("original_text and new_text are required")
 	}
 
+	// Full logging for debugging
+	log.Printf("✏️ [EditText] Processing text edit")
+	log.Printf("   📝 Reason: %q", input.Reason)
+	log.Printf("   📄 Original text length: %d characters", len(input.OriginalText))
+	log.Printf("   📄 New text length: %d characters", len(input.NewText))
+	log.Printf("   📋 ORIGINAL TEXT START ===")
+	log.Printf("%s", input.OriginalText)
+	log.Printf("   === ORIGINAL TEXT END")
+	log.Printf("   📋 NEW TEXT START ===")
+	log.Printf("%s", input.NewText)
+	log.Printf("   === NEW TEXT END")
+
 	// Generate unified diff patch using diffmatchpatch
 	dmp := diffmatchpatch.New()
 	diffs := dmp.DiffMain(input.OriginalText, input.NewText, false)
@@ -538,8 +470,23 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 		},
 	}
 
+	// Create artifact hint for diff display
+	artifactData := map[string]interface{}{
+		"original": input.OriginalText,
+		"proposed": input.NewText,
+		"reason":   input.Reason,
+	}
+
 	resultJSON, _ := json.Marshal(result)
-	return NewTextResponse(string(resultJSON)), nil
+	return ToolResponse{
+		Type:    ToolResponseTypeText,
+		Content: string(resultJSON),
+		Result:  result,
+		Artifact: &ArtifactHint{
+			Type: ArtifactHintTypeDiff,
+			Data: artifactData,
+		},
+	}, nil
 }
 
 // Helper function to count characters by diff type
@@ -681,11 +628,11 @@ func (t *AddContextFromSourcesTool) Run(ctx context.Context, params ToolCall) (T
 	if articleIDStr == "" {
 		log.Printf("📚 [AddContextFromSources] WARNING: No article ID in context")
 		result := map[string]interface{}{
-			"relevant_sources":   []map[string]interface{}{},
-			"context_added":      false,
-			"query":              input.Query,
-			"tool_name":          "add_context_from_sources",
-			"warning":            "No article ID available - cannot search for sources",
+			"relevant_sources": []map[string]interface{}{},
+			"context_added":    false,
+			"query":            input.Query,
+			"tool_name":        "add_context_from_sources",
+			"warning":          "No article ID available - cannot search for sources",
 		}
 		resultJSON, _ := json.Marshal(result)
 		return NewTextResponse(string(resultJSON)), nil
@@ -920,9 +867,9 @@ func (t *GenerateTextContentTool) Info() ToolInfo {
 
 func (t *GenerateTextContentTool) Run(ctx context.Context, params ToolCall) (ToolResponse, error) {
 	var input struct {
-		Prompt         string                   `json:"prompt"`
-		ContextSources []map[string]interface{} `json:"context_sources"`
-		OriginalContent string                  `json:"original_content"`
+		Prompt          string                   `json:"prompt"`
+		ContextSources  []map[string]interface{} `json:"context_sources"`
+		OriginalContent string                   `json:"original_content"`
 	}
 
 	if err := json.Unmarshal([]byte(params.Input), &input); err != nil {
@@ -940,7 +887,7 @@ func (t *GenerateTextContentTool) Run(ctx context.Context, params ToolCall) (Too
 
 	// Build enhanced prompt with context sources
 	enhancedPrompt := input.Prompt
-	
+
 	if len(input.ContextSources) > 0 {
 		enhancedPrompt += "\n\n--- Relevant Context Sources ---\n"
 		for i, source := range input.ContextSources {
@@ -965,18 +912,33 @@ func (t *GenerateTextContentTool) Run(ctx context.Context, params ToolCall) (Too
 	// For now, we'll return the enhanced prompt as this tool is meant to be a placeholder
 	// In a real implementation, this would call an LLM service
 	result := map[string]interface{}{
-		"generated_content":  enhancedPrompt, // This would be LLM-generated content
-		"prompt_used":        input.Prompt,
-		"sources_included":   len(input.ContextSources),
-		"has_original":       input.OriginalContent != "",
-		"tool_name":          "generate_text_content",
-		"generation_method":  "enhanced_prompt", // Indicates this is using context enhancement
+		"generated_content": enhancedPrompt, // This would be LLM-generated content
+		"prompt_used":       input.Prompt,
+		"sources_included":  len(input.ContextSources),
+		"has_original":      input.OriginalContent != "",
+		"tool_name":         "generate_text_content",
+		"generation_method": "enhanced_prompt", // Indicates this is using context enhancement
 	}
 
 	log.Printf("✍️ [GenerateTextContent] ✅ Generated content with context enhancement")
 
+	// Create artifact hint for content generation display
+	artifactData := map[string]interface{}{
+		"generated_content": enhancedPrompt,
+		"prompt":            input.Prompt,
+		"section_type":      "generated",
+	}
+
 	resultJSON, _ := json.Marshal(result)
-	return NewTextResponse(string(resultJSON)), nil
+	return ToolResponse{
+		Type:    ToolResponseTypeText,
+		Content: string(resultJSON),
+		Result:  result,
+		Artifact: &ArtifactHint{
+			Type: ArtifactHintTypeContent,
+			Data: artifactData,
+		},
+	}, nil
 }
 
 // GenerateImagePromptTool generates image prompts from content
@@ -1027,6 +989,28 @@ func (t *GenerateImagePromptTool) Run(ctx context.Context, params ToolCall) (Too
 		"tool_name": "generate_image_prompt",
 	}
 
+	// Create artifact hint for image prompt display
+	artifactData := map[string]interface{}{
+		"prompt":       prompt,
+		"content_hint": input.Content[:min(200, len(input.Content))],
+	}
+
 	resultJSON, _ := json.Marshal(result)
-	return NewTextResponse(string(resultJSON)), nil
+	return ToolResponse{
+		Type:    ToolResponseTypeText,
+		Content: string(resultJSON),
+		Result:  result,
+		Artifact: &ArtifactHint{
+			Type: ArtifactHintTypeImagePrompt,
+			Data: artifactData,
+		},
+	}, nil
+}
+
+// min returns the smaller of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

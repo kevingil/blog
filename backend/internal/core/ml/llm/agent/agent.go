@@ -292,61 +292,178 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 
 	toolResults := make([]message.ToolResult, len(assistantMsg.ToolCalls()))
 	toolCalls := assistantMsg.ToolCalls()
-	for i, toolCall := range toolCalls {
-		select {
-		case <-ctx.Done():
-			a.finishMessage(context.Background(), &assistantMsg, message.FinishReasonCanceled)
-			// Make all future tool calls cancelled
-			for j := i; j < len(toolCalls); j++ {
-				toolResults[j] = message.ToolResult{
-					ToolCallID: toolCalls[j].ID,
-					Content:    "Tool execution canceled by user",
-					IsError:    true,
-				}
-			}
-			goto out
-		default:
-			// Continue processing
-			var tool tools.BaseTool
-			for _, availableTool := range a.tools {
-				if availableTool.Info().Name == toolCall.Name {
-					tool = availableTool
-					break
-				}
-				// Monkey patch for Copilot Sonnet-4 tool repetition obfuscation
-				// if strings.HasPrefix(toolCall.Name, availableTool.Info().Name) &&
-				// 	strings.HasPrefix(toolCall.Name, availableTool.Info().Name+availableTool.Info().Name) {
-				// 	tool = availableTool
-				// 	break
-				// }
-			}
 
-			// Tool not found
-			if tool == nil {
-				toolResults[i] = message.ToolResult{
-					ToolCallID: toolCall.ID,
-					Content:    fmt.Sprintf("Tool not found: %s", toolCall.Name),
-					IsError:    true,
+	// Check if any tools are parallelizable
+	parallelizableTools := map[string]bool{
+		"search_web_sources":       true,
+		"ask_question":             true,
+		"get_relevant_sources":     true,
+		"fetch_url":                true,
+		"analyze_document":         true,
+		"add_context_from_sources": true,
+	}
+
+	// Determine if we can parallelize (all tools must be parallelizable)
+	canParallelize := len(toolCalls) > 1
+	for _, tc := range toolCalls {
+		if !parallelizableTools[tc.Name] {
+			canParallelize = false
+			break
+		}
+	}
+
+	if canParallelize {
+		// Execute tools in parallel using goroutines
+		log.Printf("│ 🔄 Executing %d tools in parallel", len(toolCalls))
+
+		type toolResultWithIndex struct {
+			index  int
+			result message.ToolResult
+		}
+		resultChan := make(chan toolResultWithIndex, len(toolCalls))
+
+		for i, toolCall := range toolCalls {
+			go func(idx int, tc message.ToolCall) {
+				// Check for cancellation
+				select {
+				case <-ctx.Done():
+					resultChan <- toolResultWithIndex{
+						index: idx,
+						result: message.ToolResult{
+							ToolCallID: tc.ID,
+							Content:    "Tool execution canceled by user",
+							IsError:    true,
+						},
+					}
+					return
+				default:
 				}
-				continue
+
+				// Find the tool
+				var tool tools.BaseTool
+				for _, availableTool := range a.tools {
+					if availableTool.Info().Name == tc.Name {
+						tool = availableTool
+						break
+					}
+				}
+
+				if tool == nil {
+					resultChan <- toolResultWithIndex{
+						index: idx,
+						result: message.ToolResult{
+							ToolCallID: tc.ID,
+							Content:    fmt.Sprintf("Tool not found: %s", tc.Name),
+							IsError:    true,
+						},
+					}
+					return
+				}
+
+				// Execute the tool
+				toolResult, toolErr := tool.Run(ctx, tools.ToolCall{
+					ID:    tc.ID,
+					Name:  tc.Name,
+					Input: tc.Input,
+				})
+
+				if toolErr != nil {
+					resultChan <- toolResultWithIndex{
+						index: idx,
+						result: message.ToolResult{
+							ToolCallID: tc.ID,
+							Content:    fmt.Sprintf("Tool execution error: %v", toolErr),
+							IsError:    true,
+						},
+					}
+				} else {
+					resultChan <- toolResultWithIndex{
+						index: idx,
+						result: message.ToolResult{
+							ToolCallID: tc.ID,
+							Content:    toolResult.Content,
+							Metadata:   toolResult.Metadata,
+							IsError:    toolResult.IsError,
+						},
+					}
+				}
+			}(i, toolCall)
+		}
+
+		// Collect all results
+		for range toolCalls {
+			select {
+			case <-ctx.Done():
+				// Fill remaining with cancelled
+				for j := 0; j < len(toolCalls); j++ {
+					if toolResults[j].ToolCallID == "" {
+						toolResults[j] = message.ToolResult{
+							ToolCallID: toolCalls[j].ID,
+							Content:    "Tool execution canceled by user",
+							IsError:    true,
+						}
+					}
+				}
+				a.finishMessage(context.Background(), &assistantMsg, message.FinishReasonCanceled)
+				goto out
+			case result := <-resultChan:
+				toolResults[result.index] = result.result
 			}
-			toolResult, toolErr := tool.Run(ctx, tools.ToolCall{
-				ID:    toolCall.ID,
-				Name:  toolCall.Name,
-				Input: toolCall.Input,
-			})
-			if toolErr != nil {
-				toolResults[i] = message.ToolResult{
-					ToolCallID: toolCall.ID,
-					Content:    fmt.Sprintf("Tool execution error: %v", toolErr),
-					IsError:    true,
+		}
+
+		log.Printf("│ ✅ All parallel tools completed")
+	} else {
+		// Execute tools sequentially (original behavior)
+		for i, toolCall := range toolCalls {
+			select {
+			case <-ctx.Done():
+				a.finishMessage(context.Background(), &assistantMsg, message.FinishReasonCanceled)
+				// Make all future tool calls cancelled
+				for j := i; j < len(toolCalls); j++ {
+					toolResults[j] = message.ToolResult{
+						ToolCallID: toolCalls[j].ID,
+						Content:    "Tool execution canceled by user",
+						IsError:    true,
+					}
 				}
-			} else {
-				toolResults[i] = message.ToolResult{
-					ToolCallID: toolCall.ID,
-					Content:    toolResult.Content,
-					Metadata:   toolResult.Metadata,
-					IsError:    toolResult.IsError,
+				goto out
+			default:
+				// Continue processing
+				var tool tools.BaseTool
+				for _, availableTool := range a.tools {
+					if availableTool.Info().Name == toolCall.Name {
+						tool = availableTool
+						break
+					}
+				}
+
+				// Tool not found
+				if tool == nil {
+					toolResults[i] = message.ToolResult{
+						ToolCallID: toolCall.ID,
+						Content:    fmt.Sprintf("Tool not found: %s", toolCall.Name),
+						IsError:    true,
+					}
+					continue
+				}
+				toolResult, toolErr := tool.Run(ctx, tools.ToolCall{
+					ID:    toolCall.ID,
+					Name:  toolCall.Name,
+					Input: toolCall.Input,
+				})
+				if toolErr != nil {
+					toolResults[i] = message.ToolResult{
+						ToolCallID: toolCall.ID,
+						Content:    fmt.Sprintf("Tool execution error: %v", toolErr),
+						IsError:    true,
+					}
+				} else {
+					toolResults[i] = message.ToolResult{
+						ToolCallID: toolCall.ID,
+						Content:    toolResult.Content,
+						Metadata:   toolResult.Metadata,
+						IsError:    toolResult.IsError,
+					}
 				}
 			}
 		}

@@ -60,3 +60,35 @@ func (a *ExaServiceAdapter) SearchWithDefaults(ctx context.Context, query string
 func (a *ExaServiceAdapter) IsConfigured() bool {
 	return a.service.IsConfigured()
 }
+
+// AnswerWithDefaults implements the tools.ExaAnswerService interface
+func (a *ExaServiceAdapter) AnswerWithDefaults(ctx context.Context, question string) (*tools.ExaAnswerResponse, error) {
+	resp, err := a.service.AnswerWithDefaults(ctx, question)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert service response to tools response
+	toolsResp := &tools.ExaAnswerResponse{
+		Answer:      resp.Answer,
+		CostDollars: resp.CostDollars,
+	}
+
+	// Convert citations
+	for _, citation := range resp.Citations {
+		toolsCitation := tools.ExaAnswerCitation{
+			ID:            citation.ID,
+			URL:           citation.URL,
+			Title:         citation.Title,
+			Author:        citation.Author,
+			PublishedDate: citation.PublishedDate,
+			Text:          citation.Text,
+			Image:         citation.Image,
+			Favicon:       citation.Favicon,
+			Extras:        citation.Extras,
+		}
+		toolsResp.Citations = append(toolsResp.Citations, toolsCitation)
+	}
+
+	return toolsResp, nil
+}

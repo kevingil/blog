@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 	"time"
 
@@ -105,6 +106,9 @@ func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uuid.UUID,
 		return nil, fmt.Errorf("failed to find article: %w", result.Error)
 	}
 
+	// Store old title to check if it changed
+	oldTitle := article.Title
+
 	// Process tags using tag service
 	tagIDs, err := s.tagService.EnsureTagsExist(req.Tags)
 	if err != nil {
@@ -116,6 +120,12 @@ func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uuid.UUID,
 	article.Content = req.Content
 	article.ImageURL = req.ImageURL
 	article.IsDraft = req.IsDraft
+
+	// Regenerate slug if title changed
+	if oldTitle != req.Title {
+		article.Slug = s.generateUniqueSlug(req.Title, &articleID)
+		fmt.Printf("\n\n- Title changed from '%s' to '%s', new slug: %s\n", oldTitle, req.Title, article.Slug)
+	}
 
 	// Convert Unix timestamp to time.Time if provided
 	if req.PublishedAt != nil {
@@ -137,6 +147,7 @@ func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uuid.UUID,
 	// Update article without embedding field to avoid "vector must have at least 1 dimension" error
 	updateFields := map[string]interface{}{
 		"title":        article.Title,
+		"slug":         article.Slug,
 		"content":      article.Content,
 		"image_url":    article.ImageURL,
 		"is_draft":     article.IsDraft,
@@ -567,14 +578,14 @@ func (s *ArticleService) CreateArticle(ctx context.Context, req ArticleCreateReq
 		return nil, err
 	}
 
-	// Create article
+	// Create article with unique slug
 	article := models.Article{
 		Title:    req.Title,
 		Content:  req.Content,
 		ImageURL: req.ImageURL,
 		IsDraft:  req.IsDraft,
 		AuthorID: req.AuthorID,
-		Slug:     generateSlug(req.Title),
+		Slug:     s.generateUniqueSlug(req.Title, nil),
 	}
 	if len(tagIDs) > 0 {
 		article.TagIDs = tagIDs
@@ -590,10 +601,52 @@ func (s *ArticleService) CreateArticle(ctx context.Context, req ArticleCreateReq
 
 // Helper function to generate slug from title
 func generateSlug(title string) string {
-	// Basic slug generation - you might want to use a proper slug library
+	// Convert to lowercase
 	slug := strings.ToLower(title)
+
+	// Replace spaces with dashes
 	slug = strings.ReplaceAll(slug, " ", "-")
-	// Remove special characters (basic implementation)
+
+	// Remove special characters (keep only alphanumeric and dashes)
+	reg := regexp.MustCompile(`[^a-z0-9-]+`)
+	slug = reg.ReplaceAllString(slug, "")
+
+	// Replace multiple consecutive dashes with single dash
+	multiDash := regexp.MustCompile(`-+`)
+	slug = multiDash.ReplaceAllString(slug, "-")
+
+	// Trim leading/trailing dashes
+	slug = strings.Trim(slug, "-")
+
+	// Ensure slug is not empty
+	if slug == "" {
+		slug = "untitled"
+	}
+
+	return slug
+}
+
+// generateUniqueSlug generates a unique slug for an article, appending a short UUID if needed
+// excludeArticleID is optional - if provided, that article's slug won't cause a conflict
+func (s *ArticleService) generateUniqueSlug(title string, excludeArticleID *uuid.UUID) string {
+	db := s.db.GetDB()
+	baseSlug := generateSlug(title)
+	slug := baseSlug
+
+	// Check if slug exists (excluding the current article if updating)
+	var count int64
+	query := db.Model(&models.Article{}).Where("slug = ?", slug)
+	if excludeArticleID != nil {
+		query = query.Where("id != ?", *excludeArticleID)
+	}
+	query.Count(&count)
+
+	// If slug exists, append short UUID
+	if count > 0 {
+		shortUUID := uuid.New().String()[:8]
+		slug = fmt.Sprintf("%s-%s", baseSlug, shortUUID)
+	}
+
 	return slug
 }
 

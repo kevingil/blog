@@ -1,16 +1,8 @@
 import { useState } from "react"
 import { ChevronDown, ChevronUp, FileEdit, FileDiff } from "lucide-react"
-import { diffWords } from "diff"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ToolCallStatusItem } from "@/components/prompt-kit/tool-call"
-
-type DiffPart = { 
-  added?: boolean
-  removed?: boolean
-  value: string
-  truncated?: boolean 
-}
 
 interface DiffPreviewContentProps {
   toolName: 'edit_text' | 'rewrite_document'
@@ -23,6 +15,8 @@ interface DiffPreviewContentProps {
   className?: string
 }
 
+const MAX_LINES = 5
+
 export function DiffPreviewContent({
   toolName,
   status,
@@ -34,42 +28,16 @@ export function DiffPreviewContent({
   
   const isEditText = toolName === 'edit_text'
 
-  // Compute diff parts if we have diff preview
-  const parts = diffPreview ? diffWords(diffPreview.oldText, diffPreview.newText) : []
-  const maxLines = 3
-
-  // Truncate logic
-  let currentLine = 0
-  let truncatedParts: DiffPart[] = []
-  let hasMoreContent = false
-
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i]
-    const lines = part.value.split('\n')
-
-    if (currentLine + lines.length <= maxLines || isExpanded) {
-      truncatedParts.push(part)
-      currentLine += lines.length - 1
-    } else {
-      const remainingLines = maxLines - currentLine
-      if (remainingLines > 0) {
-        const truncatedValue = lines.slice(0, remainingLines).join('\n')
-        truncatedParts.push({
-          ...part,
-          value: truncatedValue,
-          truncated: true
-        })
-      }
-      hasMoreContent = true
-      break
-    }
-  }
-
-  const showExpandButton = !isExpanded && (hasMoreContent || parts.some(p => p.value.split('\n').length > maxLines))
-
-  // Calculate stats
-  const addedCount = parts.filter(p => p.added).reduce((sum, p) => sum + p.value.length, 0)
-  const removedCount = parts.filter(p => p.removed).reduce((sum, p) => sum + p.value.length, 0)
+  // Check if content needs truncation
+  const oldLines = diffPreview?.oldText.split('\n') || []
+  const newLines = diffPreview?.newText.split('\n') || []
+  const needsTruncation = oldLines.length > MAX_LINES || newLines.length > MAX_LINES
+  
+  // Get display text (truncated or full)
+  const displayOldText = isExpanded ? diffPreview?.oldText : oldLines.slice(0, MAX_LINES).join('\n')
+  const displayNewText = isExpanded ? diffPreview?.newText : newLines.slice(0, MAX_LINES).join('\n')
+  const oldTruncated = !isExpanded && oldLines.length > MAX_LINES
+  const newTruncated = !isExpanded && newLines.length > MAX_LINES
 
   return (
     <div className={cn("space-y-3", className)}>
@@ -90,9 +58,9 @@ export function DiffPreviewContent({
       {diffPreview && (
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
-            <span className="text-green-600 dark:text-green-400">+{addedCount}</span>
+            <span className="text-red-600 dark:text-red-400">-{diffPreview.oldText.length}</span>
             <span>/</span>
-            <span className="text-red-600 dark:text-red-400">-{removedCount}</span>
+            <span className="text-green-600 dark:text-green-400">+{diffPreview.newText.length}</span>
             <span>chars</span>
           </span>
           {reason && (
@@ -104,47 +72,54 @@ export function DiffPreviewContent({
         </div>
       )}
 
-      {/* Expandable diff preview (when available) */}
+      {/* Simple old/new blocks */}
       {diffPreview && (
-        <div className="rounded-md border bg-muted/30 p-2">
-          <div className="font-mono text-xs whitespace-pre-wrap overflow-hidden">
-            {(isExpanded ? parts : truncatedParts).map((part, index) => (
-              <span
-                key={index}
-                className={cn(
-                  part.added ? "bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100" :
-                  part.removed ? "bg-red-200 dark:bg-red-800 text-red-900 dark:text-red-100 line-through" :
-                  "text-muted-foreground"
-                )}
-              >
-                {part.value}
-                {'truncated' in part && part.truncated && <span className="text-muted-foreground/50">...</span>}
-              </span>
-            ))}
-          </div>
-
-          {(showExpandButton || isExpanded) && (
-            <div className="flex justify-center mt-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="h-6 px-2 text-xs"
-              >
-                {isExpanded ? (
-                  <>
-                    <ChevronUp className="h-3 w-3 mr-1" />
-                    Show less
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown className="h-3 w-3 mr-1" />
-                    Show more
-                  </>
-                )}
-              </Button>
+        <div className="space-y-2">
+          {/* Old content - red */}
+          {diffPreview.oldText && (
+            <div>
+              <div className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">Removing:</div>
+              <div className="bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded p-2 font-mono text-xs whitespace-pre-wrap text-red-800 dark:text-red-200 max-h-64 overflow-auto">
+                {displayOldText}
+                {oldTruncated && <span className="text-red-400 dark:text-red-500">...</span>}
+              </div>
             </div>
           )}
+
+          {/* New content - green */}
+          {diffPreview.newText && (
+            <div>
+              <div className="text-xs font-medium text-green-600 dark:text-green-400 mb-1">Adding:</div>
+              <div className="bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded p-2 font-mono text-xs whitespace-pre-wrap text-green-800 dark:text-green-200 max-h-64 overflow-auto">
+                {displayNewText}
+                {newTruncated && <span className="text-green-400 dark:text-green-500">...</span>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Expand/collapse button */}
+      {diffPreview && needsTruncation && (
+        <div className="flex justify-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="h-6 px-2 text-xs"
+          >
+            {isExpanded ? (
+              <>
+                <ChevronUp className="h-3 w-3 mr-1" />
+                Show less
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-3 w-3 mr-1" />
+                Show more
+              </>
+            )}
+          </Button>
         </div>
       )}
 
