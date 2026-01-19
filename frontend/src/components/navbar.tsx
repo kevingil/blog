@@ -18,11 +18,8 @@ import {
   NavigationMenuList,
 } from "./ui/navigation-menu";
 import { Button } from "./ui/button";
-import { useAuth } from '@/services/auth/auth';
 import { Link } from '@tanstack/react-router';
 import { ToggleTheme } from "./home/toogle-theme";
-import { getAboutPage } from '@/services/user';
-import { useQuery } from '@tanstack/react-query';
 import { useAtomValue } from 'jotai';
 import { isAuthenticatedAtom } from '@/services/auth/auth';
 import { cn } from "@/lib/utils";
@@ -156,7 +153,6 @@ const routeList: RouteProps[] = [
 export const Navbar = () => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [isAnimated, setIsAnimated] = useState(false);
-  const { token } = useAuth();
   const isAuthenticated = useAtomValue(isAuthenticatedAtom);
 
   useEffect(() => {
@@ -166,14 +162,6 @@ export const Navbar = () => {
     }, 100);
     return () => clearTimeout(timer);
   }, []);
-
-  const { data: pageData, isLoading: aboutPageLoading } = useQuery({
-    queryKey: ['aboutPage'],
-    queryFn: getAboutPage,
-    staleTime: 5000,
-    enabled: !!isAuthenticated && !!token,
-  });
-  console.log("navbar pageData", pageData, aboutPageLoading);
 
 
   return (

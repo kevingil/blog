@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/services/auth/auth';
-import { getAboutPage, getContactPage, AboutPageData, ContactPageData } from '@/services/user';
+import { getMyProfile, UserProfile } from '@/services/profile';
 import GithubIcon from '@/components/icons/github-icon';
 import LinkedinIcon from '@/components/icons/linkedin-icon';
 import XIcon from '@/components/icons/x-icon';
@@ -20,39 +20,33 @@ interface SocialLink {
 export function UserProfileBanner() {
   const { user } = useAuth();
   
-  const { data: aboutData } = useQuery<AboutPageData | null>({
-    queryKey: ['aboutPage'],
-    queryFn: getAboutPage,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-
-  const { data: contactData } = useQuery<ContactPageData | null>({
-    queryKey: ['contactPage'],
-    queryFn: getContactPage,
+  const { data: profile } = useQuery<UserProfile | null>({
+    queryKey: ['myProfile'],
+    queryFn: getMyProfile,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   const socialLinks = useMemo(() => {
-    if (!contactData?.social_links) return [];
+    if (!profile?.social_links) return [];
     
     try {
-      const parsed = JSON.parse(contactData.social_links);
+      // social_links is already an object from the API
+      const links = profile.social_links;
       
       // Handle object format: {"github": "url", "linkedin": "url"}
-      if (typeof parsed === 'object' && !Array.isArray(parsed)) {
-        return Object.entries(parsed).map(([platform, url]) => ({
+      if (typeof links === 'object' && !Array.isArray(links)) {
+        return Object.entries(links).map(([platform, url]) => ({
           platform,
           url: url as string
         }));
       }
       
-      // Handle array format: [{"platform": "github", "url": "url"}]
-      return Array.isArray(parsed) ? parsed : [];
+      return [];
     } catch (error) {
       console.error('Error parsing social links:', error);
       return [];
     }
-  }, [contactData?.social_links]);
+  }, [profile?.social_links]);
 
   const getSocialIcon = (platform: string) => {
     const platformLower = platform.toLowerCase();
@@ -88,11 +82,11 @@ export function UserProfileBanner() {
           <div className="flex-shrink-0">
             <Avatar className="h-24 w-24 md:h-32 md:w-32">
               <AvatarImage 
-                src={aboutData?.profile_image || undefined} 
-                alt={user?.name || 'Profile'} 
+                src={profile?.profile_image || undefined} 
+                alt={profile?.name || user?.name || 'Profile'} 
               />
               <AvatarFallback className="text-xl md:text-2xl">
-                {user?.name ? getUserInitials(user.name) : <User className="h-8 w-8" />}
+                {(profile?.name || user?.name) ? getUserInitials(profile?.name || user?.name || '') : <User className="h-8 w-8" />}
               </AvatarFallback>
             </Avatar>
           </div>
@@ -102,25 +96,25 @@ export function UserProfileBanner() {
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-2xl md:text-3xl font-bold">
-                  {aboutData?.title || user?.name || 'Welcome'}
+                  {profile?.name || user?.name || 'Welcome'}
                 </h1>
                 <Badge variant="secondary" className="text-xs">
                   {user?.role || 'User'}
                 </Badge>
               </div>
-              {contactData?.email_address && (
+              {profile?.email_public && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
                   <Mail className="h-4 w-4" />
-                  {contactData.email_address}
+                  {profile.email_public}
                 </div>
               )}
             </div>
 
             {/* About Text */}
-            {aboutData?.content && (
+            {profile?.bio && (
               <div className="prose prose-sm max-w-none">
                 <p className="text-muted-foreground leading-relaxed">
-                  {aboutData.content}
+                  {profile.bio}
                 </p>
               </div>
             )}
