@@ -26,6 +26,8 @@ func NewFiberServer(
 	sourcesService *services.ArticleSourceService,
 	chatService *chat.MessageService,
 	agentCopilotMgr *services.AgentAsyncCopilotManager,
+	profileService *services.ProfileService,
+	organizationService *services.OrganizationService,
 ) *FiberServer {
 	server := &FiberServer{
 		App: fiber.New(),
@@ -33,15 +35,17 @@ func NewFiberServer(
 
 	// Register routes with dependencies
 	router.RegisterRoutes(server.App, router.RouteDeps{
-		AuthService:     authService,
-		BlogService:     blogService,
-		ProjectsService: projectsService,
-		ImageService:    imageService,
-		StorageService:  storageService,
-		PagesService:    pagesService,
-		SourcesService:  sourcesService,
-		ChatService:     chatService,
-		AgentCopilotMgr: agentCopilotMgr,
+		AuthService:         authService,
+		BlogService:         blogService,
+		ProjectsService:     projectsService,
+		ImageService:        imageService,
+		StorageService:      storageService,
+		PagesService:        pagesService,
+		SourcesService:      sourcesService,
+		ChatService:         chatService,
+		AgentCopilotMgr:     agentCopilotMgr,
+		ProfileService:      profileService,
+		OrganizationService: organizationService,
 	})
 
 	return server

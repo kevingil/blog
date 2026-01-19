@@ -12,15 +12,17 @@ import (
 )
 
 type RouteDeps struct {
-	AuthService     *services.AuthService
-	BlogService     *services.ArticleService
-	ProjectsService *services.ProjectsService
-	ImageService    *services.ImageGenerationService
-	StorageService  *services.StorageService
-	PagesService    *services.PagesService
-	SourcesService  *services.ArticleSourceService
-	ChatService     *chat.MessageService
-	AgentCopilotMgr *services.AgentAsyncCopilotManager
+	AuthService         *services.AuthService
+	BlogService         *services.ArticleService
+	ProjectsService     *services.ProjectsService
+	ImageService        *services.ImageGenerationService
+	StorageService      *services.StorageService
+	PagesService        *services.PagesService
+	SourcesService      *services.ArticleSourceService
+	ChatService         *chat.MessageService
+	AgentCopilotMgr     *services.AgentAsyncCopilotManager
+	ProfileService      *services.ProfileService
+	OrganizationService *services.OrganizationService
 }
 
 func RegisterRoutes(app *fiber.App, deps RouteDeps) {
@@ -124,6 +126,41 @@ func RegisterRoutes(app *fiber.App, deps RouteDeps) {
 	projectsProtected.Post("/", controller.CreateProjectHandler(deps.ProjectsService))
 	projectsProtected.Put(":id", controller.UpdateProjectHandler(deps.ProjectsService))
 	projectsProtected.Delete(":id", controller.DeleteProjectHandler(deps.ProjectsService))
+
+	// Profile - Public routes
+	profile := app.Group("/profile")
+	profile.Get("/public", controller.GetPublicProfileHandler(deps.ProfileService))
+	fmt.Println("✓ Registered public profile routes: GET /profile/public")
+
+	// Profile - Protected routes
+	profileProtected := profile.Group("", middleware.AuthMiddleware(deps.AuthService))
+	profileProtected.Get("/", controller.GetMyProfileHandler(deps.ProfileService))
+	profileProtected.Put("/", controller.UpdateProfileHandler(deps.ProfileService))
+	profileProtected.Get("/settings", controller.GetSiteSettingsHandler(deps.ProfileService))
+	profileProtected.Put("/settings", controller.UpdateSiteSettingsHandler(deps.ProfileService))
+	fmt.Println("✓ Registered protected profile routes:")
+	fmt.Println("  - GET    /profile")
+	fmt.Println("  - PUT    /profile")
+	fmt.Println("  - GET    /profile/settings")
+	fmt.Println("  - PUT    /profile/settings")
+
+	// Organizations - Protected routes
+	orgs := app.Group("/organizations", middleware.AuthMiddleware(deps.AuthService))
+	orgs.Get("/", controller.ListOrganizationsHandler(deps.OrganizationService))
+	orgs.Post("/", controller.CreateOrganizationHandler(deps.OrganizationService))
+	orgs.Get("/:id", controller.GetOrganizationHandler(deps.OrganizationService))
+	orgs.Put("/:id", controller.UpdateOrganizationHandler(deps.OrganizationService))
+	orgs.Delete("/:id", controller.DeleteOrganizationHandler(deps.OrganizationService))
+	orgs.Post("/:id/join", controller.JoinOrganizationHandler(deps.OrganizationService))
+	orgs.Post("/leave", controller.LeaveOrganizationHandler(deps.OrganizationService))
+	fmt.Println("✓ Registered organization routes:")
+	fmt.Println("  - GET    /organizations")
+	fmt.Println("  - POST   /organizations")
+	fmt.Println("  - GET    /organizations/:id")
+	fmt.Println("  - PUT    /organizations/:id")
+	fmt.Println("  - DELETE /organizations/:id")
+	fmt.Println("  - POST   /organizations/:id/join")
+	fmt.Println("  - POST   /organizations/leave")
 
 	// Storage (all require authentication)
 	storage := app.Group("/storage", middleware.AuthMiddleware(deps.AuthService))

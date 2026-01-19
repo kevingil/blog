@@ -35,6 +35,8 @@ func main() {
 	pagesService := services.NewPagesService(dbService)
 	sourcesService := services.NewArticleSourceService(dbService)
 	chatService := chat.NewMessageService(dbService)
+	profileService := services.NewProfileService(dbService)
+	organizationService := services.NewOrganizationService(dbService)
 
 	// Initialize the Agent-powered copilot manager with sources service and chat service
 	if err := services.InitializeAgentCopilotManager(sourcesService, chatService); err != nil {
@@ -55,6 +57,8 @@ func main() {
 		sourcesService,
 		chatService,
 		services.GetAgentAsyncCopilotManager(),
+		profileService,
+		organizationService,
 	)
 
 	address := fmt.Sprintf(":%s", cfg.Server.Port)
