@@ -71,9 +71,23 @@ func GetSiteSettingsHandler(profileService *services.ProfileService) fiber.Handl
 	}
 }
 
-// UpdateSiteSettingsHandler updates the site settings
+// UpdateSiteSettingsHandler updates the site settings (admin only)
 func UpdateSiteSettingsHandler(profileService *services.ProfileService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		userID, err := middleware.GetUserID(c)
+		if err != nil {
+			return response.Error(c, errors.NewUnauthorizedError("Not authenticated"))
+		}
+
+		// Check if user is admin
+		isAdmin, err := profileService.IsUserAdmin(userID)
+		if err != nil {
+			return response.Error(c, err)
+		}
+		if !isAdmin {
+			return response.Error(c, errors.NewForbiddenError("Only admins can update site settings"))
+		}
+
 		var req services.SiteSettingsUpdateRequest
 		if err := c.BodyParser(&req); err != nil {
 			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))

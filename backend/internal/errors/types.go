@@ -8,24 +8,25 @@ type ErrorCode string
 
 const (
 	// Authentication and authorization errors
-	ErrCodeUnauthorized     ErrorCode = "UNAUTHORIZED"
-	ErrCodeInvalidToken     ErrorCode = "INVALID_TOKEN"
-	ErrCodeTokenExpired     ErrorCode = "TOKEN_EXPIRED"
-	ErrCodeInvalidAuth      ErrorCode = "INVALID_AUTH"
-	
+	ErrCodeUnauthorized ErrorCode = "UNAUTHORIZED"
+	ErrCodeForbidden    ErrorCode = "FORBIDDEN"
+	ErrCodeInvalidToken ErrorCode = "INVALID_TOKEN"
+	ErrCodeTokenExpired ErrorCode = "TOKEN_EXPIRED"
+	ErrCodeInvalidAuth  ErrorCode = "INVALID_AUTH"
+
 	// Resource errors
-	ErrCodeNotFound         ErrorCode = "NOT_FOUND"
-	ErrCodeAlreadyExists    ErrorCode = "ALREADY_EXISTS"
-	
+	ErrCodeNotFound      ErrorCode = "NOT_FOUND"
+	ErrCodeAlreadyExists ErrorCode = "ALREADY_EXISTS"
+
 	// Validation errors
-	ErrCodeValidation       ErrorCode = "VALIDATION_ERROR"
-	ErrCodeInvalidInput     ErrorCode = "INVALID_INPUT"
-	ErrCodeMissingField     ErrorCode = "MISSING_FIELD"
-	
+	ErrCodeValidation   ErrorCode = "VALIDATION_ERROR"
+	ErrCodeInvalidInput ErrorCode = "INVALID_INPUT"
+	ErrCodeMissingField ErrorCode = "MISSING_FIELD"
+
 	// Server errors
-	ErrCodeInternal         ErrorCode = "INTERNAL_ERROR"
-	ErrCodeDatabaseError    ErrorCode = "DATABASE_ERROR"
-	ErrCodeExternalService  ErrorCode = "EXTERNAL_SERVICE_ERROR"
+	ErrCodeInternal        ErrorCode = "INTERNAL_ERROR"
+	ErrCodeDatabaseError   ErrorCode = "DATABASE_ERROR"
+	ErrCodeExternalService ErrorCode = "EXTERNAL_SERVICE_ERROR"
 )
 
 // AppError represents a structured application error with code, message, and HTTP status.
@@ -98,3 +99,10 @@ func NewInvalidInputError(message string) *AppError {
 	return NewAppError(ErrCodeInvalidInput, message, 400)
 }
 
+// NewForbiddenError creates a 403 Forbidden error.
+func NewForbiddenError(message string) *AppError {
+	if message == "" {
+		message = "Access forbidden"
+	}
+	return NewAppError(ErrCodeForbidden, message, 403)
+}

@@ -513,67 +513,78 @@ function ProfileSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Public Profile Type</Label>
-            <Select
-              value={siteSettings?.public_profile_type || 'user'}
-              onValueChange={(value: 'user' | 'organization') => {
-                if (value === 'user') {
-                  handleSetPublicProfile('user');
-                }
-              }}
-              disabled={isSaving}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="user">
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    User Profile
-                  </div>
-                </SelectItem>
-                <SelectItem value="organization" disabled={organizations.length === 0}>
-                  <div className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4" />
-                    Organization Profile
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {siteSettings?.public_profile_type === 'user' && (
-            <div className="p-4 border rounded-lg bg-muted/50">
+          {/* Current Status */}
+          {siteSettings?.public_user_id === profile?.id && siteSettings?.public_profile_type === 'user' ? (
+            <div className="p-4 border rounded-lg bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800">
               <div className="flex items-center gap-2">
                 <Check className="h-4 w-4 text-green-600" />
-                <span className="text-sm">
-                  Your personal profile will be shown on the /about page
+                <span className="text-sm text-green-700 dark:text-green-300">
+                  Your profile is currently shown on the /about page
+                </span>
+              </div>
+            </div>
+          ) : siteSettings?.public_organization_id && siteSettings?.public_profile_type === 'organization' ? (
+            <div className="p-4 border rounded-lg bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+              <div className="flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-blue-600" />
+                <span className="text-sm text-blue-700 dark:text-blue-300">
+                  Organization profile is shown on the /about page
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 border rounded-lg bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800">
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-yellow-600" />
+                <span className="text-sm text-yellow-700 dark:text-yellow-300">
+                  No public profile is set. The /about page will show a placeholder.
                 </span>
               </div>
             </div>
           )}
 
-          {siteSettings?.public_profile_type === 'organization' && (
-            <div className="space-y-2">
-              <Label>Select Organization</Label>
-              <Select
-                value={siteSettings.public_organization_id || ''}
-                onValueChange={(id) => handleSetPublicProfile('organization', id)}
-                disabled={isSaving}
+          {/* Set User Profile as Public */}
+          <div className="space-y-2">
+            <Label>User Profile</Label>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => handleSetPublicProfile('user')}
+                disabled={isSaving || (siteSettings?.public_user_id === profile?.id && siteSettings?.public_profile_type === 'user')}
+                variant={siteSettings?.public_user_id === profile?.id && siteSettings?.public_profile_type === 'user' ? 'secondary' : 'default'}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select an organization" />
-                </SelectTrigger>
-                <SelectContent>
-                  {organizations.map(org => (
-                    <SelectItem key={org.id} value={org.id}>
-                      {org.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <User className="h-4 w-4 mr-2" />
+                {siteSettings?.public_user_id === profile?.id && siteSettings?.public_profile_type === 'user' 
+                  ? 'Currently Active' 
+                  : 'Set My Profile as Public'}
+              </Button>
+            </div>
+          </div>
+
+          {/* Set Organization Profile as Public */}
+          {organizations.length > 0 && (
+            <div className="space-y-2">
+              <Label>Organization Profile</Label>
+              <div className="flex items-center gap-2">
+                <Select
+                  value={siteSettings?.public_profile_type === 'organization' ? siteSettings.public_organization_id || '' : ''}
+                  onValueChange={(id) => handleSetPublicProfile('organization', id)}
+                  disabled={isSaving}
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Select organization" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {organizations.map(org => (
+                      <SelectItem key={org.id} value={org.id}>
+                        {org.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {siteSettings?.public_profile_type === 'organization' && siteSettings?.public_organization_id && (
+                  <span className="text-sm text-muted-foreground">(Currently active)</span>
+                )}
+              </div>
             </div>
           )}
         </CardContent>

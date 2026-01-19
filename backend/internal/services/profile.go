@@ -5,6 +5,7 @@ import (
 	"blog-agent-go/backend/internal/errors"
 	"blog-agent-go/backend/internal/models"
 	"encoding/json"
+	"fmt"
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
@@ -109,6 +110,7 @@ func (s *ProfileService) GetPublicProfile() (*PublicProfile, error) {
 
 	// Return user profile (default)
 	if settings.PublicUserID == nil {
+		fmt.Println("No public user ID set")
 		return nil, nil
 	}
 
@@ -137,7 +139,7 @@ func (s *ProfileService) GetPublicProfile() (*PublicProfile, error) {
 // GetUserProfile returns the profile for a specific user
 func (s *ProfileService) GetUserProfile(accountID uuid.UUID) (*UserProfile, error) {
 	db := s.db.GetDB()
-
+	fmt.Println("Getting user profile for account ID:", accountID)
 	var account models.Account
 	if err := db.First(&account, "id = ?", accountID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -304,6 +306,18 @@ func (s *ProfileService) UpdateSiteSettings(req SiteSettingsUpdateRequest) (*Sit
 		PublicUserID:         settings.PublicUserID,
 		PublicOrganizationID: settings.PublicOrganizationID,
 	}, nil
+}
+
+// IsUserAdmin checks if a user has admin role
+func (s *ProfileService) IsUserAdmin(userID uuid.UUID) (bool, error) {
+	db := s.db.GetDB()
+
+	var account models.Account
+	if err := db.Select("role").First(&account, "id = ?", userID).Error; err != nil {
+		return false, errors.NewInternalError("Failed to fetch account")
+	}
+
+	return account.Role == "admin", nil
 }
 
 // Helper functions
