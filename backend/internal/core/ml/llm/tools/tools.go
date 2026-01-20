@@ -15,18 +15,22 @@ type ToolInfo struct {
 type toolResponseType string
 
 type (
-	sessionIDContextKey string
-	messageIDContextKey string
-	articleIDContextKey string
+	sessionIDContextKey        string
+	messageIDContextKey        string
+	articleIDContextKey        string
+	documentContentContextKey  string
+	documentMarkdownContextKey string
 )
 
 const (
 	ToolResponseTypeText  toolResponseType = "text"
 	ToolResponseTypeImage toolResponseType = "image"
 
-	SessionIDContextKey sessionIDContextKey = "session_id"
-	MessageIDContextKey messageIDContextKey = "message_id"
-	ArticleIDContextKey articleIDContextKey = "article_id"
+	SessionIDContextKey        sessionIDContextKey        = "session_id"
+	MessageIDContextKey        messageIDContextKey        = "message_id"
+	ArticleIDContextKey        articleIDContextKey        = "article_id"
+	DocumentContentContextKey  documentContentContextKey  = "document_content"
+	DocumentMarkdownContextKey documentMarkdownContextKey = "document_markdown"
 )
 
 type ToolResponse struct {
@@ -137,4 +141,29 @@ func GetArticleIDFromContext(ctx context.Context) string {
 // WithArticleID adds article ID to context for tools that need it
 func WithArticleID(ctx context.Context, articleID string) context.Context {
 	return context.WithValue(ctx, ArticleIDContextKey, articleID)
+}
+
+// WithDocumentContent adds document content (both HTML and markdown) to context for tools
+func WithDocumentContent(ctx context.Context, html, markdown string) context.Context {
+	ctx = context.WithValue(ctx, DocumentContentContextKey, html)
+	ctx = context.WithValue(ctx, DocumentMarkdownContextKey, markdown)
+	return ctx
+}
+
+// GetDocumentHTMLFromContext retrieves the original HTML document content from context
+func GetDocumentHTMLFromContext(ctx context.Context) string {
+	html := ctx.Value(DocumentContentContextKey)
+	if html == nil {
+		return ""
+	}
+	return html.(string)
+}
+
+// GetDocumentMarkdownFromContext retrieves the markdown version of the document from context
+func GetDocumentMarkdownFromContext(ctx context.Context) string {
+	markdown := ctx.Value(DocumentMarkdownContextKey)
+	if markdown == nil {
+		return ""
+	}
+	return markdown.(string)
 }

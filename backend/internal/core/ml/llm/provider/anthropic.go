@@ -397,7 +397,21 @@ func (a *anthropicClient) stream(ctx context.Context, messages []message.Message
 func (a *anthropicClient) shouldRetry(attempts int, err error) (bool, int64, error) {
 	var apierr *anthropic.Error
 	if !errors.As(err, &apierr) {
+		// Check for tool_use_failed errors in the error message (may come as streaming errors)
+		if a.isToolParseError(err) && attempts <= maxToolRetries {
+			logging.WarnPersist(fmt.Sprintf("Tool parsing failed, retrying... attempt %d of %d", attempts, maxToolRetries))
+			return true, 1000, nil // 1 second delay for tool errors
+		}
 		return false, 0, err
+	}
+
+	// Handle tool_use_failed errors (400 status with tool parsing failure)
+	if apierr.StatusCode == 400 && a.isToolParseError(err) {
+		if attempts > maxToolRetries {
+			return false, 0, fmt.Errorf("maximum retry attempts reached for tool parsing error: %d retries", maxToolRetries)
+		}
+		logging.WarnPersist(fmt.Sprintf("Tool parsing failed, retrying... attempt %d of %d", attempts, maxToolRetries))
+		return true, 1000, nil // 1 second delay for tool errors
 	}
 
 	if apierr.StatusCode != 429 && apierr.StatusCode != 529 {
@@ -420,6 +434,20 @@ func (a *anthropicClient) shouldRetry(attempts int, err error) (bool, int64, err
 		}
 	}
 	return true, int64(retryMs), nil
+}
+
+// maxToolRetries is the maximum number of retries for tool parsing errors
+const maxToolRetries = 2
+
+// isToolParseError checks if an error is a tool_use_failed or tool parsing error
+func (a *anthropicClient) isToolParseError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "tool_use_failed") ||
+		strings.Contains(errStr, "Failed to parse tool call arguments") ||
+		strings.Contains(errStr, "failed_generation")
 }
 
 func (a *anthropicClient) toolCalls(msg anthropic.Message) []message.ToolCall {

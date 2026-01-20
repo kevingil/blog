@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"time"
 
 	"blog-agent-go/backend/internal/core/ml/llm/config"
@@ -389,7 +390,19 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 func (o *openaiClient) shouldRetry(attempts int, err error) (bool, int64, error) {
 	var apierr *openai.Error
 	if !errors.As(err, &apierr) {
+		// Check for tool parsing errors in the error message
+		if o.isToolParseError(err) && attempts <= maxToolRetriesOpenAI {
+			return true, 1000, nil // 1 second delay for tool errors
+		}
 		return false, 0, err
+	}
+
+	// Handle tool parsing errors (400 status with tool parsing failure)
+	if apierr.StatusCode == 400 && o.isToolParseError(err) {
+		if attempts > maxToolRetriesOpenAI {
+			return false, 0, fmt.Errorf("maximum retry attempts reached for tool parsing error: %d retries", maxToolRetriesOpenAI)
+		}
+		return true, 1000, nil // 1 second delay for tool errors
 	}
 
 	if apierr.StatusCode != 429 && apierr.StatusCode != 500 {
@@ -412,6 +425,21 @@ func (o *openaiClient) shouldRetry(attempts int, err error) (bool, int64, error)
 		}
 	}
 	return true, int64(retryMs), nil
+}
+
+// maxToolRetriesOpenAI is the maximum number of retries for tool parsing errors
+const maxToolRetriesOpenAI = 2
+
+// isToolParseError checks if an error is a tool parsing error
+func (o *openaiClient) isToolParseError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "tool_use_failed") ||
+		strings.Contains(errStr, "Failed to parse tool call arguments") ||
+		strings.Contains(errStr, "invalid_request_error") ||
+		strings.Contains(errStr, "failed_generation")
 }
 
 func (o *openaiClient) toolCalls(completion openai.ChatCompletion) []message.ToolCall {

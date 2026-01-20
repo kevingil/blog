@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"blog-agent-go/backend/internal/core/ml/llm/tools"
 	"blog-agent-go/backend/internal/models"
 
+	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/google/uuid"
 )
 
@@ -27,6 +29,56 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// convertHTMLToMarkdown converts HTML content to markdown format
+func convertHTMLToMarkdown(html string) (string, error) {
+	converter := md.NewConverter("", true, nil)
+	markdown, err := converter.ConvertString(html)
+	if err != nil {
+		return "", err
+	}
+	return markdown, nil
+}
+
+// convertHTMLToMarkdownWithLineNumbers converts HTML to markdown and adds line numbers
+func convertHTMLToMarkdownWithLineNumbers(html string) (string, error) {
+	markdown, err := convertHTMLToMarkdown(html)
+	if err != nil {
+		return "", err
+	}
+
+	// Add line numbers
+	lines := strings.Split(markdown, "\n")
+	var numbered []string
+	for i, line := range lines {
+		numbered = append(numbered, fmt.Sprintf("%4d| %s", i+1, line))
+	}
+	return strings.Join(numbered, "\n"), nil
+}
+
+// generateOutline creates a condensed outline of the document with line numbers
+// showing only headings and paragraph previews
+func generateOutline(markdown string) string {
+	lines := strings.Split(markdown, "\n")
+	var outline []string
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Include headings
+		if strings.HasPrefix(trimmed, "#") {
+			outline = append(outline, fmt.Sprintf("%4d| %s", i+1, line))
+		} else if len(trimmed) > 60 && !strings.HasPrefix(trimmed, "-") && !strings.HasPrefix(trimmed, "*") && !strings.HasPrefix(trimmed, ">") {
+			// Include first 60 chars of substantial paragraphs
+			outline = append(outline, fmt.Sprintf("%4d| %s...", i+1, trimmed[:60]))
+		}
+	}
+
+	if len(outline) == 0 {
+		return "(empty document)"
+	}
+
+	return strings.Join(outline, "\n")
 }
 
 // """
@@ -134,8 +186,9 @@ func InitializeAgentCopilotManager(articleSourceService *ArticleSourceService, c
 
 	// Create writing tools for the agent
 	writingTools := []tools.BaseTool{
-		tools.NewEditTextTool(),
-		tools.NewAnalyzeDocumentTool(),
+		tools.NewReadDocumentTool(),                              // Read document with line numbers (use before editing)
+		tools.NewEditTextTool(),                                  // Targeted text edits with unique anchors
+		tools.NewAnalyzeDocumentTool(),                           // Document analysis without changes
 		tools.NewGenerateImagePromptTool(textGenService),         // TextGenService for image prompt generation
 		tools.NewGenerateTextContentTool(textGenService),         // New tool for text generation
 		tools.NewExaSearchTool(exaAdapter, sourceServiceAdapter), // Exa web search with source creation
@@ -367,7 +420,20 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	// Build user prompt with document content
 	userPrompt := asyncReq.Request.Message
 	if asyncReq.Request.DocumentContent != "" {
-		userPrompt += "\n\n--- Current Document ---\n" + asyncReq.Request.DocumentContent
+		// Convert HTML to markdown for LLM processing (easier to work with)
+		markdown, err := convertHTMLToMarkdown(asyncReq.Request.DocumentContent)
+		if err != nil {
+			log.Printf("[Agent] Warning: Failed to convert HTML to markdown: %v", err)
+			markdown = asyncReq.Request.DocumentContent // Fallback to raw content
+		}
+
+		// Store full content in context for read_document tool
+		ctx = tools.WithDocumentContent(ctx, asyncReq.Request.DocumentContent, markdown)
+
+		// Pass only outline to the prompt (saves tokens, model uses read_document for full content)
+		outline := generateOutline(markdown)
+		userPrompt += "\n\n--- Document Outline (use read_document for full content) ---\n" + outline
+		log.Printf("[Agent] Document outline generated (%d lines), full content stored in context", strings.Count(outline, "\n")+1)
 	}
 
 	asyncReq.iteration = 1

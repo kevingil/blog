@@ -25,6 +25,100 @@ type TextGenerationService interface {
 	GenerateImagePrompt(ctx context.Context, content string) (string, error)
 }
 
+// ReadDocumentTool allows the agent to read the current document content with line numbers
+type ReadDocumentTool struct{}
+
+func NewReadDocumentTool() *ReadDocumentTool {
+	return &ReadDocumentTool{}
+}
+
+func (t *ReadDocumentTool) Info() ToolInfo {
+	return ToolInfo{
+		Name: "read_document",
+		Description: `Read the current document content with line numbers.
+
+WHEN TO USE:
+- Before making any edits with edit_text
+- When you need to see the full content
+- When you need to find specific text to edit
+
+OUTPUT FORMAT:
+Lines are numbered for easy reference:
+   1| # Introduction
+   2|
+   3| This is the first paragraph...
+
+Use line numbers to reference specific locations when discussing edits.`,
+		Parameters: map[string]any{
+			"start_line": map[string]any{
+				"type":        []string{"number", "null"},
+				"description": "Optional: Start reading from this line number (1-indexed)",
+			},
+			"end_line": map[string]any{
+				"type":        []string{"number", "null"},
+				"description": "Optional: Stop reading at this line number (inclusive)",
+			},
+		},
+		Required: []string{},
+	}
+}
+
+func (t *ReadDocumentTool) Run(ctx context.Context, params ToolCall) (ToolResponse, error) {
+	var input struct {
+		StartLine int `json:"start_line"`
+		EndLine   int `json:"end_line"`
+	}
+	if err := json.Unmarshal([]byte(params.Input), &input); err != nil {
+		// Ignore unmarshal errors for optional params
+		log.Printf("📖 [ReadDocument] No line range specified, reading full document")
+	}
+
+	markdown := GetDocumentMarkdownFromContext(ctx)
+	if markdown == "" {
+		log.Printf("📖 [ReadDocument] ERROR: No document content in context")
+		return NewTextErrorResponse("No document content available. The document may be empty or not loaded."), nil
+	}
+
+	lines := strings.Split(markdown, "\n")
+	totalLines := len(lines)
+
+	// Apply line range if specified (1-indexed)
+	start := 0
+	end := totalLines
+	if input.StartLine > 0 {
+		start = input.StartLine - 1
+		if start >= totalLines {
+			return NewTextErrorResponse(fmt.Sprintf("Start line %d exceeds document length (%d lines)", input.StartLine, totalLines)), nil
+		}
+	}
+	if input.EndLine > 0 {
+		end = input.EndLine
+		if end > totalLines {
+			end = totalLines
+		}
+	}
+
+	// Format with line numbers
+	var numbered []string
+	for i := start; i < end; i++ {
+		numbered = append(numbered, fmt.Sprintf("%4d| %s", i+1, lines[i]))
+	}
+
+	content := strings.Join(numbered, "\n")
+
+	log.Printf("📖 [ReadDocument] Returning lines %d-%d of %d total lines", start+1, end, totalLines)
+
+	result := map[string]interface{}{
+		"content":     content,
+		"total_lines": totalLines,
+		"showing":     fmt.Sprintf("lines %d-%d of %d", start+1, end, totalLines),
+		"tool_name":   "read_document",
+	}
+
+	resultJSON, _ := json.Marshal(result)
+	return NewTextResponse(string(resultJSON)), nil
+}
+
 // GetRelevantSourcesTool finds relevant source chunks based on query
 type GetRelevantSourcesTool struct {
 	sourceService ArticleSourceService
@@ -399,20 +493,46 @@ func NewEditTextTool() *EditTextTool {
 
 func (t *EditTextTool) Info() ToolInfo {
 	return ToolInfo{
-		Name:        "edit_text",
-		Description: "Edit specific text in the document while preserving the rest. Use this for targeted edits, improvements, or changes to specific sections. CRITICAL: Never add a title/heading to the content - the editor displays ONLY body content, titles are managed separately. If you have title suggestions, mention them in your follow-up response, NOT in the edited content. Write like a human - avoid AI patterns like puffery words, symbolic importance phrases, editorializing, superficial analyses, overused conjunctions, section summaries, and negative parallelisms. Use natural, varied sentence structures.",
+		Name: "edit_text",
+		Description: `Edit specific text in the document. Returns a diff for user approval.
+
+BEFORE USING: Call read_document first to see the content with line numbers.
+
+CRITICAL REQUIREMENTS:
+1. original_text must be UNIQUE in the document
+2. Include 2-3 lines of surrounding context to ensure uniqueness
+3. Keep edits focused - one logical change at a time
+4. Output is in markdown format (will be converted to HTML)
+
+EXAMPLES:
+
+BAD (not unique):
+  original_text: "Introduction"
+
+GOOD (unique with context):
+  original_text: "## Introduction\n\nOracle announced JavaScript support"
+
+BAD (too large - causes JSON errors):
+  original_text: [entire 500-word section]
+
+GOOD (focused edit):
+  original_text: "Teams already writing business logic\nin JavaScript can move that code"
+  new_text: "Teams with existing JavaScript expertise\ncan migrate business logic"
+
+NEVER include a title/heading at the start of new_text - titles are managed separately.
+Write like a human - avoid puffery, hedging, and AI patterns.`,
 		Parameters: map[string]any{
 			"original_text": map[string]any{
 				"type":        "string",
-				"description": "The exact text to find and replace in the document",
+				"description": "The exact text to find and replace (must be unique, include 2-3 lines of context)",
 			},
 			"new_text": map[string]any{
 				"type":        "string",
-				"description": "The new text to replace the original text with. Do NOT include a title or main heading - the text area only shows body content.",
+				"description": "The replacement text in markdown format. No title/heading at start.",
 			},
 			"reason": map[string]any{
 				"type":        "string",
-				"description": "Brief explanation of why this edit is being made",
+				"description": "Brief explanation of the edit",
 			},
 		},
 		Required: []string{"original_text", "new_text", "reason"},
