@@ -179,6 +179,11 @@ export interface ArticleSource {
   created_at: string;
 }
 
+export interface ArticleSourceWithArticle extends ArticleSource {
+  article_title: string;
+  article_slug: string;
+}
+
 export interface CreateSourceRequest {
   article_id: string;
   title: string;

@@ -106,6 +106,12 @@ func RegisterRoutes(app *fiber.App, deps RouteDeps) {
 	images.Get(":requestId", controller.GetImageGenerationHandler(deps.ImageService))
 	images.Get(":requestId/status", controller.GetImageGenerationStatusHandler(deps.ImageService))
 
+	// Sources - Dashboard management (authenticated)
+	dashboardSources := app.Group("/dashboard/sources", middleware.AuthMiddleware(deps.AuthService))
+	dashboardSources.Get("/", controller.ListAllSourcesHandler(deps.SourcesService))
+	fmt.Println("✓ Registered dashboard sources routes:")
+	fmt.Println("  - GET    /dashboard/sources")
+
 	// Sources (all require authentication)
 	sources := app.Group("/sources", middleware.AuthMiddleware(deps.AuthService))
 	sources.Post("/", controller.CreateSourceHandler(deps.SourcesService))

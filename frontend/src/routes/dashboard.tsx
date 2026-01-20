@@ -19,6 +19,7 @@ import './dashboard/pages/edit.$pageId'
 import './dashboard/projects/index'
 import './dashboard/projects/new'
 import './dashboard/projects/edit.$projectId'
+import './dashboard/sources/index'
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardLayout,

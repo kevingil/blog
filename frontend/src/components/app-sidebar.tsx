@@ -5,6 +5,7 @@ import {
   IconFileWord,
   IconFolder,
   IconInnerShadowTop,
+  IconLink,
   IconUsers,
   IconUpload,
 } from "@tabler/icons-react"
@@ -79,6 +80,11 @@ const navigationData = {
           url: "/dashboard/projects/new",
         },
       ],
+    },
+    {
+      title: "Sources",
+      url: "/dashboard/sources",
+      icon: IconLink,
     },
     {
       title: "Uploads",

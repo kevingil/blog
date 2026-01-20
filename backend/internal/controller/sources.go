@@ -9,6 +9,25 @@ import (
 	"github.com/google/uuid"
 )
 
+// ListAllSourcesHandler retrieves all sources with pagination and article metadata
+func ListAllSourcesHandler(sourcesService *services.ArticleSourceService) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		page := c.QueryInt("page", 1)
+		limit := c.QueryInt("limit", 20)
+
+		sources, totalPages, err := sourcesService.GetAllSources(page, limit)
+		if err != nil {
+			return response.Error(c, err)
+		}
+
+		return response.Success(c, fiber.Map{
+			"sources":     sources,
+			"total_pages": totalPages,
+			"page":        page,
+		})
+	}
+}
+
 // CreateSourceHandler creates a new article source
 func CreateSourceHandler(sourcesService *services.ArticleSourceService) fiber.Handler {
 	return func(c *fiber.Ctx) error {

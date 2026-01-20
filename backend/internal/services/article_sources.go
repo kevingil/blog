@@ -54,6 +54,13 @@ type ScrapedContent struct {
 	URL     string `json:"url"`
 }
 
+// ArticleSourceWithArticle includes article metadata with the source
+type ArticleSourceWithArticle struct {
+	models.ArticleSource
+	ArticleTitle string `json:"article_title"`
+	ArticleSlug  string `json:"article_slug"`
+}
+
 // CreateSource creates a new article source with embedding generation
 func (s *ArticleSourceService) CreateSource(ctx context.Context, req CreateSourceRequest) (*models.ArticleSource, error) {
 	db := s.db.GetDB()
@@ -139,6 +146,46 @@ func (s *ArticleSourceService) GetSourcesByArticleID(articleID uuid.UUID) ([]*mo
 	}
 
 	return sources, nil
+}
+
+// GetAllSources retrieves all sources with pagination and article metadata
+func (s *ArticleSourceService) GetAllSources(page, limit int) ([]ArticleSourceWithArticle, int, error) {
+	db := s.db.GetDB()
+
+	// Default pagination values
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	offset := (page - 1) * limit
+
+	// Count total sources
+	var total int64
+	if err := db.Model(&models.ArticleSource{}).Count(&total).Error; err != nil {
+		return nil, 0, errors.NewInternalError("Failed to count sources")
+	}
+
+	// Calculate total pages
+	totalPages := int((total + int64(limit) - 1) / int64(limit))
+
+	// Query sources with article join
+	var sources []ArticleSourceWithArticle
+	err := db.Table("article_source").
+		Select("article_source.*, article.title as article_title, article.slug as article_slug").
+		Joins("LEFT JOIN article ON article.id = article_source.article_id").
+		Order("article_source.created_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Scan(&sources).Error
+
+	if err != nil {
+		return nil, 0, errors.NewInternalError("Failed to get sources")
+	}
+
+	return sources, totalPages, nil
 }
 
 // GetSource retrieves a specific source by ID

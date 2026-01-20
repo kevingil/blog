@@ -1,10 +1,27 @@
 import { apiGet, apiPost, apiPut, apiDelete } from './authenticatedFetch';
 import type { 
   ArticleSource, 
+  ArticleSourceWithArticle,
   CreateSourceRequest, 
   UpdateSourceRequest, 
   ScrapeSourceRequest 
 } from './types';
+
+export interface GetAllSourcesResponse {
+  sources: ArticleSourceWithArticle[];
+  total_pages: number;
+  page: number;
+}
+
+// Get all sources with pagination (for dashboard)
+export async function getAllSources(page: number = 1, limit: number = 20): Promise<GetAllSourcesResponse> {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString(),
+  });
+  
+  return apiGet<GetAllSourcesResponse>(`/dashboard/sources?${params}`);
+}
 
 // Get all sources for an article
 export async function getArticleSources(articleId: string): Promise<ArticleSource[]> {
