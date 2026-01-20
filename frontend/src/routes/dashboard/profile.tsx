@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Pencil, X, Building2, User, Check, Plus, LogOut } from 'lucide-react';
+import { SocialLinksBuilder } from '@/components/social-links-builder';
 import { createFileRoute } from '@tanstack/react-router';
 import { useAdminDashboard } from '@/services/dashboard/dashboard';
 import { 
@@ -54,6 +55,7 @@ function ProfileSettings() {
   const [isSaving, setIsSaving] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [showCreateOrg, setShowCreateOrg] = useState(false);
+  const [editSocialLinks, setEditSocialLinks] = useState<Record<string, string>>({});
   const { toast } = useToast();
   const { setPageTitle } = useAdminDashboard();
 
@@ -93,29 +95,12 @@ function ProfileSettings() {
     setIsSaving(true);
     
     try {
-      // Parse social links JSON
-      let socialLinks: Record<string, string> = {};
-      const socialLinksStr = formData.get('socialLinks') as string;
-      if (socialLinksStr) {
-        try {
-          socialLinks = JSON.parse(socialLinksStr);
-        } catch {
-          toast({
-            title: "Error",
-            description: "Invalid JSON format for social links",
-            variant: "destructive",
-          });
-          setIsSaving(false);
-          return;
-        }
-      }
-
       const data = {
         name: formData.get('name') as string,
         bio: formData.get('bio') as string,
         profile_image: formData.get('profileImage') as string,
         email_public: formData.get('emailPublic') as string,
-        social_links: socialLinks,
+        social_links: editSocialLinks,
         meta_description: formData.get('metaDescription') as string,
       };
 
@@ -257,7 +242,12 @@ function ProfileSettings() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setEditingProfile(!editingProfile)}
+            onClick={() => {
+              if (!editingProfile && profile) {
+                setEditSocialLinks(profile.social_links || {});
+              }
+              setEditingProfile(!editingProfile);
+            }}
           >
             {editingProfile ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
           </Button>
@@ -308,13 +298,11 @@ function ProfileSettings() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="socialLinks">Social Links (JSON)</Label>
-                <Textarea
-                  id="socialLinks"
-                  name="socialLinks"
-                  rows={3}
-                  defaultValue={profile?.social_links ? JSON.stringify(profile.social_links, null, 2) : '{}'}
-                  placeholder='{"github": "https://github.com/...", "twitter": "https://twitter.com/..."}'
+                <Label>Social Links</Label>
+                <SocialLinksBuilder
+                  value={editSocialLinks}
+                  onChange={setEditSocialLinks}
+                  disabled={isSaving}
                 />
               </div>
               

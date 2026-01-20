@@ -4,11 +4,8 @@ import { Skeleton } from '../../components/ui/skeleton';
 import { Button } from '../../components/ui/button';
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { Mail, ExternalLink, Globe } from 'lucide-react';
-import GithubIcon from '../../components/icons/github-icon';
-import LinkedinIcon from '../../components/icons/linkedin-icon';
-import XIcon from '../../components/icons/x-icon';
-import DiscordIcon from '../../components/icons/discord-icon';
+import { Mail, Globe } from 'lucide-react';
+import { SocialLinkIcon } from '../../components/social-link-icon';
 import { getPublicProfile } from '../../services/profile';
 
 export const Route = createFileRoute('/_publicLayout/about')({
@@ -23,23 +20,6 @@ function AboutPage() {
   });
 
   const aboutPageRef = useRef<HTMLDivElement | null>(null);
-
-  const getSocialIcon = (platform: string) => {
-    const platformLower = platform.toLowerCase();
-    switch (platformLower) {
-      case 'github':
-        return <GithubIcon className="h-5 w-5" />;
-      case 'linkedin':
-        return <LinkedinIcon className="h-5 w-5" />;
-      case 'x':
-      case 'twitter':
-        return <XIcon className="h-5 w-5" />;
-      case 'discord':
-        return <DiscordIcon className="h-5 w-5" />;
-      default:
-        return <ExternalLink className="h-5 w-5" />;
-    }
-  };
 
   const socialLinks = profile?.social_links || {};
   const hasSocialLinks = Object.keys(socialLinks).length > 0;
@@ -179,7 +159,7 @@ function AboutPage() {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                   >
-                                    {getSocialIcon(platform)}
+                                    <SocialLinkIcon platform={platform} size={20} />
                                     {platform.charAt(0).toUpperCase() + platform.slice(1)}
                                   </a>
                                 </Button>

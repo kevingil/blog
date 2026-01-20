@@ -6,11 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/services/auth/auth';
 import { getMyProfile, UserProfile } from '@/services/profile';
-import GithubIcon from '@/components/icons/github-icon';
-import LinkedinIcon from '@/components/icons/linkedin-icon';
-import XIcon from '@/components/icons/x-icon';
-import DiscordIcon from '@/components/icons/discord-icon';
-import { Mail, ExternalLink, User } from 'lucide-react';
+import { SocialLinkIcon } from '@/components/social-link-icon';
+import { Mail, User } from 'lucide-react';
 
 interface SocialLink {
   platform: string;
@@ -47,23 +44,6 @@ export function UserProfileBanner() {
       return [];
     }
   }, [profile?.social_links]);
-
-  const getSocialIcon = (platform: string) => {
-    const platformLower = platform.toLowerCase();
-    switch (platformLower) {
-      case 'github':
-        return <GithubIcon className="h-4 w-4" />;
-      case 'linkedin':
-        return <LinkedinIcon className="h-4 w-4" />;
-      case 'x':
-      case 'twitter':
-        return <XIcon className="h-4 w-4" />;
-      case 'discord':
-        return <DiscordIcon className="h-4 w-4" />;
-      default:
-        return <ExternalLink className="h-4 w-4" />;
-    }
-  };
 
   const getUserInitials = (name: string) => {
     return name
@@ -136,7 +116,7 @@ export function UserProfileBanner() {
                       rel="noopener noreferrer"
                       className="flex items-center gap-2"
                     >
-                      {getSocialIcon(link.platform)}
+                      <SocialLinkIcon platform={link.platform} size={16} />
                       <span className="capitalize">{link.platform}</span>
                     </a>
                   </Button>
