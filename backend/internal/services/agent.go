@@ -57,20 +57,26 @@ func convertHTMLToMarkdownWithLineNumbers(html string) (string, error) {
 	return strings.Join(numbered, "\n"), nil
 }
 
-// generateOutline creates a condensed outline of the document with line numbers
-// showing only headings and paragraph previews
-func generateOutline(markdown string) string {
-	lines := strings.Split(markdown, "\n")
+// generateHTMLOutline creates a condensed outline from HTML content
+// showing headings and paragraph previews with line numbers
+func generateHTMLOutline(html string) string {
+	lines := strings.Split(html, "\n")
 	var outline []string
 
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		// Include headings
-		if strings.HasPrefix(trimmed, "#") {
+		// Include headings (h1-h6)
+		if strings.HasPrefix(trimmed, "<h1") || strings.HasPrefix(trimmed, "<h2") ||
+			strings.HasPrefix(trimmed, "<h3") || strings.HasPrefix(trimmed, "<h4") ||
+			strings.HasPrefix(trimmed, "<h5") || strings.HasPrefix(trimmed, "<h6") {
 			outline = append(outline, fmt.Sprintf("%4d| %s", i+1, line))
-		} else if len(trimmed) > 60 && !strings.HasPrefix(trimmed, "-") && !strings.HasPrefix(trimmed, "*") && !strings.HasPrefix(trimmed, ">") {
-			// Include first 60 chars of substantial paragraphs
-			outline = append(outline, fmt.Sprintf("%4d| %s...", i+1, trimmed[:60]))
+		} else if strings.HasPrefix(trimmed, "<p") && len(trimmed) > 60 {
+			// Include first 60 chars of paragraph tags
+			preview := trimmed
+			if len(preview) > 80 {
+				preview = preview[:80] + "..."
+			}
+			outline = append(outline, fmt.Sprintf("%4d| %s", i+1, preview))
 		}
 	}
 
@@ -420,20 +426,13 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	// Build user prompt with document content
 	userPrompt := asyncReq.Request.Message
 	if asyncReq.Request.DocumentContent != "" {
-		// Convert HTML to markdown for LLM processing (easier to work with)
-		markdown, err := convertHTMLToMarkdown(asyncReq.Request.DocumentContent)
-		if err != nil {
-			log.Printf("[Agent] Warning: Failed to convert HTML to markdown: %v", err)
-			markdown = asyncReq.Request.DocumentContent // Fallback to raw content
-		}
-
-		// Store full content in context for read_document tool
-		ctx = tools.WithDocumentContent(ctx, asyncReq.Request.DocumentContent, markdown)
+		// Store HTML content directly in context for read_document tool (no markdown conversion)
+		ctx = tools.WithDocumentContent(ctx, asyncReq.Request.DocumentContent, "")
 
 		// Pass only outline to the prompt (saves tokens, model uses read_document for full content)
-		outline := generateOutline(markdown)
+		outline := generateHTMLOutline(asyncReq.Request.DocumentContent)
 		userPrompt += "\n\n--- Document Outline (use read_document for full content) ---\n" + outline
-		log.Printf("[Agent] Document outline generated (%d lines), full content stored in context", strings.Count(outline, "\n")+1)
+		log.Printf("[Agent] Document outline generated (%d lines), full HTML content stored in context", strings.Count(outline, "\n")+1)
 	}
 
 	asyncReq.iteration = 1

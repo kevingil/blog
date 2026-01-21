@@ -1088,13 +1088,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   };
 
-  // Apply text edit from AI assistant
+  // Apply text edit from AI assistant (HTML-based search/replace)
   const applyTextEdit = (originalText: string, newText: string, reason: string) => {
     if (!editor) return;
     
     const oldHtml = editor.getHTML();
-    const currentText = editor.getText();
-    const index = currentText.indexOf(originalText);
+    
+    // Search for original HTML in current HTML content
+    const index = oldHtml.indexOf(originalText);
     if (index === -1) {
       toast({
         title: 'Edit Warning',
@@ -1103,20 +1104,21 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       });
       return;
     }
-    const from = index;
-    const to = index + originalText.length;
-    editor.chain().focus().setTextSelection({ from, to }).insertContent(newText).run();
-    const newHtml = editor.getHTML();
+    
+    // Replace HTML directly
+    const newHtml = oldHtml.substring(0, index) + newText + oldHtml.substring(index + originalText.length);
+    
     enterDiffPreview(oldHtml, newHtml, reason);
   };
 
-  // Apply patch from AI assistant (new implementation)
+  // Apply patch from AI assistant (HTML-based search/replace)
   const applyPatch = (patch: any, originalText: string, newText: string, reason: string) => {
     if (!editor) return;
     
     const oldHtml = editor.getHTML();
-    const currentText = editor.getText();
-    const index = currentText.indexOf(originalText);
+    
+    // Search for original HTML in current HTML content
+    const index = oldHtml.indexOf(originalText);
     if (index === -1) {
       toast({
         title: 'Patch Failed',
@@ -1125,10 +1127,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       });
       return;
     }
-    const from = index;
-    const to = index + originalText.length;
-    editor.chain().focus().setTextSelection({ from, to }).insertContent(newText).run();
-    const newHtml = editor.getHTML();
+    
+    // Replace HTML directly
+    const newHtml = oldHtml.substring(0, index) + newText + oldHtml.substring(index + originalText.length);
+    
     enterDiffPreview(oldHtml, newHtml, reason);
   };
 
@@ -1152,8 +1154,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       return;
     }
 
-    // Get current document content to send separately
-    const currentContent = editor?.getText() || '';
+    // Get current document content to send separately (HTML format)
+    const currentContent = editor?.getHTML() || '';
 
     // Check if this looks like an edit request
     const isEditRequest = /\b(rewrite|edit|improve|change|update|fix|enhance|modify)\b/i.test(text);

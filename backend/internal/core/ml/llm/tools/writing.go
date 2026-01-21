@@ -35,20 +35,20 @@ func NewReadDocumentTool() *ReadDocumentTool {
 func (t *ReadDocumentTool) Info() ToolInfo {
 	return ToolInfo{
 		Name: "read_document",
-		Description: `Read the current document content with line numbers.
+		Description: `Read the current document content (HTML format) with line numbers.
 
 WHEN TO USE:
 - Before making any edits with edit_text
 - When you need to see the full content
-- When you need to find specific text to edit
+- When you need to find specific HTML to edit
 
 OUTPUT FORMAT:
-Lines are numbered for easy reference:
-   1| # Introduction
-   2|
-   3| This is the first paragraph...
+Lines are numbered for easy reference. Content is HTML:
+   1| <h2>Introduction</h2>
+   2| <p>This is the first paragraph...</p>
 
-Use line numbers to reference specific locations when discussing edits.`,
+Use line numbers to reference specific locations when discussing edits.
+When editing, include HTML tags to ensure uniqueness.`,
 		Parameters: map[string]any{
 			"start_line": map[string]any{
 				"type":        []string{"number", "null"},
@@ -73,13 +73,14 @@ func (t *ReadDocumentTool) Run(ctx context.Context, params ToolCall) (ToolRespon
 		log.Printf("📖 [ReadDocument] No line range specified, reading full document")
 	}
 
-	markdown := GetDocumentMarkdownFromContext(ctx)
-	if markdown == "" {
+	// Get HTML content directly (no markdown conversion)
+	html := GetDocumentHTMLFromContext(ctx)
+	if html == "" {
 		log.Printf("📖 [ReadDocument] ERROR: No document content in context")
 		return NewTextErrorResponse("No document content available. The document may be empty or not loaded."), nil
 	}
 
-	lines := strings.Split(markdown, "\n")
+	lines := strings.Split(html, "\n")
 	totalLines := len(lines)
 
 	// Apply line range if specified (1-indexed)
@@ -500,35 +501,35 @@ BEFORE USING: Call read_document first to see the content with line numbers.
 
 CRITICAL REQUIREMENTS:
 1. original_text must be UNIQUE in the document
-2. Include 2-3 lines of surrounding context to ensure uniqueness
+2. Include surrounding HTML tags to ensure uniqueness
 3. Keep edits focused - one logical change at a time
-4. Output is in markdown format (will be converted to HTML)
+4. Content is in HTML format
 
 EXAMPLES:
 
 BAD (not unique):
   original_text: "Introduction"
 
-GOOD (unique with context):
-  original_text: "## Introduction\n\nOracle announced JavaScript support"
+GOOD (unique with HTML context):
+  original_text: "<h2>Introduction</h2><p>Oracle announced JavaScript support"
 
 BAD (too large - causes JSON errors):
   original_text: [entire 500-word section]
 
 GOOD (focused edit):
-  original_text: "Teams already writing business logic\nin JavaScript can move that code"
-  new_text: "Teams with existing JavaScript expertise\ncan migrate business logic"
+  original_text: "<p>Teams already writing business logic in JavaScript can move that code</p>"
+  new_text: "<p>Teams with existing JavaScript expertise can migrate business logic</p>"
 
 NEVER include a title/heading at the start of new_text - titles are managed separately.
 Write like a human - avoid puffery, hedging, and AI patterns.`,
 		Parameters: map[string]any{
 			"original_text": map[string]any{
 				"type":        "string",
-				"description": "The exact text to find and replace (must be unique, include 2-3 lines of context)",
+				"description": "The exact HTML to find and replace (must be unique, include HTML tags for context)",
 			},
 			"new_text": map[string]any{
 				"type":        "string",
-				"description": "The replacement text in markdown format. No title/heading at start.",
+				"description": "The replacement HTML. No title/heading at start.",
 			},
 			"reason": map[string]any{
 				"type":        "string",
