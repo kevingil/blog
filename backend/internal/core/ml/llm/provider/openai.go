@@ -317,10 +317,6 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 				acc.AddChunk(chunk)
 				chunkNum++
 
-				// RAW LOGGING: Dump raw JSON of every chunk
-				rawJSON, _ := json.Marshal(chunk)
-				log.Printf("[RAW #%d]\n %s \n", chunkNum, string(rawJSON))
-
 				for _, choice := range chunk.Choices {
 					// Stream content deltas
 					if choice.Delta.Content != "" {
@@ -342,6 +338,11 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 				}
 				if len(toolCalls) > 0 {
 					finishReason = message.FinishReasonToolUse
+					// Log prettified tool calls
+					for i, tc := range toolCalls {
+						prettyArgs, _ := json.MarshalIndent(json.RawMessage(tc.Input), "    ", "  ")
+						log.Printf("🔧 [ToolCall #%d] %s\n    %s", i+1, tc.Name, string(prettyArgs))
+					}
 				}
 
 				eventChan <- ProviderEvent{

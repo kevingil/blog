@@ -2252,11 +2252,20 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       if (call && (call.name === 'edit_text' || call.name === 'rewrite_document')) {
                         const result = call.result;
                         if (action === 'accept' && result && editor) {
-                          const newContent = (result.new_content || result.new_text) as string;
+                          const oldContent = (result.original_text || result.original_content) as string;
+                          const newContent = (result.new_text || result.new_content) as string;
+                          const reason = (result.reason as string) || '';
+                          
                           if (newContent) {
-                            const currentHtml = editor.getHTML();
-                            const newHtml = mdParser.render(newContent);
-                            enterDiffPreview(currentHtml, newHtml, (result.reason as string) || '');
+                            if (call.name === 'edit_text' && oldContent) {
+                              // edit_text: do find-and-replace
+                              applyTextEdit(oldContent, newContent, reason);
+                            } else {
+                              // rewrite_document: replace entire document
+                              const currentHtml = editor.getHTML();
+                              const newHtml = mdParser.render(newContent);
+                              enterDiffPreview(currentHtml, newHtml, reason);
+                            }
                           }
                         }
                       }
@@ -2329,13 +2338,18 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   );
                 }
                 
-                // Get diff data from tool_context.output
+                // Get diff data from tool_context.output - handle both edit_text and rewrite_document formats
                 const toolOutput = m.tool_context?.output as { 
-                  original_content?: string; 
-                  new_content?: string 
+                  original_text?: string;  // edit_text format
+                  new_text?: string;       // edit_text format
+                  original_content?: string; // rewrite_document format
+                  new_content?: string;      // rewrite_document format
                 } | undefined;
-                const oldText = toolOutput?.original_content || '';
-                const newText = toolOutput?.new_content || '';
+                
+                // edit_text uses original_text/new_text, rewrite_document uses original_content/new_content
+                const oldText = toolOutput?.original_text || toolOutput?.original_content || '';
+                const newText = toolOutput?.new_text || toolOutput?.new_content || '';
+                const isEditText = tool_name === 'edit_text';
                 
                 // Show DiffArtifact with diff preview and Apply button
                 return (
@@ -2346,8 +2360,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     oldText={oldText}
                     newText={newText}
                     onApply={() => {
-                      // Apply this tool's new content to editor
-                      if (editor && newText) {
+                      if (!editor || !newText) return;
+                      
+                      if (isEditText && oldText) {
+                        // edit_text: do find-and-replace
+                        applyTextEdit(oldText, newText, reason || '');
+                      } else {
+                        // rewrite_document: replace entire document
                         const currentHtml = editor.getHTML();
                         const newHtml = mdParser.render(newText);
                         enterDiffPreview(currentHtml, newHtml, reason || '');
@@ -2433,14 +2452,18 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 // Render artifacts from metadata using unified DiffArtifact component
                 if (m.meta_data?.artifact) {
                   const artifact = m.meta_data.artifact;
-                  const toolOutput = m.meta_data?.tool_execution?.output as { 
-                    original_content?: string; 
-                    new_content?: string 
+                  const toolExec = m.meta_data?.tool_execution;
+                  const toolOutput = toolExec?.output as { 
+                    original_text?: string;  // edit_text format
+                    new_text?: string;       // edit_text format
+                    original_content?: string; // rewrite_document format
+                    new_content?: string;      // rewrite_document format
                   } | undefined;
                   
-                  // Get diff data from tool_execution.output
-                  const oldText = toolOutput?.original_content || '';
-                  const newText = toolOutput?.new_content || artifact.content || '';
+                  // Get diff data - handle both edit_text and rewrite_document formats
+                  const oldText = toolOutput?.original_text || toolOutput?.original_content || '';
+                  const newText = toolOutput?.new_text || toolOutput?.new_content || artifact.content || '';
+                  const isEditText = toolExec?.tool_name === 'edit_text';
                   
                   return (
                     <DiffArtifact
@@ -2450,8 +2473,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       oldText={oldText}
                       newText={newText}
                       onApply={() => {
-                        // Apply this artifact's new content to editor
-                        if (editor && newText) {
+                        if (!editor || !newText) return;
+                        
+                        if (isEditText && oldText) {
+                          // edit_text: do find-and-replace
+                          applyTextEdit(oldText, newText, artifact.description || '');
+                        } else {
+                          // rewrite_document: replace entire document
                           const currentHtml = editor.getHTML();
                           const newHtml = mdParser.render(newText);
                           enterDiffPreview(currentHtml, newHtml, artifact.description || '');

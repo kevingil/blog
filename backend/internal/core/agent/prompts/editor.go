@@ -32,4 +32,3 @@ CRITICAL: No title at start - title is stored separately. Start with the first p
 // EditorContextPrompt is used when updating an article with chat context
 const EditorContextPrompt = `You are the Editor. Improve and refine the previously drafted content.
 Use the chat history to understand what the user wants and what the writer has written.`
-
