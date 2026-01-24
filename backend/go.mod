@@ -1,4 +1,4 @@
-module blog-agent-go
+module backend
 
 go 1.24.4
 

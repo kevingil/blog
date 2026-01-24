@@ -2,13 +2,15 @@ ARG GO_VERSION=1.24.4
 FROM golang:${GO_VERSION}-bookworm AS builder
 
 WORKDIR /app
-COPY go.mod go.sum ./
+COPY backend/go.mod backend/go.sum ./backend/
+WORKDIR /app/backend
 RUN go mod download && go mod verify
+WORKDIR /app
 COPY . .
 RUN ls -la /app
-WORKDIR /app
+WORKDIR /app/backend
 
-RUN go build -v -o /run-app ./backend
+RUN go build -v -o /run-app .
 
 FROM debian:bookworm-slim
 
