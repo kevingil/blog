@@ -2,104 +2,36 @@ package page
 
 import (
 	"context"
-	"encoding/json"
 	"math"
 
 	"backend/pkg/core"
 	"backend/pkg/database"
-	"backend/pkg/database/models"
+	"backend/pkg/database/repository"
+	"backend/pkg/types"
 
 	"github.com/google/uuid"
-	"gorm.io/datatypes"
-	"gorm.io/gorm"
 )
 
-// CreateRequest represents a request to create a page
-type CreateRequest struct {
-	Slug        string                 `json:"slug" validate:"required,min=3,max=100"`
-	Title       string                 `json:"title" validate:"required,min=3,max=200"`
-	Content     string                 `json:"content" validate:"required,min=10"`
-	Description string                 `json:"description" validate:"max=500"`
-	ImageURL    string                 `json:"image_url" validate:"omitempty,url"`
-	MetaData    map[string]interface{} `json:"meta_data"`
-	IsPublished bool                   `json:"is_published"`
-}
-
-// UpdateRequest represents a request to update a page
-type UpdateRequest struct {
-	Title       *string                 `json:"title"`
-	Content     *string                 `json:"content"`
-	Description *string                 `json:"description"`
-	ImageURL    *string                 `json:"image_url"`
-	MetaData    *map[string]interface{} `json:"meta_data"`
-	IsPublished *bool                   `json:"is_published"`
-}
-
-// ListResult represents the result of listing pages
-type ListResult struct {
-	Pages      []Page `json:"pages"`
-	Total      int64  `json:"total"`
-	Page       int    `json:"page"`
-	PerPage    int    `json:"per_page"`
-	TotalPages int    `json:"total_pages"`
-}
-
-// modelToPage converts a database model to domain type
-func modelToPage(m *models.Page) *Page {
-	if m == nil {
-		return nil
-	}
-
-	var metaData map[string]interface{}
-	if m.MetaData != nil {
-		_ = json.Unmarshal(m.MetaData, &metaData)
-	}
-
-	return &Page{
-		ID:          m.ID,
-		Slug:        m.Slug,
-		Title:       m.Title,
-		Content:     m.Content,
-		Description: m.Description,
-		ImageURL:    m.ImageURL,
-		MetaData:    metaData,
-		IsPublished: m.IsPublished,
-		CreatedAt:   m.CreatedAt,
-		UpdatedAt:   m.UpdatedAt,
-	}
+// getRepo returns a page repository instance
+func getRepo() *repository.PageRepository {
+	return repository.NewPageRepository(database.DB())
 }
 
 // GetByID retrieves a page by its ID
-func GetByID(ctx context.Context, id uuid.UUID) (*Page, error) {
-	db := database.DB()
-
-	var model models.Page
-	if err := db.WithContext(ctx).First(&model, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, core.ErrNotFound
-		}
-		return nil, err
-	}
-	return modelToPage(&model), nil
+func GetByID(ctx context.Context, id uuid.UUID) (*types.Page, error) {
+	repo := getRepo()
+	return repo.FindByID(ctx, id)
 }
 
 // GetBySlug retrieves a page by its slug
-func GetBySlug(ctx context.Context, slug string) (*Page, error) {
-	db := database.DB()
-
-	var model models.Page
-	if err := db.WithContext(ctx).Where("slug = ?", slug).First(&model).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, core.ErrNotFound
-		}
-		return nil, err
-	}
-	return modelToPage(&model), nil
+func GetBySlug(ctx context.Context, slug string) (*types.Page, error) {
+	repo := getRepo()
+	return repo.FindBySlug(ctx, slug)
 }
 
 // List retrieves pages with pagination and optional filters
 func List(ctx context.Context, pageNum, perPage int, isPublished *bool) (*ListResult, error) {
-	db := database.DB()
+	repo := getRepo()
 
 	// Apply defaults
 	if perPage <= 0 {
@@ -109,27 +41,15 @@ func List(ctx context.Context, pageNum, perPage int, isPublished *bool) (*ListRe
 		pageNum = 1
 	}
 
-	query := db.WithContext(ctx).Model(&models.Page{})
-
-	// Apply filter if specified
-	if isPublished != nil {
-		query = query.Where("is_published = ?", *isPublished)
+	opts := types.PageListOptions{
+		Page:        pageNum,
+		PerPage:     perPage,
+		IsPublished: isPublished,
 	}
 
-	var total int64
-	if err := query.Count(&total).Error; err != nil {
+	pages, total, err := repo.List(ctx, opts)
+	if err != nil {
 		return nil, err
-	}
-
-	var pageModels []models.Page
-	offset := (pageNum - 1) * perPage
-	if err := query.Order("created_at DESC").Offset(offset).Limit(perPage).Find(&pageModels).Error; err != nil {
-		return nil, err
-	}
-
-	pages := make([]Page, len(pageModels))
-	for i, m := range pageModels {
-		pages[i] = *modelToPage(&m)
 	}
 
 	totalPages := int(math.Ceil(float64(total) / float64(perPage)))
@@ -144,98 +64,76 @@ func List(ctx context.Context, pageNum, perPage int, isPublished *bool) (*ListRe
 }
 
 // Create creates a new page
-func Create(ctx context.Context, req CreateRequest) (*Page, error) {
-	db := database.DB()
+func Create(ctx context.Context, req CreateRequest) (*types.Page, error) {
+	repo := getRepo()
 
 	// Check if slug already exists
-	var count int64
-	db.WithContext(ctx).Model(&models.Page{}).Where("slug = ?", req.Slug).Count(&count)
-	if count > 0 {
+	existing, err := repo.FindBySlug(ctx, req.Slug)
+	if err != nil && err != core.ErrNotFound {
+		return nil, err
+	}
+	if existing != nil {
 		return nil, core.ErrAlreadyExists
 	}
 
-	// Marshal metadata
-	var metaDataJSON datatypes.JSON
-	if req.MetaData != nil {
-		data, err := json.Marshal(req.MetaData)
-		if err != nil {
-			return nil, err
-		}
-		metaDataJSON = datatypes.JSON(data)
-	}
-
-	model := models.Page{
+	page := &types.Page{
 		ID:          uuid.New(),
 		Slug:        req.Slug,
 		Title:       req.Title,
 		Content:     req.Content,
 		Description: req.Description,
 		ImageURL:    req.ImageURL,
-		MetaData:    metaDataJSON,
+		MetaData:    req.MetaData,
 		IsPublished: req.IsPublished,
 	}
 
-	if err := db.WithContext(ctx).Create(&model).Error; err != nil {
+	if err := repo.Save(ctx, page); err != nil {
 		return nil, err
 	}
 
-	return modelToPage(&model), nil
+	return page, nil
 }
 
 // Update updates an existing page
-func Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (*Page, error) {
-	db := database.DB()
+func Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (*types.Page, error) {
+	repo := getRepo()
 
-	var model models.Page
-	if err := db.WithContext(ctx).First(&model, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, core.ErrNotFound
-		}
+	page, err := repo.FindByID(ctx, id)
+	if err != nil {
 		return nil, err
 	}
 
 	// Apply updates
 	if req.Title != nil {
-		model.Title = *req.Title
+		page.Title = *req.Title
 	}
 	if req.Content != nil {
-		model.Content = *req.Content
+		page.Content = *req.Content
 	}
 	if req.Description != nil {
-		model.Description = *req.Description
+		page.Description = *req.Description
 	}
 	if req.ImageURL != nil {
-		model.ImageURL = *req.ImageURL
+		page.ImageURL = *req.ImageURL
 	}
 	if req.MetaData != nil {
-		data, err := json.Marshal(*req.MetaData)
-		if err != nil {
-			return nil, err
-		}
-		model.MetaData = datatypes.JSON(data)
+		page.MetaData = *req.MetaData
 	}
 	if req.IsPublished != nil {
-		model.IsPublished = *req.IsPublished
+		page.IsPublished = *req.IsPublished
 	}
 
-	if err := db.WithContext(ctx).Save(&model).Error; err != nil {
+	if err := repo.Save(ctx, page); err != nil {
 		return nil, err
 	}
 
-	return modelToPage(&model), nil
+	return page, nil
 }
 
 // Delete removes a page by its ID
 func Delete(ctx context.Context, id uuid.UUID) error {
-	db := database.DB()
-	result := db.WithContext(ctx).Delete(&models.Page{}, id)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return core.ErrNotFound
-	}
-	return nil
+	repo := getRepo()
+	return repo.Delete(ctx, id)
 }
 
 // Legacy Service type for backward compatibility

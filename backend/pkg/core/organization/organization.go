@@ -3,32 +3,30 @@ package organization
 
 import (
 	"context"
-	"time"
+
+	"backend/pkg/types"
 
 	"github.com/google/uuid"
 )
 
-// Organization represents an organization profile
-type Organization struct {
-	ID              uuid.UUID
-	Name            string
-	Slug            string
-	Bio             *string
-	LogoURL         *string
-	WebsiteURL      *string
-	EmailPublic     *string
-	SocialLinks     map[string]interface{}
-	MetaDescription *string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-}
+// Organization is an alias to types.Organization for backward compatibility
+type Organization = types.Organization
+
+// CreateRequest is an alias to types.OrganizationCreateRequest for backward compatibility
+type CreateRequest = types.OrganizationCreateRequest
+
+// UpdateRequest is an alias to types.OrganizationUpdateRequest for backward compatibility
+type UpdateRequest = types.OrganizationUpdateRequest
+
+// OrganizationResponse is an alias to types.OrganizationResponse for backward compatibility
+type OrganizationResponse = types.OrganizationResponse
 
 // OrganizationStore defines the data access interface for organizations
 type OrganizationStore interface {
-	FindByID(ctx context.Context, id uuid.UUID) (*Organization, error)
-	FindBySlug(ctx context.Context, slug string) (*Organization, error)
-	List(ctx context.Context) ([]Organization, error)
-	Save(ctx context.Context, org *Organization) error
-	Update(ctx context.Context, org *Organization) error
+	FindByID(ctx context.Context, id uuid.UUID) (*types.Organization, error)
+	FindBySlug(ctx context.Context, slug string) (*types.Organization, error)
+	List(ctx context.Context) ([]types.Organization, error)
+	Save(ctx context.Context, org *types.Organization) error
+	Update(ctx context.Context, org *types.Organization) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }

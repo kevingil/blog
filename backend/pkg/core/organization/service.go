@@ -8,97 +8,60 @@ import (
 
 	"backend/pkg/core"
 	"backend/pkg/database"
-	"backend/pkg/database/models"
+	"backend/pkg/database/repository"
+	"backend/pkg/types"
 
 	"github.com/google/uuid"
-	"gorm.io/datatypes"
-	"gorm.io/gorm"
 )
 
-// CreateRequest represents a request to create an organization
-type CreateRequest struct {
-	Name            string             `json:"name" validate:"required,min=2,max=255"`
-	Slug            string             `json:"slug" validate:"omitempty,min=2,max=100"`
-	Bio             *string            `json:"bio"`
-	LogoURL         *string            `json:"logo_url"`
-	WebsiteURL      *string            `json:"website_url"`
-	EmailPublic     *string            `json:"email_public"`
-	SocialLinks     *map[string]string `json:"social_links"`
-	MetaDescription *string            `json:"meta_description"`
+// getRepo returns an organization repository instance
+func getRepo() *repository.OrganizationRepository {
+	return repository.NewOrganizationRepository(database.DB())
 }
 
-// UpdateRequest represents a request to update an organization
-type UpdateRequest struct {
-	Name            *string            `json:"name"`
-	Slug            *string            `json:"slug"`
-	Bio             *string            `json:"bio"`
-	LogoURL         *string            `json:"logo_url"`
-	WebsiteURL      *string            `json:"website_url"`
-	EmailPublic     *string            `json:"email_public"`
-	SocialLinks     *map[string]string `json:"social_links"`
-	MetaDescription *string            `json:"meta_description"`
-}
-
-// OrganizationResponse is the response for an organization
-type OrganizationResponse struct {
-	ID              uuid.UUID         `json:"id"`
-	Name            string            `json:"name"`
-	Slug            string            `json:"slug"`
-	Bio             string            `json:"bio"`
-	LogoURL         string            `json:"logo_url"`
-	WebsiteURL      string            `json:"website_url"`
-	EmailPublic     string            `json:"email_public"`
-	SocialLinks     map[string]string `json:"social_links"`
-	MetaDescription string            `json:"meta_description"`
+// getAccountRepo returns an account repository instance
+func getAccountRepo() *repository.AccountRepository {
+	return repository.NewAccountRepository(database.DB())
 }
 
 // GetByID retrieves an organization by its ID
 func GetByID(ctx context.Context, id uuid.UUID) (*OrganizationResponse, error) {
-	db := database.DB()
-
-	var model models.Organization
-	if err := db.WithContext(ctx).First(&model, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, core.ErrNotFound
-		}
+	repo := getRepo()
+	org, err := repo.FindByID(ctx, id)
+	if err != nil {
 		return nil, err
 	}
-	return modelToResponse(&model), nil
+	return toResponse(org), nil
 }
 
 // GetBySlug retrieves an organization by its slug
 func GetBySlug(ctx context.Context, slug string) (*OrganizationResponse, error) {
-	db := database.DB()
-
-	var model models.Organization
-	if err := db.WithContext(ctx).Where("slug = ?", slug).First(&model).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, core.ErrNotFound
-		}
+	repo := getRepo()
+	org, err := repo.FindBySlug(ctx, slug)
+	if err != nil {
 		return nil, err
 	}
-	return modelToResponse(&model), nil
+	return toResponse(org), nil
 }
 
 // List retrieves all organizations
 func List(ctx context.Context) ([]OrganizationResponse, error) {
-	db := database.DB()
-
-	var orgModels []models.Organization
-	if err := db.WithContext(ctx).Order("name ASC").Find(&orgModels).Error; err != nil {
+	repo := getRepo()
+	orgs, err := repo.List(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	result := make([]OrganizationResponse, len(orgModels))
-	for i, model := range orgModels {
-		result[i] = *modelToResponse(&model)
+	result := make([]OrganizationResponse, len(orgs))
+	for i, org := range orgs {
+		result[i] = *toResponse(&org)
 	}
 	return result, nil
 }
 
 // Create creates a new organization
 func Create(ctx context.Context, req CreateRequest) (*OrganizationResponse, error) {
-	db := database.DB()
+	repo := getRepo()
 
 	// Generate slug if not provided
 	slug := req.Slug
@@ -107,25 +70,24 @@ func Create(ctx context.Context, req CreateRequest) (*OrganizationResponse, erro
 	}
 
 	// Check if slug already exists
-	var count int64
-	db.WithContext(ctx).Model(&models.Organization{}).Where("slug = ?", slug).Count(&count)
-	if count > 0 {
+	existing, err := repo.FindBySlug(ctx, slug)
+	if err != nil && err != core.ErrNotFound {
+		return nil, err
+	}
+	if existing != nil {
 		return nil, core.ErrAlreadyExists
 	}
 
-	// Marshal social links
-	var socialLinksJSON datatypes.JSON
+	// Convert social links
+	var socialLinks map[string]interface{}
 	if req.SocialLinks != nil {
-		data, err := json.Marshal(*req.SocialLinks)
-		if err != nil {
-			return nil, err
+		socialLinks = make(map[string]interface{})
+		for k, v := range *req.SocialLinks {
+			socialLinks[k] = v
 		}
-		socialLinksJSON = datatypes.JSON(data)
-	} else {
-		socialLinksJSON = datatypes.JSON([]byte("{}"))
 	}
 
-	model := models.Organization{
+	org := &types.Organization{
 		ID:              uuid.New(),
 		Name:            req.Name,
 		Slug:            slug,
@@ -133,120 +95,110 @@ func Create(ctx context.Context, req CreateRequest) (*OrganizationResponse, erro
 		LogoURL:         req.LogoURL,
 		WebsiteURL:      req.WebsiteURL,
 		EmailPublic:     req.EmailPublic,
-		SocialLinks:     socialLinksJSON,
+		SocialLinks:     socialLinks,
 		MetaDescription: req.MetaDescription,
 	}
 
-	if err := db.WithContext(ctx).Create(&model).Error; err != nil {
+	if err := repo.Save(ctx, org); err != nil {
 		return nil, err
 	}
 
-	return modelToResponse(&model), nil
+	return toResponse(org), nil
 }
 
 // Update updates an existing organization
 func Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (*OrganizationResponse, error) {
-	db := database.DB()
+	repo := getRepo()
 
-	var model models.Organization
-	if err := db.WithContext(ctx).First(&model, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, core.ErrNotFound
-		}
+	org, err := repo.FindByID(ctx, id)
+	if err != nil {
 		return nil, err
 	}
 
 	// Check if new slug is unique
-	if req.Slug != nil && *req.Slug != model.Slug {
-		var count int64
-		db.WithContext(ctx).Model(&models.Organization{}).Where("slug = ? AND id != ?", *req.Slug, id).Count(&count)
-		if count > 0 {
+	if req.Slug != nil && *req.Slug != org.Slug {
+		existing, err := repo.FindBySlug(ctx, *req.Slug)
+		if err != nil && err != core.ErrNotFound {
+			return nil, err
+		}
+		if existing != nil {
 			return nil, core.ErrAlreadyExists
 		}
-		model.Slug = *req.Slug
+		org.Slug = *req.Slug
 	}
 
 	// Apply updates
 	if req.Name != nil {
-		model.Name = *req.Name
+		org.Name = *req.Name
 	}
 	if req.Bio != nil {
-		model.Bio = req.Bio
+		org.Bio = req.Bio
 	}
 	if req.LogoURL != nil {
-		model.LogoURL = req.LogoURL
+		org.LogoURL = req.LogoURL
 	}
 	if req.WebsiteURL != nil {
-		model.WebsiteURL = req.WebsiteURL
+		org.WebsiteURL = req.WebsiteURL
 	}
 	if req.EmailPublic != nil {
-		model.EmailPublic = req.EmailPublic
+		org.EmailPublic = req.EmailPublic
 	}
 	if req.SocialLinks != nil {
-		data, err := json.Marshal(*req.SocialLinks)
-		if err != nil {
-			return nil, err
+		socialLinks := make(map[string]interface{})
+		for k, v := range *req.SocialLinks {
+			socialLinks[k] = v
 		}
-		model.SocialLinks = datatypes.JSON(data)
+		org.SocialLinks = socialLinks
 	}
 	if req.MetaDescription != nil {
-		model.MetaDescription = req.MetaDescription
+		org.MetaDescription = req.MetaDescription
 	}
 
-	if err := db.WithContext(ctx).Save(&model).Error; err != nil {
+	if err := repo.Update(ctx, org); err != nil {
 		return nil, err
 	}
 
-	return modelToResponse(&model), nil
+	return toResponse(org), nil
 }
 
 // Delete removes an organization by its ID
 func Delete(ctx context.Context, id uuid.UUID) error {
-	db := database.DB()
-	result := db.WithContext(ctx).Delete(&models.Organization{}, id)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return core.ErrNotFound
-	}
-	return nil
+	repo := getRepo()
+	return repo.Delete(ctx, id)
 }
 
 // JoinOrganization sets the organization for a user account
 func JoinOrganization(ctx context.Context, accountID, orgID uuid.UUID) error {
-	db := database.DB()
+	orgRepo := getRepo()
+	accountRepo := getAccountRepo()
 
 	// Verify organization exists
-	var orgCount int64
-	db.WithContext(ctx).Model(&models.Organization{}).Where("id = ?", orgID).Count(&orgCount)
-	if orgCount == 0 {
-		return core.ErrNotFound
+	_, err := orgRepo.FindByID(ctx, orgID)
+	if err != nil {
+		return err
 	}
 
-	// Update account
-	result := db.WithContext(ctx).Model(&models.Account{}).Where("id = ?", accountID).Update("organization_id", orgID)
-	if result.Error != nil {
-		return result.Error
+	// Get and update account
+	account, err := accountRepo.FindByID(ctx, accountID)
+	if err != nil {
+		return err
 	}
-	if result.RowsAffected == 0 {
-		return core.ErrNotFound
-	}
-	return nil
+
+	account.OrganizationID = &orgID
+	return accountRepo.Update(ctx, account)
 }
 
 // LeaveOrganization clears the organization for a user account
 func LeaveOrganization(ctx context.Context, accountID uuid.UUID) error {
-	db := database.DB()
+	accountRepo := getAccountRepo()
 
-	result := db.WithContext(ctx).Model(&models.Account{}).Where("id = ?", accountID).Update("organization_id", nil)
-	if result.Error != nil {
-		return result.Error
+	account, err := accountRepo.FindByID(ctx, accountID)
+	if err != nil {
+		return err
 	}
-	if result.RowsAffected == 0 {
-		return core.ErrNotFound
-	}
-	return nil
+
+	account.OrganizationID = nil
+	return accountRepo.Update(ctx, account)
 }
 
 // Helper functions
@@ -262,22 +214,25 @@ func generateSlug(name string) string {
 	return slug
 }
 
-func modelToResponse(model *models.Organization) *OrganizationResponse {
+func toResponse(org *types.Organization) *OrganizationResponse {
 	socialLinks := make(map[string]string)
-	if model.SocialLinks != nil {
-		_ = json.Unmarshal(model.SocialLinks, &socialLinks)
+	if org.SocialLinks != nil {
+		data, err := json.Marshal(org.SocialLinks)
+		if err == nil {
+			json.Unmarshal(data, &socialLinks)
+		}
 	}
 
 	return &OrganizationResponse{
-		ID:              model.ID,
-		Name:            model.Name,
-		Slug:            model.Slug,
-		Bio:             stringValue(model.Bio),
-		LogoURL:         stringValue(model.LogoURL),
-		WebsiteURL:      stringValue(model.WebsiteURL),
-		EmailPublic:     stringValue(model.EmailPublic),
+		ID:              org.ID,
+		Name:            org.Name,
+		Slug:            org.Slug,
+		Bio:             stringValue(org.Bio),
+		LogoURL:         stringValue(org.LogoURL),
+		WebsiteURL:      stringValue(org.WebsiteURL),
+		EmailPublic:     stringValue(org.EmailPublic),
 		SocialLinks:     socialLinks,
-		MetaDescription: stringValue(model.MetaDescription),
+		MetaDescription: stringValue(org.MetaDescription),
 	}
 }
 
