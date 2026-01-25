@@ -1812,7 +1812,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
   return (
     <section className="flex gap-4 p-0 md:p-4 h-[calc(100vh-60px)]">
-      <div className="flex-1">
+      <div className="flex-1 flex flex-col">
         {/* Article Metadata Card */}
         
             {/* Article Title Section with Image and Save */}
@@ -2272,13 +2272,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               )}
             </div>
 
-          <form className="">
+          <form className="flex-1 flex flex-col min-h-0">
 
-              <div className="border border-gray-300 dark:border-gray-600 rounded-md">
+              <div className="flex-1 flex flex-col border border-gray-300 dark:border-gray-600 rounded-md min-h-0">
                 <FormattingToolbar editor={editor} />
                 <EditorContent
                   editor={editor}
-                  className="tiptap w-full border-none rounded-b-md h-[calc(100vh-400px)] overflow-y-auto focus:outline-none"
+                  className="tiptap w-full border-none rounded-b-md flex-1 overflow-y-auto focus:outline-none"
                 />
                 {errors.content && <p className="text-red-500">{errors.content.message}</p>}
               </div>

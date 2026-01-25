@@ -9,6 +9,14 @@
   .tiptap {
     flex: 1; /* Take up remaining space */
     overflow: auto; /* Allow scrolling if content overflows */
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tiptap .ProseMirror {
+    flex: 1;
+    padding: 1rem;
+    outline: none;
   }
   
   .tiptap :first-child {
