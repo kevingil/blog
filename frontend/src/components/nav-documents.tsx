@@ -24,7 +24,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Link, useLocation, useNavigate } from "@tanstack/react-router"
-import { Badge } from "@/components/ui/badge"
 import { ArticleListItem, isPublished } from "@/services/types"
 import { useEffect, useRef } from "react"
 import { FetchNextPageOptions, InfiniteQueryObserverResult, InfiniteData, useQueryClient } from "@tanstack/react-query"
@@ -139,20 +138,20 @@ export function NavDocuments({
                       }}
                     >
                       <div className="flex items-center gap-2 w-full">
-                        <span className="text-sm font-medium truncate flex-1">{articleItem.article.draft_title}</span>
-                        <Badge 
-                          className={`text-[0.6rem] ${
+                        <span 
+                          className={`w-2 h-2 rounded-full flex-shrink-0 ${
                             isPublished(articleItem.article) 
-                              ? "bg-green-50 dark:bg-green-900 text-green-700 dark:text-green-300"
-                              : "bg-indigo-50 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300" 
-                          }`} 
-                          variant="outline"
-                        >
-                          {isPublished(articleItem.article) ? 'Published' : 'Draft'}
-                        </Badge>
+                              ? "bg-green-500" 
+                              : "bg-indigo-400"
+                          }`}
+                        />
+                        <span className="text-sm font-medium truncate flex-1">{articleItem.article.draft_title}</span>
                       </div>
                       <span className="text-xs text-muted-foreground">
-                        {new Date(articleItem.article.created_at).toLocaleDateString()}
+                        {isPublished(articleItem.article) 
+                          ? `Published ${new Date(articleItem.article.published_at!).toLocaleDateString()}`
+                          : 'Draft'
+                        }
                       </span>
                     </Link>
                   </SidebarMenuButton>
