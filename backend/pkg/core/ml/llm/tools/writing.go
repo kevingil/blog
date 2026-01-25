@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"backend/pkg/models"
+	"backend/pkg/database/models"
 
 	"github.com/google/uuid"
 	"github.com/sergi/go-diff/diffmatchpatch"
@@ -17,7 +17,7 @@ import (
 
 // ArticleSourceService interface for source operations - using the real service directly
 type ArticleSourceService interface {
-	SearchSimilarSources(ctx context.Context, articleID uuid.UUID, query string, limit int) ([]*models.ArticleSource, error)
+	SearchSimilarSources(ctx context.Context, articleID uuid.UUID, query string, limit int) ([]*models.Source, error)
 }
 
 // TextGenerationService interface for text generation operations
@@ -218,7 +218,7 @@ func (t *GetRelevantSourcesTool) Run(ctx context.Context, params ToolCall) (Tool
 
 	log.Printf("🔍 [GetRelevantSources] ✅ Found %d sources", len(sources))
 
-	// Convert models.ArticleSource to response format with text chunking
+	// Convert models.Source to response format with text chunking
 	var relevantSources []map[string]interface{}
 	for i, source := range sources {
 		// Log detailed information about each source
