@@ -5,18 +5,16 @@ all: build test
 
 build:
 	@echo "Building..."
-	
-	
-	@go build -o main backend/main.go
+	@cd backend && go build -o ../main .
 
 # Run the application
 run:
-	@go run backend/main.go
+	@cd backend && go run .
 
 # Test the application
 test:
 	@echo "Testing..."
-	@go test ./... -v
+	@cd backend && go test ./... -v
 
 # Clean the binary
 clean:

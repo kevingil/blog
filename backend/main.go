@@ -1,11 +1,31 @@
+// Package main is the entry point for the blog-agent API server.
+//
+//	@title			Blog Agent API
+//	@version		1.0
+//	@description	A blog management API with AI-powered writing assistance
+//	@termsOfService	http://swagger.io/terms/
+//
+//	@contact.name	API Support
+//	@contact.email	support@example.com
+//
+//	@license.name	Apache 2.0
+//	@license.url	http://www.apache.org/licenses/LICENSE-2.0.html
+//
+//	@host		localhost:8080
+//	@BasePath	/
+//
+//	@securityDefinitions.apikey	BearerAuth
+//	@in							header
+//	@name						Authorization
+//	@description				Enter token with Bearer prefix: Bearer <token>
 package main
 
 import (
-	"blog-agent-go/backend/internal/config"
-	"blog-agent-go/backend/internal/core/chat"
-	"blog-agent-go/backend/internal/database"
-	"blog-agent-go/backend/internal/server"
-	"blog-agent-go/backend/internal/services"
+	"backend/pkg/api/services"
+	"backend/pkg/config"
+	"backend/pkg/core/chat"
+	"backend/pkg/database"
+	"backend/pkg/server"
 	"fmt"
 	"log"
 

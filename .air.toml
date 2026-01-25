@@ -5,7 +5,7 @@ tmp_dir = "tmp"
 [build]
   args_bin = []
   bin = "./main"
-  cmd = "make build"
+  cmd = "cd backend && go build -o ../main ."
   delay = 1000
   exclude_dir = ["frontend", "assets", "tmp", "vendor", "testdata", "node_modules"]
   exclude_file = []
