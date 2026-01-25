@@ -7,8 +7,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"backend/pkg/database"
 	"backend/pkg/core"
+	"backend/pkg/database"
 	"backend/pkg/models"
 
 	"github.com/google/uuid"
@@ -227,4 +227,3 @@ func (s *AuthService) ComparePasswords(plainTextPassword string, hashedPassword 
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(plainTextPassword))
 	return err == nil
 }
-

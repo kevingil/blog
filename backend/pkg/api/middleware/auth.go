@@ -15,7 +15,7 @@ import (
 func AuthMiddleware(authService *services.AuthService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		token := c.Get("Authorization")
-		
+
 		if token == "" {
 			return response.Error(c, core.UnauthorizedError("Not authenticated"))
 		}
@@ -25,7 +25,7 @@ func AuthMiddleware(authService *services.AuthService) fiber.Handler {
 		}
 
 		token = token[7:]
-		
+
 		validToken, err := authService.ValidateToken(token)
 		if err != nil {
 			return response.Error(c, err)
@@ -33,9 +33,8 @@ func AuthMiddleware(authService *services.AuthService) fiber.Handler {
 
 		claims := validToken.Claims.(jwt.MapClaims)
 		userID := uuid.MustParse(claims["sub"].(string))
-		
+
 		SetUserID(c, userID)
 		return c.Next()
 	}
 }
-

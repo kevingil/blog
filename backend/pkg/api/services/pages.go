@@ -1,8 +1,8 @@
 package services
 
 import (
-	"backend/pkg/database"
 	"backend/pkg/core"
+	"backend/pkg/database"
 	"backend/pkg/models"
 	"fmt"
 	"math"
@@ -108,7 +108,7 @@ func (s *PagesService) ListPagesWithPagination(page, perPage int, isPublished *b
 
 	var pages []models.Page
 	offset := (page - 1) * perPage
-	
+
 	if err := query.Order("updated_at DESC").Offset(offset).Limit(perPage).Find(&pages).Error; err != nil {
 		return nil, err
 	}
