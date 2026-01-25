@@ -23,7 +23,7 @@ func NewAccountRepository(db *gorm.DB) *AccountRepository {
 
 // FindByID retrieves an account by its ID
 func (r *AccountRepository) FindByID(ctx context.Context, id uuid.UUID) (*auth.Account, error) {
-	var model models.AccountModel
+	var model models.Account
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, core.ErrNotFound
@@ -35,7 +35,7 @@ func (r *AccountRepository) FindByID(ctx context.Context, id uuid.UUID) (*auth.A
 
 // FindByEmail retrieves an account by its email
 func (r *AccountRepository) FindByEmail(ctx context.Context, email string) (*auth.Account, error) {
-	var model models.AccountModel
+	var model models.Account
 	if err := r.db.WithContext(ctx).Where("email = ?", email).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, core.ErrNotFound
@@ -47,7 +47,7 @@ func (r *AccountRepository) FindByEmail(ctx context.Context, email string) (*aut
 
 // Save creates a new account
 func (r *AccountRepository) Save(ctx context.Context, a *auth.Account) error {
-	model := models.AccountModelFromCore(a)
+	model := models.AccountFromCore(a)
 
 	if a.ID == uuid.Nil {
 		a.ID = uuid.New()
@@ -59,13 +59,13 @@ func (r *AccountRepository) Save(ctx context.Context, a *auth.Account) error {
 
 // Update updates an existing account
 func (r *AccountRepository) Update(ctx context.Context, a *auth.Account) error {
-	model := models.AccountModelFromCore(a)
+	model := models.AccountFromCore(a)
 	return r.db.WithContext(ctx).Save(model).Error
 }
 
 // Delete removes an account by its ID
 func (r *AccountRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	result := r.db.WithContext(ctx).Delete(&models.AccountModel{}, id)
+	result := r.db.WithContext(ctx).Delete(&models.Account{}, id)
 	if result.Error != nil {
 		return result.Error
 	}

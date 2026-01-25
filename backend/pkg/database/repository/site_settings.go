@@ -24,7 +24,7 @@ func NewSiteSettingsRepository(db *gorm.DB) *SiteSettingsRepository {
 
 // Get retrieves the site settings (there's only one row)
 func (r *SiteSettingsRepository) Get(ctx context.Context) (*profile.SiteSettings, error) {
-	var model models.SiteSettingsModel
+	var model models.SiteSettings
 	if err := r.db.WithContext(ctx).First(&model, 1).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, core.ErrNotFound
@@ -36,7 +36,7 @@ func (r *SiteSettingsRepository) Get(ctx context.Context) (*profile.SiteSettings
 
 // Save creates or updates site settings
 func (r *SiteSettingsRepository) Save(ctx context.Context, s *profile.SiteSettings) error {
-	model := models.SiteSettingsModelFromCore(s)
+	model := models.SiteSettingsFromCore(s)
 	model.ID = 1 // Always use ID 1 for site settings
 
 	return r.db.WithContext(ctx).Save(model).Error
@@ -54,7 +54,7 @@ func NewProfileRepository(db *gorm.DB) *ProfileRepository {
 
 // GetPublicProfile retrieves the public profile based on site settings
 func (r *ProfileRepository) GetPublicProfile(ctx context.Context) (*profile.PublicProfile, error) {
-	var settings models.SiteSettingsModel
+	var settings models.SiteSettings
 	if err := r.db.WithContext(ctx).
 		Preload("PublicUser").
 		Preload("PublicOrganization").
@@ -101,7 +101,7 @@ func (r *ProfileRepository) GetPublicProfile(ctx context.Context) (*profile.Publ
 
 // IsUserAdmin checks if a user has admin role
 func (r *ProfileRepository) IsUserAdmin(ctx context.Context, userID uuid.UUID) (bool, error) {
-	var model models.AccountModel
+	var model models.Account
 	if err := r.db.WithContext(ctx).Select("role").First(&model, userID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return false, core.ErrNotFound

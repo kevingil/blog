@@ -23,7 +23,7 @@ func NewImageRepository(db *gorm.DB) *ImageRepository {
 
 // FindByID retrieves an image generation by its ID
 func (r *ImageRepository) FindByID(ctx context.Context, id uuid.UUID) (*image.ImageGeneration, error) {
-	var model models.ImageGenerationModel
+	var model models.ImageGeneration
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, core.ErrNotFound
@@ -35,7 +35,7 @@ func (r *ImageRepository) FindByID(ctx context.Context, id uuid.UUID) (*image.Im
 
 // FindByRequestID retrieves an image generation by its request ID
 func (r *ImageRepository) FindByRequestID(ctx context.Context, requestID string) (*image.ImageGeneration, error) {
-	var model models.ImageGenerationModel
+	var model models.ImageGeneration
 	if err := r.db.WithContext(ctx).Where("request_id = ?", requestID).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, core.ErrNotFound
@@ -47,7 +47,7 @@ func (r *ImageRepository) FindByRequestID(ctx context.Context, requestID string)
 
 // Save creates a new image generation
 func (r *ImageRepository) Save(ctx context.Context, i *image.ImageGeneration) error {
-	model := models.ImageGenerationModelFromCore(i)
+	model := models.ImageGenerationFromCore(i)
 
 	if i.ID == uuid.Nil {
 		i.ID = uuid.New()
@@ -59,6 +59,6 @@ func (r *ImageRepository) Save(ctx context.Context, i *image.ImageGeneration) er
 
 // Update updates an existing image generation
 func (r *ImageRepository) Update(ctx context.Context, i *image.ImageGeneration) error {
-	model := models.ImageGenerationModelFromCore(i)
+	model := models.ImageGenerationFromCore(i)
 	return r.db.WithContext(ctx).Save(model).Error
 }

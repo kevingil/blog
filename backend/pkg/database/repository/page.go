@@ -23,7 +23,7 @@ func NewPageRepository(db *gorm.DB) *PageRepository {
 
 // FindByID retrieves a page by its ID
 func (r *PageRepository) FindByID(ctx context.Context, id uuid.UUID) (*page.Page, error) {
-	var model models.PageModel
+	var model models.Page
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, core.ErrNotFound
@@ -35,7 +35,7 @@ func (r *PageRepository) FindByID(ctx context.Context, id uuid.UUID) (*page.Page
 
 // FindBySlug retrieves a page by its slug
 func (r *PageRepository) FindBySlug(ctx context.Context, slug string) (*page.Page, error) {
-	var model models.PageModel
+	var model models.Page
 	if err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, core.ErrNotFound
@@ -47,10 +47,10 @@ func (r *PageRepository) FindBySlug(ctx context.Context, slug string) (*page.Pag
 
 // List retrieves pages with pagination
 func (r *PageRepository) List(ctx context.Context, opts page.ListOptions) ([]page.Page, int64, error) {
-	var pageModels []models.PageModel
+	var pageModels []models.Page
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&models.PageModel{})
+	query := r.db.WithContext(ctx).Model(&models.Page{})
 
 	// Get total count
 	if err := query.Count(&total).Error; err != nil {
@@ -74,10 +74,10 @@ func (r *PageRepository) List(ctx context.Context, opts page.ListOptions) ([]pag
 
 // Save creates or updates a page
 func (r *PageRepository) Save(ctx context.Context, p *page.Page) error {
-	model := models.PageModelFromCore(p)
+	model := models.PageFromCore(p)
 
 	// Check if page exists
-	var existing models.PageModel
+	var existing models.Page
 	err := r.db.WithContext(ctx).First(&existing, p.ID).Error
 	if err == gorm.ErrRecordNotFound {
 		// Create new page
@@ -96,7 +96,7 @@ func (r *PageRepository) Save(ctx context.Context, p *page.Page) error {
 
 // Delete removes a page by its ID
 func (r *PageRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	result := r.db.WithContext(ctx).Delete(&models.PageModel{}, id)
+	result := r.db.WithContext(ctx).Delete(&models.Page{}, id)
 	if result.Error != nil {
 		return result.Error
 	}

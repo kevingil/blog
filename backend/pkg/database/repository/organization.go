@@ -23,7 +23,7 @@ func NewOrganizationRepository(db *gorm.DB) *OrganizationRepository {
 
 // FindByID retrieves an organization by its ID
 func (r *OrganizationRepository) FindByID(ctx context.Context, id uuid.UUID) (*organization.Organization, error) {
-	var model models.OrganizationModel
+	var model models.Organization
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, core.ErrNotFound
@@ -35,7 +35,7 @@ func (r *OrganizationRepository) FindByID(ctx context.Context, id uuid.UUID) (*o
 
 // FindBySlug retrieves an organization by its slug
 func (r *OrganizationRepository) FindBySlug(ctx context.Context, slug string) (*organization.Organization, error) {
-	var model models.OrganizationModel
+	var model models.Organization
 	if err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, core.ErrNotFound
@@ -47,7 +47,7 @@ func (r *OrganizationRepository) FindBySlug(ctx context.Context, slug string) (*
 
 // List retrieves all organizations
 func (r *OrganizationRepository) List(ctx context.Context) ([]organization.Organization, error) {
-	var orgModels []models.OrganizationModel
+	var orgModels []models.Organization
 	if err := r.db.WithContext(ctx).Order("created_at DESC").Find(&orgModels).Error; err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func (r *OrganizationRepository) List(ctx context.Context) ([]organization.Organ
 
 // Save creates a new organization
 func (r *OrganizationRepository) Save(ctx context.Context, o *organization.Organization) error {
-	model := models.OrganizationModelFromCore(o)
+	model := models.OrganizationFromCore(o)
 
 	if o.ID == uuid.Nil {
 		o.ID = uuid.New()
@@ -73,13 +73,13 @@ func (r *OrganizationRepository) Save(ctx context.Context, o *organization.Organ
 
 // Update updates an existing organization
 func (r *OrganizationRepository) Update(ctx context.Context, o *organization.Organization) error {
-	model := models.OrganizationModelFromCore(o)
+	model := models.OrganizationFromCore(o)
 	return r.db.WithContext(ctx).Save(model).Error
 }
 
 // Delete removes an organization by its ID
 func (r *OrganizationRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	result := r.db.WithContext(ctx).Delete(&models.OrganizationModel{}, id)
+	result := r.db.WithContext(ctx).Delete(&models.Organization{}, id)
 	if result.Error != nil {
 		return result.Error
 	}
