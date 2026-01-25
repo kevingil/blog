@@ -1,9 +1,10 @@
 package models
 
 import (
+	"encoding/json"
 	"time"
 
-	"blog-agent-go/backend/internal/core/organization"
+	"backend/pkg/core/organization"
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
@@ -32,7 +33,7 @@ func (OrganizationModel) TableName() string {
 func (m *OrganizationModel) ToCore() *organization.Organization {
 	var socialLinks map[string]interface{}
 	if m.SocialLinks != nil {
-		_ = m.SocialLinks.Unmarshal(&socialLinks)
+		_ = json.Unmarshal(m.SocialLinks, &socialLinks)
 	}
 
 	return &organization.Organization{

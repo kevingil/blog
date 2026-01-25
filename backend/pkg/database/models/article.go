@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"blog-agent-go/backend/internal/core/article"
+	"backend/pkg/core/article"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -58,7 +58,7 @@ func (a ArticleModel) MarshalJSON() ([]byte, error) {
 func (m *ArticleModel) ToCore() *article.Article {
 	var sessionMemory map[string]interface{}
 	if m.SessionMemory != nil {
-		_ = m.SessionMemory.Unmarshal(&sessionMemory)
+		_ = json.Unmarshal(m.SessionMemory, &sessionMemory)
 	}
 
 	var embedding []float32

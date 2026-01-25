@@ -3,7 +3,7 @@ package models
 import (
 	"time"
 
-	"blog-agent-go/backend/internal/core/project"
+	"backend/pkg/core/project"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"

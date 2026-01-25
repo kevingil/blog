@@ -1,9 +1,10 @@
 package models
 
 import (
+	"encoding/json"
 	"time"
 
-	"blog-agent-go/backend/internal/core/page"
+	"backend/pkg/core/page"
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
@@ -31,7 +32,7 @@ func (PageModel) TableName() string {
 func (m *PageModel) ToCore() *page.Page {
 	var metaData map[string]interface{}
 	if m.MetaData != nil {
-		_ = m.MetaData.Unmarshal(&metaData)
+		_ = json.Unmarshal(m.MetaData, &metaData)
 	}
 
 	return &page.Page{

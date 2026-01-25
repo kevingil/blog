@@ -1,9 +1,10 @@
 package models
 
 import (
+	"encoding/json"
 	"time"
 
-	"blog-agent-go/backend/internal/core/auth"
+	"backend/pkg/core/auth"
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
@@ -39,7 +40,7 @@ func (AccountModel) TableName() string {
 func (m *AccountModel) ToCore() *auth.Account {
 	var socialLinks map[string]interface{}
 	if m.SocialLinks != nil {
-		_ = m.SocialLinks.Unmarshal(&socialLinks)
+		_ = json.Unmarshal(m.SocialLinks, &socialLinks)
 	}
 
 	return &auth.Account{

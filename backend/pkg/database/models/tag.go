@@ -3,7 +3,7 @@ package models
 import (
 	"time"
 
-	"blog-agent-go/backend/internal/core/tag"
+	"backend/pkg/core/tag"
 )
 
 // TagModel is the GORM model for tags

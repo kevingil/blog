@@ -1,9 +1,10 @@
 package models
 
 import (
+	"encoding/json"
 	"time"
 
-	"blog-agent-go/backend/internal/core/image"
+	"backend/pkg/core/image"
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
@@ -33,7 +34,7 @@ func (ImageGenerationModel) TableName() string {
 func (m *ImageGenerationModel) ToCore() *image.ImageGeneration {
 	var metaData map[string]interface{}
 	if m.MetaData != nil {
-		_ = m.MetaData.Unmarshal(&metaData)
+		_ = json.Unmarshal(m.MetaData, &metaData)
 	}
 
 	var completedAt *time.Time
