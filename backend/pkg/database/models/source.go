@@ -1,9 +1,10 @@
 package models
 
 import (
+	"encoding/json"
 	"time"
 
-	"blog-agent-go/backend/internal/core/source"
+	"backend/pkg/core/source"
 
 	"github.com/google/uuid"
 	"github.com/pgvector/pgvector-go"
@@ -31,7 +32,7 @@ func (SourceModel) TableName() string {
 func (m *SourceModel) ToCore() *source.Source {
 	var metaData map[string]interface{}
 	if m.MetaData != nil {
-		_ = m.MetaData.Unmarshal(&metaData)
+		_ = json.Unmarshal(m.MetaData, &metaData)
 	}
 
 	var embedding []float32

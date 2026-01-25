@@ -3,9 +3,9 @@ package repository
 import (
 	"context"
 
-	"blog-agent-go/backend/internal/core"
-	"blog-agent-go/backend/internal/core/project"
-	"blog-agent-go/backend/internal/database/models"
+	"backend/pkg/core"
+	"backend/pkg/core/project"
+	"backend/pkg/database/models"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"

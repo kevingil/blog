@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"blog-agent-go/backend/internal/core"
-	"blog-agent-go/backend/internal/core/article"
-	"blog-agent-go/backend/internal/database/models"
+	"backend/pkg/core"
+	"backend/pkg/core/article"
+	"backend/pkg/database/models"
 
 	"github.com/google/uuid"
 	"github.com/pgvector/pgvector-go"

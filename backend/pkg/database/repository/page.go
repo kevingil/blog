@@ -3,9 +3,9 @@ package repository
 import (
 	"context"
 
-	"blog-agent-go/backend/internal/core"
-	"blog-agent-go/backend/internal/core/page"
-	"blog-agent-go/backend/internal/database/models"
+	"backend/pkg/core"
+	"backend/pkg/core/page"
+	"backend/pkg/database/models"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -47,7 +47,7 @@ func (r *PageRepository) FindBySlug(ctx context.Context, slug string) (*page.Pag
 
 // List retrieves pages with pagination
 func (r *PageRepository) List(ctx context.Context, opts page.ListOptions) ([]page.Page, int64, error) {
-	var models []models.PageModel
+	var pageModels []models.PageModel
 	var total int64
 
 	query := r.db.WithContext(ctx).Model(&models.PageModel{})
@@ -59,13 +59,13 @@ func (r *PageRepository) List(ctx context.Context, opts page.ListOptions) ([]pag
 
 	// Apply pagination
 	offset := (opts.Page - 1) * opts.PerPage
-	if err := query.Offset(offset).Limit(opts.PerPage).Order("created_at DESC").Find(&models).Error; err != nil {
+	if err := query.Offset(offset).Limit(opts.PerPage).Order("created_at DESC").Find(&pageModels).Error; err != nil {
 		return nil, 0, err
 	}
 
 	// Convert to domain types
-	pages := make([]page.Page, len(models))
-	for i, m := range models {
+	pages := make([]page.Page, len(pageModels))
+	for i, m := range pageModels {
 		pages[i] = *m.ToCore()
 	}
 

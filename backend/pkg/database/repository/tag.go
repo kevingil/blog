@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
-	"blog-agent-go/backend/internal/core"
-	"blog-agent-go/backend/internal/core/tag"
-	"blog-agent-go/backend/internal/database/models"
+	"backend/pkg/core"
+	"backend/pkg/core/tag"
+	"backend/pkg/database/models"
 
 	"gorm.io/gorm"
 )

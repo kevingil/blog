@@ -2,10 +2,11 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 
-	"blog-agent-go/backend/internal/core"
-	"blog-agent-go/backend/internal/core/profile"
-	"blog-agent-go/backend/internal/database/models"
+	"backend/pkg/core"
+	"backend/pkg/core/profile"
+	"backend/pkg/database/models"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -72,7 +73,7 @@ func (r *ProfileRepository) GetPublicProfile(ctx context.Context) (*profile.Publ
 		org := settings.PublicOrganization
 		var socialLinks map[string]interface{}
 		if org.SocialLinks != nil {
-			_ = org.SocialLinks.Unmarshal(&socialLinks)
+			_ = json.Unmarshal(org.SocialLinks, &socialLinks)
 		}
 		pub.Name = org.Name
 		pub.Bio = org.Bio
@@ -85,7 +86,7 @@ func (r *ProfileRepository) GetPublicProfile(ctx context.Context) (*profile.Publ
 		user := settings.PublicUser
 		var socialLinks map[string]interface{}
 		if user.SocialLinks != nil {
-			_ = user.SocialLinks.Unmarshal(&socialLinks)
+			_ = json.Unmarshal(user.SocialLinks, &socialLinks)
 		}
 		pub.Name = user.Name
 		pub.Bio = user.Bio
