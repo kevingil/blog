@@ -722,7 +722,7 @@ func main() {
 	flag.Parse()
 
 	if !*checkFlag && !*runFlag {
-		fmt.Println("\nUsage: go run migrate_turso_to_postgres.go [flags]\n")
+		fmt.Println("\nUsage: go run migrate_turso_to_postgres.go [flags]")
 		fmt.Println("Flags:")
 		fmt.Println("  -check   Print migration plan and check (default)")
 		fmt.Println("  -run     Run the migration (will prompt for confirmation)")
@@ -739,7 +739,7 @@ func main() {
 			os.Exit(0)
 		}
 
-		fmt.Println("\n===== Running Turso to Postgres Migration =====\n")
+		fmt.Println("\n===== Running Turso to Postgres Migration =====")
 
 		tursoDB, err := connectTurso()
 		if err != nil {
@@ -815,7 +815,7 @@ func main() {
 	}
 
 	// Default: check
-	fmt.Println("\n===== Turso to Postgres Migration Plan & Check =====\n")
+	fmt.Println("\n===== Turso to Postgres Migration Plan & Check =====")
 
 	tursoDB, err := connectTurso()
 	if err != nil {

@@ -4,7 +4,7 @@ package mocks
 import (
 	"context"
 
-	"backend/pkg/core/organization"
+	"backend/pkg/types"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
@@ -15,33 +15,33 @@ type MockOrganizationStore struct {
 	mock.Mock
 }
 
-func (m *MockOrganizationStore) FindByID(ctx context.Context, id uuid.UUID) (*organization.Organization, error) {
+func (m *MockOrganizationStore) FindByID(ctx context.Context, id uuid.UUID) (*types.Organization, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*organization.Organization), args.Error(1)
+	return args.Get(0).(*types.Organization), args.Error(1)
 }
 
-func (m *MockOrganizationStore) FindBySlug(ctx context.Context, slug string) (*organization.Organization, error) {
+func (m *MockOrganizationStore) FindBySlug(ctx context.Context, slug string) (*types.Organization, error) {
 	args := m.Called(ctx, slug)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*organization.Organization), args.Error(1)
+	return args.Get(0).(*types.Organization), args.Error(1)
 }
 
-func (m *MockOrganizationStore) List(ctx context.Context) ([]organization.Organization, error) {
+func (m *MockOrganizationStore) List(ctx context.Context) ([]types.Organization, error) {
 	args := m.Called(ctx)
-	return args.Get(0).([]organization.Organization), args.Error(1)
+	return args.Get(0).([]types.Organization), args.Error(1)
 }
 
-func (m *MockOrganizationStore) Save(ctx context.Context, org *organization.Organization) error {
+func (m *MockOrganizationStore) Save(ctx context.Context, org *types.Organization) error {
 	args := m.Called(ctx, org)
 	return args.Error(0)
 }
 
-func (m *MockOrganizationStore) Update(ctx context.Context, org *organization.Organization) error {
+func (m *MockOrganizationStore) Update(ctx context.Context, org *types.Organization) error {
 	args := m.Called(ctx, org)
 	return args.Error(0)
 }
