@@ -2,7 +2,7 @@
 package websocket
 
 import (
-	agentTypes "blog-agent-go/backend/internal/core/agent"
+	agentTypes "backend/pkg/core/agent"
 )
 
 // StreamData is an alias for the agent's StreamResponse type

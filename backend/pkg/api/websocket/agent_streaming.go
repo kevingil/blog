@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 
-	agentTypes "blog-agent-go/backend/internal/core/agent"
+	agentTypes "backend/pkg/core/agent"
 
 	"github.com/gofiber/contrib/websocket"
 )
