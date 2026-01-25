@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"blog-agent-go/backend/internal/errors"
-	"blog-agent-go/backend/internal/middleware"
-	"blog-agent-go/backend/internal/response"
-	"blog-agent-go/backend/internal/services"
+	"backend/pkg/api/middleware"
+	"backend/pkg/api/response"
+	"backend/pkg/api/services"
+	"backend/pkg/core"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -17,7 +17,7 @@ func GetPublicProfileHandler(profileService *services.ProfileService) fiber.Hand
 			return response.Error(c, err)
 		}
 		if profile == nil {
-			return response.Error(c, errors.NewNotFoundError("Public profile"))
+			return response.Error(c, core.NotFoundError("Public profile"))
 		}
 		return response.Success(c, profile)
 	}
@@ -28,7 +28,7 @@ func GetMyProfileHandler(profileService *services.ProfileService) fiber.Handler 
 	return func(c *fiber.Ctx) error {
 		userID, err := middleware.GetUserID(c)
 		if err != nil {
-			return response.Error(c, errors.NewUnauthorizedError("Not authenticated"))
+			return response.Error(c, core.UnauthorizedError("Not authenticated"))
 		}
 
 		profile, err := profileService.GetUserProfile(userID)
@@ -44,12 +44,12 @@ func UpdateProfileHandler(profileService *services.ProfileService) fiber.Handler
 	return func(c *fiber.Ctx) error {
 		userID, err := middleware.GetUserID(c)
 		if err != nil {
-			return response.Error(c, errors.NewUnauthorizedError("Not authenticated"))
+			return response.Error(c, core.UnauthorizedError("Not authenticated"))
 		}
 
 		var req services.ProfileUpdateRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 
 		profile, err := profileService.UpdateUserProfile(userID, req)
@@ -76,7 +76,7 @@ func UpdateSiteSettingsHandler(profileService *services.ProfileService) fiber.Ha
 	return func(c *fiber.Ctx) error {
 		userID, err := middleware.GetUserID(c)
 		if err != nil {
-			return response.Error(c, errors.NewUnauthorizedError("Not authenticated"))
+			return response.Error(c, core.UnauthorizedError("Not authenticated"))
 		}
 
 		// Check if user is admin
@@ -85,12 +85,12 @@ func UpdateSiteSettingsHandler(profileService *services.ProfileService) fiber.Ha
 			return response.Error(c, err)
 		}
 		if !isAdmin {
-			return response.Error(c, errors.NewForbiddenError("Only admins can update site settings"))
+			return response.Error(c, core.ForbiddenError("Only admins can update site settings"))
 		}
 
 		var req services.SiteSettingsUpdateRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 
 		settings, err := profileService.UpdateSiteSettings(req)

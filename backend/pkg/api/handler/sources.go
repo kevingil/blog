@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"blog-agent-go/backend/internal/errors"
-	"blog-agent-go/backend/internal/response"
-	"blog-agent-go/backend/internal/services"
+	"backend/pkg/api/response"
+	"backend/pkg/api/services"
+	"backend/pkg/core"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -33,16 +33,16 @@ func CreateSourceHandler(sourcesService *services.ArticleSourceService) fiber.Ha
 	return func(c *fiber.Ctx) error {
 		var req services.CreateSourceRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 
 		// Validate required fields
 		if req.ArticleID == uuid.Nil {
-			return response.Error(c, errors.NewValidationError("Article ID is required"))
+			return response.Error(c, core.InvalidInputError("Article ID is required"))
 		}
 
 		if req.Content == "" {
-			return response.Error(c, errors.NewValidationError("Content is required"))
+			return response.Error(c, core.InvalidInputError("Content is required"))
 		}
 
 		source, err := sourcesService.CreateSource(c.Context(), req)
@@ -63,16 +63,16 @@ func ScrapeAndCreateSourceHandler(sourcesService *services.ArticleSourceService)
 		}
 
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 
 		// Validate required fields
 		if req.ArticleID == uuid.Nil {
-			return response.Error(c, errors.NewValidationError("Article ID is required"))
+			return response.Error(c, core.InvalidInputError("Article ID is required"))
 		}
 
 		if req.URL == "" {
-			return response.Error(c, errors.NewValidationError("URL is required"))
+			return response.Error(c, core.InvalidInputError("URL is required"))
 		}
 
 		source, err := sourcesService.ScrapeAndCreateSource(c.Context(), req.ArticleID, req.URL)
@@ -90,7 +90,7 @@ func GetArticleSourcesHandler(sourcesService *services.ArticleSourceService) fib
 		articleIDStr := c.Params("articleId")
 		articleID, err := uuid.Parse(articleIDStr)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid article ID"))
+			return response.Error(c, core.InvalidInputError("Invalid article ID"))
 		}
 
 		sources, err := sourcesService.GetSourcesByArticleID(articleID)
@@ -110,7 +110,7 @@ func GetSourceHandler(sourcesService *services.ArticleSourceService) fiber.Handl
 		sourceIDStr := c.Params("sourceId")
 		sourceID, err := uuid.Parse(sourceIDStr)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid source ID"))
+			return response.Error(c, core.InvalidInputError("Invalid source ID"))
 		}
 
 		source, err := sourcesService.GetSource(sourceID)
@@ -128,12 +128,12 @@ func UpdateSourceHandler(sourcesService *services.ArticleSourceService) fiber.Ha
 		sourceIDStr := c.Params("sourceId")
 		sourceID, err := uuid.Parse(sourceIDStr)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid source ID"))
+			return response.Error(c, core.InvalidInputError("Invalid source ID"))
 		}
 
 		var req services.UpdateSourceRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 
 		source, err := sourcesService.UpdateSource(c.Context(), sourceID, req)
@@ -151,7 +151,7 @@ func DeleteSourceHandler(sourcesService *services.ArticleSourceService) fiber.Ha
 		sourceIDStr := c.Params("sourceId")
 		sourceID, err := uuid.Parse(sourceIDStr)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid source ID"))
+			return response.Error(c, core.InvalidInputError("Invalid source ID"))
 		}
 
 		err = sourcesService.DeleteSource(sourceID)
@@ -169,12 +169,12 @@ func SearchSimilarSourcesHandler(sourcesService *services.ArticleSourceService) 
 		articleIDStr := c.Params("articleId")
 		articleID, err := uuid.Parse(articleIDStr)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid article ID"))
+			return response.Error(c, core.InvalidInputError("Invalid article ID"))
 		}
 
 		query := c.Query("q", "")
 		if query == "" {
-			return response.Error(c, errors.NewInvalidInputError("Query parameter 'q' is required"))
+			return response.Error(c, core.InvalidInputError("Query parameter 'q' is required"))
 		}
 
 		limit := c.QueryInt("limit", 5)

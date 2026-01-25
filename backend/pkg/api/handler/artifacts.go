@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"blog-agent-go/backend/internal/core/chat"
-	"blog-agent-go/backend/internal/errors"
-	"blog-agent-go/backend/internal/response"
+	"backend/pkg/api/response"
+	"backend/pkg/core"
+	"backend/pkg/core/chat"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -24,24 +24,24 @@ func AcceptArtifact() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		messageID := c.Params("messageId")
 		if messageID == "" {
-			return response.Error(c, errors.NewInvalidInputError("Message ID is required"))
+			return response.Error(c, core.InvalidInputError("Message ID is required"))
 		}
 
 		messageUUID, err := uuid.Parse(messageID)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid message ID format"))
+			return response.Error(c, core.InvalidInputError("Invalid message ID format"))
 		}
 
 		// Parse request body
 		var req AcceptArtifactRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 
 		// Get chat service from context (injected by dependency injection in routes)
 		chatService := c.Locals("chatService").(*chat.MessageService)
 		if chatService == nil {
-			return response.Error(c, errors.NewInternalError("Chat service not available"))
+			return response.Error(c, core.InternalError("Chat service not available"))
 		}
 
 		// Accept the artifact
@@ -61,24 +61,24 @@ func RejectArtifact() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		messageID := c.Params("messageId")
 		if messageID == "" {
-			return response.Error(c, errors.NewInvalidInputError("Message ID is required"))
+			return response.Error(c, core.InvalidInputError("Message ID is required"))
 		}
 
 		messageUUID, err := uuid.Parse(messageID)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid message ID format"))
+			return response.Error(c, core.InvalidInputError("Invalid message ID format"))
 		}
 
 		// Parse request body
 		var req RejectArtifactRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 
 		// Get chat service from context
 		chatService := c.Locals("chatService").(*chat.MessageService)
 		if chatService == nil {
-			return response.Error(c, errors.NewInternalError("Chat service not available"))
+			return response.Error(c, core.InternalError("Chat service not available"))
 		}
 
 		// Reject the artifact
@@ -98,18 +98,18 @@ func GetPendingArtifacts() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		articleID := c.Params("articleId")
 		if articleID == "" {
-			return response.Error(c, errors.NewInvalidInputError("Article ID is required"))
+			return response.Error(c, core.InvalidInputError("Article ID is required"))
 		}
 
 		articleUUID, err := uuid.Parse(articleID)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid article ID format"))
+			return response.Error(c, core.InvalidInputError("Invalid article ID format"))
 		}
 
 		// Get chat service from context
 		chatService := c.Locals("chatService").(*chat.MessageService)
 		if chatService == nil {
-			return response.Error(c, errors.NewInternalError("Chat service not available"))
+			return response.Error(c, core.InternalError("Chat service not available"))
 		}
 
 		// Get pending artifacts

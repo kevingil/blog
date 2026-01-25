@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"blog-agent-go/backend/internal/errors"
-	"blog-agent-go/backend/internal/response"
-	"blog-agent-go/backend/internal/services"
-	"blog-agent-go/backend/internal/validation"
+	"backend/pkg/api/response"
+	"backend/pkg/api/services"
+	"backend/pkg/api/validation"
+	"backend/pkg/core"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -37,7 +37,7 @@ func GetPageByIDHandler(pagesService *services.PagesService) fiber.Handler {
 		idStr := c.Params("id")
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid page ID"))
+			return response.Error(c, core.InvalidInputError("Invalid page ID"))
 		}
 
 		page, err := pagesService.GetPageByID(id)
@@ -45,7 +45,7 @@ func GetPageByIDHandler(pagesService *services.PagesService) fiber.Handler {
 			return response.Error(c, err)
 		}
 		if page == nil {
-			return response.Error(c, errors.NewNotFoundError("Page"))
+			return response.Error(c, core.NotFoundError("Page"))
 		}
 		return response.Success(c, page)
 	}
@@ -55,7 +55,7 @@ func CreatePageHandler(pagesService *services.PagesService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req services.PageCreateRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 		if err := validation.ValidateStruct(req); err != nil {
 			return response.Error(c, err)
@@ -74,12 +74,12 @@ func UpdatePageHandler(pagesService *services.PagesService) fiber.Handler {
 		idStr := c.Params("id")
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid page ID"))
+			return response.Error(c, core.InvalidInputError("Invalid page ID"))
 		}
 
 		var req services.PageUpdateRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 
 		page, err := pagesService.UpdatePage(id, req)
@@ -95,7 +95,7 @@ func DeletePageHandler(pagesService *services.PagesService) fiber.Handler {
 		idStr := c.Params("id")
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid page ID"))
+			return response.Error(c, core.InvalidInputError("Invalid page ID"))
 		}
 
 		if err := pagesService.DeletePage(id); err != nil {

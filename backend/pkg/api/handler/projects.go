@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"blog-agent-go/backend/internal/errors"
-	"blog-agent-go/backend/internal/response"
-	"blog-agent-go/backend/internal/services"
-	"blog-agent-go/backend/internal/validation"
+	"backend/pkg/api/response"
+	"backend/pkg/api/services"
+	"backend/pkg/api/validation"
+	"backend/pkg/core"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -32,7 +32,7 @@ func GetProjectHandler(svc *services.ProjectsService) fiber.Handler {
 		idStr := c.Params("id")
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid project ID"))
+			return response.Error(c, core.InvalidInputError("Invalid project ID"))
 		}
 		project, err := svc.GetProjectDetail(id)
 		if err != nil {
@@ -46,7 +46,7 @@ func CreateProjectHandler(svc *services.ProjectsService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req services.ProjectCreateRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 		if err := validation.ValidateStruct(req); err != nil {
 			return response.Error(c, err)
@@ -64,11 +64,11 @@ func UpdateProjectHandler(svc *services.ProjectsService) fiber.Handler {
 		idStr := c.Params("id")
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid project ID"))
+			return response.Error(c, core.InvalidInputError("Invalid project ID"))
 		}
 		var req services.ProjectUpdateRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 		project, err := svc.UpdateProject(id, req)
 		if err != nil {
@@ -83,7 +83,7 @@ func DeleteProjectHandler(svc *services.ProjectsService) fiber.Handler {
 		idStr := c.Params("id")
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid project ID"))
+			return response.Error(c, core.InvalidInputError("Invalid project ID"))
 		}
 		if err := svc.DeleteProject(id); err != nil {
 			return response.Error(c, err)

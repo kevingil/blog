@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"blog-agent-go/backend/internal/errors"
-	"blog-agent-go/backend/internal/response"
-	"blog-agent-go/backend/internal/services"
-	"blog-agent-go/backend/internal/validation"
+	"backend/pkg/api/response"
+	"backend/pkg/api/services"
+	"backend/pkg/api/validation"
+	"backend/pkg/core"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -18,11 +18,11 @@ func GenerateArticleHandler(blogService *services.ArticleService) fiber.Handler 
 			IsDraft bool   `json:"is_draft"`
 		}
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 		userID, ok := c.Locals("userID").(uuid.UUID)
 		if !ok {
-			return response.Error(c, errors.NewUnauthorizedError("User not authenticated"))
+			return response.Error(c, core.UnauthorizedError("User not authenticated"))
 		}
 		article, err := blogService.GenerateArticle(c.Context(), req.Prompt, req.Title, userID, req.IsDraft)
 		if err != nil {
@@ -36,7 +36,7 @@ func UpdateArticleHandler(blogService *services.ArticleService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		slug := c.Params("slug")
 		if slug == "" {
-			return response.Error(c, errors.NewInvalidInputError("Article slug is required"))
+			return response.Error(c, core.InvalidInputError("Article slug is required"))
 		}
 		articleID, err := blogService.GetArticleIDBySlug(slug)
 		if err != nil {
@@ -44,7 +44,7 @@ func UpdateArticleHandler(blogService *services.ArticleService) fiber.Handler {
 		}
 		var req services.ArticleUpdateRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 		if err := validation.ValidateStruct(req); err != nil {
 			return response.Error(c, err)
@@ -61,7 +61,7 @@ func CreateArticleHandler(blogService *services.ArticleService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req services.ArticleCreateRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 		if err := validation.ValidateStruct(req); err != nil {
 			return response.Error(c, err)
@@ -79,7 +79,7 @@ func UpdateArticleWithContextHandler(blogService *services.ArticleService) fiber
 		articleIDStr := c.Params("id")
 		articleID, err := uuid.Parse(articleIDStr)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid article ID"))
+			return response.Error(c, core.InvalidInputError("Invalid article ID"))
 		}
 		article, err := blogService.UpdateArticleWithContext(c.Context(), articleID)
 		if err != nil {
@@ -109,7 +109,7 @@ func SearchArticlesHandler(blogService *services.ArticleService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		query := c.Query("query")
 		if query == "" {
-			return response.Error(c, errors.NewInvalidInputError("Query parameter is required"))
+			return response.Error(c, core.InvalidInputError("Query parameter is required"))
 		}
 		page := c.QueryInt("page", 1)
 		tag := c.Query("tag", "")
@@ -138,7 +138,7 @@ func GetArticleDataHandler(blogService *services.ArticleService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		slug := c.Params("slug")
 		if slug == "" {
-			return response.Error(c, errors.NewInvalidInputError("Slug is required"))
+			return response.Error(c, core.InvalidInputError("Slug is required"))
 		}
 		data, err := blogService.GetArticleData(slug)
 		if err != nil {
@@ -153,7 +153,7 @@ func GetRecommendedArticlesHandler(blogService *services.ArticleService) fiber.H
 		idStr := c.Params("id")
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid article ID"))
+			return response.Error(c, core.InvalidInputError("Invalid article ID"))
 		}
 		articles, err := blogService.GetRecommendedArticles(id)
 		if err != nil {
@@ -168,7 +168,7 @@ func DeleteArticleHandler(blogService *services.ArticleService) fiber.Handler {
 		idStr := c.Params("id")
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid article ID"))
+			return response.Error(c, core.InvalidInputError("Invalid article ID"))
 		}
 		if err := blogService.DeleteArticle(id); err != nil {
 			return response.Error(c, err)
@@ -181,14 +181,14 @@ func GetPageBySlugHandler(pagesService *services.PagesService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		slug := c.Params("slug")
 		if slug == "" {
-			return response.Error(c, errors.NewInvalidInputError("Page slug is required"))
+			return response.Error(c, core.InvalidInputError("Page slug is required"))
 		}
 		page, err := pagesService.GetPageBySlug(slug)
 		if err != nil {
 			return response.Error(c, err)
 		}
 		if page == nil {
-			return response.Error(c, errors.NewNotFoundError("Page"))
+			return response.Error(c, core.NotFoundError("Page"))
 		}
 		return response.Success(c, page)
 	}

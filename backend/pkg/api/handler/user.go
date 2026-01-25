@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"blog-agent-go/backend/internal/errors"
-	"blog-agent-go/backend/internal/response"
-	"blog-agent-go/backend/internal/services"
-	"blog-agent-go/backend/internal/validation"
+	"backend/pkg/core"
+	"backend/pkg/api/response"
+	"backend/pkg/api/services"
+	"backend/pkg/api/validation"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -14,7 +14,7 @@ func LoginHandler(authService *services.AuthService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req services.LoginRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 		if err := validation.ValidateStruct(req); err != nil {
 			return response.Error(c, err)
@@ -31,7 +31,7 @@ func RegisterHandler(authService *services.AuthService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req services.RegisterRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 		if err := validation.ValidateStruct(req); err != nil {
 			return response.Error(c, err)
@@ -58,7 +58,7 @@ func UpdateAccountHandler(authService *services.AuthService) fiber.Handler {
 		userID := c.Locals("userID").(uuid.UUID)
 		var req services.UpdateAccountRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 		if err := validation.ValidateStruct(req); err != nil {
 			return response.Error(c, err)
@@ -75,7 +75,7 @@ func UpdatePasswordHandler(authService *services.AuthService) fiber.Handler {
 		userID := c.Locals("userID").(uuid.UUID)
 		var req services.UpdatePasswordRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 		if err := validation.ValidateStruct(req); err != nil {
 			return response.Error(c, err)
@@ -94,7 +94,7 @@ func DeleteAccountHandler(authService *services.AuthService) fiber.Handler {
 			Password string `json:"password"`
 		}
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 		if err := authService.DeleteAccount(userID, req.Password); err != nil {
 			return response.Error(c, err)

@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"blog-agent-go/backend/internal/errors"
-	"blog-agent-go/backend/internal/response"
-	"blog-agent-go/backend/internal/services"
+	"backend/pkg/api/response"
+	"backend/pkg/api/services"
+	"backend/pkg/core"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -26,21 +26,21 @@ func UploadFileHandler(storageService *services.StorageService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		file, err := c.FormFile("file")
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid file upload"))
+			return response.Error(c, core.InvalidInputError("Invalid file upload"))
 		}
 		key := c.FormValue("key")
 		if key == "" {
-			return response.Error(c, errors.NewInvalidInputError("Key is required"))
+			return response.Error(c, core.InvalidInputError("Key is required"))
 		}
 		data, err := file.Open()
 		if err != nil {
-			return response.Error(c, errors.NewInternalError("Failed to open file"))
+			return response.Error(c, core.InternalError("Failed to open file"))
 		}
 		defer data.Close()
 		buf := make([]byte, file.Size)
 		_, err = data.Read(buf)
 		if err != nil {
-			return response.Error(c, errors.NewInternalError("Failed to read file"))
+			return response.Error(c, core.InternalError("Failed to read file"))
 		}
 		if err := storageService.UploadFile(c.Context(), key, buf); err != nil {
 			return response.Error(c, err)
@@ -53,7 +53,7 @@ func DeleteFileHandler(storageService *services.StorageService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		key := c.Params("key")
 		if key == "" {
-			return response.Error(c, errors.NewInvalidInputError("Key is required"))
+			return response.Error(c, core.InvalidInputError("Key is required"))
 		}
 		if err := storageService.DeleteFile(c.Context(), key); err != nil {
 			return response.Error(c, err)
@@ -68,7 +68,7 @@ func CreateFolderHandler(storageService *services.StorageService) fiber.Handler 
 			Path string `json:"path"`
 		}
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 		if err := storageService.CreateFolder(c.Context(), req.Path); err != nil {
 			return response.Error(c, err)
@@ -84,7 +84,7 @@ func UpdateFolderHandler(storageService *services.StorageService) fiber.Handler 
 			NewPath string `json:"new_path"`
 		}
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 		if err := storageService.UpdateFolder(c.Context(), req.OldPath, req.NewPath); err != nil {
 			return response.Error(c, err)

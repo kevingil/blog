@@ -1,11 +1,11 @@
 package handler
 
 import (
-	"blog-agent-go/backend/internal/core/chat"
-	"blog-agent-go/backend/internal/errors"
-	"blog-agent-go/backend/internal/response"
-	"blog-agent-go/backend/internal/services"
-	"blog-agent-go/backend/internal/websocket"
+	"backend/pkg/api/response"
+	"backend/pkg/api/services"
+	"backend/pkg/api/websocket"
+	"backend/pkg/core"
+	"backend/pkg/core/chat"
 	"context"
 	"encoding/json"
 	"log"
@@ -29,7 +29,7 @@ func AgentCopilotHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req services.ChatRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 
 		// Get the agent async manager and submit the request
@@ -85,7 +85,7 @@ func GetConversationHistoryHandler(chatService *chat.MessageService) fiber.Handl
 	return func(c *fiber.Ctx) error {
 		articleID := c.Params("articleId")
 		if articleID == "" {
-			return response.Error(c, errors.NewInvalidInputError("Article ID is required"))
+			return response.Error(c, core.InvalidInputError("Article ID is required"))
 		}
 
 		log.Printf("[ConversationHistory] Fetching messages for article: %s", articleID)
@@ -93,7 +93,7 @@ func GetConversationHistoryHandler(chatService *chat.MessageService) fiber.Handl
 		articleUUID, err := uuid.Parse(articleID)
 		if err != nil {
 			log.Printf("[ConversationHistory] Invalid article ID format: %s", articleID)
-			return response.Error(c, errors.NewInvalidInputError("Invalid article ID format"))
+			return response.Error(c, core.InvalidInputError("Invalid article ID format"))
 		}
 
 		// Get limit from query params, default to 50

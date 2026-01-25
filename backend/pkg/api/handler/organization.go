@@ -1,11 +1,11 @@
 package handler
 
 import (
-	"blog-agent-go/backend/internal/errors"
-	"blog-agent-go/backend/internal/middleware"
-	"blog-agent-go/backend/internal/response"
-	"blog-agent-go/backend/internal/services"
-	"blog-agent-go/backend/internal/validation"
+	"backend/pkg/api/middleware"
+	"backend/pkg/api/response"
+	"backend/pkg/api/services"
+	"backend/pkg/api/validation"
+	"backend/pkg/core"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -28,7 +28,7 @@ func GetOrganizationHandler(orgService *services.OrganizationService) fiber.Hand
 		idStr := c.Params("id")
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid organization ID"))
+			return response.Error(c, core.InvalidInputError("Invalid organization ID"))
 		}
 
 		org, err := orgService.GetOrganizationByID(id)
@@ -44,7 +44,7 @@ func CreateOrganizationHandler(orgService *services.OrganizationService) fiber.H
 	return func(c *fiber.Ctx) error {
 		var req services.OrganizationCreateRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 		if err := validation.ValidateStruct(req); err != nil {
 			return response.Error(c, err)
@@ -64,12 +64,12 @@ func UpdateOrganizationHandler(orgService *services.OrganizationService) fiber.H
 		idStr := c.Params("id")
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid organization ID"))
+			return response.Error(c, core.InvalidInputError("Invalid organization ID"))
 		}
 
 		var req services.OrganizationUpdateRequest
 		if err := c.BodyParser(&req); err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid request body"))
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
 		}
 
 		org, err := orgService.UpdateOrganization(id, req)
@@ -86,7 +86,7 @@ func DeleteOrganizationHandler(orgService *services.OrganizationService) fiber.H
 		idStr := c.Params("id")
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid organization ID"))
+			return response.Error(c, core.InvalidInputError("Invalid organization ID"))
 		}
 
 		if err := orgService.DeleteOrganization(id); err != nil {
@@ -101,13 +101,13 @@ func JoinOrganizationHandler(orgService *services.OrganizationService) fiber.Han
 	return func(c *fiber.Ctx) error {
 		userID, err := middleware.GetUserID(c)
 		if err != nil {
-			return response.Error(c, errors.NewUnauthorizedError("Not authenticated"))
+			return response.Error(c, core.UnauthorizedError("Not authenticated"))
 		}
 
 		idStr := c.Params("id")
 		orgID, err := uuid.Parse(idStr)
 		if err != nil {
-			return response.Error(c, errors.NewInvalidInputError("Invalid organization ID"))
+			return response.Error(c, core.InvalidInputError("Invalid organization ID"))
 		}
 
 		if err := orgService.JoinOrganization(userID, orgID); err != nil {
@@ -122,7 +122,7 @@ func LeaveOrganizationHandler(orgService *services.OrganizationService) fiber.Ha
 	return func(c *fiber.Ctx) error {
 		userID, err := middleware.GetUserID(c)
 		if err != nil {
-			return response.Error(c, errors.NewUnauthorizedError("Not authenticated"))
+			return response.Error(c, core.UnauthorizedError("Not authenticated"))
 		}
 
 		if err := orgService.LeaveOrganization(userID); err != nil {
