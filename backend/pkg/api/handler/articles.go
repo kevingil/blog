@@ -15,7 +15,7 @@ func GenerateArticleHandler(blogService *services.ArticleService) fiber.Handler 
 		var req struct {
 			Prompt  string `json:"prompt"`
 			Title   string `json:"title"`
-			IsDraft bool   `json:"is_draft"`
+			Publish bool   `json:"publish"`
 		}
 		if err := c.BodyParser(&req); err != nil {
 			return response.Error(c, core.InvalidInputError("Invalid request body"))
@@ -24,7 +24,7 @@ func GenerateArticleHandler(blogService *services.ArticleService) fiber.Handler 
 		if !ok {
 			return response.Error(c, core.UnauthorizedError("User not authenticated"))
 		}
-		article, err := blogService.GenerateArticle(c.Context(), req.Prompt, req.Title, userID, req.IsDraft)
+		article, err := blogService.GenerateArticle(c.Context(), req.Prompt, req.Title, userID, req.Publish)
 		if err != nil {
 			return response.Error(c, err)
 		}
@@ -174,6 +174,98 @@ func DeleteArticleHandler(blogService *services.ArticleService) fiber.Handler {
 			return response.Error(c, err)
 		}
 		return response.Success(c, fiber.Map{"success": true})
+	}
+}
+
+func PublishArticleHandler(blogService *services.ArticleService) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		slug := c.Params("slug")
+		if slug == "" {
+			return response.Error(c, core.InvalidInputError("Article slug is required"))
+		}
+		articleID, err := blogService.GetArticleIDBySlug(slug)
+		if err != nil {
+			return response.Error(c, err)
+		}
+		article, err := blogService.PublishArticle(c.Context(), articleID)
+		if err != nil {
+			return response.Error(c, err)
+		}
+		return response.Success(c, article)
+	}
+}
+
+func UnpublishArticleHandler(blogService *services.ArticleService) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		slug := c.Params("slug")
+		if slug == "" {
+			return response.Error(c, core.InvalidInputError("Article slug is required"))
+		}
+		articleID, err := blogService.GetArticleIDBySlug(slug)
+		if err != nil {
+			return response.Error(c, err)
+		}
+		article, err := blogService.UnpublishArticle(c.Context(), articleID)
+		if err != nil {
+			return response.Error(c, err)
+		}
+		return response.Success(c, article)
+	}
+}
+
+func ListVersionsHandler(blogService *services.ArticleService) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		slug := c.Params("slug")
+		if slug == "" {
+			return response.Error(c, core.InvalidInputError("Article slug is required"))
+		}
+		articleID, err := blogService.GetArticleIDBySlug(slug)
+		if err != nil {
+			return response.Error(c, err)
+		}
+		versions, err := blogService.ListVersions(c.Context(), articleID)
+		if err != nil {
+			return response.Error(c, err)
+		}
+		return response.Success(c, versions)
+	}
+}
+
+func GetVersionHandler(blogService *services.ArticleService) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		versionIDStr := c.Params("versionId")
+		versionID, err := uuid.Parse(versionIDStr)
+		if err != nil {
+			return response.Error(c, core.InvalidInputError("Invalid version ID"))
+		}
+		version, err := blogService.GetVersion(c.Context(), versionID)
+		if err != nil {
+			return response.Error(c, err)
+		}
+		return response.Success(c, version)
+	}
+}
+
+func RevertToVersionHandler(blogService *services.ArticleService) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		slug := c.Params("slug")
+		if slug == "" {
+			return response.Error(c, core.InvalidInputError("Article slug is required"))
+		}
+		articleID, err := blogService.GetArticleIDBySlug(slug)
+		if err != nil {
+			return response.Error(c, err)
+		}
+		versionIDStr := c.Params("versionId")
+		versionID, err := uuid.Parse(versionIDStr)
+		if err != nil {
+			return response.Error(c, core.InvalidInputError("Invalid version ID"))
+		}
+		article, err := blogService.RevertToVersion(c.Context(), articleID, versionID)
+		if err != nil {
+			return response.Error(c, err)
+		}
+		return response.Success(c, article)
 	}
 }
 

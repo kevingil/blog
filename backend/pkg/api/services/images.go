@@ -53,7 +53,7 @@ func (s *ImageGenerationService) GenerateArticleImage(ctx context.Context, promp
 			return nil, core.InternalError("Failed to fetch article")
 		}
 
-		generatedPrompt, err := textGen.GenerateImagePrompt(ctx, article.Content)
+		generatedPrompt, err := textGen.GenerateImagePrompt(ctx, article.DraftContent)
 		if err != nil {
 			return nil, core.InternalError("Failed to generate image prompt")
 		}

@@ -60,3 +60,41 @@ func (m *MockArticleStore) GetPopularTags(ctx context.Context, limit int) ([]int
 	args := m.Called(ctx, limit)
 	return args.Get(0).([]int64), args.Error(1)
 }
+
+// Version management methods
+
+func (m *MockArticleStore) SaveDraft(ctx context.Context, a *article.Article) error {
+	args := m.Called(ctx, a)
+	return args.Error(0)
+}
+
+func (m *MockArticleStore) Publish(ctx context.Context, a *article.Article) error {
+	args := m.Called(ctx, a)
+	return args.Error(0)
+}
+
+func (m *MockArticleStore) Unpublish(ctx context.Context, a *article.Article) error {
+	args := m.Called(ctx, a)
+	return args.Error(0)
+}
+
+func (m *MockArticleStore) ListVersions(ctx context.Context, articleID uuid.UUID) ([]article.ArticleVersion, error) {
+	args := m.Called(ctx, articleID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]article.ArticleVersion), args.Error(1)
+}
+
+func (m *MockArticleStore) GetVersion(ctx context.Context, versionID uuid.UUID) (*article.ArticleVersion, error) {
+	args := m.Called(ctx, versionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*article.ArticleVersion), args.Error(1)
+}
+
+func (m *MockArticleStore) RevertToVersion(ctx context.Context, articleID, versionID uuid.UUID) error {
+	args := m.Called(ctx, articleID, versionID)
+	return args.Error(0)
+}

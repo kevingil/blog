@@ -21,7 +21,7 @@ func TestService_GetByID(t *testing.T) {
 
 	t.Run("returns article when found", func(t *testing.T) {
 		articleID := uuid.New()
-		expected := &article.Article{ID: articleID, Title: "Test Article"}
+		expected := &article.Article{ID: articleID, DraftTitle: "Test Article"}
 		mockStore.On("FindByID", ctx, articleID).Return(expected, nil).Once()
 
 		result, err := svc.GetByID(ctx, articleID)
@@ -70,13 +70,13 @@ func TestService_List(t *testing.T) {
 
 	t.Run("returns paginated list", func(t *testing.T) {
 		articles := []article.Article{
-			{ID: uuid.New(), Title: "Article 1"},
-			{ID: uuid.New(), Title: "Article 2"},
+			{ID: uuid.New(), DraftTitle: "Article 1"},
+			{ID: uuid.New(), DraftTitle: "Article 2"},
 		}
-		opts := article.ListOptions{Page: 1, PerPage: 10, IsDraft: nil, AuthorID: nil}
+		opts := article.ListOptions{Page: 1, PerPage: 10, PublishedOnly: false, AuthorID: nil}
 		mockStore.On("List", ctx, opts).Return(articles, int64(2), nil).Once()
 
-		result, err := svc.List(ctx, 1, 10, nil, nil)
+		result, err := svc.List(ctx, 1, 10, false, nil)
 
 		assert.NoError(t, err)
 		assert.Equal(t, articles, result.Articles)
@@ -86,10 +86,10 @@ func TestService_List(t *testing.T) {
 
 	t.Run("uses default values for invalid pagination", func(t *testing.T) {
 		articles := []article.Article{}
-		opts := article.ListOptions{Page: 1, PerPage: 20, IsDraft: nil, AuthorID: nil}
+		opts := article.ListOptions{Page: 1, PerPage: 20, PublishedOnly: false, AuthorID: nil}
 		mockStore.On("List", ctx, opts).Return(articles, int64(0), nil).Once()
 
-		result, err := svc.List(ctx, 0, 0, nil, nil)
+		result, err := svc.List(ctx, 0, 0, false, nil)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 1, result.Page)
@@ -110,18 +110,18 @@ func TestService_Create(t *testing.T) {
 			Content:  "Content here",
 			Slug:     "new-article",
 			AuthorID: uuid.New(),
-			IsDraft:  false,
+			Publish:  true,
 		}
 		mockStore.On("FindBySlug", ctx, req.Slug).Return(nil, core.ErrNotFound).Once()
 		mockStore.On("Save", ctx, mock.AnythingOfType("*article.Article")).Return(nil).Once()
+		mockStore.On("Publish", ctx, mock.AnythingOfType("*article.Article")).Return(nil).Once()
 
 		result, err := svc.Create(ctx, req)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
-		assert.Equal(t, req.Title, result.Title)
+		assert.Equal(t, req.Title, result.DraftTitle)
 		assert.Equal(t, req.Slug, result.Slug)
-		assert.NotNil(t, result.PublishedAt) // Not a draft, should have published date
 		mockStore.AssertExpectations(t)
 	})
 
@@ -131,7 +131,7 @@ func TestService_Create(t *testing.T) {
 			Content:  "Draft content",
 			Slug:     "draft-article",
 			AuthorID: uuid.New(),
-			IsDraft:  true,
+			Publish:  false,
 		}
 		mockStore.On("FindBySlug", ctx, req.Slug).Return(nil, core.ErrNotFound).Once()
 		mockStore.On("Save", ctx, mock.AnythingOfType("*article.Article")).Return(nil).Once()
@@ -139,8 +139,7 @@ func TestService_Create(t *testing.T) {
 		result, err := svc.Create(ctx, req)
 
 		assert.NoError(t, err)
-		assert.True(t, result.IsDraft)
-		assert.Nil(t, result.PublishedAt)
+		assert.Nil(t, result.PublishedAt) // Not published
 		mockStore.AssertExpectations(t)
 	})
 
@@ -164,7 +163,7 @@ func TestService_Create(t *testing.T) {
 			Title:   "Tagged Article",
 			Slug:    "tagged-article",
 			Tags:    []string{"go", "backend"},
-			IsDraft: true,
+			Publish: false,
 		}
 		tagIDs := []int64{1, 2}
 		mockStore.On("FindBySlug", ctx, req.Slug).Return(nil, core.ErrNotFound).Once()
@@ -189,22 +188,22 @@ func TestService_Update(t *testing.T) {
 	t.Run("updates article successfully", func(t *testing.T) {
 		articleID := uuid.New()
 		existing := &article.Article{
-			ID:      articleID,
-			Title:   "Old Title",
-			Content: "Old Content",
-			Slug:    "old-slug",
+			ID:           articleID,
+			DraftTitle:   "Old Title",
+			DraftContent: "Old Content",
+			Slug:         "old-slug",
 		}
 		newTitle := "New Title"
 		req := article.UpdateRequest{
 			Title: &newTitle,
 		}
 		mockStore.On("FindByID", ctx, articleID).Return(existing, nil).Once()
-		mockStore.On("Save", ctx, existing).Return(nil).Once()
+		mockStore.On("SaveDraft", ctx, existing).Return(nil).Once()
 
 		result, err := svc.Update(ctx, articleID, req)
 
 		assert.NoError(t, err)
-		assert.Equal(t, newTitle, result.Title)
+		assert.Equal(t, newTitle, result.DraftTitle)
 		mockStore.AssertExpectations(t)
 	})
 
@@ -246,15 +245,64 @@ func TestService_Search(t *testing.T) {
 
 	t.Run("returns search results", func(t *testing.T) {
 		articles := []article.Article{
-			{ID: uuid.New(), Title: "Match 1"},
+			{ID: uuid.New(), DraftTitle: "Match 1"},
 		}
-		opts := article.SearchOptions{Query: "test", Page: 1, PerPage: 10, IsDraft: nil}
+		opts := article.SearchOptions{Query: "test", Page: 1, PerPage: 10, PublishedOnly: false}
 		mockStore.On("Search", ctx, opts).Return(articles, int64(1), nil).Once()
 
-		result, err := svc.Search(ctx, "test", 1, 10, nil)
+		result, err := svc.Search(ctx, "test", 1, 10, false)
 
 		assert.NoError(t, err)
 		assert.Equal(t, articles, result.Articles)
+		mockStore.AssertExpectations(t)
+	})
+}
+
+func TestService_Publish(t *testing.T) {
+	ctx := context.Background()
+	mockStore := new(mocks.MockArticleStore)
+	mockTagStore := new(mocks.MockTagStore)
+	svc := article.NewService(mockStore, mockTagStore)
+
+	t.Run("publishes article successfully", func(t *testing.T) {
+		articleID := uuid.New()
+		existing := &article.Article{
+			ID:           articleID,
+			DraftTitle:   "Test Article",
+			DraftContent: "Test Content",
+		}
+		mockStore.On("FindByID", ctx, articleID).Return(existing, nil).Once()
+		mockStore.On("Publish", ctx, existing).Return(nil).Once()
+
+		result, err := svc.Publish(ctx, articleID)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		mockStore.AssertExpectations(t)
+	})
+}
+
+func TestService_ListVersions(t *testing.T) {
+	ctx := context.Background()
+	mockStore := new(mocks.MockArticleStore)
+	mockTagStore := new(mocks.MockTagStore)
+	svc := article.NewService(mockStore, mockTagStore)
+
+	t.Run("returns versions list", func(t *testing.T) {
+		articleID := uuid.New()
+		existing := &article.Article{ID: articleID}
+		versions := []article.ArticleVersion{
+			{ID: uuid.New(), ArticleID: articleID, VersionNumber: 2, Status: "draft"},
+			{ID: uuid.New(), ArticleID: articleID, VersionNumber: 1, Status: "published"},
+		}
+		mockStore.On("FindByID", ctx, articleID).Return(existing, nil).Once()
+		mockStore.On("ListVersions", ctx, articleID).Return(versions, nil).Once()
+
+		result, err := svc.ListVersions(ctx, articleID)
+
+		assert.NoError(t, err)
+		assert.Equal(t, 2, result.Total)
+		assert.Equal(t, versions, result.Versions)
 		mockStore.AssertExpectations(t)
 	})
 }
