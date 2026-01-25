@@ -1,4 +1,4 @@
-package services
+package profile
 
 import (
 	"backend/pkg/core"

@@ -2,7 +2,6 @@ package page
 
 import (
 	"backend/pkg/api/response"
-	"backend/pkg/api/services"
 	"backend/pkg/api/validation"
 	"backend/pkg/core"
 
@@ -17,7 +16,7 @@ func GetPageBySlug(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Page slug is required"))
 	}
 
-	page, err := services.Pages().GetPageBySlug(slug)
+	page, err := Pages().GetPageBySlug(slug)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -39,7 +38,7 @@ func ListPages(c *fiber.Ctx) error {
 		isPublished = &val
 	}
 
-	pages, err := services.Pages().ListPagesWithPagination(page, perPage, isPublished)
+	pages, err := Pages().ListPagesWithPagination(page, perPage, isPublished)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -54,7 +53,7 @@ func GetPageByID(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid page ID"))
 	}
 
-	page, err := services.Pages().GetPageByID(id)
+	page, err := Pages().GetPageByID(id)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -66,7 +65,7 @@ func GetPageByID(c *fiber.Ctx) error {
 
 // CreatePage handles POST /dashboard/pages
 func CreatePage(c *fiber.Ctx) error {
-	var req services.PageCreateRequest
+	var req PageCreateRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
@@ -74,7 +73,7 @@ func CreatePage(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	page, err := services.Pages().CreatePage(req)
+	page, err := Pages().CreatePage(req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -89,12 +88,12 @@ func UpdatePage(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid page ID"))
 	}
 
-	var req services.PageUpdateRequest
+	var req PageUpdateRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
 
-	page, err := services.Pages().UpdatePage(id, req)
+	page, err := Pages().UpdatePage(id, req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -109,7 +108,7 @@ func DeletePage(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid page ID"))
 	}
 
-	if err := services.Pages().DeletePage(id); err != nil {
+	if err := Pages().DeletePage(id); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Success(c, fiber.Map{"success": true})

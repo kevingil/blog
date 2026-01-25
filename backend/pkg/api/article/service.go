@@ -1,4 +1,4 @@
-package services
+package article
 
 import (
 	"context"
@@ -10,9 +10,12 @@ import (
 	"time"
 
 	"backend/pkg/core"
+	"backend/pkg/core/agent"
 	"backend/pkg/core/ml"
+	"backend/pkg/core/tag"
 	"backend/pkg/database"
 	"backend/pkg/database/models"
+	"backend/pkg/database/repository"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -22,8 +25,8 @@ import (
 
 type ArticleService struct {
 	db               database.Service
-	writerAgent      *WriterAgent
-	tagService       *TagService
+	writerAgent      *agent.WriterAgent
+	tagService       *tag.Service
 	embeddingService *ml.EmbeddingService
 }
 
@@ -33,7 +36,7 @@ var articleSvc *ArticleService
 // InitArticleService initializes the article service singleton
 func InitArticleService() {
 	if articleSvc == nil {
-		articleSvc = NewArticleService(database.New(), NewWriterAgent())
+		articleSvc = NewArticleService(database.New(), agent.NewWriterAgent())
 	}
 }
 
@@ -45,11 +48,11 @@ func Articles() *ArticleService {
 	return articleSvc
 }
 
-func NewArticleService(db database.Service, writerAgent *WriterAgent) *ArticleService {
+func NewArticleService(db database.Service, writerAgent *agent.WriterAgent) *ArticleService {
 	return &ArticleService{
 		db:               db,
 		writerAgent:      writerAgent,
-		tagService:       NewTagService(db),
+		tagService:       tag.NewService(repository.NewTagRepository(db.GetDB())),
 		embeddingService: ml.NewEmbeddingService(),
 	}
 }
@@ -163,7 +166,7 @@ func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uuid.UUID,
 	oldTitle := article.DraftTitle
 
 	// Process tags using tag service
-	tagIDs, err := s.tagService.EnsureTagsExist(req.Tags)
+	tagIDs, err := s.tagService.EnsureExists(ctx, req.Tags)
 	if err != nil {
 		return nil, err
 	}
@@ -294,7 +297,7 @@ func (s *ArticleService) getTagsData(articleID uuid.UUID, tagIDs []int64) ([]Tag
 		return []TagData{}, nil
 	}
 
-	tags, err := s.tagService.GetTagsByIDs(tagIDs)
+	tags, err := s.tagService.GetByIDs(context.Background(), tagIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +306,7 @@ func (s *ArticleService) getTagsData(articleID uuid.UUID, tagIDs []int64) ([]Tag
 	for _, t := range tags {
 		tagData = append(tagData, TagData{
 			ArticleID: articleID,
-			TagID:     int(t.ID),
+			TagID:     t.ID,
 			TagName:   t.Name,
 		})
 	}
@@ -628,7 +631,7 @@ func (s *ArticleService) CreateArticle(ctx context.Context, req ArticleCreateReq
 	db := s.db.GetDB()
 
 	// Process tags using tag service
-	tagIDs, err := s.tagService.EnsureTagsExist(req.Tags)
+	tagIDs, err := s.tagService.EnsureExists(ctx, req.Tags)
 	if err != nil {
 		return nil, err
 	}

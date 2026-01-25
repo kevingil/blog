@@ -1,4 +1,4 @@
-package services
+package page
 
 import (
 	"backend/pkg/core"

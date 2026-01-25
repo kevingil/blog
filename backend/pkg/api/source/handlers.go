@@ -2,7 +2,6 @@ package source
 
 import (
 	"backend/pkg/api/response"
-	"backend/pkg/api/services"
 	"backend/pkg/core"
 
 	"github.com/gofiber/fiber/v2"
@@ -14,7 +13,7 @@ func ListAllSources(c *fiber.Ctx) error {
 	page := c.QueryInt("page", 1)
 	limit := c.QueryInt("limit", 20)
 
-	sources, totalPages, err := services.Sources().GetAllSources(page, limit)
+	sources, totalPages, err := Sources().GetAllSources(page, limit)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -28,7 +27,7 @@ func ListAllSources(c *fiber.Ctx) error {
 
 // CreateSource handles POST /sources
 func CreateSource(c *fiber.Ctx) error {
-	var req services.CreateSourceRequest
+	var req CreateSourceRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
@@ -40,7 +39,7 @@ func CreateSource(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Content is required"))
 	}
 
-	source, err := services.Sources().CreateSource(c.Context(), req)
+	source, err := Sources().CreateSource(c.Context(), req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -65,7 +64,7 @@ func ScrapeAndCreateSource(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("URL is required"))
 	}
 
-	source, err := services.Sources().ScrapeAndCreateSource(c.Context(), req.ArticleID, req.URL)
+	source, err := Sources().ScrapeAndCreateSource(c.Context(), req.ArticleID, req.URL)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -80,7 +79,7 @@ func GetArticleSources(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid article ID"))
 	}
 
-	sources, err := services.Sources().GetSourcesByArticleID(articleID)
+	sources, err := Sources().GetSourcesByArticleID(articleID)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -96,7 +95,7 @@ func GetSource(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid source ID"))
 	}
 
-	source, err := services.Sources().GetSource(sourceID)
+	source, err := Sources().GetSource(sourceID)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -111,12 +110,12 @@ func UpdateSource(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid source ID"))
 	}
 
-	var req services.UpdateSourceRequest
+	var req UpdateSourceRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
 
-	source, err := services.Sources().UpdateSource(c.Context(), sourceID, req)
+	source, err := Sources().UpdateSource(c.Context(), sourceID, req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -131,7 +130,7 @@ func DeleteSource(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid source ID"))
 	}
 
-	if err := services.Sources().DeleteSource(sourceID); err != nil {
+	if err := Sources().DeleteSource(sourceID); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Success(c, fiber.Map{"success": true})
@@ -155,7 +154,7 @@ func SearchSimilarSources(c *fiber.Ctx) error {
 		limit = 20
 	}
 
-	sources, err := services.Sources().SearchSimilarSources(c.Context(), articleID, query, limit)
+	sources, err := Sources().SearchSimilarSources(c.Context(), articleID, query, limit)
 	if err != nil {
 		return response.Error(c, err)
 	}

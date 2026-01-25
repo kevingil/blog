@@ -1,31 +1,32 @@
-package services
+package adapters
 
 import (
 	"context"
 
 	"backend/pkg/core/ml/llm/tools"
+	"backend/pkg/integrations/exa"
 )
 
-// ExaServiceAdapter adapts ExaSearchService to match the tools.ExaSearchService interface
+// ExaServiceAdapter adapts exa.Client to match the tools.ExaSearchService interface
 type ExaServiceAdapter struct {
-	service *ExaSearchService
+	client *exa.Client
 }
 
-// NewExaServiceAdapter creates a new adapter for the Exa service
-func NewExaServiceAdapter(service *ExaSearchService) *ExaServiceAdapter {
+// NewExaServiceAdapter creates a new adapter for the Exa client
+func NewExaServiceAdapter(client *exa.Client) *ExaServiceAdapter {
 	return &ExaServiceAdapter{
-		service: service,
+		client: client,
 	}
 }
 
 // SearchWithDefaults implements the tools.ExaSearchService interface
 func (a *ExaServiceAdapter) SearchWithDefaults(ctx context.Context, query string) (*tools.ExaSearchResponse, error) {
-	resp, err := a.service.SearchWithDefaults(ctx, query)
+	resp, err := a.client.SearchWithDefaults(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert service response to tools response
+	// Convert client response to tools response
 	toolsResp := &tools.ExaSearchResponse{
 		RequestID:          resp.RequestID,
 		ResolvedSearchType: resp.ResolvedSearchType,
@@ -58,17 +59,17 @@ func (a *ExaServiceAdapter) SearchWithDefaults(ctx context.Context, query string
 
 // IsConfigured implements the tools.ExaSearchService interface
 func (a *ExaServiceAdapter) IsConfigured() bool {
-	return a.service.IsConfigured()
+	return a.client.IsConfigured()
 }
 
 // AnswerWithDefaults implements the tools.ExaAnswerService interface
 func (a *ExaServiceAdapter) AnswerWithDefaults(ctx context.Context, question string) (*tools.ExaAnswerResponse, error) {
-	resp, err := a.service.AnswerWithDefaults(ctx, question)
+	resp, err := a.client.AnswerWithDefaults(ctx, question)
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert service response to tools response
+	// Convert client response to tools response
 	toolsResp := &tools.ExaAnswerResponse{
 		Answer:      resp.Answer,
 		CostDollars: resp.CostDollars,

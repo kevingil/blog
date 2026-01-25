@@ -1,4 +1,4 @@
-package services
+package agent
 
 import (
 	"context"
@@ -14,11 +14,13 @@ import (
 	openai "github.com/openai/openai-go"
 )
 
+// WriterAgent provides article generation using LLM with writer and editor prompts
 type WriterAgent struct {
 	client           *openai.Client
 	embeddingService *ml.EmbeddingService
 }
 
+// NewWriterAgent creates a new WriterAgent instance
 func NewWriterAgent() *WriterAgent {
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
@@ -31,6 +33,7 @@ func NewWriterAgent() *WriterAgent {
 	}
 }
 
+// GenerateArticle creates a new article using the writer and editor prompts
 func (w *WriterAgent) GenerateArticle(ctx context.Context, prompt, title string, authorID uuid.UUID) (*models.Article, error) {
 	// First draft with writer system message
 	draftMsg, err := w.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
@@ -64,14 +67,15 @@ func (w *WriterAgent) GenerateArticle(ctx context.Context, prompt, title string,
 
 	// Create article with draft content
 	article := &models.Article{
-		DraftTitle:    title,
-		DraftContent:  finalMsg.Choices[0].Message.Content,
-		AuthorID:      authorID,
+		DraftTitle:     title,
+		DraftContent:   finalMsg.Choices[0].Message.Content,
+		AuthorID:       authorID,
 		DraftEmbedding: embedding,
 	}
 	return article, nil
 }
 
+// UpdateWithContext updates an article using editor context prompts
 func (w *WriterAgent) UpdateWithContext(ctx context.Context, article *models.Article) (string, error) {
 	if article == nil {
 		return "", fmt.Errorf("article not found")

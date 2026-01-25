@@ -3,7 +3,6 @@ package organization
 import (
 	"backend/pkg/api/middleware"
 	"backend/pkg/api/response"
-	"backend/pkg/api/services"
 	"backend/pkg/api/validation"
 	"backend/pkg/core"
 
@@ -13,7 +12,7 @@ import (
 
 // ListOrganizations handles GET /organizations
 func ListOrganizations(c *fiber.Ctx) error {
-	orgs, err := services.Organizations().ListOrganizations()
+	orgs, err := Organizations().ListOrganizations()
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -28,7 +27,7 @@ func GetOrganization(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid organization ID"))
 	}
 
-	org, err := services.Organizations().GetOrganizationByID(id)
+	org, err := Organizations().GetOrganizationByID(id)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -37,7 +36,7 @@ func GetOrganization(c *fiber.Ctx) error {
 
 // CreateOrganization handles POST /organizations
 func CreateOrganization(c *fiber.Ctx) error {
-	var req services.OrganizationCreateRequest
+	var req OrganizationCreateRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
@@ -45,7 +44,7 @@ func CreateOrganization(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	org, err := services.Organizations().CreateOrganization(req)
+	org, err := Organizations().CreateOrganization(req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -60,12 +59,12 @@ func UpdateOrganization(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid organization ID"))
 	}
 
-	var req services.OrganizationUpdateRequest
+	var req OrganizationUpdateRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
 
-	org, err := services.Organizations().UpdateOrganization(id, req)
+	org, err := Organizations().UpdateOrganization(id, req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -80,7 +79,7 @@ func DeleteOrganization(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid organization ID"))
 	}
 
-	if err := services.Organizations().DeleteOrganization(id); err != nil {
+	if err := Organizations().DeleteOrganization(id); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Success(c, fiber.Map{"success": true})
@@ -99,7 +98,7 @@ func JoinOrganization(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid organization ID"))
 	}
 
-	if err := services.Organizations().JoinOrganization(userID, orgID); err != nil {
+	if err := Organizations().JoinOrganization(userID, orgID); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Success(c, fiber.Map{"success": true})
@@ -112,7 +111,7 @@ func LeaveOrganization(c *fiber.Ctx) error {
 		return response.Error(c, core.UnauthorizedError("Not authenticated"))
 	}
 
-	if err := services.Organizations().LeaveOrganization(userID); err != nil {
+	if err := Organizations().LeaveOrganization(userID); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Success(c, fiber.Map{"success": true})

@@ -3,7 +3,6 @@ package auth
 import (
 	"backend/pkg/api/middleware"
 	"backend/pkg/api/response"
-	"backend/pkg/api/services"
 	"backend/pkg/api/validation"
 	"backend/pkg/core"
 
@@ -12,7 +11,7 @@ import (
 
 // Login handles POST /auth/login
 func Login(c *fiber.Ctx) error {
-	var req services.LoginRequest
+	var req LoginRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
@@ -20,7 +19,7 @@ func Login(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	resp, err := services.Auth().Login(req)
+	resp, err := Auth().Login(req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -29,7 +28,7 @@ func Login(c *fiber.Ctx) error {
 
 // Register_ handles POST /auth/register (named with underscore to avoid conflict with package Register function)
 func Register_(c *fiber.Ctx) error {
-	var req services.RegisterRequest
+	var req RegisterRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
@@ -37,7 +36,7 @@ func Register_(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	if err := services.Auth().Register(req); err != nil {
+	if err := Auth().Register(req); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Created(c, fiber.Map{
@@ -59,7 +58,7 @@ func UpdateAccount(c *fiber.Ctx) error {
 		return response.Error(c, core.UnauthorizedError("Not authenticated"))
 	}
 
-	var req services.UpdateAccountRequest
+	var req UpdateAccountRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
@@ -67,7 +66,7 @@ func UpdateAccount(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	if err := services.Auth().UpdateAccount(userID, req); err != nil {
+	if err := Auth().UpdateAccount(userID, req); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Success(c, fiber.Map{"message": "Account updated successfully"})
@@ -80,7 +79,7 @@ func UpdatePassword(c *fiber.Ctx) error {
 		return response.Error(c, core.UnauthorizedError("Not authenticated"))
 	}
 
-	var req services.UpdatePasswordRequest
+	var req UpdatePasswordRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
@@ -88,7 +87,7 @@ func UpdatePassword(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	if err := services.Auth().UpdatePassword(userID, req); err != nil {
+	if err := Auth().UpdatePassword(userID, req); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Success(c, fiber.Map{"message": "Password updated successfully"})
@@ -108,7 +107,7 @@ func DeleteAccount(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
 
-	if err := services.Auth().DeleteAccount(userID, req.Password); err != nil {
+	if err := Auth().DeleteAccount(userID, req.Password); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Success(c, fiber.Map{"message": "Account deleted successfully"})

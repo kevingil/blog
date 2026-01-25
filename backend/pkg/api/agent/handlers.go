@@ -2,7 +2,6 @@ package agent
 
 import (
 	"backend/pkg/api/response"
-	"backend/pkg/api/services"
 	agentws "backend/pkg/api/websocket"
 	"backend/pkg/core"
 	"backend/pkg/core/chat"
@@ -37,19 +36,19 @@ func truncateString(s string, maxLen int) string {
 
 // AgentCopilot handles POST /agent
 func AgentCopilot(c *fiber.Ctx) error {
-	var req services.ChatRequest
+	var req ChatRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
 
-	manager := services.GetAgentAsyncCopilotManager()
+	manager := GetAgentAsyncCopilotManager()
 	requestID, err := manager.SubmitChatRequest(req)
 	if err != nil {
 		log.Printf("[Agent API] Failed to submit request: %v", err)
 		return response.Error(c, err)
 	}
 
-	return response.Success(c, services.ChatRequestResponse{
+	return response.Success(c, ChatRequestResponse{
 		RequestID: requestID,
 		Status:    "processing",
 	})
@@ -60,7 +59,7 @@ func WebsocketHandler(con *websocketLib.Conn) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	agentManager := services.GetAgentAsyncCopilotManager()
+	agentManager := GetAgentAsyncCopilotManager()
 
 	go func() {
 		defer cancel()

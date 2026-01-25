@@ -1,4 +1,4 @@
-package services
+package agent
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"backend/pkg/api/adapters"
+	"backend/pkg/api/source"
 	agentTypes "backend/pkg/core/agent"
 	"backend/pkg/core/agent/metadata"
 	"backend/pkg/core/ml/llm/agent"
@@ -17,7 +19,9 @@ import (
 	"backend/pkg/core/ml/llm/message"
 	"backend/pkg/core/ml/llm/session"
 	"backend/pkg/core/ml/llm/tools"
+	"backend/pkg/core/ml/text"
 	"backend/pkg/database/models"
+	"backend/pkg/integrations/exa"
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/google/uuid"
@@ -166,7 +170,7 @@ func SetGlobalAgentManager(manager *AgentAsyncCopilotManager) {
 }
 
 // InitializeAgentCopilotManager initializes the agent copilot manager with real services
-func InitializeAgentCopilotManager(articleSourceService *ArticleSourceService, chatService ChatMessageServiceInterface) error {
+func InitializeAgentCopilotManager(articleSourceService *source.ArticleSourceService, chatService ChatMessageServiceInterface) error {
 	// Load agent configuration
 	cfg := agentTypes.LoadConfig()
 
@@ -181,14 +185,14 @@ func InitializeAgentCopilotManager(articleSourceService *ArticleSourceService, c
 	}
 
 	// Create text generation service for tools that need it
-	textGenService := NewTextGenerationService()
+	textGenService := text.NewGenerationService()
 
-	// Create Exa search service and adapter for web search capabilities
-	exaService := NewExaSearchService()
-	exaAdapter := NewExaServiceAdapter(exaService)
+	// Create Exa client and adapter for web search capabilities
+	exaClient := exa.NewClient()
+	exaAdapter := adapters.NewExaServiceAdapter(exaClient)
 
 	// Create source service adapter for tools interface compatibility
-	sourceServiceAdapter := NewSourceServiceAdapter(articleSourceService)
+	sourceServiceAdapter := adapters.NewSourceServiceAdapter(articleSourceService)
 
 	// Create writing tools for the agent
 	writingTools := []tools.BaseTool{

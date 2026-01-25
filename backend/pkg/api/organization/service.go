@@ -1,4 +1,4 @@
-package services
+package organization
 
 import (
 	"backend/pkg/core"
@@ -324,4 +324,11 @@ func generateOrgSlug(name string) string {
 	// Trim hyphens from start and end
 	slug = strings.Trim(slug, "-")
 	return slug
+}
+
+func stringValue(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

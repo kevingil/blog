@@ -3,7 +3,6 @@ package profile
 import (
 	"backend/pkg/api/middleware"
 	"backend/pkg/api/response"
-	"backend/pkg/api/services"
 	"backend/pkg/core"
 
 	"github.com/gofiber/fiber/v2"
@@ -11,7 +10,7 @@ import (
 
 // GetPublicProfile handles GET /profile/public
 func GetPublicProfile(c *fiber.Ctx) error {
-	profile, err := services.Profiles().GetPublicProfile()
+	profile, err := Profiles().GetPublicProfile()
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -28,7 +27,7 @@ func GetMyProfile(c *fiber.Ctx) error {
 		return response.Error(c, core.UnauthorizedError("Not authenticated"))
 	}
 
-	profile, err := services.Profiles().GetUserProfile(userID)
+	profile, err := Profiles().GetUserProfile(userID)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -42,12 +41,12 @@ func UpdateProfile(c *fiber.Ctx) error {
 		return response.Error(c, core.UnauthorizedError("Not authenticated"))
 	}
 
-	var req services.ProfileUpdateRequest
+	var req ProfileUpdateRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
 
-	profile, err := services.Profiles().UpdateUserProfile(userID, req)
+	profile, err := Profiles().UpdateUserProfile(userID, req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -56,7 +55,7 @@ func UpdateProfile(c *fiber.Ctx) error {
 
 // GetSiteSettings handles GET /profile/settings
 func GetSiteSettings(c *fiber.Ctx) error {
-	settings, err := services.Profiles().GetSiteSettings()
+	settings, err := Profiles().GetSiteSettings()
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -71,7 +70,7 @@ func UpdateSiteSettings(c *fiber.Ctx) error {
 	}
 
 	// Check if user is admin
-	isAdmin, err := services.Profiles().IsUserAdmin(userID)
+	isAdmin, err := Profiles().IsUserAdmin(userID)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -79,12 +78,12 @@ func UpdateSiteSettings(c *fiber.Ctx) error {
 		return response.Error(c, core.ForbiddenError("Only admins can update site settings"))
 	}
 
-	var req services.SiteSettingsUpdateRequest
+	var req SiteSettingsUpdateRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
 
-	settings, err := services.Profiles().UpdateSiteSettings(req)
+	settings, err := Profiles().UpdateSiteSettings(req)
 	if err != nil {
 		return response.Error(c, err)
 	}

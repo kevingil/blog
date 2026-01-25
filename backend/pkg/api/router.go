@@ -10,7 +10,6 @@ import (
 	"backend/pkg/api/page"
 	"backend/pkg/api/profile"
 	"backend/pkg/api/project"
-	"backend/pkg/api/services"
 	"backend/pkg/api/source"
 
 	"github.com/gofiber/fiber/v2"
@@ -18,12 +17,12 @@ import (
 
 // Init initializes all API services (call this before RegisterRoutes)
 func Init() {
-	services.InitArticleService()
-	services.InitAuthService()
-	services.InitOrganizationService()
-	services.InitPagesService()
-	services.InitSourcesService()
-	services.InitProfileService()
+	article.InitArticleService()
+	auth.InitAuthService()
+	organization.InitOrganizationService()
+	page.InitPagesService()
+	source.InitSourcesService()
+	profile.InitProfileService()
 }
 
 // RegisterRoutes registers all API routes on the app
