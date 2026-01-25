@@ -113,11 +113,11 @@ export function NavDocuments({
 
   return (
     <>
-      <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+      <SidebarGroup className="group-data-[collapsible=icon]:hidden flex-1 flex flex-col min-h-0">
         <div className="flex flex-row justify-between gap-2">
         <SidebarGroupLabel>Recent Articles</SidebarGroupLabel>
         </div>
-        <SidebarMenu className="h-[calc(100vh-450px)] overflow-y-auto">
+        <SidebarMenu className="flex-1 overflow-y-auto min-h-0">
           {articles
             .slice()
             .sort((a, b) => {
