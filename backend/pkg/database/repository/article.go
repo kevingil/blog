@@ -403,11 +403,6 @@ func (r *ArticleRepository) createVersionAsync(articleID uuid.UUID, title, conte
 		Select("COALESCE(MAX(version_number), 0)").
 		Scan(&maxVersion)
 
-	var embeddingVector pgvector.Vector
-	if len(embedding) > 0 {
-		embeddingVector = pgvector.NewVector(embedding)
-	}
-
 	var editedByPtr *uuid.UUID
 	if editedBy != uuid.Nil {
 		editedByPtr = &editedBy
@@ -421,12 +416,20 @@ func (r *ArticleRepository) createVersionAsync(articleID uuid.UUID, title, conte
 		Title:         title,
 		Content:       content,
 		ImageURL:      imageURL,
-		Embedding:     embeddingVector,
 		EditedBy:      editedByPtr,
 		CreatedAt:     time.Now(),
 	}
 
-	if err := r.db.WithContext(ctx).Create(version).Error; err != nil {
+	// Create version - omit embedding if empty (pgvector requires at least 1 dimension)
+	var err error
+	if len(embedding) > 0 {
+		version.Embedding = pgvector.NewVector(embedding)
+		err = r.db.WithContext(ctx).Create(version).Error
+	} else {
+		err = r.db.WithContext(ctx).Omit("Embedding").Create(version).Error
+	}
+
+	if err != nil {
 		log.Printf("Failed to create version for article %s: %v", articleID, err)
 		return
 	}

@@ -832,20 +832,21 @@ func (s *ArticleService) RevertToVersion(ctx context.Context, articleID, version
 
 // createVersionAsync creates a version record asynchronously
 func (s *ArticleService) createVersionAsync(articleID uuid.UUID, title, content, imageURL string, embedding []float32, status string, editedBy uuid.UUID) {
+	fmt.Printf("\n[VERSION] Creating version for article %s, status=%s\n", articleID, status)
+	
 	db := s.db.GetDB()
 	ctx := context.Background()
 
 	// Get next version number
 	var maxVersion int
-	db.WithContext(ctx).Model(&models.ArticleVersion{}).
+	if err := db.WithContext(ctx).Model(&models.ArticleVersion{}).
 		Where("article_id = ?", articleID).
 		Select("COALESCE(MAX(version_number), 0)").
-		Scan(&maxVersion)
-
-	var embeddingVector pgvector.Vector
-	if len(embedding) > 0 {
-		embeddingVector = pgvector.NewVector(embedding)
+		Scan(&maxVersion).Error; err != nil {
+		fmt.Printf("[VERSION] Error getting max version: %v\n", err)
+		return
 	}
+	fmt.Printf("[VERSION] Max version number: %d, next will be %d\n", maxVersion, maxVersion+1)
 
 	var editedByPtr *uuid.UUID
 	if editedBy != uuid.Nil {
@@ -860,24 +861,39 @@ func (s *ArticleService) createVersionAsync(articleID uuid.UUID, title, content,
 		Title:         title,
 		Content:       content,
 		ImageURL:      imageURL,
-		Embedding:     embeddingVector,
 		EditedBy:      editedByPtr,
 		CreatedAt:     time.Now(),
 	}
 
-	if err := db.WithContext(ctx).Create(version).Error; err != nil {
+	// Create version - omit embedding if empty (pgvector requires at least 1 dimension)
+	var err error
+	if len(embedding) > 0 {
+		version.Embedding = pgvector.NewVector(embedding)
+		err = db.WithContext(ctx).Create(version).Error
+	} else {
+		// Omit embedding field when it's empty to avoid pgvector error
+		err = db.WithContext(ctx).Omit("Embedding").Create(version).Error
+	}
+
+	if err != nil {
+		fmt.Printf("[VERSION] Failed to create version for article %s: %v\n", articleID, err)
 		log.Printf("Failed to create version for article %s: %v", articleID, err)
 		return
 	}
+	fmt.Printf("[VERSION] Successfully created version %s (v%d) for article %s\n", version.ID, version.VersionNumber, articleID)
 
 	// Update version pointer on article
 	pointerField := "current_draft_version_id"
 	if status == "published" {
 		pointerField = "current_published_version_id"
 	}
-	db.Model(&models.Article{}).
+	if err := db.Model(&models.Article{}).
 		Where("id = ?", articleID).
-		Update(pointerField, version.ID)
+		Update(pointerField, version.ID).Error; err != nil {
+		fmt.Printf("[VERSION] Failed to update version pointer: %v\n", err)
+	} else {
+		fmt.Printf("[VERSION] Updated %s pointer to %s\n", pointerField, version.ID)
+	}
 }
 
 // Helper function to generate slug from title
