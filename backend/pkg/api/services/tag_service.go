@@ -2,7 +2,7 @@ package services
 
 import (
 	"backend/pkg/database"
-	"backend/pkg/models"
+	"backend/pkg/database/models"
 	"fmt"
 	"strings"
 

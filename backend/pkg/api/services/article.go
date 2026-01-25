@@ -12,7 +12,7 @@ import (
 	"backend/pkg/core"
 	"backend/pkg/core/ml"
 	"backend/pkg/database"
-	"backend/pkg/models"
+	"backend/pkg/database/models"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"

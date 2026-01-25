@@ -2,7 +2,7 @@ package services
 
 import (
 	"backend/pkg/core/ml/llm/tools"
-	"backend/pkg/models"
+	"backend/pkg/database/models"
 	"context"
 
 	"github.com/google/uuid"
@@ -21,12 +21,12 @@ func NewSourceServiceAdapter(service *ArticleSourceService) *SourceServiceAdapte
 }
 
 // ScrapeAndCreateSource implements the tools.ExaSourceService interface
-func (a *SourceServiceAdapter) ScrapeAndCreateSource(ctx context.Context, articleID uuid.UUID, targetURL string) (*models.ArticleSource, error) {
+func (a *SourceServiceAdapter) ScrapeAndCreateSource(ctx context.Context, articleID uuid.UUID, targetURL string) (*models.Source, error) {
 	return a.service.ScrapeAndCreateSource(ctx, articleID, targetURL)
 }
 
 // CreateSource implements the tools.ExaSourceService interface
-func (a *SourceServiceAdapter) CreateSource(ctx context.Context, req tools.CreateSourceRequest) (*models.ArticleSource, error) {
+func (a *SourceServiceAdapter) CreateSource(ctx context.Context, req tools.CreateSourceRequest) (*models.Source, error) {
 	// Convert tools.CreateSourceRequest to services.CreateSourceRequest
 	serviceReq := CreateSourceRequest{
 		ArticleID:  req.ArticleID,

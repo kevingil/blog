@@ -13,7 +13,7 @@ import (
 	"backend/pkg/core"
 	"backend/pkg/core/ml"
 	"backend/pkg/database"
-	"backend/pkg/models"
+	"backend/pkg/database/models"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/google/uuid"
@@ -56,13 +56,13 @@ type ScrapedContent struct {
 
 // ArticleSourceWithArticle includes article metadata with the source
 type ArticleSourceWithArticle struct {
-	models.ArticleSource
+	models.Source
 	ArticleTitle string `json:"article_title"`
 	ArticleSlug  string `json:"article_slug"`
 }
 
 // CreateSource creates a new article source with embedding generation
-func (s *ArticleSourceService) CreateSource(ctx context.Context, req CreateSourceRequest) (*models.ArticleSource, error) {
+func (s *ArticleSourceService) CreateSource(ctx context.Context, req CreateSourceRequest) (*models.Source, error) {
 	db := s.db.GetDB()
 
 	// Validate that the article exists
@@ -90,7 +90,7 @@ func (s *ArticleSourceService) CreateSource(ctx context.Context, req CreateSourc
 		}
 	}
 
-	source := &models.ArticleSource{
+	source := &models.Source{
 		ArticleID:  req.ArticleID,
 		Title:      req.Title,
 		Content:    req.Content,
@@ -107,7 +107,7 @@ func (s *ArticleSourceService) CreateSource(ctx context.Context, req CreateSourc
 }
 
 // ScrapeAndCreateSource scrapes content from a URL and creates a source
-func (s *ArticleSourceService) ScrapeAndCreateSource(ctx context.Context, articleID uuid.UUID, targetURL string) (*models.ArticleSource, error) {
+func (s *ArticleSourceService) ScrapeAndCreateSource(ctx context.Context, articleID uuid.UUID, targetURL string) (*models.Source, error) {
 	// Scrape the content
 	scraped, err := s.scrapeURL(targetURL)
 	if err != nil {
@@ -133,9 +133,9 @@ func (s *ArticleSourceService) ScrapeAndCreateSource(ctx context.Context, articl
 }
 
 // GetSourcesByArticleID retrieves all sources for an article
-func (s *ArticleSourceService) GetSourcesByArticleID(articleID uuid.UUID) ([]*models.ArticleSource, error) {
+func (s *ArticleSourceService) GetSourcesByArticleID(articleID uuid.UUID) ([]*models.Source, error) {
 	db := s.db.GetDB()
-	var sources []*models.ArticleSource
+	var sources []*models.Source
 
 	err := db.Where("article_id = ?", articleID).
 		Order("created_at DESC").
@@ -164,7 +164,7 @@ func (s *ArticleSourceService) GetAllSources(page, limit int) ([]ArticleSourceWi
 
 	// Count total sources
 	var total int64
-	if err := db.Model(&models.ArticleSource{}).Count(&total).Error; err != nil {
+	if err := db.Model(&models.Source{}).Count(&total).Error; err != nil {
 		return nil, 0, core.InternalError("Failed to count sources")
 	}
 
@@ -189,9 +189,9 @@ func (s *ArticleSourceService) GetAllSources(page, limit int) ([]ArticleSourceWi
 }
 
 // GetSource retrieves a specific source by ID
-func (s *ArticleSourceService) GetSource(sourceID uuid.UUID) (*models.ArticleSource, error) {
+func (s *ArticleSourceService) GetSource(sourceID uuid.UUID) (*models.Source, error) {
 	db := s.db.GetDB()
-	var source models.ArticleSource
+	var source models.Source
 
 	err := db.First(&source, sourceID).Error
 	if err != nil {
@@ -205,10 +205,10 @@ func (s *ArticleSourceService) GetSource(sourceID uuid.UUID) (*models.ArticleSou
 }
 
 // UpdateSource updates an existing source
-func (s *ArticleSourceService) UpdateSource(ctx context.Context, sourceID uuid.UUID, req UpdateSourceRequest) (*models.ArticleSource, error) {
+func (s *ArticleSourceService) UpdateSource(ctx context.Context, sourceID uuid.UUID, req UpdateSourceRequest) (*models.Source, error) {
 	db := s.db.GetDB()
 
-	var source models.ArticleSource
+	var source models.Source
 	if err := db.First(&source, sourceID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, core.NotFoundError("Source")
@@ -254,7 +254,7 @@ func (s *ArticleSourceService) UpdateSource(ctx context.Context, sourceID uuid.U
 func (s *ArticleSourceService) DeleteSource(sourceID uuid.UUID) error {
 	db := s.db.GetDB()
 
-	result := db.Delete(&models.ArticleSource{}, sourceID)
+	result := db.Delete(&models.Source{}, sourceID)
 	if result.Error != nil {
 		return core.InternalError("Failed to delete source")
 	}
@@ -473,7 +473,7 @@ func (s *ArticleSourceService) extractMainContent(doc *goquery.Document) string 
 }
 
 // SearchSimilarSources finds sources similar to the given query using vector similarity
-func (s *ArticleSourceService) SearchSimilarSources(ctx context.Context, articleID uuid.UUID, query string, limit int) ([]*models.ArticleSource, error) {
+func (s *ArticleSourceService) SearchSimilarSources(ctx context.Context, articleID uuid.UUID, query string, limit int) ([]*models.Source, error) {
 	// Generate embedding for the query
 	queryEmbedding, err := s.embeddingService.GenerateEmbedding(ctx, query)
 	if err != nil {
@@ -481,7 +481,7 @@ func (s *ArticleSourceService) SearchSimilarSources(ctx context.Context, article
 	}
 
 	db := s.db.GetDB()
-	var sources []*models.ArticleSource
+	var sources []*models.Source
 
 	// Use PostgreSQL's vector similarity search with pgvector
 	err = db.Raw(`

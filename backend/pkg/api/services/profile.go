@@ -3,7 +3,7 @@ package services
 import (
 	"backend/pkg/core"
 	"backend/pkg/database"
-	"backend/pkg/models"
+	"backend/pkg/database/models"
 	"encoding/json"
 	"fmt"
 

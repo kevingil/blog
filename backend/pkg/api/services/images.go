@@ -9,7 +9,7 @@ import (
 
 	"backend/pkg/core"
 	"backend/pkg/database"
-	"backend/pkg/models"
+	"backend/pkg/database/models"
 
 	"github.com/google/uuid"
 	"github.com/openai/openai-go"
