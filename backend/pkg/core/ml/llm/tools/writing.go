@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"blog-agent-go/backend/internal/models"
+	"backend/pkg/models"
 
 	"github.com/google/uuid"
 	"github.com/sergi/go-diff/diffmatchpatch"

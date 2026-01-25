@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	"blog-agent-go/backend/internal/core/ml/llm/config"
-	"blog-agent-go/backend/internal/core/ml/llm/models"
+	"backend/pkg/core/ml/llm/config"
+	"backend/pkg/core/ml/llm/models"
 )
 
 func GetAgentPrompt(agentName config.AgentName, provider models.ModelProvider) string {

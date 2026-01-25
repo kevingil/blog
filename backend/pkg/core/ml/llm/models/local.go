@@ -1,7 +1,7 @@
 package models
 
 import (
-	"blog-agent-go/backend/internal/core/ml/llm/logging"
+	"backend/pkg/core/ml/llm/logging"
 	"cmp"
 	"encoding/json"
 	"net/http"

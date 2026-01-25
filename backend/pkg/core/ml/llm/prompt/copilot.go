@@ -1,6 +1,6 @@
 package prompt
 
-import "blog-agent-go/backend/internal/core/ml/llm/models"
+import "backend/pkg/core/ml/llm/models"
 
 func CopilotPrompt(_ models.ModelProvider) string {
 	return `You are a writing copilot helping blog authors improve their content.

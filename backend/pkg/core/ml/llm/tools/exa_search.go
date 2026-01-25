@@ -1,7 +1,7 @@
 package tools
 
 import (
-	"blog-agent-go/backend/internal/models"
+	"backend/pkg/models"
 	"context"
 	"encoding/json"
 	"fmt"

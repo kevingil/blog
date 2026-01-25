@@ -1,6 +1,6 @@
 package prompt
 
-import "blog-agent-go/backend/internal/core/ml/llm/models"
+import "backend/pkg/core/ml/llm/models"
 
 func WriterPrompt(_ models.ModelProvider) string {
 	return `⚠️ CRITICAL INSTRUCTION: Before calling ANY tool, you MUST write a brief acknowledgment message. This is the FIRST thing you must do in your response.

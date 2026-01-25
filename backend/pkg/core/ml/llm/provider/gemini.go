@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"blog-agent-go/backend/internal/core/ml/llm/config"
-	"blog-agent-go/backend/internal/core/ml/llm/logging"
-	"blog-agent-go/backend/internal/core/ml/llm/message"
-	"blog-agent-go/backend/internal/core/ml/llm/tools"
+	"backend/pkg/core/ml/llm/config"
+	"backend/pkg/core/ml/llm/logging"
+	"backend/pkg/core/ml/llm/message"
+	"backend/pkg/core/ml/llm/tools"
 
 	"github.com/google/uuid"
 	"google.golang.org/genai"

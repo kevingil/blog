@@ -3,9 +3,9 @@ package agent
 import (
 	"context"
 
-	"blog-agent-go/backend/internal/core/ml/llm/message"
-	"blog-agent-go/backend/internal/core/ml/llm/session"
-	"blog-agent-go/backend/internal/core/ml/llm/tools"
+	"backend/pkg/core/ml/llm/message"
+	"backend/pkg/core/ml/llm/session"
+	"backend/pkg/core/ml/llm/tools"
 )
 
 func CoderAgentTools(

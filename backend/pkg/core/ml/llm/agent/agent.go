@@ -7,14 +7,14 @@ import (
 	"log"
 	"sync"
 
-	"blog-agent-go/backend/internal/core/ml/llm/config"
-	"blog-agent-go/backend/internal/core/ml/llm/logging"
-	"blog-agent-go/backend/internal/core/ml/llm/message"
-	"blog-agent-go/backend/internal/core/ml/llm/models"
-	"blog-agent-go/backend/internal/core/ml/llm/prompt"
-	"blog-agent-go/backend/internal/core/ml/llm/provider"
-	"blog-agent-go/backend/internal/core/ml/llm/session"
-	"blog-agent-go/backend/internal/core/ml/llm/tools"
+	"backend/pkg/core/ml/llm/config"
+	"backend/pkg/core/ml/llm/logging"
+	"backend/pkg/core/ml/llm/message"
+	"backend/pkg/core/ml/llm/models"
+	"backend/pkg/core/ml/llm/prompt"
+	"backend/pkg/core/ml/llm/provider"
+	"backend/pkg/core/ml/llm/session"
+	"backend/pkg/core/ml/llm/tools"
 )
 
 // Common errors

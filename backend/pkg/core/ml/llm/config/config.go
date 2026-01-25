@@ -1,7 +1,7 @@
 package config
 
 import (
-	"blog-agent-go/backend/internal/core/ml/llm/models"
+	"backend/pkg/core/ml/llm/models"
 	"os"
 )
 

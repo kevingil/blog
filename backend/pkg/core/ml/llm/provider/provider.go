@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"blog-agent-go/backend/internal/core/ml/llm/message"
-	"blog-agent-go/backend/internal/core/ml/llm/models"
-	"blog-agent-go/backend/internal/core/ml/llm/tools"
+	"backend/pkg/core/ml/llm/message"
+	"backend/pkg/core/ml/llm/models"
+	"backend/pkg/core/ml/llm/tools"
 )
 
 type EventType string

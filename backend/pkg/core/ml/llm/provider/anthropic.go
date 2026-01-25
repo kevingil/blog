@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"blog-agent-go/backend/internal/core/ml/llm/logging"
-	"blog-agent-go/backend/internal/core/ml/llm/message"
-	"blog-agent-go/backend/internal/core/ml/llm/models"
-	toolsPkg "blog-agent-go/backend/internal/core/ml/llm/tools"
+	"backend/pkg/core/ml/llm/logging"
+	"backend/pkg/core/ml/llm/message"
+	"backend/pkg/core/ml/llm/models"
+	toolsPkg "backend/pkg/core/ml/llm/tools"
 
-	"blog-agent-go/backend/internal/core/ml/llm/config"
+	"backend/pkg/core/ml/llm/config"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/bedrock"
