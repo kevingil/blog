@@ -8,10 +8,10 @@ import (
 	"log"
 	"time"
 
-	"blog-agent-go/backend/internal/core/agent/metadata"
-	"blog-agent-go/backend/internal/database"
-	"blog-agent-go/backend/internal/errors"
-	"blog-agent-go/backend/internal/models"
+	"backend/pkg/core"
+	"backend/pkg/core/agent/metadata"
+	"backend/pkg/database"
+	"backend/pkg/models"
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
@@ -43,13 +43,13 @@ func (s *MessageService) SaveMessage(ctx context.Context, articleID uuid.UUID, r
 		// Validate metadata
 		if err := metadata.ValidateMetaData(metaData); err != nil {
 			log.Printf("[MessageService] ❌ Metadata validation failed: %v", err)
-			return nil, errors.NewValidationError(fmt.Sprintf("Invalid metadata: %v", err))
+			return nil, core.InvalidInputError(fmt.Sprintf("Invalid metadata: %v", err))
 		}
 
 		jsonBytes, err := json.Marshal(metaData)
 		if err != nil {
 			log.Printf("[MessageService] ❌ Failed to marshal metadata: %v", err)
-			return nil, errors.NewInternalError("Failed to marshal metadata")
+			return nil, core.InternalError("Failed to marshal metadata")
 		}
 		metaDataJSON = datatypes.JSON(jsonBytes)
 		log.Printf("[MessageService]    Metadata: %d bytes", len(jsonBytes))
@@ -83,7 +83,7 @@ func (s *MessageService) SaveMessage(ctx context.Context, articleID uuid.UUID, r
 	db := s.db.GetDB()
 	if err := db.Create(message).Error; err != nil {
 		log.Printf("[MessageService] ❌ Database INSERT failed: %v", err)
-		return nil, errors.NewInternalError("Failed to save message")
+		return nil, core.InternalError("Failed to save message")
 	}
 
 	log.Printf("[MessageService] ✅ Message saved successfully (ID: %s)", message.ID)
@@ -118,7 +118,7 @@ func (s *MessageService) GetConversationHistory(ctx context.Context, articleID u
 
 	if err != nil {
 		fmt.Printf("[MessageService] ❌ Database query failed: %v\n", err)
-		return nil, errors.NewInternalError("Failed to retrieve conversation history")
+		return nil, core.InternalError("Failed to retrieve conversation history")
 	}
 
 	// Reverse to get chronological order (oldest first for display)
@@ -174,13 +174,13 @@ func (s *MessageService) GetConversationHistory(ctx context.Context, articleID u
 func (s *MessageService) UpdateMessageMetadata(ctx context.Context, messageID uuid.UUID, metaData *metadata.MessageMetaData) error {
 	// Validate metadata
 	if err := metadata.ValidateMetaData(metaData); err != nil {
-		return errors.NewValidationError(fmt.Sprintf("Invalid metadata: %v", err))
+		return core.InvalidInputError(fmt.Sprintf("Invalid metadata: %v", err))
 	}
 
 	// Marshal to JSON
 	jsonBytes, err := json.Marshal(metaData)
 	if err != nil {
-		return errors.NewInternalError("Failed to marshal metadata")
+		return core.InternalError("Failed to marshal metadata")
 	}
 
 	db := s.db.GetDB()
@@ -189,11 +189,11 @@ func (s *MessageService) UpdateMessageMetadata(ctx context.Context, messageID uu
 		Update("meta_data", datatypes.JSON(jsonBytes))
 
 	if result.Error != nil {
-		return errors.NewInternalError("Failed to update message metadata")
+		return core.InternalError("Failed to update message metadata")
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.NewNotFoundError("Message")
+		return core.NotFoundError("Message")
 	}
 
 	return nil
@@ -207,26 +207,26 @@ func (s *MessageService) UpdateArtifactStatus(ctx context.Context, messageID uui
 	var message models.ChatMessage
 	if err := db.First(&message, messageID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return errors.NewNotFoundError("Message")
+			return core.NotFoundError("Message")
 		}
-		return errors.NewInternalError("Failed to retrieve message")
+		return core.InternalError("Failed to retrieve message")
 	}
 
 	// Parse current metadata
 	var metaData metadata.MessageMetaData
 	if len(message.MetaData) > 0 && string(message.MetaData) != "{}" {
 		if err := json.Unmarshal(message.MetaData, &metaData); err != nil {
-			return errors.NewInternalError("Failed to parse message metadata")
+			return core.InternalError("Failed to parse message metadata")
 		}
 	}
 
 	// Update artifact status
 	if metaData.Artifact == nil {
-		return errors.NewNotFoundError("Artifact")
+		return core.NotFoundError("Artifact")
 	}
 
 	if artifactID != "" && metaData.Artifact.ID != artifactID {
-		return errors.NewNotFoundError("Artifact")
+		return core.NotFoundError("Artifact")
 	}
 
 	metaData.Artifact.Status = status
@@ -246,9 +246,9 @@ func (s *MessageService) GetMessageByID(ctx context.Context, messageID uuid.UUID
 
 	if err := db.First(&message, messageID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("Message")
+			return nil, core.NotFoundError("Message")
 		}
-		return nil, errors.NewInternalError("Failed to retrieve message")
+		return nil, core.InternalError("Failed to retrieve message")
 	}
 
 	return &message, nil
@@ -265,7 +265,7 @@ func (s *MessageService) GetPendingArtifacts(ctx context.Context, articleID uuid
 		Find(&messages).Error
 
 	if err != nil {
-		return nil, errors.NewInternalError("Failed to retrieve pending artifacts")
+		return nil, core.InternalError("Failed to retrieve pending artifacts")
 	}
 
 	return messages, nil
@@ -287,7 +287,7 @@ func (s *MessageService) AcceptArtifact(ctx context.Context, messageID uuid.UUID
 	var metaData metadata.MessageMetaData
 	if len(message.MetaData) > 0 && string(message.MetaData) != "{}" {
 		if err := json.Unmarshal(message.MetaData, &metaData); err != nil {
-			return errors.NewInternalError("Failed to parse metadata")
+			return core.InternalError("Failed to parse metadata")
 		}
 	}
 
@@ -317,7 +317,7 @@ func (s *MessageService) RejectArtifact(ctx context.Context, messageID uuid.UUID
 	var metaData metadata.MessageMetaData
 	if len(message.MetaData) > 0 && string(message.MetaData) != "{}" {
 		if err := json.Unmarshal(message.MetaData, &metaData); err != nil {
-			return errors.NewInternalError("Failed to parse metadata")
+			return core.InternalError("Failed to parse metadata")
 		}
 	}
 
@@ -342,12 +342,12 @@ func (s *MessageService) GetArtifactContent(ctx context.Context, messageID uuid.
 	var metaData metadata.MessageMetaData
 	if len(message.MetaData) > 0 && string(message.MetaData) != "{}" {
 		if err := json.Unmarshal(message.MetaData, &metaData); err != nil {
-			return "", errors.NewInternalError("Failed to parse metadata")
+			return "", core.InternalError("Failed to parse metadata")
 		}
 	}
 
 	if metaData.Artifact == nil {
-		return "", errors.NewNotFoundError("Artifact")
+		return "", core.NotFoundError("Artifact")
 	}
 
 	return metaData.Artifact.Content, nil
@@ -364,12 +364,12 @@ func (s *MessageService) MarkArtifactAsApplied(ctx context.Context, messageID uu
 	var metaData metadata.MessageMetaData
 	if len(message.MetaData) > 0 && string(message.MetaData) != "{}" {
 		if err := json.Unmarshal(message.MetaData, &metaData); err != nil {
-			return errors.NewInternalError("Failed to parse metadata")
+			return core.InternalError("Failed to parse metadata")
 		}
 	}
 
 	if metaData.Artifact == nil {
-		return errors.NewNotFoundError("Artifact")
+		return core.NotFoundError("Artifact")
 	}
 
 	// Mark artifact as applied
