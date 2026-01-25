@@ -21,7 +21,7 @@ import { VITE_API_BASE_URL } from "@/services/constants";
 import { apiPost, isAuthError } from '@/services/authenticatedFetch';
 import '@/tiptap.css';
 
-import { Card } from "@/components/ui/card";
+// Card removed - no longer needed after toolbar simplification
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -82,7 +82,7 @@ import {
 import { Link } from '@tanstack/react-router';
 import { ArticleListItem, ArticleVersion, ArticleVersionListResponse, isPublished, hasDraftChanges } from '@/services/types';
 import { Badge } from '@/components/ui/badge';
-import { Globe, EyeOff, History } from 'lucide-react';
+import { Globe, EyeOff, History, Tag } from 'lucide-react';
 import { Dialog, DialogTitle, DialogContent, DialogTrigger, DialogDescription, DialogFooter, DialogHeader, DialogClose } from '@/components/ui/dialog';
 import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerClose } from '@/components/ui/drawer';
 import { SourcesManager } from './SourcesManager';
@@ -2087,8 +2087,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             </div>
 
             {/* Article Tools Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
-              {/* Sources Preview Section */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              {/* Sources Button */}
               <SourcesPreview
                 articleId={article?.article.id}
                 onOpenDrawer={() => setSourcesManagerOpen(true)}
@@ -2096,225 +2096,180 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 refreshTrigger={sourcesRefreshTrigger}
               />
 
-              {/* Tags Section */}
-              <div className="space-y-3">
-                <Drawer direction="right">
-                  <DrawerTrigger asChild>
-                    <Card className="p-3 h-32 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <div className="h-full flex flex-col">
-                        <div className="flex-1 space-y-1">
-                          {watchedTags && watchedTags.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {watchedTags.slice(0, 3).map((tag, idx) => (
-                                <span
-                                  key={idx}
-                                  className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200"
-                                >
-                                  {tag}
-                                </span>
-                              ))}
-                              {watchedTags.length > 3 && (
-                                <span className="text-xs text-muted-foreground">
-                                  +{watchedTags.length - 3} more
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="text-center text-muted-foreground">
-                              <span className="text-xs">Click to add tags</span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-2">
-                          {watchedTags?.length || 0} tag{(watchedTags?.length || 0) !== 1 ? 's' : ''}
-                        </div>
-                      </div>
-                    </Card>
-                  </DrawerTrigger>
+              {/* Tags Button */}
+              <Drawer direction="right">
+                <DrawerTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Tag className="h-4 w-4" />
+                    Tags
+                    {watchedTags && watchedTags.length > 0 && (
+                      <Badge variant="secondary" className="ml-1">
+                        {watchedTags.length}
+                      </Badge>
+                    )}
+                  </Button>
+                </DrawerTrigger>
 
-                  {/* Drawer content for tags editing */}
-                  <DrawerContent className="w-full sm:max-w-sm ml-auto">
-                    <DrawerHeader>
-                      <DrawerTitle>Edit Tags</DrawerTitle>
-                      <DrawerDescription>Add or remove tags for your article.</DrawerDescription>
-                    </DrawerHeader>
-                    <div className="space-y-4 px-4">
-                      <div className="space-y-2">
-                        <label className="block text-md font-medium leading-6 text-gray-900 dark:text-white">Article Tags</label>
-                        <ChipInput
-                          value={watchedTags}
-                          onChange={(tags) => setValue('tags', tags.map((tag: string) => tag.toUpperCase()))}
-                          placeholder="Type and press Enter to add tags..."
-                        />
-                        {errors.tags && <p className="text-red-500 text-sm">{errors.tags.message}</p>}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Tags help categorize your article and make it easier to find. Press Enter or comma to add a tag.
-                      </div>
+                {/* Drawer content for tags editing */}
+                <DrawerContent className="w-full sm:max-w-sm ml-auto">
+                  <DrawerHeader>
+                    <DrawerTitle>Edit Tags</DrawerTitle>
+                    <DrawerDescription>Add or remove tags for your article.</DrawerDescription>
+                  </DrawerHeader>
+                  <div className="space-y-4 px-4">
+                    <div className="space-y-2">
+                      <label className="block text-md font-medium leading-6 text-gray-900 dark:text-white">Article Tags</label>
+                      <ChipInput
+                        value={watchedTags}
+                        onChange={(tags) => setValue('tags', tags.map((tag: string) => tag.toUpperCase()))}
+                        placeholder="Type and press Enter to add tags..."
+                      />
+                      {errors.tags && <p className="text-red-500 text-sm">{errors.tags.message}</p>}
                     </div>
-                    <DrawerFooter>
-                      <DrawerClose asChild>
-                        <Button variant="outline" className="w-full">Done</Button>
-                      </DrawerClose>
-                    </DrawerFooter>
-                  </DrawerContent>
-                </Drawer>
-              </div>
+                    <div className="text-xs text-muted-foreground">
+                      Tags help categorize your article and make it easier to find. Press Enter or comma to add a tag.
+                    </div>
+                  </div>
+                  <DrawerFooter>
+                    <DrawerClose asChild>
+                      <Button variant="outline" className="w-full">Done</Button>
+                    </DrawerClose>
+                  </DrawerFooter>
+                </DrawerContent>
+              </Drawer>
 
-              {/* Publishing Settings Section */}
-              <div className="space-y-3">
-                <Drawer direction="right">
-                  <DrawerTrigger asChild>
-                    <Card className="p-3 h-32 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <div className="h-full flex flex-col justify-between">
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium">Status:</span>
-                            <Badge variant={isPublished(article?.article) ? "default" : "secondary"} className="text-xs">
-                              {isPublished(article?.article) ? "Published" : "Draft"}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium">Date:</span>
-                            <span className="text-xs text-muted-foreground">
-                              {article?.article.published_at ? format(new Date(article.article.published_at), 'MMM d') : 'Not set'}
-                            </span>
-                          </div>
-                          {isPublished(article?.article) && hasDraftChanges(article?.article) && (
-                            <div className="text-xs text-amber-600 dark:text-amber-400">
-                              Has unpublished changes
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Click to manage
-                        </div>
-                      </div>
-                    </Card>
-                  </DrawerTrigger>
+              {/* Publish Button */}
+              <Drawer direction="right">
+                <DrawerTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    {isPublished(article?.article) ? (
+                      <Globe className="h-4 w-4" />
+                    ) : (
+                      <EyeOff className="h-4 w-4" />
+                    )}
+                    {isPublished(article?.article) ? "Published" : "Draft"}
+                    {isPublished(article?.article) && hasDraftChanges(article?.article) && (
+                      <Badge variant="secondary" className="ml-1">*</Badge>
+                    )}
+                  </Button>
+                </DrawerTrigger>
 
-                  {/* Drawer content for publishing settings */}
-                  <DrawerContent className="w-full sm:max-w-sm ml-auto">
-                    <DrawerHeader>
-                      <DrawerTitle>Publishing Settings</DrawerTitle>
-                      <DrawerDescription>Manage article publication status.</DrawerDescription>
-                    </DrawerHeader>
-                    <div className="space-y-4 px-4">
-                      {/* Status Display */}
-                      <div className="flex items-center gap-2 mb-4">
-                        <Badge variant={isPublished(article?.article) ? "default" : "secondary"}>
-                          {isPublished(article?.article) ? "Published" : "Draft Only"}
-                        </Badge>
-                        {article?.article.published_at && (
-                          <span className="text-xs text-muted-foreground">
-                            Published {format(new Date(article.article.published_at), 'PPP')}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Show if draft differs from published */}
-                      {isPublished(article?.article) && hasDraftChanges(article?.article) && (
-                        <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded text-sm text-amber-800 dark:text-amber-200">
-                          Draft has unpublished changes
-                        </div>
+                {/* Drawer content for publishing settings */}
+                <DrawerContent className="w-full sm:max-w-sm ml-auto">
+                  <DrawerHeader>
+                    <DrawerTitle>Publishing Settings</DrawerTitle>
+                    <DrawerDescription>Manage article publication status.</DrawerDescription>
+                  </DrawerHeader>
+                  <div className="space-y-4 px-4">
+                    {/* Status Display */}
+                    <div className="flex items-center gap-2 mb-4">
+                      <Badge variant={isPublished(article?.article) ? "default" : "secondary"}>
+                        {isPublished(article?.article) ? "Published" : "Draft Only"}
+                      </Badge>
+                      {article?.article.published_at && (
+                        <span className="text-xs text-muted-foreground">
+                          Published {format(new Date(article.article.published_at), 'PPP')}
+                        </span>
                       )}
+                    </div>
 
-                      {/* Action Buttons */}
-                      <div className="space-y-2">
-                        {!isPublished(article?.article) ? (
+                    {/* Show if draft differs from published */}
+                    {isPublished(article?.article) && hasDraftChanges(article?.article) && (
+                      <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded text-sm text-amber-800 dark:text-amber-200">
+                        Draft has unpublished changes
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="space-y-2">
+                      {!isPublished(article?.article) ? (
+                        <Button 
+                          onClick={() => publishMutation.mutate()} 
+                          disabled={publishMutation.isPending || isNew}
+                          className="w-full"
+                        >
+                          <Globe className="mr-2 h-4 w-4" />
+                          {publishMutation.isPending ? 'Publishing...' : 'Publish'}
+                        </Button>
+                      ) : (
+                        <>
                           <Button 
                             onClick={() => publishMutation.mutate()} 
-                            disabled={publishMutation.isPending || isNew}
+                            variant="outline" 
+                            disabled={publishMutation.isPending}
                             className="w-full"
                           >
-                            <Globe className="mr-2 h-4 w-4" />
-                            {publishMutation.isPending ? 'Publishing...' : 'Publish'}
+                            <RefreshCw className={cn("mr-2 h-4 w-4", publishMutation.isPending && "animate-spin")} />
+                            {publishMutation.isPending ? 'Updating...' : 'Update Published'}
                           </Button>
-                        ) : (
-                          <>
-                            <Button 
-                              onClick={() => publishMutation.mutate()} 
-                              variant="outline" 
-                              disabled={publishMutation.isPending}
-                              className="w-full"
-                            >
-                              <RefreshCw className={cn("mr-2 h-4 w-4", publishMutation.isPending && "animate-spin")} />
-                              {publishMutation.isPending ? 'Updating...' : 'Update Published'}
-                            </Button>
-                            <Button 
-                              onClick={() => unpublishMutation.mutate()} 
-                              variant="destructive" 
-                              disabled={unpublishMutation.isPending}
-                              className="w-full"
-                            >
-                              <EyeOff className="mr-2 h-4 w-4" />
-                              {unpublishMutation.isPending ? 'Unpublishing...' : 'Unpublish'}
-                            </Button>
-                          </>
-                        )}
-                      </div>
-
-                      {isNew && (
-                        <p className="text-xs text-muted-foreground">
-                          Save the article first before publishing.
-                        </p>
+                          <Button 
+                            onClick={() => unpublishMutation.mutate()} 
+                            variant="destructive" 
+                            disabled={unpublishMutation.isPending}
+                            className="w-full"
+                          >
+                            <EyeOff className="mr-2 h-4 w-4" />
+                            {unpublishMutation.isPending ? 'Unpublishing...' : 'Unpublish'}
+                          </Button>
+                        </>
                       )}
                     </div>
-                    <DrawerFooter>
-                      <DrawerClose asChild>
-                        <Button variant="outline" className="w-full">Done</Button>
-                      </DrawerClose>
-                    </DrawerFooter>
-                  </DrawerContent>
-                </Drawer>
-              </div>
 
-              {/* Actions Section */}
-              <div className="space-y-3">
-                <Card className="p-3 h-32 space-y-2">
-                  {!isNew && (
-                    <>
-                      <Link
-                        to="/blog"
-                        params={{ slug: article?.article.slug || '' }}
-                        search={{ page: undefined, tag: undefined, search: undefined }}
-                        target="_blank"
-                        className="flex items-center gap-2 text-xs text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors p-1 rounded hover:bg-gray-50 dark:hover:bg-gray-800"
-                      >
-                        <ExternalLinkIcon className="w-3 h-3" />
-                        View Article
-                      </Link>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="w-full text-xs justify-start h-7"
-                        onClick={() => setShowVersions(true)}
-                      >
-                        <History className="w-3 h-3 mr-2 text-indigo-500" /> 
-                        Version History
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="w-full text-xs justify-start h-7"
-                        onClick={rewriteArticle}
-                        disabled={generatingRewrite}
-                      >
-                        <RefreshCw className={cn('w-3 h-3 mr-2 text-indigo-500', generatingRewrite && 'animate-spin')} /> 
-                        Regenerate
-                      </Button>
-                    </>
-                  )}
-                  {isNew && (
-                    <div className="text-xs text-muted-foreground text-center py-8">
-                      Save article to access actions
-                    </div>
-                  )}
-                </Card>
-              </div>
+                    {isNew && (
+                      <p className="text-xs text-muted-foreground">
+                        Save the article first before publishing.
+                      </p>
+                    )}
+                  </div>
+                  <DrawerFooter>
+                    <DrawerClose asChild>
+                      <Button variant="outline" className="w-full">Done</Button>
+                    </DrawerClose>
+                  </DrawerFooter>
+                </DrawerContent>
+              </Drawer>
 
+              {/* View Article Button */}
+              {!isNew && (
+                <Button variant="outline" size="sm" asChild>
+                  <Link
+                    to="/blog"
+                    params={{ slug: article?.article.slug || '' }}
+                    search={{ page: undefined, tag: undefined, search: undefined }}
+                    target="_blank"
+                  >
+                    <ExternalLinkIcon className="h-4 w-4" />
+                    View
+                  </Link>
+                </Button>
+              )}
+
+              {/* Version History Button */}
+              {!isNew && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowVersions(true)}
+                >
+                  <History className="h-4 w-4" />
+                  History
+                </Button>
+              )}
+
+              {/* Regenerate Button */}
+              {!isNew && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={rewriteArticle}
+                  disabled={generatingRewrite}
+                >
+                  <RefreshCw className={cn('h-4 w-4', generatingRewrite && 'animate-spin')} />
+                  Regenerate
+                </Button>
+              )}
             </div>
 
           <form className="">
