@@ -1,10 +1,10 @@
 package server
 
 import (
-	"blog-agent-go/backend/internal/core/chat"
-	"blog-agent-go/backend/internal/database"
-	"blog-agent-go/backend/internal/router"
-	"blog-agent-go/backend/internal/services"
+	"backend/pkg/api/router"
+	"backend/pkg/api/services"
+	"backend/pkg/core/chat"
+	"backend/pkg/database"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -35,6 +35,7 @@ func NewFiberServer(
 
 	// Register routes with dependencies
 	router.RegisterRoutes(server.App, router.RouteDeps{
+		DBService:           db,
 		AuthService:         authService,
 		BlogService:         blogService,
 		ProjectsService:     projectsService,

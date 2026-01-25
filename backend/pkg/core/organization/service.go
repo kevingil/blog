@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"blog-agent-go/backend/internal/core"
-	"blog-agent-go/backend/internal/core/auth"
+	"backend/pkg/core"
+	"backend/pkg/core/auth"
 
 	"github.com/google/uuid"
 )

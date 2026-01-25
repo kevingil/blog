@@ -4,7 +4,7 @@ import (
 	"context"
 	"math"
 
-	"blog-agent-go/backend/internal/core"
+	"backend/pkg/core"
 
 	"github.com/google/uuid"
 )
