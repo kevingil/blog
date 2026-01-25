@@ -399,6 +399,13 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 				ThinkingMessage: event.ThinkingMessage,
 				Iteration:       event.Iteration,
 			}
+		case agent.AgentEventTypeReasoningDelta:
+			asyncReq.ResponseChan <- StreamResponse{
+				RequestID:       asyncReq.ID,
+				Type:            StreamTypeReasoningDelta,
+				ThinkingContent: event.ReasoningDelta,
+				Iteration:       asyncReq.iteration,
+			}
 		case agent.AgentEventTypeContentDelta:
 			asyncReq.ResponseChan <- StreamResponse{
 				RequestID: asyncReq.ID,

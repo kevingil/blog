@@ -64,6 +64,7 @@ import {
   StepsContent, 
   StepsItem 
 } from "@/components/prompt-kit/steps";
+import { ReasoningStep } from "@/components/prompt-kit/chain-of-thought";
 import { cn } from '@/lib/utils';
 import { FileDiff, Wrench, BookOpen, FileSearch, PlusCircle, FileText, ImageIcon } from "lucide-react";
 import { 
@@ -227,6 +228,8 @@ type ChatMessage = {
     reason?: string;
   };
   created_at?: string;
+  // Streaming state
+  isReasoningStreaming?: boolean;
 };
 
 // === TipTap Diff Extension ================================================
@@ -1371,6 +1374,35 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 setThinkingMessage(msg.thinking_message || 'Thinking...');
                 break;
 
+              case 'reasoning_delta':
+                // Handle reasoning/extended thinking content from LLM
+                setIsThinking(true);
+                setThinkingMessage('Reasoning...');
+                if (msg.thinking_content) {
+                  setChatMessages((prev) => {
+                    const updated = [...prev];
+                    if (updated[assistantIndex]) {
+                      const currentMsg = updated[assistantIndex];
+                      const currentMetaData = currentMsg.meta_data || {};
+                      const currentThinking = currentMetaData.thinking || { content: '', visible: true };
+                      
+                      updated[assistantIndex] = {
+                        ...currentMsg,
+                        meta_data: {
+                          ...currentMetaData,
+                          thinking: {
+                            ...currentThinking,
+                            content: (currentThinking.content || '') + msg.thinking_content,
+                          },
+                        },
+                        isReasoningStreaming: true,
+                      };
+                    }
+                    return updated;
+                  });
+                }
+                break;
+
               case 'content_delta':
                 // Handle real-time content chunks
                 setIsThinking(false);
@@ -1380,7 +1412,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     if (updated[assistantIndex]) {
                       updated[assistantIndex] = {
                         ...updated[assistantIndex],
-                        content: (updated[assistantIndex].content || '') + msg.content
+                        content: (updated[assistantIndex].content || '') + msg.content,
+                        isReasoningStreaming: false, // Reasoning is complete when content starts
                       };
                     }
                     return updated;
@@ -2546,10 +2579,46 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 if (m.content === '__DIFF_ACTIONS__') {
                   return null;
                 }
+                
+                // Check if there's reasoning content to display
+                const thinkingContent = m.meta_data?.thinking?.content;
+                const isReasoningStreaming = m.isReasoningStreaming;
+                const hasReasoning = thinkingContent && thinkingContent.length > 0;
+                
+                // If only reasoning with no content, show reasoning
+                if (hasReasoning && (!m.content || m.content === '')) {
+                  return (
+                    <div key={i} className="w-full space-y-2">
+                      <ReasoningStep 
+                        content={thinkingContent}
+                        isStreaming={isReasoningStreaming}
+                        durationMs={m.meta_data?.thinking?.duration_ms}
+                        isLast={true}
+                      />
+                    </div>
+                  );
+                }
                   
                 // Regular assistant message
                 if (!m.content || m.content === '') {
                   return null; // Don't render empty messages
+                }
+                
+                // If there's reasoning AND content, show both
+                if (hasReasoning) {
+                  return (
+                    <div key={i} className="w-full space-y-2">
+                      <ReasoningStep 
+                        content={thinkingContent}
+                        isStreaming={false}
+                        durationMs={m.meta_data?.thinking?.duration_ms}
+                        isLast={false}
+                      />
+                      <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
+                        <Markdown>{m.content}</Markdown>
+                      </div>
+                    </div>
+                  );
                 }
                 
                 return (
