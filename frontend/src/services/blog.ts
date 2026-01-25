@@ -1,4 +1,4 @@
-import { ArticleListItem, ArticleData, RecommendedArticle  } from '@/services/types';
+import { ArticleListItem, ArticleData, RecommendedArticle, ArticleVersion, ArticleVersionListResponse } from '@/services/types';
 import { GetArticlesResponse } from '@/routes/dashboard/blog/index';
 import { VITE_API_BASE_URL } from '@/services/constants';
 import { apiGet, apiPost, apiPut, apiDelete, authenticatedFetch } from '@/services/authenticatedFetch';
@@ -27,8 +27,8 @@ export async function getArticles(
   // Debug: Log API response
   console.log('articlesPayload API response:', {
     totalArticles: data.articles.length,
-    drafts: data.articles.filter(a => a.article.is_draft).length,
-    published: data.articles.filter(a => !a.article.is_draft).length,
+    drafts: data.articles.filter(a => !a.article.published_at).length,
+    published: data.articles.filter(a => a.article.published_at).length,
     status
   });
   
@@ -101,22 +101,21 @@ export async function createArticle(article: {
   content: string;
   image_url?: string;
   tags: string[];
-  isDraft: boolean;
-  authorId: number;
+  publish: boolean;  // true = publish immediately, false = save as draft only
+  authorId: string;
 }): Promise<ArticleListItem> {
   // Protected endpoint - requires auth
   return apiPost<ArticleListItem>('/blog/articles', article);
 }
 
 export async function updateArticle(slug: string, article: {
-  title: string;
-  content: string;
-  image_url?: string;
+  title: string;       // Updates draft_title
+  content: string;     // Updates draft_content
+  image_url?: string;  // Updates draft_image_url
   tags: string[];
-  is_draft: boolean;
-  published_at: number | null;
 }): Promise<ArticleListItem> {
   // Protected endpoint - requires auth
+  // Updates always go to draft_* fields; use publishArticle() to publish
   return apiPost<ArticleListItem>(`/blog/articles/${slug}/update`, article);
 }
 
@@ -168,7 +167,7 @@ export async function getArticleData(slug: string): Promise<ArticleData | null> 
   }
 }
 
-export async function getRecommendedArticles(currentArticleId: number): Promise<RecommendedArticle[] | null> {
+export async function getRecommendedArticles(currentArticleId: string): Promise<RecommendedArticle[] | null> {
   // Public endpoint - skip auth
   return apiGet<RecommendedArticle[]>(`/blog/articles/${currentArticleId}/recommended`, { skipAuth: true });
 }
@@ -176,4 +175,46 @@ export async function getRecommendedArticles(currentArticleId: number): Promise<
 export async function deleteArticle(id: string): Promise<{ success: boolean }> {
   // Protected endpoint - requires auth
   return apiDelete<{ success: boolean }>(`/blog/articles/${id}`);
+}
+
+// Version management operations
+
+/**
+ * Publish the current draft - copies draft_* fields to published_* fields
+ */
+export async function publishArticle(slug: string): Promise<ArticleListItem> {
+  // Protected endpoint - requires auth
+  return apiPost<ArticleListItem>(`/blog/articles/${slug}/publish`);
+}
+
+/**
+ * Unpublish an article - clears published_* fields and published_at
+ */
+export async function unpublishArticle(slug: string): Promise<ArticleListItem> {
+  // Protected endpoint - requires auth
+  return apiPost<ArticleListItem>(`/blog/articles/${slug}/unpublish`);
+}
+
+/**
+ * List all versions for an article
+ */
+export async function listArticleVersions(slug: string): Promise<ArticleVersionListResponse> {
+  // Protected endpoint - requires auth
+  return apiGet<ArticleVersionListResponse>(`/blog/articles/${slug}/versions`);
+}
+
+/**
+ * Get a specific version by ID
+ */
+export async function getArticleVersion(versionId: string): Promise<ArticleVersion> {
+  // Protected endpoint - requires auth
+  return apiGet<ArticleVersion>(`/blog/articles/versions/${versionId}`);
+}
+
+/**
+ * Revert to a previous version - creates a new draft from that version
+ */
+export async function revertToVersion(slug: string, versionId: string): Promise<ArticleListItem> {
+  // Protected endpoint - requires auth
+  return apiPost<ArticleListItem>(`/blog/articles/${slug}/revert/${versionId}`);
 }

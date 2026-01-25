@@ -1,16 +1,74 @@
 export interface Article {
-  id: number;
-  image_url: string;
+  id: string;
   slug: string;
-  title: string;
-  content: string;
-  author: number;
+  author_id: string;
+  
+  // Draft content (always present)
+  draft_title: string;
+  draft_content: string;
+  draft_image_url: string;
+  
+  // Published content (null if unpublished)
+  published_title: string | null;
+  published_content: string | null;
+  published_image_url: string | null;
+  published_at: string | null;
+  
+  // Version pointers
+  current_draft_version_id: string | null;
+  current_published_version_id: string | null;
+  
+  // Metadata
+  image_generation_request_id?: string | null;
+  session_memory?: Record<string, any>;
   created_at: string;
   updated_at: string;
-  is_draft: boolean;
-  image_generation_request_id: string;
-  published_at?: string | null;
-  chat_history: string;
+}
+
+// Version history types
+export interface ArticleVersion {
+  id: string;
+  article_id: string;
+  version_number: number;
+  status: 'draft' | 'published';
+  title: string;
+  content: string;
+  image_url: string;
+  edited_by: string;
+  created_at: string;
+}
+
+export interface ArticleVersionListResponse {
+  versions: ArticleVersion[];
+  draft_count: number;
+  published_count: number;
+}
+
+// Helper functions for article display
+export function isPublished(article: Article | ArticleListItem['article'] | null | undefined): boolean {
+  return article?.published_at !== null && article?.published_at !== undefined;
+}
+
+export function getDisplayTitle(article: Article | ArticleListItem['article'], preferPublished = true): string {
+  if (preferPublished && article.published_title) return article.published_title;
+  return article.draft_title;
+}
+
+export function getDisplayContent(article: Article | ArticleListItem['article'], preferPublished = true): string {
+  if (preferPublished && article.published_content) return article.published_content;
+  return article.draft_content;
+}
+
+export function getDisplayImageUrl(article: Article | ArticleListItem['article'], preferPublished = true): string {
+  if (preferPublished && article.published_image_url) return article.published_image_url;
+  return article.draft_image_url;
+}
+
+export function hasDraftChanges(article: Article | ArticleListItem['article'] | null | undefined): boolean {
+  if (!article || !article.published_at) return false;
+  return article.draft_title !== article.published_title || 
+         article.draft_content !== article.published_content ||
+         article.draft_image_url !== article.published_image_url;
 }
 
 export interface ArticleChatHistoryMessage {
@@ -31,7 +89,7 @@ export interface Tag {
 }
 
 export interface ArticleTag {
-  article_id: number;
+  article_id: string;
   tag_id: number;
 }
 
@@ -102,20 +160,30 @@ export const ITEMS_PER_PAGE = 6;
 export type ArticleListItem = {
   article: {
     id: string;
-    title: string;
     slug: string;
-    content: string;
-    image_url: string;
+    author_id: string | null;
+    
+    // Draft content (always present)
+    draft_title: string;
+    draft_content: string;
+    draft_image_url: string;
+    
+    // Published content (null if unpublished)
+    published_title: string | null;
+    published_content: string | null;
+    published_image_url: string | null;
+    published_at: string | null;
+    
+    // Version pointers
+    current_draft_version_id: string | null;
+    current_published_version_id: string | null;
+    
+    // Metadata
     created_at: string;
     updated_at: string;
-    published_at: string | null;
-    is_draft: boolean;
     image_generation_request_id?: string | null;
-    author_id: string | null;
-    chat_history?: any | null;
     tag_ids?: number[];
     imagen_request_id?: string | null;
-    embedding?: any | null;
     session_memory?: Record<string, any>;
   };
   author: {
@@ -134,20 +202,20 @@ export type ArticleData = {
   article: Article;
   tags: TagData[] | null;
   author: {
-    id: number;
+    id: string;
     name: string;
   };
 }
 
 export type TagData = {
-  article_id: number;
+  article_id: string;
   tag_id: number;
   tag_name: string | null;
 }
 
 export type RecommendedArticle = {
-  id: number;
-  title: string;
+  id: string;
+  title: string; // Backend returns the appropriate title (published if available)
   slug: string;
   image_url: string | null;
   published_at: string | null;
@@ -156,15 +224,17 @@ export type RecommendedArticle = {
 }
 
 export type ArticleRow = {
-  id: number;
-  title: string | null;
-  content: string | null;
-  created_at: string;
-  published_at: string | null;
-  is_draft: boolean;
+  id: string;
   slug: string | null;
+  draft_title: string | null;
+  draft_content: string | null;
+  draft_image_url: string | null;
+  published_title: string | null;
+  published_content: string | null;
+  published_image_url: string | null;
+  published_at: string | null;
+  created_at: string;
   tags: string[];
-  image_url: string | null;
 }
 
 export interface ArticleSource {

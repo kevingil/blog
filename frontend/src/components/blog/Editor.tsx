@@ -73,11 +73,16 @@ import {
   generateArticleImage,
   getImageGeneration,
   getImageGenerationStatus,
-  updateArticleWithContext
+  updateArticleWithContext,
+  publishArticle,
+  unpublishArticle,
+  listArticleVersions,
+  revertToVersion
 } from '@/services/blog';
 import { Link } from '@tanstack/react-router';
-import { ArticleListItem } from '@/services/types';
-import { Switch } from '@/components/ui/switch';
+import { ArticleListItem, ArticleVersion, ArticleVersionListResponse, isPublished, hasDraftChanges } from '@/services/types';
+import { Badge } from '@/components/ui/badge';
+import { Globe, EyeOff, History } from 'lucide-react';
 import { Dialog, DialogTitle, DialogContent, DialogTrigger, DialogDescription, DialogFooter, DialogHeader, DialogClose } from '@/components/ui/dialog';
 import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerClose } from '@/components/ui/drawer';
 import { SourcesManager } from './SourcesManager';
@@ -137,7 +142,7 @@ const articleSchema = z.object({
   content: z.string().min(1, 'Content is required'),
   image_url: z.union([z.string().url(), z.literal('')]).optional(),
   tags: z.array(z.string()),
-  isDraft: z.boolean(),
+  // Note: isDraft removed - publish/unpublish is now a separate action
 });
 
 type ArticleFormData = z.infer<typeof articleSchema>;
@@ -532,8 +537,8 @@ export function ImageLoader({ article, newImageGenerationRequestId, stagedImageU
 
     if (stagedImageUrl !== undefined) {
       setImageUrl(stagedImageUrl);
-    } else if (article && article.article.image_url) {
-      setImageUrl(article.article.image_url);
+    } else if (article && article.article.draft_image_url) {
+      setImageUrl(article.article.draft_image_url);
     }
   }, [article, stagedImageUrl, newImageGenerationRequestId]);
 
@@ -544,7 +549,7 @@ export function ImageLoader({ article, newImageGenerationRequestId, stagedImageU
   if (imageUrl) {
     return (
       <div className='flex items-center justify-center'>
-        <img className='rounded-md aspect-video object-cover' src={imageUrl} alt={article.article.title || ''} width={'100%'} />
+        <img className='rounded-md aspect-video object-cover' src={imageUrl} alt={article.article.draft_title || ''} width={'100%'} />
       </div>
     )
   }
@@ -648,8 +653,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       content: string;
       image_url?: string;
       tags: string[];
-      isDraft: boolean;
-      authorId: number;
+      publish: boolean;
+      authorId: string;
     }) => createArticle(data),
     onSuccess: () => {
       toast({ title: "Success", description: "Article created successfully." });
@@ -662,7 +667,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   });
 
-  // Mutation for updating existing articles
+  // Mutation for updating existing articles (saves to draft_* fields)
   const updateArticleMutation = useMutation({
     mutationFn: (data: {
       slug: string;
@@ -671,13 +676,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         content: string;
         image_url?: string;
         tags: string[];
-        is_draft: boolean;
-        published_at: number | null;
       };
       returnToDashboard?: boolean;
     }) => updateArticle(data.slug, data.updateData),
     onSuccess: (response, variables) => {
-      toast({ title: "Success", description: "Article updated successfully." });
+      toast({ title: "Success", description: "Draft saved successfully." });
       
       const newSlug = response?.article?.slug;
       const oldSlug = variables.slug;
@@ -729,6 +732,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         }
       );
       
+      // Invalidate version history cache since we created a new draft version
+      queryClient.invalidateQueries({ queryKey: ['article-versions', oldSlug] });
+      
       if (variables.returnToDashboard) {
         navigate({ to: '/dashboard/blog' });
       } else {
@@ -738,12 +744,86 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         setValue('content', data.content);
         setValue('image_url', data.image_url || '');
         setValue('tags', data.tags);
-        setValue('isDraft', data.is_draft);
       }
     },
     onError: (error) => {
       console.error('Error updating article:', error);
-      toast({ title: "Error", description: "Failed to update article. Please try again.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to save draft. Please try again.", variant: "destructive" });
+    }
+  });
+
+  // Mutation for publishing an article (copies draft to published)
+  const publishMutation = useMutation({
+    mutationFn: () => publishArticle(blogSlug as string),
+    onSuccess: (response) => {
+      toast({ title: "Success", description: "Article published successfully." });
+      queryClient.setQueryData(['article', blogSlug], response);
+      queryClient.invalidateQueries({ queryKey: ['articles'] });
+      queryClient.invalidateQueries({ queryKey: ['article-versions', blogSlug] });
+    },
+    onError: (error) => {
+      console.error('Error publishing article:', error);
+      toast({ title: "Error", description: "Failed to publish article. Please try again.", variant: "destructive" });
+    }
+  });
+
+  // Mutation for unpublishing an article (removes from public view)
+  const unpublishMutation = useMutation({
+    mutationFn: () => unpublishArticle(blogSlug as string),
+    onSuccess: (response) => {
+      toast({ title: "Success", description: "Article unpublished successfully." });
+      queryClient.setQueryData(['article', blogSlug], response);
+      queryClient.invalidateQueries({ queryKey: ['articles'] });
+      queryClient.invalidateQueries({ queryKey: ['article-versions', blogSlug] });
+    },
+    onError: (error) => {
+      console.error('Error unpublishing article:', error);
+      toast({ title: "Error", description: "Failed to unpublish article. Please try again.", variant: "destructive" });
+    }
+  });
+
+  // State for version history
+  const [showVersions, setShowVersions] = useState(false);
+  const [selectedVersion, setSelectedVersion] = useState<ArticleVersion | null>(null);
+
+  // Query for fetching version history
+  const { data: versionsData, isLoading: versionsLoading } = useQuery({
+    queryKey: ['article-versions', blogSlug],
+    queryFn: () => listArticleVersions(blogSlug as string),
+    enabled: !!blogSlug && !isNew && showVersions,
+  });
+
+  // Mutation for reverting to a previous version
+  const revertMutation = useMutation({
+    mutationFn: (versionId: string) => revertToVersion(blogSlug as string, versionId),
+    onSuccess: (response) => {
+      toast({ title: "Success", description: "Reverted to previous version." });
+      queryClient.setQueryData(['article', blogSlug], response);
+      queryClient.invalidateQueries({ queryKey: ['articles'] });
+      queryClient.invalidateQueries({ queryKey: ['article-versions', blogSlug] });
+      
+      // Reset form with reverted content
+      const tagNames = response.tags ? response.tags
+        .map((tag: any) => tag?.name?.toUpperCase())
+        .filter((name: string | undefined) => !!name && name !== '') : [];
+      reset({
+        title: response.article.draft_title,
+        content: response.article.draft_content,
+        image_url: response.article.draft_image_url || '',
+        tags: tagNames,
+      });
+      
+      // Sync editor content
+      if (editor) {
+        editor.commands.setContent(response.article.draft_content || '');
+      }
+      
+      setSelectedVersion(null);
+      setShowVersions(false);
+    },
+    onError: (error) => {
+      console.error('Error reverting to version:', error);
+      toast({ title: "Error", description: "Failed to revert to version. Please try again.", variant: "destructive" });
     }
   });
 
@@ -754,13 +834,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       content: '',
       image_url: '',
       tags: [],
-      isDraft: false,
     }
   });
 
   // Watch only the specific fields that need reactive UI updates (NOT content - that causes re-renders on every keystroke)
   const watchedTags = useWatch({ control, name: 'tags' });
-  const watchedIsDraft = useWatch({ control, name: 'isDraft' });
 
   const [imagePrompt, setImagePrompt] = useState<string | null>(DEFAULT_IMAGE_PROMPT[Math.floor(Math.random() * DEFAULT_IMAGE_PROMPT.length)]);
 
@@ -873,7 +951,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   }, [stagedImageUrl, setValue]);
 
-  // Populate form when article data is loaded
+  // Populate form when article data is loaded (always load draft_* fields for editing)
   useEffect(() => {
     if (article && !isNew) {
       // Extract tag names from the server response format
@@ -881,19 +959,18 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         .map((tag: any) => tag?.name?.toUpperCase())
         .filter((name: string | undefined) => !!name && name !== '') : [];
       const newValues = {
-        title: article.article.title || '',
-        content: article.article.content || '',
-        image_url: article.article.image_url || '',
+        title: article.article.draft_title || '',
+        content: article.article.draft_content || '',
+        image_url: article.article.draft_image_url || '',
         tags: tagNames,
-        isDraft: article.article.is_draft,
       } as ArticleFormData;
       reset(newValues);
       
       // Initialize image versions if there's an existing image
-      if (article.article.image_url) {
-        setImageVersions([{ url: article.article.image_url, timestamp: Date.now() }]);
+      if (article.article.draft_image_url) {
+        setImageVersions([{ url: article.article.draft_image_url, timestamp: Date.now() }]);
         setCurrentVersionIndex(0);
-        setPreviewImageUrl(article.article.image_url);
+        setPreviewImageUrl(article.article.draft_image_url);
       } else {
         setImageVersions([]);
         setCurrentVersionIndex(-1);
@@ -910,7 +987,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         content: '',
         image_url: '',
         tags: [],
-        isDraft: false,
       };
       reset(blank);
       setImageVersions([]);
@@ -1028,30 +1104,24 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     const finalImageUrl = stagedImageUrl !== undefined ? stagedImageUrl : data.image_url;
 
     if (isNew) {
+      // New articles are created as drafts by default
+      // Use publishArticle() separately to publish
       createArticleMutation.mutate({
         title: data.title,
         content: data.content,
         image_url: finalImageUrl || undefined,
         tags: data.tags,
-        isDraft: data.isDraft,
-        authorId: user.id,
+        publish: false, // Save as draft, publish is a separate action
+        authorId: String(user.id),
       });
-    } else {        
+    } else {
+      // Updates always go to draft_* fields
+      // Use publishArticle() separately to publish
       const updateData = {
         title: data.title,
         content: data.content, // HTML content from Tiptap editor
         image_url: finalImageUrl || undefined,
         tags: data.tags,
-        is_draft: data.isDraft,
-        published_at: (() => {
-          if (data.isDraft) return null;
-          if (article?.article.published_at && article.article.published_at !== '') {
-            return typeof article.article.published_at === 'string'
-              ? new Date(article.article.published_at).getTime()
-              : article.article.published_at;
-          }
-          return Date.now();
-        })(),
       };
       
       updateArticleMutation.mutate({
@@ -1753,7 +1823,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         setStagedImageUrl={setStagedImageUrl}
                       />
                       </div>
-                      {(!stagedImageUrl && !article?.article.image_url) && (
+                      {(!stagedImageUrl && !article?.article.draft_image_url) && (
                         <div className="text-center">
                           <UploadIcon className="w-6 h-6 mx-auto mb-1 text-muted-foreground" />
                           <span className="text-xs text-muted-foreground">Click to add image</span>
@@ -1899,7 +1969,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                               onClick={async (e) => {
                                 setGeneratingImage(true);
                                 e.preventDefault();
-                                const result = await generateArticleImage(article?.article.title || '', article?.article.id || '');
+                                const result = await generateArticleImage(article?.article.draft_title || '', article?.article.id || '');
                                 if (result.success) {
                                   setNewImageGenerationRequestId(result.generationRequestId);
                                   // Add to versions when image is generated
@@ -1907,7 +1977,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                     setTimeout(async () => {
                                       const status = await getImageGenerationStatus(result.generationRequestId);
                                       if (status.outputUrl) {
-                                        addImageVersion(status.outputUrl, article?.article.title || '');
+                                        addImageVersion(status.outputUrl, article?.article.draft_title || '');
                                       }
                                     }, 3000);
                                   }
@@ -2064,9 +2134,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-medium">Status:</span>
-                            <span className={cn("text-xs font-medium", watchedIsDraft ? "text-orange-600" : "text-green-600")}>
-                              {watchedIsDraft ? "Draft" : "Published"}
-                            </span>
+                            <Badge variant={isPublished(article?.article) ? "default" : "secondary"} className="text-xs">
+                              {isPublished(article?.article) ? "Published" : "Draft"}
+                            </Badge>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-medium">Date:</span>
@@ -2074,9 +2144,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                               {article?.article.published_at ? format(new Date(article.article.published_at), 'MMM d') : 'Not set'}
                             </span>
                           </div>
+                          {isPublished(article?.article) && hasDraftChanges(article?.article) && (
+                            <div className="text-xs text-amber-600 dark:text-amber-400">
+                              Has unpublished changes
+                            </div>
+                          )}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          Click to edit settings
+                          Click to manage
                         </div>
                       </div>
                     </Card>
@@ -2086,56 +2161,68 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   <DrawerContent className="w-full sm:max-w-sm ml-auto">
                     <DrawerHeader>
                       <DrawerTitle>Publishing Settings</DrawerTitle>
-                      <DrawerDescription>Configure publication status and date.</DrawerDescription>
+                      <DrawerDescription>Manage article publication status.</DrawerDescription>
                     </DrawerHeader>
                     <div className="space-y-4 px-4">
-                      {/* Publication Status */}
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <label htmlFor="isDraft" className="text-sm font-medium">Publication Status</label>
-                          <div className="flex items-center gap-2">
-                            <span className={cn("text-sm", watchedIsDraft ? "text-muted-foreground" : "text-green-600")}>
-                              {watchedIsDraft ? "Draft" : "Published"}
-                            </span>
-                            <Switch
-                              id="isDraft"
-                              checked={!watchedIsDraft}
-                              onCheckedChange={(checked) => {
-                                setValue('isDraft', !checked);
-                              }}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Published Date */}
-                        <div className="space-y-2">
-                          <label htmlFor="publishedAt" className="text-sm font-medium">Publication Date</label>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant={"outline"}
-                                className={cn(
-                                  'w-full justify-start text-left font-normal',
-                                  !article?.article.published_at && 'text-muted-foreground'
-                                )}
-                              >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {article?.article.published_at ? format(new Date(article.article.published_at), 'PPP') : 'Pick a date'}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                              <Calendar
-                                mode="single"
-                                selected={article?.article.published_at ? new Date(article.article.published_at) : undefined}
-                                onSelect={() => {
-                                  /* Not a form field; selection handled elsewhere if needed */
-                                }}
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
-                        </div>
+                      {/* Status Display */}
+                      <div className="flex items-center gap-2 mb-4">
+                        <Badge variant={isPublished(article?.article) ? "default" : "secondary"}>
+                          {isPublished(article?.article) ? "Published" : "Draft Only"}
+                        </Badge>
+                        {article?.article.published_at && (
+                          <span className="text-xs text-muted-foreground">
+                            Published {format(new Date(article.article.published_at), 'PPP')}
+                          </span>
+                        )}
                       </div>
+
+                      {/* Show if draft differs from published */}
+                      {isPublished(article?.article) && hasDraftChanges(article?.article) && (
+                        <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded text-sm text-amber-800 dark:text-amber-200">
+                          Draft has unpublished changes
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div className="space-y-2">
+                        {!isPublished(article?.article) ? (
+                          <Button 
+                            onClick={() => publishMutation.mutate()} 
+                            disabled={publishMutation.isPending || isNew}
+                            className="w-full"
+                          >
+                            <Globe className="mr-2 h-4 w-4" />
+                            {publishMutation.isPending ? 'Publishing...' : 'Publish'}
+                          </Button>
+                        ) : (
+                          <>
+                            <Button 
+                              onClick={() => publishMutation.mutate()} 
+                              variant="outline" 
+                              disabled={publishMutation.isPending}
+                              className="w-full"
+                            >
+                              <RefreshCw className={cn("mr-2 h-4 w-4", publishMutation.isPending && "animate-spin")} />
+                              {publishMutation.isPending ? 'Updating...' : 'Update Published'}
+                            </Button>
+                            <Button 
+                              onClick={() => unpublishMutation.mutate()} 
+                              variant="destructive" 
+                              disabled={unpublishMutation.isPending}
+                              className="w-full"
+                            >
+                              <EyeOff className="mr-2 h-4 w-4" />
+                              {unpublishMutation.isPending ? 'Unpublishing...' : 'Unpublish'}
+                            </Button>
+                          </>
+                        )}
+                      </div>
+
+                      {isNew && (
+                        <p className="text-xs text-muted-foreground">
+                          Save the article first before publishing.
+                        </p>
+                      )}
                     </div>
                     <DrawerFooter>
                       <DrawerClose asChild>
@@ -2161,6 +2248,16 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         <ExternalLinkIcon className="w-3 h-3" />
                         View Article
                       </Link>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="w-full text-xs justify-start h-7"
+                        onClick={() => setShowVersions(true)}
+                      >
+                        <History className="w-3 h-3 mr-2 text-indigo-500" /> 
+                        Version History
+                      </Button>
                       <Button
                         type="button"
                         variant="ghost"
@@ -2617,6 +2714,128 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           onOpenChange={setSourcesManagerOpen}
         />
       )}
+
+      {/* Version History Drawer */}
+      <Drawer open={showVersions} onOpenChange={setShowVersions} direction="right">
+        <DrawerContent className="w-full sm:max-w-md ml-auto h-full">
+          <DrawerHeader>
+            <DrawerTitle>Version History</DrawerTitle>
+            <DrawerDescription>
+              {versionsData && (
+                <span>{versionsData.draft_count} drafts, {versionsData.published_count} published</span>
+              )}
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="px-4 flex-1 overflow-y-auto">
+            {versionsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : versionsData?.versions.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8">
+                No versions yet. Save the article to create versions.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {versionsData?.versions.map((version) => (
+                  <div 
+                    key={version.id} 
+                    className="flex items-center justify-between py-3 px-3 border rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">v{version.version_number}</span>
+                        <Badge variant={version.status === 'published' ? 'default' : 'secondary'} className="text-xs">
+                          {version.status}
+                        </Badge>
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate mt-1">
+                        {version.title}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {format(new Date(version.created_at), 'PPP p')}
+                      </div>
+                    </div>
+                    <div className="flex gap-1 ml-2">
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        onClick={() => setSelectedVersion(version)}
+                        className="h-7 text-xs"
+                      >
+                        View
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => revertMutation.mutate(version.id)}
+                        disabled={revertMutation.isPending}
+                        className="h-7 text-xs"
+                      >
+                        {revertMutation.isPending ? '...' : 'Revert'}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DrawerFooter>
+            <DrawerClose asChild>
+              <Button variant="outline" className="w-full">Close</Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
+      {/* Version Preview Dialog */}
+      <Dialog open={!!selectedVersion} onOpenChange={(open) => !open && setSelectedVersion(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Version {selectedVersion?.version_number}</DialogTitle>
+            <DialogDescription>
+              <Badge variant={selectedVersion?.status === 'published' ? 'default' : 'secondary'} className="mr-2">
+                {selectedVersion?.status}
+              </Badge>
+              {selectedVersion && format(new Date(selectedVersion.created_at), 'PPP p')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 flex-1 overflow-y-auto">
+            <div>
+              <h4 className="font-medium mb-1 text-sm">Title</h4>
+              <p className="text-sm text-muted-foreground">{selectedVersion?.title}</p>
+            </div>
+            <div>
+              <h4 className="font-medium mb-1 text-sm">Content Preview</h4>
+              <div 
+                className="prose prose-sm dark:prose-invert max-h-64 overflow-y-auto border rounded p-3 text-sm"
+                dangerouslySetInnerHTML={{ __html: selectedVersion?.content || '' }} 
+              />
+            </div>
+            {selectedVersion?.image_url && (
+              <div>
+                <h4 className="font-medium mb-1 text-sm">Image</h4>
+                <img 
+                  src={selectedVersion.image_url} 
+                  alt="Version image" 
+                  className="max-h-32 rounded border"
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setSelectedVersion(null)}>
+              Close
+            </Button>
+            <Button 
+              onClick={() => selectedVersion && revertMutation.mutate(selectedVersion.id)}
+              disabled={revertMutation.isPending}
+            >
+              {revertMutation.isPending ? 'Reverting...' : 'Revert to This Version'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

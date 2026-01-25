@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Link, useLocation, useNavigate } from "@tanstack/react-router"
 import { Badge } from "@/components/ui/badge"
-import { ArticleListItem } from "@/services/types"
+import { ArticleListItem, isPublished } from "@/services/types"
 import { useEffect, useRef } from "react"
 import { FetchNextPageOptions, InfiniteQueryObserverResult, InfiniteData, useQueryClient } from "@tanstack/react-query"
 import { GetArticlesResponse } from "@/routes/dashboard/blog/index"
@@ -139,16 +139,16 @@ export function NavDocuments({
                       }}
                     >
                       <div className="flex items-center gap-2 w-full">
-                        <span className="text-sm font-medium truncate flex-1">{articleItem.article.title}</span>
+                        <span className="text-sm font-medium truncate flex-1">{articleItem.article.draft_title}</span>
                         <Badge 
                           className={`text-[0.6rem] ${
-                            articleItem.article.is_draft 
-                              ? "bg-indigo-50 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300" 
-                              : "bg-green-50 dark:bg-green-900 text-green-700 dark:text-green-300"
+                            isPublished(articleItem.article) 
+                              ? "bg-green-50 dark:bg-green-900 text-green-700 dark:text-green-300"
+                              : "bg-indigo-50 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300" 
                           }`} 
                           variant="outline"
                         >
-                          {articleItem.article.is_draft ? 'Draft' : 'Published'}
+                          {isPublished(articleItem.article) ? 'Published' : 'Draft'}
                         </Badge>
                       </div>
                       <span className="text-xs text-muted-foreground">
@@ -197,7 +197,7 @@ export function NavDocuments({
                           <AlertDialogHeader>
                             <AlertDialogTitle>Delete Article?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Are you sure you want to delete the article <b>{articleItem.article.title}</b>? This action cannot be undone.
+                              Are you sure you want to delete the article <b>{articleItem.article.draft_title}</b>? This action cannot be undone.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
