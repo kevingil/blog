@@ -1094,6 +1094,27 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   }, [chatMessages]);
 
+  // Keyboard shortcut: Cmd+S (Mac) or Ctrl+S (Windows/Linux) to save
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        // Don't save if already saving
+        if (createArticleMutation.isPending || updateArticleMutation.isPending) {
+          return;
+        }
+        // Reject pending diff changes before saving
+        if (diffing) {
+          rejectDiff();
+        }
+        handleSubmit((data) => onSubmit(data, false))();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [diffing, rejectDiff, handleSubmit, createArticleMutation.isPending, updateArticleMutation.isPending]);
+
   const onSubmit = async (data: ArticleFormData, returnToDashboard: boolean = true) => {
     if (!user) {
       toast({ title: "Error", description: "You must be logged in to edit an article." });
