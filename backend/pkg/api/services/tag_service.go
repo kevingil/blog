@@ -1,8 +1,8 @@
 package services
 
 import (
-	"blog-agent-go/backend/internal/database"
-	"blog-agent-go/backend/internal/models"
+	"backend/pkg/database"
+	"backend/pkg/models"
 	"fmt"
 	"strings"
 

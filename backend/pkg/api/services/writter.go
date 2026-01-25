@@ -6,9 +6,9 @@ import (
 	"log"
 	"os"
 
-	"blog-agent-go/backend/internal/core/agent/prompts"
-	"blog-agent-go/backend/internal/core/ml"
-	"blog-agent-go/backend/internal/models"
+	"backend/pkg/core/agent/prompts"
+	"backend/pkg/core/ml"
+	"backend/pkg/models"
 
 	"github.com/google/uuid"
 	openai "github.com/openai/openai-go"

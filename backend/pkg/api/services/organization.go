@@ -1,9 +1,9 @@
 package services
 
 import (
-	"blog-agent-go/backend/internal/database"
-	"blog-agent-go/backend/internal/errors"
-	"blog-agent-go/backend/internal/models"
+	"backend/pkg/database"
+	"backend/pkg/core"
+	"backend/pkg/models"
 	"encoding/json"
 	"regexp"
 	"strings"
@@ -72,14 +72,14 @@ func (s *OrganizationService) CreateOrganization(req OrganizationCreateRequest) 
 	// Check if slug already exists
 	var existing models.Organization
 	if err := db.Where("slug = ?", slug).First(&existing).Error; err == nil {
-		return nil, errors.NewAlreadyExistsError("Organization with this slug")
+		return nil, core.AlreadyExistsError("Organization with this slug")
 	}
 
 	var socialLinksJSON datatypes.JSON
 	if req.SocialLinks != nil {
 		data, err := json.Marshal(*req.SocialLinks)
 		if err != nil {
-			return nil, errors.NewInternalError("Failed to marshal social_links")
+			return nil, core.InternalError("Failed to marshal social_links")
 		}
 		socialLinksJSON = datatypes.JSON(data)
 	} else {
@@ -98,7 +98,7 @@ func (s *OrganizationService) CreateOrganization(req OrganizationCreateRequest) 
 	}
 
 	if err := db.Create(&org).Error; err != nil {
-		return nil, errors.NewInternalError("Failed to create organization")
+		return nil, core.InternalError("Failed to create organization")
 	}
 
 	return s.toResponse(&org), nil
@@ -111,9 +111,9 @@ func (s *OrganizationService) GetOrganizationByID(id uuid.UUID) (*OrganizationRe
 	var org models.Organization
 	if err := db.First(&org, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("Organization")
+			return nil, core.NotFoundError("Organization")
 		}
-		return nil, errors.NewInternalError("Failed to fetch organization")
+		return nil, core.InternalError("Failed to fetch organization")
 	}
 
 	return s.toResponse(&org), nil
@@ -126,9 +126,9 @@ func (s *OrganizationService) GetOrganizationBySlug(slug string) (*OrganizationR
 	var org models.Organization
 	if err := db.First(&org, "slug = ?", slug).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("Organization")
+			return nil, core.NotFoundError("Organization")
 		}
-		return nil, errors.NewInternalError("Failed to fetch organization")
+		return nil, core.InternalError("Failed to fetch organization")
 	}
 
 	return s.toResponse(&org), nil
@@ -140,7 +140,7 @@ func (s *OrganizationService) ListOrganizations() ([]OrganizationResponse, error
 
 	var orgs []models.Organization
 	if err := db.Order("name ASC").Find(&orgs).Error; err != nil {
-		return nil, errors.NewInternalError("Failed to fetch organizations")
+		return nil, core.InternalError("Failed to fetch organizations")
 	}
 
 	result := make([]OrganizationResponse, len(orgs))
@@ -158,9 +158,9 @@ func (s *OrganizationService) UpdateOrganization(id uuid.UUID, req OrganizationU
 	var org models.Organization
 	if err := db.First(&org, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("Organization")
+			return nil, core.NotFoundError("Organization")
 		}
-		return nil, errors.NewInternalError("Failed to fetch organization")
+		return nil, core.InternalError("Failed to fetch organization")
 	}
 
 	updates := make(map[string]interface{})
@@ -172,7 +172,7 @@ func (s *OrganizationService) UpdateOrganization(id uuid.UUID, req OrganizationU
 		// Check if new slug is unique
 		var existing models.Organization
 		if err := db.Where("slug = ? AND id != ?", *req.Slug, id).First(&existing).Error; err == nil {
-			return nil, errors.NewAlreadyExistsError("Organization with this slug")
+			return nil, core.AlreadyExistsError("Organization with this slug")
 		}
 		updates["slug"] = *req.Slug
 	}
@@ -194,20 +194,20 @@ func (s *OrganizationService) UpdateOrganization(id uuid.UUID, req OrganizationU
 	if req.SocialLinks != nil {
 		data, err := json.Marshal(*req.SocialLinks)
 		if err != nil {
-			return nil, errors.NewInternalError("Failed to marshal social_links")
+			return nil, core.InternalError("Failed to marshal social_links")
 		}
 		updates["social_links"] = datatypes.JSON(data)
 	}
 
 	if len(updates) > 0 {
 		if err := db.Model(&org).Updates(updates).Error; err != nil {
-			return nil, errors.NewInternalError("Failed to update organization")
+			return nil, core.InternalError("Failed to update organization")
 		}
 	}
 
 	// Reload the organization
 	if err := db.First(&org, "id = ?", id).Error; err != nil {
-		return nil, errors.NewInternalError("Failed to reload organization")
+		return nil, core.InternalError("Failed to reload organization")
 	}
 
 	return s.toResponse(&org), nil
@@ -219,11 +219,11 @@ func (s *OrganizationService) DeleteOrganization(id uuid.UUID) error {
 
 	result := db.Delete(&models.Organization{}, "id = ?", id)
 	if result.Error != nil {
-		return errors.NewInternalError("Failed to delete organization")
+		return core.InternalError("Failed to delete organization")
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.NewNotFoundError("Organization")
+		return core.NotFoundError("Organization")
 	}
 
 	return nil
@@ -237,19 +237,19 @@ func (s *OrganizationService) JoinOrganization(accountID uuid.UUID, orgID uuid.U
 	var org models.Organization
 	if err := db.First(&org, "id = ?", orgID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return errors.NewNotFoundError("Organization")
+			return core.NotFoundError("Organization")
 		}
-		return errors.NewInternalError("Failed to fetch organization")
+		return core.InternalError("Failed to fetch organization")
 	}
 
 	// Update account
 	result := db.Model(&models.Account{}).Where("id = ?", accountID).Update("organization_id", orgID)
 	if result.Error != nil {
-		return errors.NewInternalError("Failed to join organization")
+		return core.InternalError("Failed to join organization")
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.NewNotFoundError("Account")
+		return core.NotFoundError("Account")
 	}
 
 	return nil
@@ -261,11 +261,11 @@ func (s *OrganizationService) LeaveOrganization(accountID uuid.UUID) error {
 
 	result := db.Model(&models.Account{}).Where("id = ?", accountID).Update("organization_id", nil)
 	if result.Error != nil {
-		return errors.NewInternalError("Failed to leave organization")
+		return core.InternalError("Failed to leave organization")
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.NewNotFoundError("Account")
+		return core.NotFoundError("Account")
 	}
 
 	return nil

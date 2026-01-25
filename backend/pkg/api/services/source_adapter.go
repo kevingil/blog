@@ -1,8 +1,8 @@
 package services
 
 import (
-	"blog-agent-go/backend/internal/core/ml/llm/tools"
-	"blog-agent-go/backend/internal/models"
+	"backend/pkg/core/ml/llm/tools"
+	"backend/pkg/models"
 	"context"
 
 	"github.com/google/uuid"

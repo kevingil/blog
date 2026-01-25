@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"blog-agent-go/backend/internal/core/ml"
-	"blog-agent-go/backend/internal/database"
-	"blog-agent-go/backend/internal/errors"
-	"blog-agent-go/backend/internal/models"
+	"backend/pkg/core/ml"
+	"backend/pkg/database"
+	"backend/pkg/core"
+	"backend/pkg/models"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -207,9 +207,9 @@ func (s *ArticleService) GetArticleIDBySlug(slug string) (uuid.UUID, error) {
 	result := db.Select("id").Where("slug = ?", slug).First(&article)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			return uuid.UUID{}, errors.NewNotFoundError("Article")
+			return uuid.UUID{}, core.NotFoundError("Article")
 		}
-		return uuid.UUID{}, errors.NewInternalError("Failed to fetch article by slug")
+		return uuid.UUID{}, core.InternalError("Failed to fetch article by slug")
 	}
 
 	return article.ID, nil
@@ -288,9 +288,9 @@ func (s *ArticleService) GetArticle(id uuid.UUID) (*ArticleListItem, error) {
 	var article models.Article
 	if err := db.First(&article, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("Article")
+			return nil, core.NotFoundError("Article")
 		}
-		return nil, errors.NewInternalError("Failed to fetch article")
+		return nil, core.InternalError("Failed to fetch article")
 	}
 
 	return s.enrichArticleWithMetadata(article)
@@ -486,9 +486,9 @@ func (s *ArticleService) GetArticleData(slug string) (*ArticleData, error) {
 	var article models.Article
 	if err := db.Where("slug = ?", slug).First(&article).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("Article")
+			return nil, core.NotFoundError("Article")
 		}
-		return nil, errors.NewInternalError("Failed to fetch article")
+		return nil, core.InternalError("Failed to fetch article")
 	}
 
 	author, err := s.getAuthorData(article.AuthorID)
@@ -552,10 +552,10 @@ func (s *ArticleService) DeleteArticle(id uuid.UUID) error {
 	db := s.db.GetDB()
 	result := db.Delete(&models.Article{}, id)
 	if result.Error != nil {
-		return errors.NewInternalError("Failed to delete article")
+		return core.InternalError("Failed to delete article")
 	}
 	if result.RowsAffected == 0 {
-		return errors.NewNotFoundError("Article")
+		return core.NotFoundError("Article")
 	}
 	return nil
 }

@@ -1,9 +1,9 @@
 package services
 
 import (
-	"blog-agent-go/backend/internal/database"
-	"blog-agent-go/backend/internal/errors"
-	"blog-agent-go/backend/internal/models"
+	"backend/pkg/database"
+	"backend/pkg/core"
+	"backend/pkg/models"
 	"time"
 
 	"github.com/google/uuid"
@@ -71,9 +71,9 @@ func (s *ProjectsService) GetProject(id uuid.UUID) (*models.Project, error) {
 	var project models.Project
 	if err := db.First(&project, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("Project")
+			return nil, core.NotFoundError("Project")
 		}
-		return nil, errors.NewInternalError("Failed to fetch project")
+		return nil, core.InternalError("Failed to fetch project")
 	}
 	return &project, nil
 }
@@ -81,7 +81,7 @@ func (s *ProjectsService) GetProject(id uuid.UUID) (*models.Project, error) {
 func (s *ProjectsService) CreateProject(req ProjectCreateRequest) (*models.Project, error) {
 	db := s.db.GetDB()
 	if req.Title == "" || req.Description == "" {
-		return nil, errors.NewValidationError("Title and description are required")
+		return nil, core.InvalidInputError("Title and description are required")
 	}
 	// Handle tags using tag service
 	tagIDs, err := s.tagService.EnsureTagsExist(req.Tags)
@@ -97,7 +97,7 @@ func (s *ProjectsService) CreateProject(req ProjectCreateRequest) (*models.Proje
 		URL:         req.URL,
 	}
 	if err := db.Create(project).Error; err != nil {
-		return nil, errors.NewInternalError("Failed to create project")
+		return nil, core.InternalError("Failed to create project")
 	}
 	return project, nil
 }
@@ -107,9 +107,9 @@ func (s *ProjectsService) UpdateProject(id uuid.UUID, req ProjectUpdateRequest) 
 	var project models.Project
 	if err := db.First(&project, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("Project")
+			return nil, core.NotFoundError("Project")
 		}
-		return nil, errors.NewInternalError("Failed to fetch project")
+		return nil, core.InternalError("Failed to fetch project")
 	}
 	if req.Title != nil {
 		project.Title = *req.Title
@@ -137,7 +137,7 @@ func (s *ProjectsService) UpdateProject(id uuid.UUID, req ProjectUpdateRequest) 
 		project.CreatedAt = *req.CreatedAt
 	}
 	if err := db.Save(&project).Error; err != nil {
-		return nil, errors.NewInternalError("Failed to update project")
+		return nil, core.InternalError("Failed to update project")
 	}
 	return &project, nil
 }
@@ -146,10 +146,10 @@ func (s *ProjectsService) DeleteProject(id uuid.UUID) error {
 	db := s.db.GetDB()
 	result := db.Delete(&models.Project{}, "id = ?", id)
 	if result.Error != nil {
-		return errors.NewInternalError("Failed to delete project")
+		return core.InternalError("Failed to delete project")
 	}
 	if result.RowsAffected == 0 {
-		return errors.NewNotFoundError("Project")
+		return core.NotFoundError("Project")
 	}
 	return nil
 }
@@ -165,9 +165,9 @@ func (s *ProjectsService) GetProjectDetail(id uuid.UUID) (*ProjectDetail, error)
 	var project models.Project
 	if err := db.First(&project, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("Project")
+			return nil, core.NotFoundError("Project")
 		}
-		return nil, errors.NewInternalError("Failed to fetch project")
+		return nil, core.InternalError("Failed to fetch project")
 	}
 	var names []string
 	if len(project.TagIDs) > 0 {

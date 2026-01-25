@@ -1,9 +1,9 @@
 package services
 
 import (
-	"blog-agent-go/backend/internal/database"
-	"blog-agent-go/backend/internal/errors"
-	"blog-agent-go/backend/internal/models"
+	"backend/pkg/database"
+	"backend/pkg/core"
+	"backend/pkg/models"
 	"encoding/json"
 	"fmt"
 
@@ -80,7 +80,7 @@ func (s *ProfileService) GetPublicProfile() (*PublicProfile, error) {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
-		return nil, errors.NewInternalError("Failed to fetch site settings")
+		return nil, core.InternalError("Failed to fetch site settings")
 	}
 
 	if settings.PublicProfileType == "organization" && settings.PublicOrganizationID != nil {
@@ -90,7 +90,7 @@ func (s *ProfileService) GetPublicProfile() (*PublicProfile, error) {
 			if err == gorm.ErrRecordNotFound {
 				return nil, nil
 			}
-			return nil, errors.NewInternalError("Failed to fetch organization")
+			return nil, core.InternalError("Failed to fetch organization")
 		}
 
 		socialLinks := parseSocialLinks(org.SocialLinks)
@@ -119,7 +119,7 @@ func (s *ProfileService) GetPublicProfile() (*PublicProfile, error) {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
-		return nil, errors.NewInternalError("Failed to fetch account")
+		return nil, core.InternalError("Failed to fetch account")
 	}
 
 	socialLinks := parseSocialLinks(account.SocialLinks)
@@ -143,9 +143,9 @@ func (s *ProfileService) GetUserProfile(accountID uuid.UUID) (*UserProfile, erro
 	var account models.Account
 	if err := db.First(&account, "id = ?", accountID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("Account")
+			return nil, core.NotFoundError("Account")
 		}
-		return nil, errors.NewInternalError("Failed to fetch account")
+		return nil, core.InternalError("Failed to fetch account")
 	}
 
 	socialLinks := parseSocialLinks(account.SocialLinks)
@@ -169,9 +169,9 @@ func (s *ProfileService) UpdateUserProfile(accountID uuid.UUID, req ProfileUpdat
 	var account models.Account
 	if err := db.First(&account, "id = ?", accountID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("Account")
+			return nil, core.NotFoundError("Account")
 		}
-		return nil, errors.NewInternalError("Failed to fetch account")
+		return nil, core.InternalError("Failed to fetch account")
 	}
 
 	updates := make(map[string]interface{})
@@ -194,20 +194,20 @@ func (s *ProfileService) UpdateUserProfile(accountID uuid.UUID, req ProfileUpdat
 	if req.SocialLinks != nil {
 		socialLinksJSON, err := json.Marshal(*req.SocialLinks)
 		if err != nil {
-			return nil, errors.NewInternalError("Failed to marshal social_links")
+			return nil, core.InternalError("Failed to marshal social_links")
 		}
 		updates["social_links"] = datatypes.JSON(socialLinksJSON)
 	}
 
 	if len(updates) > 0 {
 		if err := db.Model(&account).Updates(updates).Error; err != nil {
-			return nil, errors.NewInternalError("Failed to update profile")
+			return nil, core.InternalError("Failed to update profile")
 		}
 	}
 
 	// Reload the account
 	if err := db.First(&account, "id = ?", accountID).Error; err != nil {
-		return nil, errors.NewInternalError("Failed to reload account")
+		return nil, core.InternalError("Failed to reload account")
 	}
 
 	socialLinks := parseSocialLinks(account.SocialLinks)
@@ -236,7 +236,7 @@ func (s *ProfileService) GetSiteSettings() (*SiteSettingsResponse, error) {
 				PublicProfileType: "user",
 			}, nil
 		}
-		return nil, errors.NewInternalError("Failed to fetch site settings")
+		return nil, core.InternalError("Failed to fetch site settings")
 	}
 
 	return &SiteSettingsResponse{
@@ -256,10 +256,10 @@ func (s *ProfileService) UpdateSiteSettings(req SiteSettingsUpdateRequest) (*Sit
 			// Create default settings
 			settings = models.SiteSettings{ID: 1, PublicProfileType: "user"}
 			if err := db.Create(&settings).Error; err != nil {
-				return nil, errors.NewInternalError("Failed to create site settings")
+				return nil, core.InternalError("Failed to create site settings")
 			}
 		} else {
-			return nil, errors.NewInternalError("Failed to fetch site settings")
+			return nil, core.InternalError("Failed to fetch site settings")
 		}
 	}
 
@@ -267,7 +267,7 @@ func (s *ProfileService) UpdateSiteSettings(req SiteSettingsUpdateRequest) (*Sit
 
 	if req.PublicProfileType != nil {
 		if *req.PublicProfileType != "user" && *req.PublicProfileType != "organization" {
-			return nil, errors.NewInvalidInputError("public_profile_type must be 'user' or 'organization'")
+			return nil, core.InvalidInputError("public_profile_type must be 'user' or 'organization'")
 		}
 		updates["public_profile_type"] = *req.PublicProfileType
 	}
@@ -276,7 +276,7 @@ func (s *ProfileService) UpdateSiteSettings(req SiteSettingsUpdateRequest) (*Sit
 		var count int64
 		db.Model(&models.Account{}).Where("id = ?", req.PublicUserID).Count(&count)
 		if count == 0 {
-			return nil, errors.NewNotFoundError("User")
+			return nil, core.NotFoundError("User")
 		}
 		updates["public_user_id"] = *req.PublicUserID
 	}
@@ -285,20 +285,20 @@ func (s *ProfileService) UpdateSiteSettings(req SiteSettingsUpdateRequest) (*Sit
 		var count int64
 		db.Model(&models.Organization{}).Where("id = ?", req.PublicOrganizationID).Count(&count)
 		if count == 0 {
-			return nil, errors.NewNotFoundError("Organization")
+			return nil, core.NotFoundError("Organization")
 		}
 		updates["public_organization_id"] = *req.PublicOrganizationID
 	}
 
 	if len(updates) > 0 {
 		if err := db.Model(&settings).Updates(updates).Error; err != nil {
-			return nil, errors.NewInternalError("Failed to update site settings")
+			return nil, core.InternalError("Failed to update site settings")
 		}
 	}
 
 	// Reload settings
 	if err := db.First(&settings, "id = 1").Error; err != nil {
-		return nil, errors.NewInternalError("Failed to reload site settings")
+		return nil, core.InternalError("Failed to reload site settings")
 	}
 
 	return &SiteSettingsResponse{
@@ -314,7 +314,7 @@ func (s *ProfileService) IsUserAdmin(userID uuid.UUID) (bool, error) {
 
 	var account models.Account
 	if err := db.Select("role").First(&account, "id = ?", userID).Error; err != nil {
-		return false, errors.NewInternalError("Failed to fetch account")
+		return false, core.InternalError("Failed to fetch account")
 	}
 
 	return account.Role == "admin", nil

@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"blog-agent-go/backend/internal/core/ml"
-	"blog-agent-go/backend/internal/database"
-	"blog-agent-go/backend/internal/errors"
-	"blog-agent-go/backend/internal/models"
+	"backend/pkg/core/ml"
+	"backend/pkg/database"
+	"backend/pkg/core"
+	"backend/pkg/models"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/google/uuid"
@@ -69,15 +69,15 @@ func (s *ArticleSourceService) CreateSource(ctx context.Context, req CreateSourc
 	var article models.Article
 	if err := db.First(&article, req.ArticleID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("Article")
+			return nil, core.NotFoundError("Article")
 		}
-		return nil, errors.NewInternalError("Failed to fetch article")
+		return nil, core.InternalError("Failed to fetch article")
 	}
 
 	// Generate embedding for the content
 	embedding, err := s.embeddingService.GenerateEmbedding(ctx, req.Content)
 	if err != nil {
-		return nil, errors.NewAppError(errors.ErrCodeExternalService, "Failed to generate embedding", 500)
+		return nil, core.InternalError("Failed to generate embedding")
 	}
 
 	// Set default source type if not provided
@@ -100,7 +100,7 @@ func (s *ArticleSourceService) CreateSource(ctx context.Context, req CreateSourc
 	}
 
 	if err := db.Create(source).Error; err != nil {
-		return nil, errors.NewInternalError("Failed to create source")
+		return nil, core.InternalError("Failed to create source")
 	}
 
 	return source, nil
@@ -111,7 +111,7 @@ func (s *ArticleSourceService) ScrapeAndCreateSource(ctx context.Context, articl
 	// Scrape the content
 	scraped, err := s.scrapeURL(targetURL)
 	if err != nil {
-		return nil, errors.NewAppError(errors.ErrCodeExternalService, fmt.Sprintf("Failed to scrape URL: %v", err), 500)
+		return nil, core.InternalError(fmt.Sprintf("Failed to scrape URL: %v", err))
 	}
 
 	// Determine source type based on URL and content
@@ -142,7 +142,7 @@ func (s *ArticleSourceService) GetSourcesByArticleID(articleID uuid.UUID) ([]*mo
 		Find(&sources).Error
 
 	if err != nil {
-		return nil, errors.NewInternalError("Failed to get sources")
+		return nil, core.InternalError("Failed to get sources")
 	}
 
 	return sources, nil
@@ -165,7 +165,7 @@ func (s *ArticleSourceService) GetAllSources(page, limit int) ([]ArticleSourceWi
 	// Count total sources
 	var total int64
 	if err := db.Model(&models.ArticleSource{}).Count(&total).Error; err != nil {
-		return nil, 0, errors.NewInternalError("Failed to count sources")
+		return nil, 0, core.InternalError("Failed to count sources")
 	}
 
 	// Calculate total pages
@@ -182,7 +182,7 @@ func (s *ArticleSourceService) GetAllSources(page, limit int) ([]ArticleSourceWi
 		Scan(&sources).Error
 
 	if err != nil {
-		return nil, 0, errors.NewInternalError("Failed to get sources")
+		return nil, 0, core.InternalError("Failed to get sources")
 	}
 
 	return sources, totalPages, nil
@@ -196,9 +196,9 @@ func (s *ArticleSourceService) GetSource(sourceID uuid.UUID) (*models.ArticleSou
 	err := db.First(&source, sourceID).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("Source")
+			return nil, core.NotFoundError("Source")
 		}
-		return nil, errors.NewInternalError("Failed to get source")
+		return nil, core.InternalError("Failed to get source")
 	}
 
 	return &source, nil
@@ -211,9 +211,9 @@ func (s *ArticleSourceService) UpdateSource(ctx context.Context, sourceID uuid.U
 	var source models.ArticleSource
 	if err := db.First(&source, sourceID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("Source")
+			return nil, core.NotFoundError("Source")
 		}
-		return nil, errors.NewInternalError("Failed to fetch source")
+		return nil, core.InternalError("Failed to fetch source")
 	}
 
 	// Track if we need to regenerate embedding
@@ -238,13 +238,13 @@ func (s *ArticleSourceService) UpdateSource(ctx context.Context, sourceID uuid.U
 	if needsEmbeddingUpdate {
 		embedding, err := s.embeddingService.GenerateEmbedding(ctx, source.Content)
 		if err != nil {
-			return nil, errors.NewAppError(errors.ErrCodeExternalService, "Failed to generate embedding", 500)
+			return nil, core.InternalError("Failed to generate embedding")
 		}
 		source.Embedding = embedding
 	}
 
 	if err := db.Save(&source).Error; err != nil {
-		return nil, errors.NewInternalError("Failed to update source")
+		return nil, core.InternalError("Failed to update source")
 	}
 
 	return &source, nil
@@ -256,11 +256,11 @@ func (s *ArticleSourceService) DeleteSource(sourceID uuid.UUID) error {
 
 	result := db.Delete(&models.ArticleSource{}, sourceID)
 	if result.Error != nil {
-		return errors.NewInternalError("Failed to delete source")
+		return core.InternalError("Failed to delete source")
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.NewNotFoundError("Source")
+		return core.NotFoundError("Source")
 	}
 
 	return nil

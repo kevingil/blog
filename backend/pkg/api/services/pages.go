@@ -1,9 +1,9 @@
 package services
 
 import (
-	"blog-agent-go/backend/internal/database"
-	"blog-agent-go/backend/internal/errors"
-	"blog-agent-go/backend/internal/models"
+	"backend/pkg/database"
+	"backend/pkg/core"
+	"backend/pkg/models"
 	"fmt"
 	"math"
 
@@ -132,7 +132,7 @@ func (s *PagesService) CreatePage(req PageCreateRequest) (*models.Page, error) {
 	// Check if slug already exists
 	var existing models.Page
 	if err := db.Where("slug = ?", req.Slug).First(&existing).Error; err == nil {
-		return nil, errors.NewAlreadyExistsError("Page with this slug")
+		return nil, core.AlreadyExistsError("Page with this slug")
 	}
 
 	var metaDataJSON datatypes.JSON
@@ -155,7 +155,7 @@ func (s *PagesService) CreatePage(req PageCreateRequest) (*models.Page, error) {
 	}
 
 	if err := db.Create(&page).Error; err != nil {
-		return nil, errors.NewInternalError("Failed to create page")
+		return nil, core.InternalError("Failed to create page")
 	}
 
 	return &page, nil
@@ -167,9 +167,9 @@ func (s *PagesService) UpdatePage(id uuid.UUID, req PageUpdateRequest) (*models.
 	var page models.Page
 	if err := db.First(&page, "id = ?", id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("Page")
+			return nil, core.NotFoundError("Page")
 		}
-		return nil, errors.NewInternalError("Failed to fetch page")
+		return nil, core.InternalError("Failed to fetch page")
 	}
 
 	updates := make(map[string]interface{})
@@ -199,13 +199,13 @@ func (s *PagesService) UpdatePage(id uuid.UUID, req PageUpdateRequest) (*models.
 
 	if len(updates) > 0 {
 		if err := db.Model(&page).Updates(updates).Error; err != nil {
-			return nil, errors.NewInternalError("Failed to update page")
+			return nil, core.InternalError("Failed to update page")
 		}
 	}
 
 	// Reload the page to get updated values
 	if err := db.First(&page, "id = ?", id).Error; err != nil {
-		return nil, errors.NewInternalError("Failed to reload page")
+		return nil, core.InternalError("Failed to reload page")
 	}
 
 	return &page, nil
@@ -216,11 +216,11 @@ func (s *PagesService) DeletePage(id uuid.UUID) error {
 
 	result := db.Delete(&models.Page{}, "id = ?", id)
 	if result.Error != nil {
-		return errors.NewInternalError("Failed to delete page")
+		return core.InternalError("Failed to delete page")
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.NewNotFoundError("Page")
+		return core.NotFoundError("Page")
 	}
 
 	return nil

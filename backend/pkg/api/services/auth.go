@@ -7,9 +7,9 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"blog-agent-go/backend/internal/database"
-	"blog-agent-go/backend/internal/errors"
-	"blog-agent-go/backend/internal/models"
+	"backend/pkg/database"
+	"backend/pkg/core"
+	"backend/pkg/models"
 
 	"github.com/google/uuid"
 )
@@ -67,14 +67,14 @@ type UserData struct {
 func (s *AuthService) Login(req LoginRequest) (*LoginResponse, error) {
 	account, err := s.db.GetAccountByEmail(req.Email)
 	if err != nil {
-		return nil, errors.NewUnauthorizedError("Invalid credentials")
+		return nil, core.UnauthorizedError("Invalid credentials")
 	}
 	if account == nil {
-		return nil, errors.NewUnauthorizedError("Invalid credentials")
+		return nil, core.UnauthorizedError("Invalid credentials")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(req.Password)); err != nil {
-		return nil, errors.NewUnauthorizedError("Invalid credentials")
+		return nil, core.UnauthorizedError("Invalid credentials")
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
@@ -117,17 +117,17 @@ func (s *AuthService) Register(req RegisterRequest) error {
 func (s *AuthService) ValidateToken(tokenString string) (*jwt.Token, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.NewInvalidInputError("Unexpected signing method")
+			return nil, core.InvalidInputError("Unexpected signing method")
 		}
 		return s.secretKey, nil
 	})
 
 	if err != nil {
-		return nil, errors.NewAppError(errors.ErrCodeInvalidToken, "Invalid or expired token", 401)
+		return nil, core.UnauthorizedError("Invalid or expired token")
 	}
 
 	if !token.Valid {
-		return nil, errors.NewAppError(errors.ErrCodeInvalidToken, "Invalid token", 401)
+		return nil, core.UnauthorizedError("Invalid token")
 	}
 
 	return token, nil
@@ -141,9 +141,9 @@ func (s *AuthService) UpdateAccount(accountID uuid.UUID, req UpdateAccountReques
 	result := db.First(&account, accountID)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			return errors.NewNotFoundError("Account")
+			return core.NotFoundError("Account")
 		}
-		return errors.NewInternalError("Failed to fetch account")
+		return core.InternalError("Failed to fetch account")
 	}
 
 	// Check if email is already taken by another account
@@ -151,7 +151,7 @@ func (s *AuthService) UpdateAccount(accountID uuid.UUID, req UpdateAccountReques
 		var count int64
 		db.Model(&models.Account{}).Where("email = ? AND id != ?", req.Email, accountID).Count(&count)
 		if count > 0 {
-			return errors.NewAlreadyExistsError("Email")
+			return core.AlreadyExistsError("Email")
 		}
 	}
 
@@ -171,14 +171,14 @@ func (s *AuthService) UpdatePassword(accountID uuid.UUID, req UpdatePasswordRequ
 	result := db.First(&account, accountID)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			return errors.NewNotFoundError("Account")
+			return core.NotFoundError("Account")
 		}
-		return errors.NewInternalError("Failed to fetch account")
+		return core.InternalError("Failed to fetch account")
 	}
 
 	// Verify current password
 	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(req.CurrentPassword)); err != nil {
-		return errors.NewUnauthorizedError("Current password is incorrect")
+		return core.UnauthorizedError("Current password is incorrect")
 	}
 
 	// Hash new password
@@ -200,14 +200,14 @@ func (s *AuthService) DeleteAccount(accountID uuid.UUID, password string) error 
 	result := db.First(&account, accountID)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			return errors.NewNotFoundError("Account")
+			return core.NotFoundError("Account")
 		}
-		return errors.NewInternalError("Failed to fetch account")
+		return core.InternalError("Failed to fetch account")
 	}
 
 	// Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(password)); err != nil {
-		return errors.NewUnauthorizedError("Password is incorrect")
+		return core.UnauthorizedError("Password is incorrect")
 	}
 
 	// Delete account
