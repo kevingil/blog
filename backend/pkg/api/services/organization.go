@@ -5,6 +5,7 @@ import (
 	"backend/pkg/database"
 	"backend/pkg/database/models"
 	"encoding/json"
+	"log"
 	"regexp"
 	"strings"
 
@@ -16,6 +17,23 @@ import (
 // OrganizationService provides methods to interact with organizations
 type OrganizationService struct {
 	db database.Service
+}
+
+var orgSvc *OrganizationService
+
+// InitOrganizationService initializes the organization service singleton
+func InitOrganizationService() {
+	if orgSvc == nil {
+		orgSvc = NewOrganizationService(database.New())
+	}
+}
+
+// Organizations returns the organization service singleton
+func Organizations() *OrganizationService {
+	if orgSvc == nil {
+		log.Fatal("OrganizationService not initialized. Call InitOrganizationService() first.")
+	}
+	return orgSvc
 }
 
 func NewOrganizationService(db database.Service) *OrganizationService {

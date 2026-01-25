@@ -5,6 +5,7 @@ import (
 	"backend/pkg/database"
 	"backend/pkg/database/models"
 	"fmt"
+	"log"
 	"math"
 
 	"github.com/google/uuid"
@@ -15,6 +16,23 @@ import (
 // PagesService provides methods to interact with the Page table
 type PagesService struct {
 	db database.Service
+}
+
+var pagesSvc *PagesService
+
+// InitPagesService initializes the pages service singleton
+func InitPagesService() {
+	if pagesSvc == nil {
+		pagesSvc = NewPagesService(database.New())
+	}
+}
+
+// Pages returns the pages service singleton
+func Pages() *PagesService {
+	if pagesSvc == nil {
+		log.Fatal("PagesService not initialized. Call InitPagesService() first.")
+	}
+	return pagesSvc
 }
 
 func NewPagesService(db database.Service) *PagesService {

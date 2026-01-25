@@ -1,12 +1,14 @@
 package services
 
 import (
+	"log"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
+	"backend/pkg/config"
 	"backend/pkg/core"
 	"backend/pkg/database"
 	"backend/pkg/database/models"
@@ -17,6 +19,23 @@ import (
 type AuthService struct {
 	db        database.Service
 	secretKey []byte
+}
+
+var authSvc *AuthService
+
+// InitAuthService initializes the auth service singleton
+func InitAuthService() {
+	if authSvc == nil {
+		authSvc = NewAuthService(database.New(), config.Get().Auth.SecretKey)
+	}
+}
+
+// Auth returns the auth service singleton
+func Auth() *AuthService {
+	if authSvc == nil {
+		log.Fatal("AuthService not initialized. Call InitAuthService() first.")
+	}
+	return authSvc
 }
 
 func NewAuthService(db database.Service, secretKey string) *AuthService {

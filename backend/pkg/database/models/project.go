@@ -3,8 +3,6 @@ package models
 import (
 	"time"
 
-	"backend/pkg/core/project"
-
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 )
@@ -24,34 +22,4 @@ type Project struct {
 
 func (Project) TableName() string {
 	return "project"
-}
-
-// ToCore converts the GORM model to the domain type
-func (m *Project) ToCore() *project.Project {
-	return &project.Project{
-		ID:          m.ID,
-		Title:       m.Title,
-		Description: m.Description,
-		Content:     m.Content,
-		TagIDs:      m.TagIDs,
-		ImageURL:    m.ImageURL,
-		URL:         m.URL,
-		CreatedAt:   m.CreatedAt,
-		UpdatedAt:   m.UpdatedAt,
-	}
-}
-
-// ProjectFromCore creates a GORM model from the domain type
-func ProjectFromCore(p *project.Project) *Project {
-	return &Project{
-		ID:          p.ID,
-		Title:       p.Title,
-		Description: p.Description,
-		Content:     p.Content,
-		TagIDs:      p.TagIDs,
-		ImageURL:    p.ImageURL,
-		URL:         p.URL,
-		CreatedAt:   p.CreatedAt,
-		UpdatedAt:   p.UpdatedAt,
-	}
 }

@@ -6,6 +6,7 @@ import (
 	"backend/pkg/database/models"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
@@ -15,6 +16,23 @@ import (
 // ProfileService provides methods to interact with user profiles and site settings
 type ProfileService struct {
 	db database.Service
+}
+
+var profileSvc *ProfileService
+
+// InitProfileService initializes the profile service singleton
+func InitProfileService() {
+	if profileSvc == nil {
+		profileSvc = NewProfileService(database.New())
+	}
+}
+
+// Profiles returns the profile service singleton
+func Profiles() *ProfileService {
+	if profileSvc == nil {
+		log.Fatal("ProfileService not initialized. Call InitProfileService() first.")
+	}
+	return profileSvc
 }
 
 func NewProfileService(db database.Service) *ProfileService {

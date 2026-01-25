@@ -8,6 +8,7 @@ import (
 	"backend/pkg/database/models"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
 
@@ -30,7 +31,7 @@ func (r *ProjectRepository) FindByID(ctx context.Context, id uuid.UUID) (*projec
 		}
 		return nil, err
 	}
-	return model.ToCore(), nil
+	return modelToCore(&model), nil
 }
 
 // List retrieves projects with pagination
@@ -54,7 +55,7 @@ func (r *ProjectRepository) List(ctx context.Context, opts project.ListOptions) 
 	// Convert to domain types
 	projects := make([]project.Project, len(projectModels))
 	for i, m := range projectModels {
-		projects[i] = *m.ToCore()
+		projects[i] = *modelToCore(&m)
 	}
 
 	return projects, total, nil
@@ -62,7 +63,7 @@ func (r *ProjectRepository) List(ctx context.Context, opts project.ListOptions) 
 
 // Save creates a new project
 func (r *ProjectRepository) Save(ctx context.Context, p *project.Project) error {
-	model := models.ProjectFromCore(p)
+	model := coreToModel(p)
 
 	if p.ID == uuid.Nil {
 		p.ID = uuid.New()
@@ -74,7 +75,7 @@ func (r *ProjectRepository) Save(ctx context.Context, p *project.Project) error 
 
 // Update updates an existing project
 func (r *ProjectRepository) Update(ctx context.Context, p *project.Project) error {
-	model := models.ProjectFromCore(p)
+	model := coreToModel(p)
 	return r.db.WithContext(ctx).Save(model).Error
 }
 
@@ -88,4 +89,34 @@ func (r *ProjectRepository) Delete(ctx context.Context, id uuid.UUID) error {
 		return core.ErrNotFound
 	}
 	return nil
+}
+
+// modelToCore converts a GORM model to the domain type
+func modelToCore(m *models.Project) *project.Project {
+	return &project.Project{
+		ID:          m.ID,
+		Title:       m.Title,
+		Description: m.Description,
+		Content:     m.Content,
+		TagIDs:      m.TagIDs,
+		ImageURL:    m.ImageURL,
+		URL:         m.URL,
+		CreatedAt:   m.CreatedAt,
+		UpdatedAt:   m.UpdatedAt,
+	}
+}
+
+// coreToModel creates a GORM model from the domain type
+func coreToModel(p *project.Project) *models.Project {
+	return &models.Project{
+		ID:          p.ID,
+		Title:       p.Title,
+		Description: p.Description,
+		Content:     p.Content,
+		TagIDs:      pq.Int64Array(p.TagIDs),
+		ImageURL:    p.ImageURL,
+		URL:         p.URL,
+		CreatedAt:   p.CreatedAt,
+		UpdatedAt:   p.UpdatedAt,
+	}
 }

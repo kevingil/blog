@@ -27,6 +27,24 @@ type ArticleService struct {
 	embeddingService *ml.EmbeddingService
 }
 
+// articleSvc is the singleton instance
+var articleSvc *ArticleService
+
+// InitArticleService initializes the article service singleton
+func InitArticleService() {
+	if articleSvc == nil {
+		articleSvc = NewArticleService(database.New(), NewWriterAgent())
+	}
+}
+
+// Articles returns the article service singleton
+func Articles() *ArticleService {
+	if articleSvc == nil {
+		log.Fatal("ArticleService not initialized. Call InitArticleService() first.")
+	}
+	return articleSvc
+}
+
 func NewArticleService(db database.Service, writerAgent *WriterAgent) *ArticleService {
 	return &ArticleService{
 		db:               db,

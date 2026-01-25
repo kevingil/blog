@@ -36,6 +36,20 @@ var (
 	dbInstance *service
 )
 
+// Init initializes the database connection. Call this once at startup.
+func Init() {
+	New()
+}
+
+// DB returns the underlying GORM database connection.
+// Use this to access the database from anywhere in the application.
+func DB() *gorm.DB {
+	if dbInstance == nil {
+		log.Fatal("Database not initialized. Call database.Init() first.")
+	}
+	return dbInstance.db
+}
+
 func New() Service {
 	// Reuse Connection
 	if dbInstance != nil {

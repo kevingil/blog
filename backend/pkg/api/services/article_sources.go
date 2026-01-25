@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -24,6 +25,23 @@ import (
 type ArticleSourceService struct {
 	db               database.Service
 	embeddingService *ml.EmbeddingService
+}
+
+var sourcesSvc *ArticleSourceService
+
+// InitSourcesService initializes the sources service singleton
+func InitSourcesService() {
+	if sourcesSvc == nil {
+		sourcesSvc = NewArticleSourceService(database.New())
+	}
+}
+
+// Sources returns the sources service singleton
+func Sources() *ArticleSourceService {
+	if sourcesSvc == nil {
+		log.Fatal("ArticleSourceService not initialized. Call InitSourcesService() first.")
+	}
+	return sourcesSvc
 }
 
 func NewArticleSourceService(db database.Service) *ArticleSourceService {
