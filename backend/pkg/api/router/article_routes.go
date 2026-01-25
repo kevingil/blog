@@ -25,4 +25,11 @@ func RegisterArticleRoutes(app *fiber.App, deps RouteDeps) {
 	blogProtected.Post("/articles/:slug/update", handler.UpdateArticleHandler(deps.BlogService))
 	blogProtected.Post("/articles", handler.CreateArticleHandler(deps.BlogService))
 	blogProtected.Delete("/articles/:id", handler.DeleteArticleHandler(deps.BlogService))
+
+	// Version management routes (protected)
+	blogProtected.Post("/articles/:slug/publish", handler.PublishArticleHandler(deps.BlogService))
+	blogProtected.Post("/articles/:slug/unpublish", handler.UnpublishArticleHandler(deps.BlogService))
+	blogProtected.Get("/articles/:slug/versions", handler.ListVersionsHandler(deps.BlogService))
+	blogProtected.Get("/articles/versions/:versionId", handler.GetVersionHandler(deps.BlogService))
+	blogProtected.Post("/articles/:slug/revert/:versionId", handler.RevertToVersionHandler(deps.BlogService))
 }

@@ -5,7 +5,6 @@ import (
 	"math"
 	"regexp"
 	"strings"
-	"time"
 
 	"backend/pkg/core"
 	"backend/pkg/core/tag"
@@ -34,7 +33,7 @@ type CreateRequest struct {
 	Slug     string
 	AuthorID uuid.UUID
 	Tags     []string
-	IsDraft  bool
+	Publish  bool
 	ImageURL string
 }
 
@@ -44,7 +43,6 @@ type UpdateRequest struct {
 	Content  *string
 	Slug     *string
 	Tags     *[]string
-	IsDraft  *bool
 	ImageURL *string
 }
 
@@ -55,6 +53,12 @@ type ListResult struct {
 	Page       int
 	PerPage    int
 	TotalPages int
+}
+
+// VersionListResult represents the result of listing versions
+type VersionListResult struct {
+	Versions []ArticleVersion
+	Total    int
 }
 
 // GetByID retrieves an article by its ID
@@ -68,7 +72,7 @@ func (s *Service) GetBySlug(ctx context.Context, slug string) (*Article, error) 
 }
 
 // List retrieves articles with pagination and filtering
-func (s *Service) List(ctx context.Context, pageNum, perPage int, isDraft *bool, authorID *uuid.UUID) (*ListResult, error) {
+func (s *Service) List(ctx context.Context, pageNum, perPage int, publishedOnly bool, authorID *uuid.UUID) (*ListResult, error) {
 	if perPage <= 0 {
 		perPage = 20
 	}
@@ -77,10 +81,10 @@ func (s *Service) List(ctx context.Context, pageNum, perPage int, isDraft *bool,
 	}
 
 	opts := ListOptions{
-		Page:     pageNum,
-		PerPage:  perPage,
-		IsDraft:  isDraft,
-		AuthorID: authorID,
+		Page:          pageNum,
+		PerPage:       perPage,
+		PublishedOnly: publishedOnly,
+		AuthorID:      authorID,
 	}
 
 	articles, total, err := s.store.List(ctx, opts)
@@ -100,7 +104,7 @@ func (s *Service) List(ctx context.Context, pageNum, perPage int, isDraft *bool,
 }
 
 // Search performs full-text search on articles
-func (s *Service) Search(ctx context.Context, query string, pageNum, perPage int, isDraft *bool) (*ListResult, error) {
+func (s *Service) Search(ctx context.Context, query string, pageNum, perPage int, publishedOnly bool) (*ListResult, error) {
 	if perPage <= 0 {
 		perPage = 20
 	}
@@ -109,10 +113,10 @@ func (s *Service) Search(ctx context.Context, query string, pageNum, perPage int
 	}
 
 	opts := SearchOptions{
-		Query:   query,
-		Page:    pageNum,
-		PerPage: perPage,
-		IsDraft: isDraft,
+		Query:         query,
+		Page:          pageNum,
+		PerPage:       perPage,
+		PublishedOnly: publishedOnly,
 	}
 
 	articles, total, err := s.store.Search(ctx, opts)
@@ -139,7 +143,7 @@ func (s *Service) SearchByEmbedding(ctx context.Context, embedding []float32, li
 	return s.store.SearchByEmbedding(ctx, embedding, limit)
 }
 
-// Create creates a new article
+// Create creates a new article as a draft
 func (s *Service) Create(ctx context.Context, req CreateRequest) (*Article, error) {
 	// Generate slug if not provided
 	slug := req.Slug
@@ -166,30 +170,30 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*Article, erro
 	}
 
 	article := &Article{
-		ID:       uuid.New(),
-		Slug:     slug,
-		Title:    req.Title,
-		Content:  req.Content,
-		AuthorID: req.AuthorID,
-		TagIDs:   tagIDs,
-		IsDraft:  req.IsDraft,
-		ImageURL: req.ImageURL,
-	}
-
-	// Set published date if not a draft
-	if !req.IsDraft {
-		now := time.Now()
-		article.PublishedAt = &now
+		ID:            uuid.New(),
+		Slug:          slug,
+		AuthorID:      req.AuthorID,
+		TagIDs:        tagIDs,
+		DraftTitle:    req.Title,
+		DraftContent:  req.Content,
+		DraftImageURL: req.ImageURL,
 	}
 
 	if err := s.store.Save(ctx, article); err != nil {
 		return nil, err
 	}
 
+	// If publish is requested, publish immediately after creation
+	if req.Publish {
+		if err := s.store.Publish(ctx, article); err != nil {
+			return nil, err
+		}
+	}
+
 	return article, nil
 }
 
-// Update updates an existing article
+// Update updates an existing article's draft content
 func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (*Article, error) {
 	article, err := s.store.FindByID(ctx, id)
 	if err != nil {
@@ -208,12 +212,12 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (
 		article.Slug = *req.Slug
 	}
 
-	// Apply updates
+	// Apply updates to draft fields
 	if req.Title != nil {
-		article.Title = *req.Title
+		article.DraftTitle = *req.Title
 	}
 	if req.Content != nil {
-		article.Content = *req.Content
+		article.DraftContent = *req.Content
 	}
 	if req.Tags != nil {
 		tagIDs, err := s.tagStore.EnsureExists(ctx, *req.Tags)
@@ -223,20 +227,11 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (
 		article.TagIDs = tagIDs
 	}
 	if req.ImageURL != nil {
-		article.ImageURL = *req.ImageURL
-	}
-	if req.IsDraft != nil {
-		wasDraft := article.IsDraft
-		article.IsDraft = *req.IsDraft
-
-		// Set published date when transitioning from draft to published
-		if wasDraft && !*req.IsDraft && article.PublishedAt == nil {
-			now := time.Now()
-			article.PublishedAt = &now
-		}
+		article.DraftImageURL = *req.ImageURL
 	}
 
-	if err := s.store.Save(ctx, article); err != nil {
+	// Save draft (creates version asynchronously)
+	if err := s.store.SaveDraft(ctx, article); err != nil {
 		return nil, err
 	}
 
@@ -256,15 +251,87 @@ func (s *Service) GetPopularTags(ctx context.Context, limit int) ([]int64, error
 	return s.store.GetPopularTags(ctx, limit)
 }
 
-// UpdateEmbedding updates the embedding for an article
+// UpdateEmbedding updates the draft embedding for an article
 func (s *Service) UpdateEmbedding(ctx context.Context, id uuid.UUID, embedding []float32) error {
 	article, err := s.store.FindByID(ctx, id)
 	if err != nil {
 		return err
 	}
 
-	article.Embedding = embedding
+	article.DraftEmbedding = embedding
 	return s.store.Save(ctx, article)
+}
+
+// Publish publishes the current draft
+func (s *Service) Publish(ctx context.Context, id uuid.UUID) (*Article, error) {
+	article, err := s.store.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.store.Publish(ctx, article); err != nil {
+		return nil, err
+	}
+
+	return article, nil
+}
+
+// Unpublish removes published status from an article
+func (s *Service) Unpublish(ctx context.Context, id uuid.UUID) (*Article, error) {
+	article, err := s.store.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if article.PublishedAt == nil {
+		return nil, core.InvalidInputError("Article is not published")
+	}
+
+	if err := s.store.Unpublish(ctx, article); err != nil {
+		return nil, err
+	}
+
+	return article, nil
+}
+
+// ListVersions retrieves all versions for an article
+func (s *Service) ListVersions(ctx context.Context, id uuid.UUID) (*VersionListResult, error) {
+	// Verify article exists
+	_, err := s.store.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	versions, err := s.store.ListVersions(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &VersionListResult{
+		Versions: versions,
+		Total:    len(versions),
+	}, nil
+}
+
+// GetVersion retrieves a specific version by ID
+func (s *Service) GetVersion(ctx context.Context, versionID uuid.UUID) (*ArticleVersion, error) {
+	return s.store.GetVersion(ctx, versionID)
+}
+
+// RevertToVersion creates a new draft by copying content from a historical version
+func (s *Service) RevertToVersion(ctx context.Context, articleID, versionID uuid.UUID) (*Article, error) {
+	// Verify article exists
+	_, err := s.store.FindByID(ctx, articleID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.store.RevertToVersion(ctx, articleID, versionID); err != nil {
+		return nil, err
+	}
+
+	// Return the updated article
+	return s.store.FindByID(ctx, articleID)
 }
 
 // Helper function to generate slug
@@ -277,4 +344,15 @@ func generateSlug(title string) string {
 	slug = reg.ReplaceAllString(slug, "-")
 	slug = strings.Trim(slug, "-")
 	return slug
+}
+
+// UpdateSessionMemory updates the session memory for an article
+func (s *Service) UpdateSessionMemory(ctx context.Context, id uuid.UUID, sessionMemory map[string]interface{}) error {
+	article, err := s.store.FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	article.SessionMemory = sessionMemory
+	return s.store.Save(ctx, article)
 }

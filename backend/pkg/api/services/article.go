@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 	"math"
 	"regexp"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"github.com/pgvector/pgvector-go"
 	"gorm.io/gorm"
 )
 
@@ -57,7 +59,6 @@ type ArticleUpdateRequest struct {
 	Content     string   `json:"content" validate:"required,min=10"`
 	ImageURL    string   `json:"image_url" validate:"omitempty,url"`
 	Tags        []string `json:"tags" validate:"max=10,dive,min=2,max=30"`
-	IsDraft     bool     `json:"is_draft"`
 	PublishedAt *int64   `json:"published_at"`
 }
 
@@ -67,25 +68,52 @@ type ArticleListResponse struct {
 	IncludeDrafts bool              `json:"include_drafts"`
 }
 
+type ArticleVersionResponse struct {
+	ID            uuid.UUID `json:"id"`
+	ArticleID     uuid.UUID `json:"article_id"`
+	VersionNumber int       `json:"version_number"`
+	Status        string    `json:"status"`
+	Title         string    `json:"title"`
+	Content       string    `json:"content"`
+	ImageURL      string    `json:"image_url"`
+	CreatedAt     string    `json:"created_at"`
+}
+
+type ArticleVersionListResponse struct {
+	Versions []ArticleVersionResponse `json:"versions"`
+	Total    int                      `json:"total"`
+}
+
 const ITEMS_PER_PAGE = 6
 
-func (s *ArticleService) GenerateArticle(ctx context.Context, prompt string, title string, authorID uuid.UUID, draft bool) (*models.Article, error) {
+func (s *ArticleService) GenerateArticle(ctx context.Context, prompt string, title string, authorID uuid.UUID, publish bool) (*models.Article, error) {
 	article, err := s.writerAgent.GenerateArticle(ctx, prompt, title, authorID)
 	if err != nil {
 		return nil, fmt.Errorf("error generating article: %w", err)
 	}
 
+	// Generate slug from title
+	slug := generateSlug(title)
+
 	gormArticle := &models.Article{
-		ImageURL:        article.ImageURL,
-		Slug:            article.Slug,
-		Title:           article.Title,
-		Content:         article.Content,
+		DraftImageURL:   article.DraftImageURL,
+		Slug:            slug,
+		DraftTitle:      article.DraftTitle,
+		DraftContent:    article.DraftContent,
 		AuthorID:        authorID,
-		IsDraft:         draft,
-		Embedding:       article.Embedding,
+		DraftEmbedding:  article.DraftEmbedding,
 		ImagenRequestID: article.ImagenRequestID,
-		PublishedAt:     article.PublishedAt,
 		SessionMemory:   article.SessionMemory,
+	}
+
+	// If publish is requested, copy draft to published
+	if publish {
+		now := time.Now()
+		gormArticle.PublishedTitle = &article.DraftTitle
+		gormArticle.PublishedContent = &article.DraftContent
+		gormArticle.PublishedImageURL = &article.DraftImageURL
+		gormArticle.PublishedEmbedding = gormArticle.DraftEmbedding
+		gormArticle.PublishedAt = &now
 	}
 
 	db := s.db.GetDB()
@@ -93,6 +121,13 @@ func (s *ArticleService) GenerateArticle(ctx context.Context, prompt string, tit
 	if result.Error != nil {
 		return nil, result.Error
 	}
+
+	// Create initial version asynchronously
+	status := "draft"
+	if publish {
+		status = "published"
+	}
+	go s.createVersionAsync(gormArticle.ID, article.DraftTitle, article.DraftContent, article.DraftImageURL, article.DraftEmbedding.Slice(), status, authorID)
 
 	return gormArticle, nil
 }
@@ -107,7 +142,7 @@ func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uuid.UUID,
 	}
 
 	// Store old title to check if it changed
-	oldTitle := article.Title
+	oldTitle := article.DraftTitle
 
 	// Process tags using tag service
 	tagIDs, err := s.tagService.EnsureTagsExist(req.Tags)
@@ -115,11 +150,10 @@ func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uuid.UUID,
 		return nil, err
 	}
 
-	// Update article fields directly
-	article.Title = req.Title
-	article.Content = req.Content
-	article.ImageURL = req.ImageURL
-	article.IsDraft = req.IsDraft
+	// Update draft fields
+	article.DraftTitle = req.Title
+	article.DraftContent = req.Content
+	article.DraftImageURL = req.ImageURL
 
 	// Regenerate slug if title changed
 	if oldTitle != req.Title {
@@ -144,16 +178,15 @@ func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uuid.UUID,
 		article.TagIDs = pq.Int64Array(tagIDs)
 	}
 
-	// Update article without embedding field to avoid "vector must have at least 1 dimension" error
+	// Update article draft fields
 	updateFields := map[string]interface{}{
-		"title":        article.Title,
-		"slug":         article.Slug,
-		"content":      article.Content,
-		"image_url":    article.ImageURL,
-		"is_draft":     article.IsDraft,
-		"published_at": article.PublishedAt,
-		"tag_ids":      article.TagIDs,
-		"updated_at":   time.Now(),
+		"draft_title":     article.DraftTitle,
+		"slug":            article.Slug,
+		"draft_content":   article.DraftContent,
+		"draft_image_url": article.DraftImageURL,
+		"published_at":    article.PublishedAt,
+		"tag_ids":         article.TagIDs,
+		"updated_at":      time.Now(),
 	}
 
 	fmt.Println("\n\n- Updating article", articleID)
@@ -161,6 +194,9 @@ func (s *ArticleService) UpdateArticle(ctx context.Context, articleID uuid.UUID,
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to update article: %w", result.Error)
 	}
+
+	// Create version record asynchronously
+	go s.createVersionAsync(articleID, req.Title, req.Content, req.ImageURL, nil, "draft", article.AuthorID)
 
 	// Generate embeddings in the background after successful update
 	go func() {
@@ -190,9 +226,9 @@ func (s *ArticleService) UpdateArticleWithContext(ctx context.Context, articleID
 		return nil, fmt.Errorf("error updating article content: %w", err)
 	}
 
-	article.Content = updatedContent
+	article.DraftContent = updatedContent
 
-	result = db.Model(&article).Update("content", updatedContent)
+	result = db.Model(&article).Update("draft_content", updatedContent)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -214,13 +250,6 @@ func (s *ArticleService) GetArticleIDBySlug(slug string) (uuid.UUID, error) {
 
 	return article.ID, nil
 }
-
-// --- FULL REFACTOR FOR NEW SCHEMA ---
-// All list/detail methods now use the new schema from 20250723064003_init.sql.
-// Remove all legacy GORM relations, join table logic, and references to removed fields.
-// For tag handling, use tag_ids integer array on Article and fetch tag names from tag table.
-// For author, fetch from account table using author_id.
-// Only use fields present in the new schema.
 
 // getAuthorData fetches author information for an article
 func (s *ArticleService) getAuthorData(authorID uuid.UUID) (AuthorData, error) {
@@ -309,13 +338,13 @@ func (s *ArticleService) GetArticles(page int, tag string, status string, articl
 
 	switch status {
 	case "published":
-		query = query.Where("is_draft = ?", false)
+		query = query.Where("published_at IS NOT NULL")
 	case "drafts":
-		query = query.Where("is_draft = ?", true)
+		query = query.Where("published_at IS NULL")
 	case "all":
 		// No filter
 	default:
-		query = query.Where("is_draft = ?", false)
+		query = query.Where("published_at IS NOT NULL")
 	}
 
 	if tag != "" {
@@ -361,18 +390,19 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string, stat
 	var totalCount int64
 
 	searchQuery := db.Model(&models.Article{}).
-		Where("title ILIKE ? OR content ILIKE ? OR EXISTS (SELECT 1 FROM tag WHERE tag.id = ANY(tag_ids) AND tag.name ILIKE ?)", "%"+query+"%", "%"+query+"%", "%"+query+"%")
+		Where("draft_title ILIKE ? OR draft_content ILIKE ? OR published_title ILIKE ? OR published_content ILIKE ? OR EXISTS (SELECT 1 FROM tag WHERE tag.id = ANY(tag_ids) AND tag.name ILIKE ?)",
+			"%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%")
 
 	// Apply status filter
 	switch status {
 	case "published":
-		searchQuery = searchQuery.Where("is_draft = ?", false)
+		searchQuery = searchQuery.Where("published_at IS NOT NULL")
 	case "drafts":
-		searchQuery = searchQuery.Where("is_draft = ?", true)
+		searchQuery = searchQuery.Where("published_at IS NULL")
 	case "all":
 		// No filter
 	default:
-		searchQuery = searchQuery.Where("is_draft = ?", false)
+		searchQuery = searchQuery.Where("published_at IS NOT NULL")
 	}
 
 	if tag != "" {
@@ -413,7 +443,6 @@ func (s *ArticleService) SearchArticles(query string, page int, tag string, stat
 
 func (s *ArticleService) GetPopularTags() ([]string, error) {
 	db := s.db.GetDB()
-	// Use raw SQL to unnest tag_ids and count tag usage
 	var results []struct {
 		TagName string
 		Count   int
@@ -422,7 +451,7 @@ func (s *ArticleService) GetPopularTags() ([]string, error) {
 SELECT tag.name AS tag_name, COUNT(*) AS count
 FROM article, unnest(tag_ids) AS tag_id
 JOIN tag ON tag.id = tag_id
-WHERE article.is_draft = false
+WHERE article.published_at IS NOT NULL
 GROUP BY tag.name
 ORDER BY count DESC
 LIMIT 10`
@@ -512,7 +541,7 @@ func (s *ArticleService) GetRecommendedArticles(currentArticleID uuid.UUID) ([]R
 	db := s.db.GetDB()
 	var articles []models.Article
 
-	result := db.Where("id != ? AND is_draft = ?", currentArticleID, false).
+	result := db.Where("id != ? AND published_at IS NOT NULL", currentArticleID).
 		Order("created_at DESC").
 		Limit(3).
 		Find(&articles)
@@ -530,13 +559,21 @@ func (s *ArticleService) GetRecommendedArticles(currentArticleID uuid.UUID) ([]R
 		}
 
 		var image *string
-		if article.ImageURL != "" {
-			image = &article.ImageURL
+		if article.PublishedImageURL != nil && *article.PublishedImageURL != "" {
+			image = article.PublishedImageURL
+		} else if article.DraftImageURL != "" {
+			image = &article.DraftImageURL
+		}
+
+		// Use published title if available, otherwise draft
+		title := article.DraftTitle
+		if article.PublishedTitle != nil {
+			title = *article.PublishedTitle
 		}
 
 		recommended = append(recommended, RecommendedArticle{
 			ID:          article.ID,
-			Title:       article.Title,
+			Title:       title,
 			Slug:        article.Slug,
 			ImageURL:    image,
 			PublishedAt: safeTimeToString(article.PublishedAt),
@@ -565,7 +602,7 @@ type ArticleCreateRequest struct {
 	Content  string    `json:"content" validate:"required,min=10"`
 	ImageURL string    `json:"image_url" validate:"omitempty,url"`
 	Tags     []string  `json:"tags" validate:"max=10,dive,min=2,max=30"`
-	IsDraft  bool      `json:"isDraft"`
+	Publish  bool      `json:"publish"`
 	AuthorID uuid.UUID `json:"authorId" validate:"required"`
 }
 
@@ -578,15 +615,24 @@ func (s *ArticleService) CreateArticle(ctx context.Context, req ArticleCreateReq
 		return nil, err
 	}
 
-	// Create article with unique slug
+	// Create article with draft content
 	article := models.Article{
-		Title:    req.Title,
-		Content:  req.Content,
-		ImageURL: req.ImageURL,
-		IsDraft:  req.IsDraft,
-		AuthorID: req.AuthorID,
-		Slug:     s.generateUniqueSlug(req.Title, nil),
+		DraftTitle:    req.Title,
+		DraftContent:  req.Content,
+		DraftImageURL: req.ImageURL,
+		AuthorID:      req.AuthorID,
+		Slug:          s.generateUniqueSlug(req.Title, nil),
 	}
+
+	// If publish is requested, also set published content
+	if req.Publish {
+		now := time.Now()
+		article.PublishedTitle = &req.Title
+		article.PublishedContent = &req.Content
+		article.PublishedImageURL = &req.ImageURL
+		article.PublishedAt = &now
+	}
+
 	if len(tagIDs) > 0 {
 		article.TagIDs = tagIDs
 	}
@@ -596,7 +642,242 @@ func (s *ArticleService) CreateArticle(ctx context.Context, req ArticleCreateReq
 		return nil, result.Error
 	}
 
+	// Create initial version asynchronously
+	status := "draft"
+	if req.Publish {
+		status = "published"
+	}
+	go s.createVersionAsync(article.ID, req.Title, req.Content, req.ImageURL, nil, status, req.AuthorID)
+
 	return s.GetArticle(article.ID)
+}
+
+// PublishArticle publishes the current draft
+func (s *ArticleService) PublishArticle(ctx context.Context, articleID uuid.UUID) (*ArticleListItem, error) {
+	db := s.db.GetDB()
+
+	var article models.Article
+	if err := db.First(&article, articleID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, core.NotFoundError("Article")
+		}
+		return nil, core.InternalError("Failed to fetch article")
+	}
+
+	now := time.Now()
+
+	// Copy draft to published
+	updateFields := map[string]interface{}{
+		"published_title":     article.DraftTitle,
+		"published_content":   article.DraftContent,
+		"published_image_url": article.DraftImageURL,
+		"published_embedding": article.DraftEmbedding,
+		"published_at":        now,
+		"updated_at":          now,
+	}
+
+	if err := db.Model(&article).Updates(updateFields).Error; err != nil {
+		return nil, fmt.Errorf("failed to publish article: %w", err)
+	}
+
+	// Create published version asynchronously
+	go s.createVersionAsync(articleID, article.DraftTitle, article.DraftContent, article.DraftImageURL, article.DraftEmbedding.Slice(), "published", article.AuthorID)
+
+	return s.GetArticle(article.ID)
+}
+
+// UnpublishArticle removes published status
+func (s *ArticleService) UnpublishArticle(ctx context.Context, articleID uuid.UUID) (*ArticleListItem, error) {
+	db := s.db.GetDB()
+
+	var article models.Article
+	if err := db.First(&article, articleID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, core.NotFoundError("Article")
+		}
+		return nil, core.InternalError("Failed to fetch article")
+	}
+
+	if article.PublishedAt == nil {
+		return nil, core.InvalidInputError("Article is not published")
+	}
+
+	updateFields := map[string]interface{}{
+		"published_title":              nil,
+		"published_content":            nil,
+		"published_image_url":          nil,
+		"published_embedding":          nil,
+		"published_at":                 nil,
+		"current_published_version_id": nil,
+		"updated_at":                   time.Now(),
+	}
+
+	if err := db.Model(&article).Updates(updateFields).Error; err != nil {
+		return nil, fmt.Errorf("failed to unpublish article: %w", err)
+	}
+
+	return s.GetArticle(article.ID)
+}
+
+// ListVersions returns all versions for an article
+func (s *ArticleService) ListVersions(ctx context.Context, articleID uuid.UUID) (*ArticleVersionListResponse, error) {
+	db := s.db.GetDB()
+
+	// Verify article exists
+	var article models.Article
+	if err := db.First(&article, articleID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, core.NotFoundError("Article")
+		}
+		return nil, core.InternalError("Failed to fetch article")
+	}
+
+	var versions []models.ArticleVersion
+	if err := db.Where("article_id = ?", articleID).Order("version_number DESC").Find(&versions).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch versions: %w", err)
+	}
+
+	response := &ArticleVersionListResponse{
+		Versions: make([]ArticleVersionResponse, len(versions)),
+		Total:    len(versions),
+	}
+
+	for i, v := range versions {
+		response.Versions[i] = ArticleVersionResponse{
+			ID:            v.ID,
+			ArticleID:     v.ArticleID,
+			VersionNumber: v.VersionNumber,
+			Status:        v.Status,
+			Title:         v.Title,
+			Content:       v.Content,
+			ImageURL:      v.ImageURL,
+			CreatedAt:     v.CreatedAt.UTC().Format(time.RFC3339),
+		}
+	}
+
+	return response, nil
+}
+
+// GetVersion retrieves a specific version
+func (s *ArticleService) GetVersion(ctx context.Context, versionID uuid.UUID) (*ArticleVersionResponse, error) {
+	db := s.db.GetDB()
+
+	var version models.ArticleVersion
+	if err := db.First(&version, versionID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, core.NotFoundError("Version")
+		}
+		return nil, core.InternalError("Failed to fetch version")
+	}
+
+	return &ArticleVersionResponse{
+		ID:            version.ID,
+		ArticleID:     version.ArticleID,
+		VersionNumber: version.VersionNumber,
+		Status:        version.Status,
+		Title:         version.Title,
+		Content:       version.Content,
+		ImageURL:      version.ImageURL,
+		CreatedAt:     version.CreatedAt.UTC().Format(time.RFC3339),
+	}, nil
+}
+
+// RevertToVersion creates a new draft from a historical version
+func (s *ArticleService) RevertToVersion(ctx context.Context, articleID, versionID uuid.UUID) (*ArticleListItem, error) {
+	db := s.db.GetDB()
+
+	// Verify article exists
+	var article models.Article
+	if err := db.First(&article, articleID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, core.NotFoundError("Article")
+		}
+		return nil, core.InternalError("Failed to fetch article")
+	}
+
+	// Get the version to revert to
+	var version models.ArticleVersion
+	if err := db.First(&version, versionID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, core.NotFoundError("Version")
+		}
+		return nil, core.InternalError("Failed to fetch version")
+	}
+
+	// Verify version belongs to this article
+	if version.ArticleID != articleID {
+		return nil, core.InvalidInputError("Version does not belong to this article")
+	}
+
+	now := time.Now()
+
+	// Update draft with version content
+	updateFields := map[string]interface{}{
+		"draft_title":     version.Title,
+		"draft_content":   version.Content,
+		"draft_image_url": version.ImageURL,
+		"draft_embedding": version.Embedding,
+		"updated_at":      now,
+	}
+
+	if err := db.Model(&article).Updates(updateFields).Error; err != nil {
+		return nil, fmt.Errorf("failed to revert article: %w", err)
+	}
+
+	// Create new draft version asynchronously (to record the revert)
+	go s.createVersionAsync(articleID, version.Title, version.Content, version.ImageURL, version.Embedding.Slice(), "draft", article.AuthorID)
+
+	return s.GetArticle(article.ID)
+}
+
+// createVersionAsync creates a version record asynchronously
+func (s *ArticleService) createVersionAsync(articleID uuid.UUID, title, content, imageURL string, embedding []float32, status string, editedBy uuid.UUID) {
+	db := s.db.GetDB()
+	ctx := context.Background()
+
+	// Get next version number
+	var maxVersion int
+	db.WithContext(ctx).Model(&models.ArticleVersion{}).
+		Where("article_id = ?", articleID).
+		Select("COALESCE(MAX(version_number), 0)").
+		Scan(&maxVersion)
+
+	var embeddingVector pgvector.Vector
+	if len(embedding) > 0 {
+		embeddingVector = pgvector.NewVector(embedding)
+	}
+
+	var editedByPtr *uuid.UUID
+	if editedBy != uuid.Nil {
+		editedByPtr = &editedBy
+	}
+
+	version := &models.ArticleVersion{
+		ID:            uuid.New(),
+		ArticleID:     articleID,
+		VersionNumber: maxVersion + 1,
+		Status:        status,
+		Title:         title,
+		Content:       content,
+		ImageURL:      imageURL,
+		Embedding:     embeddingVector,
+		EditedBy:      editedByPtr,
+		CreatedAt:     time.Now(),
+	}
+
+	if err := db.WithContext(ctx).Create(version).Error; err != nil {
+		log.Printf("Failed to create version for article %s: %v", articleID, err)
+		return
+	}
+
+	// Update version pointer on article
+	pointerField := "current_draft_version_id"
+	if status == "published" {
+		pointerField = "current_published_version_id"
+	}
+	db.Model(&models.Article{}).
+		Where("id = ?", articleID).
+		Update(pointerField, version.ID)
 }
 
 // Helper function to generate slug from title
@@ -660,11 +941,10 @@ func buildOrderClause(sortBy string, sortOrder string) string {
 
 	// Map sortBy to valid column names
 	validColumns := map[string]string{
-		"title":        "title",
+		"title":        "draft_title",
 		"created_at":   "created_at",
 		"published_at": "published_at",
-		"is_draft":     "is_draft",
-		"status":       "is_draft", // Map status to is_draft
+		"status":       "published_at", // Sort by published status
 	}
 
 	column, exists := validColumns[sortBy]
@@ -698,7 +978,7 @@ func (s *ArticleService) regenerateArticleEmbedding(ctx context.Context, article
 
 	// Update the article with the new embedding
 	db := s.db.GetDB()
-	result := db.Model(&models.Article{}).Where("id = ?", articleID).Update("embedding", embedding)
+	result := db.Model(&models.Article{}).Where("id = ?", articleID).Update("draft_embedding", embedding)
 	if result.Error != nil {
 		return fmt.Errorf("failed to update article embedding: %w", result.Error)
 	}

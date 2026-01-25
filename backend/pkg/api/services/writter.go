@@ -62,13 +62,12 @@ func (w *WriterAgent) GenerateArticle(ctx context.Context, prompt, title string,
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
-	// Create article
+	// Create article with draft content
 	article := &models.Article{
-		Title:     title,
-		Content:   finalMsg.Choices[0].Message.Content,
-		AuthorID:  authorID,
-		IsDraft:   true,
-		Embedding: embedding,
+		DraftTitle:    title,
+		DraftContent:  finalMsg.Choices[0].Message.Content,
+		AuthorID:      authorID,
+		DraftEmbedding: embedding,
 	}
 	return article, nil
 }
@@ -81,7 +80,7 @@ func (w *WriterAgent) UpdateWithContext(ctx context.Context, article *models.Art
 	msg, err := w.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.SystemMessage(prompts.EditorContextPrompt),
-			openai.UserMessage(fmt.Sprintf("Title: %q\nPrompt: %s", article.Title, article.Content)),
+			openai.UserMessage(fmt.Sprintf("Title: %q\nPrompt: %s", article.DraftTitle, article.DraftContent)),
 		},
 		Model: openai.ChatModelGPT4o,
 	})
