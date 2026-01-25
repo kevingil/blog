@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"blog-agent-go/backend/internal/core"
+	"backend/pkg/core"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"

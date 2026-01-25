@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"blog-agent-go/backend/internal/core"
-	"blog-agent-go/backend/internal/core/tag"
+	"backend/pkg/core"
+	"backend/pkg/core/tag"
 
 	"github.com/google/uuid"
 )
