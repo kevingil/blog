@@ -23,7 +23,7 @@ func NewTagRepository(db *gorm.DB) *TagRepository {
 
 // FindByID retrieves a tag by its ID
 func (r *TagRepository) FindByID(ctx context.Context, id int) (*tag.Tag, error) {
-	var model models.TagModel
+	var model models.Tag
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, core.ErrNotFound
@@ -35,7 +35,7 @@ func (r *TagRepository) FindByID(ctx context.Context, id int) (*tag.Tag, error) 
 
 // FindByName retrieves a tag by its name (case-insensitive)
 func (r *TagRepository) FindByName(ctx context.Context, name string) (*tag.Tag, error) {
-	var model models.TagModel
+	var model models.Tag
 	if err := r.db.WithContext(ctx).Where("LOWER(name) = LOWER(?)", name).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, core.ErrNotFound
@@ -47,7 +47,7 @@ func (r *TagRepository) FindByName(ctx context.Context, name string) (*tag.Tag, 
 
 // FindByIDs retrieves tags by their IDs
 func (r *TagRepository) FindByIDs(ctx context.Context, ids []int64) ([]tag.Tag, error) {
-	var tagModels []models.TagModel
+	var tagModels []models.Tag
 	if err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&tagModels).Error; err != nil {
 		return nil, err
 	}
@@ -69,11 +69,11 @@ func (r *TagRepository) EnsureExists(ctx context.Context, names []string) ([]int
 			continue
 		}
 
-		var existingTag models.TagModel
+		var existingTag models.Tag
 		err := r.db.WithContext(ctx).Where("LOWER(name) = LOWER(?)", name).First(&existingTag).Error
 		if err == gorm.ErrRecordNotFound {
 			// Create new tag
-			newTag := &models.TagModel{Name: name}
+			newTag := &models.Tag{Name: name}
 			if err := r.db.WithContext(ctx).Create(newTag).Error; err != nil {
 				return nil, err
 			}
@@ -90,7 +90,7 @@ func (r *TagRepository) EnsureExists(ctx context.Context, names []string) ([]int
 
 // List retrieves all tags
 func (r *TagRepository) List(ctx context.Context) ([]tag.Tag, error) {
-	var tagModels []models.TagModel
+	var tagModels []models.Tag
 	if err := r.db.WithContext(ctx).Order("name ASC").Find(&tagModels).Error; err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func (r *TagRepository) List(ctx context.Context) ([]tag.Tag, error) {
 
 // Save creates or updates a tag
 func (r *TagRepository) Save(ctx context.Context, t *tag.Tag) error {
-	model := models.TagModelFromCore(t)
+	model := models.TagFromCore(t)
 
 	if t.ID == 0 {
 		// Create new tag
@@ -121,7 +121,7 @@ func (r *TagRepository) Save(ctx context.Context, t *tag.Tag) error {
 
 // Delete removes a tag by its ID
 func (r *TagRepository) Delete(ctx context.Context, id int) error {
-	result := r.db.WithContext(ctx).Delete(&models.TagModel{}, id)
+	result := r.db.WithContext(ctx).Delete(&models.Tag{}, id)
 	if result.Error != nil {
 		return result.Error
 	}

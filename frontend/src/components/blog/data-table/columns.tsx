@@ -1,5 +1,5 @@
 import { ColumnDef } from "@tanstack/react-table";
-import { ArticleListItem } from "@/services/types";
+import { ArticleListItem, isPublished, hasDraftChanges } from "@/services/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +14,7 @@ import { deleteArticle } from "@/services/blog";
 
 export const createColumns = (onArticleDeleted: () => void): ColumnDef<ArticleListItem>[] => [
   {
-    accessorKey: "article.title",
+    accessorKey: "article.draft_title",
     header: ({ column }) => {
       return (
         <Button
@@ -29,26 +29,34 @@ export const createColumns = (onArticleDeleted: () => void): ColumnDef<ArticleLi
     },
     cell: ({ row }) => {
       const article = row.original.article;
+      const hasChanges = hasDraftChanges(article);
       return (
         <div className="flex items-start gap-3 py-2">
-          {article.image_url && (
+          {article.draft_image_url && (
             <img
-              src={article.image_url}
+              src={article.draft_image_url}
               className="rounded-md w-16 h-16 min-w-16 min-h-16 object-cover"
-              alt={article.title}
+              alt={article.draft_title}
             />
           )}
           <div className="flex flex-col gap-1 min-w-0">
-            <Link
-              to="/dashboard/blog/edit/$blogSlug"
-              params={{ blogSlug: article.slug || "" }}
-              className="font-medium hover:underline truncate"
-            >
-              {article.title}
-            </Link>
-            {article.content && (
+            <div className="flex items-center gap-2">
+              <Link
+                to="/dashboard/blog/edit/$blogSlug"
+                params={{ blogSlug: article.slug || "" }}
+                className="font-medium hover:underline truncate"
+              >
+                {article.draft_title}
+              </Link>
+              {hasChanges && (
+                <Badge variant="outline" className="text-[0.6rem] px-1 py-0 text-amber-600 dark:text-amber-400 border-amber-300">
+                  modified
+                </Badge>
+              )}
+            </div>
+            {article.draft_content && (
               <p className="text-xs text-muted-foreground line-clamp-2">
-                {article.content.slice(0, 150)}...
+                {article.draft_content.replace(/<[^>]*>/g, '').slice(0, 150)}...
               </p>
             )}
           </div>
@@ -143,7 +151,8 @@ export const createColumns = (onArticleDeleted: () => void): ColumnDef<ArticleLi
     },
   },
   {
-    accessorKey: "article.is_draft",
+    accessorKey: "article.published_at",
+    id: "status",
     header: ({ column }) => {
       return (
         <Button
@@ -157,17 +166,18 @@ export const createColumns = (onArticleDeleted: () => void): ColumnDef<ArticleLi
       );
     },
     cell: ({ row }) => {
-      const isDraft = row.original.article.is_draft;
+      const article = row.original.article;
+      const published = isPublished(article);
       return (
         <Badge
           variant="outline"
           className={`text-[0.65rem] ${
-            isDraft
-              ? "bg-indigo-50 dark:bg-indigo-900/30"
-              : "bg-green-50 dark:bg-green-900/30"
+            published
+              ? "bg-green-50 dark:bg-green-900/30"
+              : "bg-indigo-50 dark:bg-indigo-900/30"
           }`}
         >
-          {isDraft ? "Draft" : "Published"}
+          {published ? "Published" : "Draft"}
         </Badge>
       );
     },

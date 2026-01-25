@@ -24,8 +24,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Link, useLocation, useNavigate } from "@tanstack/react-router"
-import { Badge } from "@/components/ui/badge"
-import { ArticleListItem } from "@/services/types"
+import { ArticleListItem, isPublished } from "@/services/types"
 import { useEffect, useRef } from "react"
 import { FetchNextPageOptions, InfiniteQueryObserverResult, InfiniteData, useQueryClient } from "@tanstack/react-query"
 import { GetArticlesResponse } from "@/routes/dashboard/blog/index"
@@ -114,11 +113,11 @@ export function NavDocuments({
 
   return (
     <>
-      <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+      <SidebarGroup className="group-data-[collapsible=icon]:hidden flex-1 flex flex-col min-h-0">
         <div className="flex flex-row justify-between gap-2">
         <SidebarGroupLabel>Recent Articles</SidebarGroupLabel>
         </div>
-        <SidebarMenu className="h-[calc(100vh-450px)] overflow-y-auto">
+        <SidebarMenu className="flex-1 overflow-y-auto min-h-0">
           {articles
             .slice()
             .sort((a, b) => {
@@ -139,20 +138,20 @@ export function NavDocuments({
                       }}
                     >
                       <div className="flex items-center gap-2 w-full">
-                        <span className="text-sm font-medium truncate flex-1">{articleItem.article.title}</span>
-                        <Badge 
-                          className={`text-[0.6rem] ${
-                            articleItem.article.is_draft 
-                              ? "bg-indigo-50 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300" 
-                              : "bg-green-50 dark:bg-green-900 text-green-700 dark:text-green-300"
-                          }`} 
-                          variant="outline"
-                        >
-                          {articleItem.article.is_draft ? 'Draft' : 'Published'}
-                        </Badge>
+                        <span 
+                          className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                            isPublished(articleItem.article) 
+                              ? "bg-green-500" 
+                              : "bg-indigo-400"
+                          }`}
+                        />
+                        <span className="text-sm font-medium truncate flex-1">{articleItem.article.draft_title}</span>
                       </div>
                       <span className="text-xs text-muted-foreground">
-                        {new Date(articleItem.article.created_at).toLocaleDateString()}
+                        {isPublished(articleItem.article) 
+                          ? `Published ${new Date(articleItem.article.published_at!).toLocaleDateString()}`
+                          : 'Draft'
+                        }
                       </span>
                     </Link>
                   </SidebarMenuButton>
@@ -197,7 +196,7 @@ export function NavDocuments({
                           <AlertDialogHeader>
                             <AlertDialogTitle>Delete Article?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Are you sure you want to delete the article <b>{articleItem.article.title}</b>? This action cannot be undone.
+                              Are you sure you want to delete the article <b>{articleItem.article.draft_title}</b>? This action cannot be undone.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>

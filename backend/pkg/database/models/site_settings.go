@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// SiteSettingsModel is the GORM model for site settings
-type SiteSettingsModel struct {
+// SiteSettings is the GORM model for site settings
+type SiteSettings struct {
 	ID                   int        `json:"id" gorm:"primaryKey;default:1"`
 	PublicProfileType    string     `json:"public_profile_type" gorm:"default:user"` // 'user' or 'organization'
 	PublicUserID         *uuid.UUID `json:"public_user_id" gorm:"type:uuid"`
@@ -18,16 +18,16 @@ type SiteSettingsModel struct {
 	UpdatedAt            time.Time  `json:"updated_at" gorm:"autoUpdateTime"`
 
 	// Relationships for eager loading
-	PublicUser         *AccountModel      `json:"public_user,omitempty" gorm:"foreignKey:PublicUserID"`
-	PublicOrganization *OrganizationModel `json:"public_organization,omitempty" gorm:"foreignKey:PublicOrganizationID"`
+	PublicUser         *Account      `json:"public_user,omitempty" gorm:"foreignKey:PublicUserID"`
+	PublicOrganization *Organization `json:"public_organization,omitempty" gorm:"foreignKey:PublicOrganizationID"`
 }
 
-func (SiteSettingsModel) TableName() string {
+func (SiteSettings) TableName() string {
 	return "site_settings"
 }
 
 // ToCore converts the GORM model to the domain type
-func (m *SiteSettingsModel) ToCore() *profile.SiteSettings {
+func (m *SiteSettings) ToCore() *profile.SiteSettings {
 	return &profile.SiteSettings{
 		ID:                   m.ID,
 		PublicProfileType:    m.PublicProfileType,
@@ -38,9 +38,9 @@ func (m *SiteSettingsModel) ToCore() *profile.SiteSettings {
 	}
 }
 
-// SiteSettingsModelFromCore creates a GORM model from the domain type
-func SiteSettingsModelFromCore(s *profile.SiteSettings) *SiteSettingsModel {
-	return &SiteSettingsModel{
+// SiteSettingsFromCore creates a GORM model from the domain type
+func SiteSettingsFromCore(s *profile.SiteSettings) *SiteSettings {
+	return &SiteSettings{
 		ID:                   s.ID,
 		PublicProfileType:    s.PublicProfileType,
 		PublicUserID:         s.PublicUserID,

@@ -17,7 +17,7 @@ import (
 	"backend/pkg/core/ml/llm/message"
 	"backend/pkg/core/ml/llm/session"
 	"backend/pkg/core/ml/llm/tools"
-	"backend/pkg/models"
+	"backend/pkg/database/models"
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/google/uuid"

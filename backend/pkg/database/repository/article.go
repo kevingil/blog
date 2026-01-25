@@ -27,7 +27,7 @@ func NewArticleRepository(db *gorm.DB) *ArticleRepository {
 
 // FindByID retrieves an article by its ID
 func (r *ArticleRepository) FindByID(ctx context.Context, id uuid.UUID) (*article.Article, error) {
-	var model models.ArticleModel
+	var model models.Article
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, core.ErrNotFound
@@ -39,7 +39,7 @@ func (r *ArticleRepository) FindByID(ctx context.Context, id uuid.UUID) (*articl
 
 // FindBySlug retrieves an article by its slug
 func (r *ArticleRepository) FindBySlug(ctx context.Context, slug string) (*article.Article, error) {
-	var model models.ArticleModel
+	var model models.Article
 	if err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, core.ErrNotFound
@@ -51,10 +51,10 @@ func (r *ArticleRepository) FindBySlug(ctx context.Context, slug string) (*artic
 
 // List retrieves articles with pagination and filtering
 func (r *ArticleRepository) List(ctx context.Context, opts article.ListOptions) ([]article.Article, int64, error) {
-	var articleModels []models.ArticleModel
+	var articleModels []models.Article
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&models.ArticleModel{})
+	query := r.db.WithContext(ctx).Model(&models.Article{})
 
 	// Apply filters
 	if opts.PublishedOnly {
@@ -89,10 +89,10 @@ func (r *ArticleRepository) List(ctx context.Context, opts article.ListOptions) 
 
 // Search performs full-text search on articles
 func (r *ArticleRepository) Search(ctx context.Context, opts article.SearchOptions) ([]article.Article, int64, error) {
-	var articleModels []models.ArticleModel
+	var articleModels []models.Article
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&models.ArticleModel{})
+	query := r.db.WithContext(ctx).Model(&models.Article{})
 
 	// Apply search filter - search in both draft and published content
 	if opts.Query != "" {
@@ -130,7 +130,7 @@ func (r *ArticleRepository) Search(ctx context.Context, opts article.SearchOptio
 
 // SearchByEmbedding performs vector similarity search
 func (r *ArticleRepository) SearchByEmbedding(ctx context.Context, embedding []float32, limit int) ([]article.Article, error) {
-	var articleModels []models.ArticleModel
+	var articleModels []models.Article
 
 	embeddingVector := pgvector.NewVector(embedding)
 	query := fmt.Sprintf(
@@ -153,10 +153,10 @@ func (r *ArticleRepository) SearchByEmbedding(ctx context.Context, embedding []f
 
 // Save creates or updates an article
 func (r *ArticleRepository) Save(ctx context.Context, a *article.Article) error {
-	model := models.ArticleModelFromCore(a)
+	model := models.ArticleFromCore(a)
 
 	// Check if article exists
-	var existing models.ArticleModel
+	var existing models.Article
 	err := r.db.WithContext(ctx).First(&existing, a.ID).Error
 	if err == gorm.ErrRecordNotFound {
 		// Create new article
@@ -175,7 +175,7 @@ func (r *ArticleRepository) Save(ctx context.Context, a *article.Article) error 
 
 // Delete removes an article by its ID
 func (r *ArticleRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	result := r.db.WithContext(ctx).Delete(&models.ArticleModel{}, id)
+	result := r.db.WithContext(ctx).Delete(&models.Article{}, id)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -218,7 +218,7 @@ func (r *ArticleRepository) SaveDraft(ctx context.Context, a *article.Article) e
 	now := time.Now()
 
 	// 1. Update article table synchronously (draft fields only)
-	err := r.db.WithContext(ctx).Model(&models.ArticleModel{}).
+	err := r.db.WithContext(ctx).Model(&models.Article{}).
 		Where("id = ?", a.ID).
 		Updates(map[string]interface{}{
 			"draft_title":     a.DraftTitle,
@@ -243,7 +243,7 @@ func (r *ArticleRepository) Publish(ctx context.Context, a *article.Article) err
 	now := time.Now()
 
 	// 1. Copy draft fields to published fields synchronously
-	err := r.db.WithContext(ctx).Model(&models.ArticleModel{}).
+	err := r.db.WithContext(ctx).Model(&models.Article{}).
 		Where("id = ?", a.ID).
 		Updates(map[string]interface{}{
 			"published_title":     a.DraftTitle,
@@ -280,7 +280,7 @@ func (r *ArticleRepository) Publish(ctx context.Context, a *article.Article) err
 func (r *ArticleRepository) Unpublish(ctx context.Context, a *article.Article) error {
 	now := time.Now()
 
-	err := r.db.WithContext(ctx).Model(&models.ArticleModel{}).
+	err := r.db.WithContext(ctx).Model(&models.Article{}).
 		Where("id = ?", a.ID).
 		Updates(map[string]interface{}{
 			"published_title":             nil,
@@ -309,7 +309,7 @@ func (r *ArticleRepository) Unpublish(ctx context.Context, a *article.Article) e
 
 // ListVersions retrieves all versions for an article
 func (r *ArticleRepository) ListVersions(ctx context.Context, articleID uuid.UUID) ([]article.ArticleVersion, error) {
-	var versionModels []models.ArticleVersionModel
+	var versionModels []models.ArticleVersion
 
 	err := r.db.WithContext(ctx).
 		Where("article_id = ?", articleID).
@@ -329,7 +329,7 @@ func (r *ArticleRepository) ListVersions(ctx context.Context, articleID uuid.UUI
 
 // GetVersion retrieves a specific version by ID
 func (r *ArticleRepository) GetVersion(ctx context.Context, versionID uuid.UUID) (*article.ArticleVersion, error) {
-	var model models.ArticleVersionModel
+	var model models.ArticleVersion
 
 	if err := r.db.WithContext(ctx).First(&model, versionID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -344,7 +344,7 @@ func (r *ArticleRepository) GetVersion(ctx context.Context, versionID uuid.UUID)
 // RevertToVersion creates a new draft by copying content from a historical version
 func (r *ArticleRepository) RevertToVersion(ctx context.Context, articleID, versionID uuid.UUID) error {
 	// Get the version to revert to
-	var versionModel models.ArticleVersionModel
+	var versionModel models.ArticleVersion
 	if err := r.db.WithContext(ctx).First(&versionModel, versionID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return core.ErrNotFound
@@ -365,7 +365,7 @@ func (r *ArticleRepository) RevertToVersion(ctx context.Context, articleID, vers
 		embedding = versionModel.Embedding
 	}
 
-	err := r.db.WithContext(ctx).Model(&models.ArticleModel{}).
+	err := r.db.WithContext(ctx).Model(&models.Article{}).
 		Where("id = ?", articleID).
 		Updates(map[string]interface{}{
 			"draft_title":     versionModel.Title,
@@ -398,22 +398,17 @@ func (r *ArticleRepository) createVersionAsync(articleID uuid.UUID, title, conte
 
 	// Get next version number
 	var maxVersion int
-	r.db.Model(&models.ArticleVersionModel{}).
+	r.db.Model(&models.ArticleVersion{}).
 		Where("article_id = ?", articleID).
 		Select("COALESCE(MAX(version_number), 0)").
 		Scan(&maxVersion)
-
-	var embeddingVector pgvector.Vector
-	if len(embedding) > 0 {
-		embeddingVector = pgvector.NewVector(embedding)
-	}
 
 	var editedByPtr *uuid.UUID
 	if editedBy != uuid.Nil {
 		editedByPtr = &editedBy
 	}
 
-	version := &models.ArticleVersionModel{
+	version := &models.ArticleVersion{
 		ID:            uuid.New(),
 		ArticleID:     articleID,
 		VersionNumber: maxVersion + 1,
@@ -421,12 +416,20 @@ func (r *ArticleRepository) createVersionAsync(articleID uuid.UUID, title, conte
 		Title:         title,
 		Content:       content,
 		ImageURL:      imageURL,
-		Embedding:     embeddingVector,
 		EditedBy:      editedByPtr,
 		CreatedAt:     time.Now(),
 	}
 
-	if err := r.db.WithContext(ctx).Create(version).Error; err != nil {
+	// Create version - omit embedding if empty (pgvector requires at least 1 dimension)
+	var err error
+	if len(embedding) > 0 {
+		version.Embedding = pgvector.NewVector(embedding)
+		err = r.db.WithContext(ctx).Create(version).Error
+	} else {
+		err = r.db.WithContext(ctx).Omit("Embedding").Create(version).Error
+	}
+
+	if err != nil {
 		log.Printf("Failed to create version for article %s: %v", articleID, err)
 		return
 	}
@@ -436,7 +439,7 @@ func (r *ArticleRepository) createVersionAsync(articleID uuid.UUID, title, conte
 	if status == "published" {
 		pointerField = "current_published_version_id"
 	}
-	r.db.Model(&models.ArticleModel{}).
+	r.db.Model(&models.Article{}).
 		Where("id = ?", articleID).
 		Update(pointerField, version.ID)
 }

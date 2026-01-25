@@ -1,7 +1,7 @@
 package tools
 
 import (
-	"backend/pkg/models"
+	"backend/pkg/database/models"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -54,8 +54,8 @@ type CreateSourceRequest struct {
 
 // ExaSourceService interface for creating sources from search results
 type ExaSourceService interface {
-	ScrapeAndCreateSource(ctx context.Context, articleID uuid.UUID, targetURL string) (*models.ArticleSource, error)
-	CreateSource(ctx context.Context, req CreateSourceRequest) (*models.ArticleSource, error)
+	ScrapeAndCreateSource(ctx context.Context, articleID uuid.UUID, targetURL string) (*models.Source, error)
+	CreateSource(ctx context.Context, req CreateSourceRequest) (*models.Source, error)
 }
 
 // ExaSearchTool searches the web using Exa and automatically creates sources
@@ -226,7 +226,7 @@ func (t *ExaSearchTool) Run(ctx context.Context, params ToolCall) (ToolResponse,
 			}
 
 			// Create WebContentSource from search result data
-			searchResultData := models.SearchResultData{
+			searchResultData := SearchResultData{
 				ID:            result.ID,
 				Title:         result.Title,
 				URL:           result.URL,
@@ -241,10 +241,10 @@ func (t *ExaSearchTool) Run(ctx context.Context, params ToolCall) (ToolResponse,
 				Extras:        result.Extras,
 			}
 
-			webContentSource := models.NewWebContentSourceFromSearchResult(articleID, input.Query, searchResultData)
+			webContentSource := NewWebContentSourceFromSearchResult(articleID, input.Query, searchResultData)
 
 			// Convert to ArticleSource and create in database
-			articleSource := webContentSource.ToArticleSource()
+			articleSource := webContentSource.ToSource()
 
 			// Use the existing service to create the source with embedding generation
 			source, err := t.sourceService.CreateSource(ctx, CreateSourceRequest{

@@ -10,8 +10,8 @@ import (
 	"gorm.io/datatypes"
 )
 
-// PageModel is the GORM model for pages
-type PageModel struct {
+// Page is the GORM model for pages
+type Page struct {
 	ID          uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
 	Slug        string         `json:"slug" gorm:"not null;uniqueIndex"`
 	Title       string         `json:"title" gorm:"not null"`
@@ -24,12 +24,12 @@ type PageModel struct {
 	UpdatedAt   time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
-func (PageModel) TableName() string {
+func (Page) TableName() string {
 	return "page"
 }
 
 // ToCore converts the GORM model to the domain type
-func (m *PageModel) ToCore() *page.Page {
+func (m *Page) ToCore() *page.Page {
 	var metaData map[string]interface{}
 	if m.MetaData != nil {
 		_ = json.Unmarshal(m.MetaData, &metaData)
@@ -49,14 +49,14 @@ func (m *PageModel) ToCore() *page.Page {
 	}
 }
 
-// PageModelFromCore creates a GORM model from the domain type
-func PageModelFromCore(p *page.Page) *PageModel {
+// PageFromCore creates a GORM model from the domain type
+func PageFromCore(p *page.Page) *Page {
 	var metaData datatypes.JSON
 	if p.MetaData != nil {
 		metaData, _ = datatypes.NewJSONType(p.MetaData).MarshalJSON()
 	}
 
-	return &PageModel{
+	return &Page{
 		ID:          p.ID,
 		Slug:        p.Slug,
 		Title:       p.Title,

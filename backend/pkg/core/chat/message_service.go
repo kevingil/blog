@@ -11,7 +11,7 @@ import (
 	"backend/pkg/core"
 	"backend/pkg/core/agent/metadata"
 	"backend/pkg/database"
-	"backend/pkg/models"
+	"backend/pkg/database/models"
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"

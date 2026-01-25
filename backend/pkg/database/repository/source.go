@@ -25,7 +25,7 @@ func NewSourceRepository(db *gorm.DB) *SourceRepository {
 
 // FindByID retrieves a source by its ID
 func (r *SourceRepository) FindByID(ctx context.Context, id uuid.UUID) (*source.Source, error) {
-	var model models.SourceModel
+	var model models.Source
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, core.ErrNotFound
@@ -37,7 +37,7 @@ func (r *SourceRepository) FindByID(ctx context.Context, id uuid.UUID) (*source.
 
 // FindByArticleID retrieves all sources for an article
 func (r *SourceRepository) FindByArticleID(ctx context.Context, articleID uuid.UUID) ([]source.Source, error) {
-	var sourceModels []models.SourceModel
+	var sourceModels []models.Source
 	if err := r.db.WithContext(ctx).Where("article_id = ?", articleID).Order("created_at DESC").Find(&sourceModels).Error; err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func (r *SourceRepository) FindByArticleID(ctx context.Context, articleID uuid.U
 
 // SearchSimilar performs vector similarity search for sources within an article
 func (r *SourceRepository) SearchSimilar(ctx context.Context, articleID uuid.UUID, embedding []float32, limit int) ([]source.Source, error) {
-	var sourceModels []models.SourceModel
+	var sourceModels []models.Source
 
 	embeddingVector := pgvector.NewVector(embedding)
 	query := fmt.Sprintf(
@@ -76,7 +76,7 @@ func (r *SourceRepository) SearchSimilar(ctx context.Context, articleID uuid.UUI
 
 // Save creates a new source
 func (r *SourceRepository) Save(ctx context.Context, s *source.Source) error {
-	model := models.SourceModelFromCore(s)
+	model := models.SourceFromCore(s)
 
 	if s.ID == uuid.Nil {
 		s.ID = uuid.New()
@@ -88,13 +88,13 @@ func (r *SourceRepository) Save(ctx context.Context, s *source.Source) error {
 
 // Update updates an existing source
 func (r *SourceRepository) Update(ctx context.Context, s *source.Source) error {
-	model := models.SourceModelFromCore(s)
+	model := models.SourceFromCore(s)
 	return r.db.WithContext(ctx).Save(model).Error
 }
 
 // Delete removes a source by its ID
 func (r *SourceRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	result := r.db.WithContext(ctx).Delete(&models.SourceModel{}, id)
+	result := r.db.WithContext(ctx).Delete(&models.Source{}, id)
 	if result.Error != nil {
 		return result.Error
 	}

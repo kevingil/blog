@@ -10,8 +10,8 @@ import (
 	"gorm.io/datatypes"
 )
 
-// ImageGenerationModel is the GORM model for image generations
-type ImageGenerationModel struct {
+// ImageGeneration is the GORM model for image generations
+type ImageGeneration struct {
 	ID           uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
 	Prompt       string         `json:"prompt" gorm:"not null"`
 	Provider     string         `json:"provider" gorm:"not null"`
@@ -26,12 +26,12 @@ type ImageGenerationModel struct {
 	CompletedAt  *string        `json:"completed_at"`
 }
 
-func (ImageGenerationModel) TableName() string {
+func (ImageGeneration) TableName() string {
 	return "imagen_request"
 }
 
 // ToCore converts the GORM model to the domain type
-func (m *ImageGenerationModel) ToCore() *image.ImageGeneration {
+func (m *ImageGeneration) ToCore() *image.ImageGeneration {
 	var metaData map[string]interface{}
 	if m.MetaData != nil {
 		_ = json.Unmarshal(m.MetaData, &metaData)
@@ -60,8 +60,8 @@ func (m *ImageGenerationModel) ToCore() *image.ImageGeneration {
 	}
 }
 
-// ImageGenerationModelFromCore creates a GORM model from the domain type
-func ImageGenerationModelFromCore(i *image.ImageGeneration) *ImageGenerationModel {
+// ImageGenerationFromCore creates a GORM model from the domain type
+func ImageGenerationFromCore(i *image.ImageGeneration) *ImageGeneration {
 	var metaData datatypes.JSON
 	if i.MetaData != nil {
 		metaData, _ = datatypes.NewJSONType(i.MetaData).MarshalJSON()
@@ -73,7 +73,7 @@ func ImageGenerationModelFromCore(i *image.ImageGeneration) *ImageGenerationMode
 		completedAt = &s
 	}
 
-	return &ImageGenerationModel{
+	return &ImageGeneration{
 		ID:           i.ID,
 		Prompt:       i.Prompt,
 		Provider:     i.Provider,

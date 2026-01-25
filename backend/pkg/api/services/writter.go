@@ -8,7 +8,7 @@ import (
 
 	"backend/pkg/core/agent/prompts"
 	"backend/pkg/core/ml"
-	"backend/pkg/models"
+	"backend/pkg/database/models"
 
 	"github.com/google/uuid"
 	openai "github.com/openai/openai-go"

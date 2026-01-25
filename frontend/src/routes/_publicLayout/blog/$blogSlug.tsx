@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { getArticleData, getRecommendedArticles } from '@/services/blog';
 import hljs from 'highlight.js';
 import { createFileRoute } from '@tanstack/react-router';
-import { ArticleData, RecommendedArticle } from '@/services/types';
+import { ArticleData, RecommendedArticle, isPublished, getDisplayTitle, getDisplayContent, getDisplayImageUrl } from '@/services/types';
 import { Link } from "@tanstack/react-router"
 import { cn } from "@/lib/utils"
 
@@ -81,8 +81,9 @@ export default function Page() {
       if (!data) {
         redirect({ to: '/not-found' });
       }
-      if (data?.article?.is_draft && (previewDraft !== 'true')) {
-        console.log("previewDraft not true, notFound");
+      // If article is not published and not in preview mode, redirect to not-found
+      if (!isPublished(data?.article) && (previewDraft !== 'true')) {
+        console.log("Article not published and previewDraft not true, notFound");
         redirect({ to: '/not-found' });
       }
     };
@@ -119,8 +120,10 @@ export default function Page() {
 }
 
 function ArticleContent({ slug, articleData }: { slug: string, articleData: ArticleData | null }) {
-  const content = articleData?.article;
+  const article = articleData?.article;
   const [isAnimated, setIsAnimated] = useState(false);
+  const searchParams = new URLSearchParams(window.location.search);
+  const isPreview = searchParams.get('previewDraft') === 'true';
 
   useEffect(() => {
     // Trigger animation with a delay
@@ -141,16 +144,28 @@ function ArticleContent({ slug, articleData }: { slug: string, articleData: Arti
     }
   });
 
+  // Use draft content for preview mode, otherwise prefer published content
+  const displayTitle = article ? (isPreview ? article.draft_title : getDisplayTitle(article)) : '';
+  const displayContent = article ? (isPreview ? article.draft_content : getDisplayContent(article)) : '';
+  const displayImageUrl = article ? (isPreview ? article.draft_image_url : getDisplayImageUrl(article)) : '';
+
   return (
     <article className={cn(
       "max-w-4xl mx-auto bg-card/20 text-card-foreground rounded-xl border border-gray-200/10 p-8 shadow-lg",
       isAnimated ? "card-animated" : "card-hidden"
     )}>
-      <h1 className="text-4xl font-bold mb-4">{content?.title}</h1>
-      {content?.image_url && (
+      {isPreview && (
+        <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+          <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+            Draft Preview - This content is not yet published
+          </p>
+        </div>
+      )}
+      <h1 className="text-4xl font-bold mb-4">{displayTitle}</h1>
+      {displayImageUrl && (
         <img
-          src={content.image_url}
-          alt={content.title}
+          src={displayImageUrl}
+          alt={displayTitle}
           className="rounded-2xl mb-6 object-cover aspect-video"
         />
       )}
@@ -159,8 +174,8 @@ function ArticleContent({ slug, articleData }: { slug: string, articleData: Arti
           <p className="font-semibold">{articleData?.author?.name}</p>
           <p className="text-sm text-muted-foreground">
             {(() => {
-              const date = content?.published_at ? new Date(content.published_at) : null;
-              if (!date || isNaN(date.getTime())) return 'Unknown';
+              const date = article?.published_at ? new Date(article.published_at) : null;
+              if (!date || isNaN(date.getTime())) return isPreview ? 'Draft' : 'Unknown';
               const year = date.getFullYear();
               if (year > 2100) return 'Unknown';
               return format(date, 'MMMM d, yyyy');
@@ -168,7 +183,7 @@ function ArticleContent({ slug, articleData }: { slug: string, articleData: Arti
           </p>
         </div>
       </div>
-      <div className="blog-post prose max-w-none mb-8" dangerouslySetInnerHTML={{ __html: marked(content?.content || '') }}
+      <div className="blog-post prose max-w-none mb-8" dangerouslySetInnerHTML={{ __html: marked(displayContent || '') }}
       />
       <div className="flex flex-wrap gap-2 mb-8">
         {articleData?.tags?.map((tag) => (

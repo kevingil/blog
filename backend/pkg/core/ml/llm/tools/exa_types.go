@@ -1,7 +1,9 @@
-package models
+package tools
 
 import (
 	"time"
+
+	"backend/pkg/database/models"
 
 	"github.com/google/uuid"
 )
@@ -38,17 +40,17 @@ type Metadata struct {
 	Extras         map[string]interface{} `json:"extras"`          // Additional provider-specific data
 }
 
-// ToArticleSource converts a WebContentSource to an ArticleSource for database storage
-func (wcs *WebContentSource) ToArticleSource() *ArticleSource {
+// ToSource converts a WebContentSource to a Source for database storage
+func (wcs *WebContentSource) ToSource() *models.Source {
 	// Combine full text and summary for content
 	content := wcs.FullText
 	if wcs.Summary != "" && wcs.Summary != wcs.FullText {
 		content = wcs.Summary + "\n\n" + wcs.FullText
 	}
 
-	// Note: Metadata will be handled by the service layer when creating the ArticleSource
+	// Note: Metadata will be handled by the service layer when creating the Source
 
-	return &ArticleSource{
+	return &models.Source{
 		ID:         wcs.ID,
 		ArticleID:  wcs.ArticleID,
 		Title:      wcs.Title,

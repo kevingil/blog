@@ -12,8 +12,8 @@ import (
 	"gorm.io/datatypes"
 )
 
-// ArticleModel is the GORM model for articles with cached draft/published content
-type ArticleModel struct {
+// Article is the GORM model for articles with cached draft/published content
+type Article struct {
 	ID       uuid.UUID     `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
 	Slug     string        `json:"slug" gorm:"uniqueIndex;not null"`
 	AuthorID uuid.UUID     `json:"author_id" gorm:"type:uuid;not null"`
@@ -43,12 +43,12 @@ type ArticleModel struct {
 	UpdatedAt       time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
-func (ArticleModel) TableName() string {
+func (Article) TableName() string {
 	return "article"
 }
 
-func (a ArticleModel) MarshalJSON() ([]byte, error) {
-	type Alias ArticleModel
+func (a Article) MarshalJSON() ([]byte, error) {
+	type Alias Article
 	aux := struct {
 		PublishedAt *string `json:"published_at,omitempty"`
 		Alias
@@ -67,8 +67,39 @@ func (a ArticleModel) MarshalJSON() ([]byte, error) {
 	return json.Marshal(aux)
 }
 
+// IsPublished returns true if the article has been published
+func (a *Article) IsPublished() bool {
+	return a.PublishedAt != nil
+}
+
+// GetTitle returns the appropriate title based on context
+// For public viewing, returns published title if available
+// For editing, returns draft title
+func (a *Article) GetTitle(forEditing bool) string {
+	if forEditing || a.PublishedTitle == nil {
+		return a.DraftTitle
+	}
+	return *a.PublishedTitle
+}
+
+// GetContent returns the appropriate content based on context
+func (a *Article) GetContent(forEditing bool) string {
+	if forEditing || a.PublishedContent == nil {
+		return a.DraftContent
+	}
+	return *a.PublishedContent
+}
+
+// GetImageURL returns the appropriate image URL based on context
+func (a *Article) GetImageURL(forEditing bool) string {
+	if forEditing || a.PublishedImageURL == nil {
+		return a.DraftImageURL
+	}
+	return *a.PublishedImageURL
+}
+
 // ToCore converts the GORM model to the domain type
-func (m *ArticleModel) ToCore() *article.Article {
+func (m *Article) ToCore() *article.Article {
 	var sessionMemory map[string]interface{}
 	if m.SessionMemory != nil {
 		_ = json.Unmarshal(m.SessionMemory, &sessionMemory)
@@ -107,8 +138,8 @@ func (m *ArticleModel) ToCore() *article.Article {
 	}
 }
 
-// ArticleModelFromCore creates a GORM model from the domain type
-func ArticleModelFromCore(a *article.Article) *ArticleModel {
+// ArticleFromCore creates a GORM model from the domain type
+func ArticleFromCore(a *article.Article) *Article {
 	var sessionMemory datatypes.JSON
 	if a.SessionMemory != nil {
 		sessionMemory, _ = datatypes.NewJSONType(a.SessionMemory).MarshalJSON()
@@ -124,7 +155,7 @@ func ArticleModelFromCore(a *article.Article) *ArticleModel {
 		publishedEmbedding = pgvector.NewVector(a.PublishedEmbedding)
 	}
 
-	return &ArticleModel{
+	return &Article{
 		ID:                        a.ID,
 		Slug:                      a.Slug,
 		AuthorID:                  a.AuthorID,
@@ -147,8 +178,8 @@ func ArticleModelFromCore(a *article.Article) *ArticleModel {
 	}
 }
 
-// ArticleVersionModel is the GORM model for article version history
-type ArticleVersionModel struct {
+// ArticleVersion is the GORM model for article version history
+type ArticleVersion struct {
 	ID            uuid.UUID       `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
 	ArticleID     uuid.UUID       `json:"article_id" gorm:"type:uuid;not null;index"`
 	VersionNumber int             `json:"version_number" gorm:"not null"`
@@ -161,12 +192,12 @@ type ArticleVersionModel struct {
 	CreatedAt     time.Time       `json:"created_at" gorm:"autoCreateTime"`
 }
 
-func (ArticleVersionModel) TableName() string {
+func (ArticleVersion) TableName() string {
 	return "article_version"
 }
 
 // ToCore converts the GORM model to the domain type
-func (m *ArticleVersionModel) ToCore() *article.ArticleVersion {
+func (m *ArticleVersion) ToCore() *article.ArticleVersion {
 	var embedding []float32
 	if m.Embedding.Slice() != nil {
 		embedding = m.Embedding.Slice()
@@ -186,14 +217,14 @@ func (m *ArticleVersionModel) ToCore() *article.ArticleVersion {
 	}
 }
 
-// ArticleVersionModelFromCore creates a GORM model from the domain type
-func ArticleVersionModelFromCore(v *article.ArticleVersion) *ArticleVersionModel {
+// ArticleVersionFromCore creates a GORM model from the domain type
+func ArticleVersionFromCore(v *article.ArticleVersion) *ArticleVersion {
 	var embedding pgvector.Vector
 	if len(v.Embedding) > 0 {
 		embedding = pgvector.NewVector(v.Embedding)
 	}
 
-	return &ArticleVersionModel{
+	return &ArticleVersion{
 		ID:            v.ID,
 		ArticleID:     v.ArticleID,
 		VersionNumber: v.VersionNumber,
