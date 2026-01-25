@@ -2,21 +2,36 @@
 package validation
 
 import (
-	"blog-agent-go/backend/internal/errors"
+	"backend/pkg/core"
 	"fmt"
-	"strings"
+	"regexp"
 
 	"github.com/go-playground/validator/v10"
 )
 
 var validate *validator.Validate
 
+// slugRegex validates URL-friendly slugs (lowercase letters, numbers, hyphens)
+var slugRegex = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+
 func init() {
 	validate = validator.New()
+
+	// Register custom validators
+	_ = validate.RegisterValidation("slug", validateSlug)
+}
+
+// validateSlug validates that a string is a valid URL slug
+func validateSlug(fl validator.FieldLevel) bool {
+	value := fl.Field().String()
+	if value == "" {
+		return true // Empty is handled by required tag
+	}
+	return slugRegex.MatchString(value)
 }
 
 // ValidateStruct validates a struct using struct tags.
-// Returns an AppError with validation details if validation fails.
+// Returns core.ValidationErrors if validation fails.
 func ValidateStruct(s interface{}) error {
 	err := validate.Struct(s)
 	if err == nil {
@@ -26,26 +41,19 @@ func ValidateStruct(s interface{}) error {
 	// Format validation errors
 	validationErrors, ok := err.(validator.ValidationErrors)
 	if !ok {
-		return errors.NewValidationError("Invalid input")
+		return core.InvalidInputError("Invalid input")
 	}
 
-	// Build error details map
-	details := make(map[string]interface{})
-	var errorMessages []string
+	// Build core ValidationErrors
+	var coreErrors core.ValidationErrors
 	for _, fieldErr := range validationErrors {
-		errorMsg := formatValidationError(fieldErr)
-		errorMessages = append(errorMessages, errorMsg)
-		details[fieldErr.Field()] = map[string]string{
-			"tag":     fieldErr.Tag(),
-			"message": errorMsg,
-		}
+		coreErrors = append(coreErrors, core.ValidationError{
+			Field:   fieldErr.Field(),
+			Message: formatValidationError(fieldErr),
+		})
 	}
 
-	// Create AppError with detailed field information
-	validationErr := errors.NewValidationError(strings.Join(errorMessages, "; "))
-	validationErr.WithDetails("fields", details)
-
-	return validationErr
+	return coreErrors
 }
 
 // formatValidationError formats a validation error into a human-readable message
@@ -64,6 +72,10 @@ func formatValidationError(err validator.FieldError) string {
 		return fmt.Sprintf("%s must be at most %s characters", field, err.Param())
 	case "url":
 		return fmt.Sprintf("%s must be a valid URL", field)
+	case "slug":
+		return fmt.Sprintf("%s must be a valid URL slug (lowercase letters, numbers, and hyphens)", field)
+	case "oneof":
+		return fmt.Sprintf("%s must be one of: %s", field, err.Param())
 	default:
 		return fmt.Sprintf("%s failed validation on '%s'", field, tag)
 	}
