@@ -4,64 +4,76 @@ import (
 	"context"
 	"time"
 
+	"backend/pkg/config"
 	"backend/pkg/core"
+	"backend/pkg/database"
+	"backend/pkg/database/models"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
-
-// Service provides business logic for authentication
-type Service struct {
-	store     AccountStore
-	secretKey []byte
-}
-
-// NewService creates a new auth service
-func NewService(store AccountStore, secretKey string) *Service {
-	return &Service{
-		store:     store,
-		secretKey: []byte(secretKey),
-	}
-}
 
 // LoginRequest represents login credentials
 type LoginRequest struct {
-	Email    string
-	Password string
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,min=6"`
 }
 
 // LoginResponse represents the result of a successful login
 type LoginResponse struct {
-	Token string
-	User  UserData
+	Token string   `json:"token"`
+	User  UserData `json:"user"`
 }
 
 // UserData represents user information returned after authentication
 type UserData struct {
-	ID    string
-	Name  string
-	Email string
-	Role  string
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+	Role  string `json:"role"`
+}
+
+// UpdateAccountRequest represents a request to update account info
+type UpdateAccountRequest struct {
+	Name  string `json:"name" validate:"required,min=2,max=100"`
+	Email string `json:"email" validate:"required,email"`
+}
+
+// UpdatePasswordRequest represents a request to change password
+type UpdatePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword" validate:"required,min=6"`
+	NewPassword     string `json:"newPassword" validate:"required,min=6"`
+}
+
+// getSecretKey returns the JWT secret key from config
+func getSecretKey() []byte {
+	return []byte(config.Get().Auth.SecretKey)
 }
 
 // Login authenticates a user and returns a JWT token
-func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResponse, error) {
-	account, err := s.store.FindByEmail(ctx, req.Email)
-	if err != nil {
+func Login(ctx context.Context, req LoginRequest) (*LoginResponse, error) {
+	db := database.DB()
+
+	var model models.Account
+	if err := db.WithContext(ctx).Where("email = ?", req.Email).First(&model).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, core.ErrUnauthorized
+		}
 		return nil, core.ErrUnauthorized
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(req.Password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(model.PasswordHash), []byte(req.Password)); err != nil {
 		return nil, core.ErrUnauthorized
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": account.ID,
+		"sub": model.ID,
 		"exp": time.Now().Add(time.Hour * 24).Unix(),
 	})
 
-	tokenString, err := token.SignedString(s.secretKey)
+	tokenString, err := token.SignedString(getSecretKey())
 	if err != nil {
 		return nil, err
 	}
@@ -69,22 +81,22 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResponse, 
 	return &LoginResponse{
 		Token: tokenString,
 		User: UserData{
-			ID:    account.ID.String(),
-			Name:  account.Name,
-			Email: account.Email,
-			Role:  account.Role,
+			ID:    model.ID.String(),
+			Name:  model.Name,
+			Email: model.Email,
+			Role:  model.Role,
 		},
 	}, nil
 }
 
 // Register creates a new user account
-func (s *Service) Register(ctx context.Context, req RegisterRequest) error {
+func Register(ctx context.Context, req RegisterRequest) error {
+	db := database.DB()
+
 	// Check if email already exists
-	existing, err := s.store.FindByEmail(ctx, req.Email)
-	if err != nil && err != core.ErrNotFound {
-		return err
-	}
-	if existing != nil {
+	var count int64
+	db.WithContext(ctx).Model(&models.Account{}).Where("email = ?", req.Email).Count(&count)
+	if count > 0 {
 		return core.ErrAlreadyExists
 	}
 
@@ -93,7 +105,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) error {
 		return err
 	}
 
-	account := &Account{
+	model := &models.Account{
 		ID:           uuid.New(),
 		Name:         req.Name,
 		Email:        req.Email,
@@ -101,16 +113,16 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) error {
 		Role:         "user",
 	}
 
-	return s.store.Save(ctx, account)
+	return db.WithContext(ctx).Create(model).Error
 }
 
 // ValidateToken validates a JWT token and returns the parsed token
-func (s *Service) ValidateToken(tokenString string) (*jwt.Token, error) {
+func ValidateToken(tokenString string) (*jwt.Token, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, core.ErrUnauthorized
 		}
-		return s.secretKey, nil
+		return getSecretKey(), nil
 	})
 
 	if err != nil || !token.Valid {
@@ -121,7 +133,7 @@ func (s *Service) ValidateToken(tokenString string) (*jwt.Token, error) {
 }
 
 // GetUserIDFromToken extracts the user ID from a validated token
-func (s *Service) GetUserIDFromToken(token *jwt.Token) (uuid.UUID, error) {
+func GetUserIDFromToken(token *jwt.Token) (uuid.UUID, error) {
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
 		return uuid.Nil, core.ErrUnauthorized
@@ -135,51 +147,47 @@ func (s *Service) GetUserIDFromToken(token *jwt.Token) (uuid.UUID, error) {
 	return uuid.Parse(sub)
 }
 
-// UpdateAccountRequest represents a request to update account info
-type UpdateAccountRequest struct {
-	Name  string
-	Email string
-}
-
 // UpdateAccount updates account information
-func (s *Service) UpdateAccount(ctx context.Context, accountID uuid.UUID, req UpdateAccountRequest) error {
-	account, err := s.store.FindByID(ctx, accountID)
-	if err != nil {
+func UpdateAccount(ctx context.Context, accountID uuid.UUID, req UpdateAccountRequest) error {
+	db := database.DB()
+
+	var model models.Account
+	if err := db.WithContext(ctx).First(&model, accountID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return core.ErrNotFound
+		}
 		return err
 	}
 
 	// Check if email is already taken by another account
-	if req.Email != account.Email {
-		existing, err := s.store.FindByEmail(ctx, req.Email)
-		if err != nil && err != core.ErrNotFound {
-			return err
-		}
-		if existing != nil && existing.ID != accountID {
+	if req.Email != model.Email {
+		var count int64
+		db.WithContext(ctx).Model(&models.Account{}).Where("email = ? AND id != ?", req.Email, accountID).Count(&count)
+		if count > 0 {
 			return core.ErrAlreadyExists
 		}
 	}
 
-	account.Name = req.Name
-	account.Email = req.Email
+	model.Name = req.Name
+	model.Email = req.Email
 
-	return s.store.Update(ctx, account)
-}
-
-// UpdatePasswordRequest represents a request to change password
-type UpdatePasswordRequest struct {
-	CurrentPassword string
-	NewPassword     string
+	return db.WithContext(ctx).Save(&model).Error
 }
 
 // UpdatePassword changes the user's password
-func (s *Service) UpdatePassword(ctx context.Context, accountID uuid.UUID, req UpdatePasswordRequest) error {
-	account, err := s.store.FindByID(ctx, accountID)
-	if err != nil {
+func UpdatePassword(ctx context.Context, accountID uuid.UUID, req UpdatePasswordRequest) error {
+	db := database.DB()
+
+	var model models.Account
+	if err := db.WithContext(ctx).First(&model, accountID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return core.ErrNotFound
+		}
 		return err
 	}
 
 	// Verify current password
-	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(req.CurrentPassword)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(model.PasswordHash), []byte(req.CurrentPassword)); err != nil {
 		return core.ErrUnauthorized
 	}
 
@@ -189,28 +197,53 @@ func (s *Service) UpdatePassword(ctx context.Context, accountID uuid.UUID, req U
 		return err
 	}
 
-	account.PasswordHash = string(hashedPassword)
-	return s.store.Update(ctx, account)
+	model.PasswordHash = string(hashedPassword)
+	return db.WithContext(ctx).Save(&model).Error
 }
 
 // DeleteAccount removes a user account after verifying password
-func (s *Service) DeleteAccount(ctx context.Context, accountID uuid.UUID, password string) error {
-	account, err := s.store.FindByID(ctx, accountID)
-	if err != nil {
+func DeleteAccount(ctx context.Context, accountID uuid.UUID, password string) error {
+	db := database.DB()
+
+	var model models.Account
+	if err := db.WithContext(ctx).First(&model, accountID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return core.ErrNotFound
+		}
 		return err
 	}
 
 	// Verify password
-	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(model.PasswordHash), []byte(password)); err != nil {
 		return core.ErrUnauthorized
 	}
 
-	return s.store.Delete(ctx, accountID)
+	return db.WithContext(ctx).Delete(&model).Error
 }
 
 // GetAccount retrieves an account by ID
-func (s *Service) GetAccount(ctx context.Context, accountID uuid.UUID) (*Account, error) {
-	return s.store.FindByID(ctx, accountID)
+func GetAccount(ctx context.Context, accountID uuid.UUID) (*Account, error) {
+	db := database.DB()
+
+	var model models.Account
+	if err := db.WithContext(ctx).First(&model, accountID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, core.ErrNotFound
+		}
+		return nil, err
+	}
+
+	// Manual conversion since models no longer import core
+	return &Account{
+		ID:             model.ID,
+		Name:           model.Name,
+		Email:          model.Email,
+		PasswordHash:   model.PasswordHash,
+		Role:           model.Role,
+		CreatedAt:      model.CreatedAt,
+		UpdatedAt:      model.UpdatedAt,
+		OrganizationID: model.OrganizationID,
+	}, nil
 }
 
 // HashPassword hashes a password using bcrypt
@@ -226,4 +259,54 @@ func HashPassword(password string) (string, error) {
 func ComparePasswords(plainTextPassword, hashedPassword string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(plainTextPassword))
 	return err == nil
+}
+
+// Legacy Service type for backward compatibility during migration
+
+// Service provides business logic for authentication (deprecated - use package functions)
+type Service struct {
+	store     AccountStore
+	secretKey []byte
+}
+
+// NewService creates a new auth service (deprecated - use package functions)
+func NewService(store AccountStore, secretKey string) *Service {
+	return &Service{
+		store:     store,
+		secretKey: []byte(secretKey),
+	}
+}
+
+// Legacy method wrappers for backward compatibility
+
+func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResponse, error) {
+	return Login(ctx, req)
+}
+
+func (s *Service) Register(ctx context.Context, req RegisterRequest) error {
+	return Register(ctx, req)
+}
+
+func (s *Service) ValidateToken(tokenString string) (*jwt.Token, error) {
+	return ValidateToken(tokenString)
+}
+
+func (s *Service) GetUserIDFromToken(token *jwt.Token) (uuid.UUID, error) {
+	return GetUserIDFromToken(token)
+}
+
+func (s *Service) UpdateAccount(ctx context.Context, accountID uuid.UUID, req UpdateAccountRequest) error {
+	return UpdateAccount(ctx, accountID, req)
+}
+
+func (s *Service) UpdatePassword(ctx context.Context, accountID uuid.UUID, req UpdatePasswordRequest) error {
+	return UpdatePassword(ctx, accountID, req)
+}
+
+func (s *Service) DeleteAccount(ctx context.Context, accountID uuid.UUID, password string) error {
+	return DeleteAccount(ctx, accountID, password)
+}
+
+func (s *Service) GetAccount(ctx context.Context, accountID uuid.UUID) (*Account, error) {
+	return GetAccount(ctx, accountID)
 }

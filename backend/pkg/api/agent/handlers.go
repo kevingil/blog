@@ -4,6 +4,7 @@ import (
 	"backend/pkg/api/response"
 	agentws "backend/pkg/api/websocket"
 	"backend/pkg/core"
+	coreAgent "backend/pkg/core/agent"
 	"backend/pkg/core/chat"
 	"backend/pkg/database"
 	"context"
@@ -26,29 +27,21 @@ func getChatService() *chat.MessageService {
 	return chatSvc
 }
 
-// truncateString truncates a string to maxLen characters
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
-}
-
 // AgentCopilot handles POST /agent
 func AgentCopilot(c *fiber.Ctx) error {
-	var req ChatRequest
+	var req coreAgent.ChatRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
 
-	manager := GetAgentAsyncCopilotManager()
+	manager := coreAgent.GetAgentAsyncCopilotManager()
 	requestID, err := manager.SubmitChatRequest(req)
 	if err != nil {
 		log.Printf("[Agent API] Failed to submit request: %v", err)
 		return response.Error(c, err)
 	}
 
-	return response.Success(c, ChatRequestResponse{
+	return response.Success(c, coreAgent.ChatRequestResponse{
 		RequestID: requestID,
 		Status:    "processing",
 	})
@@ -59,7 +52,7 @@ func WebsocketHandler(con *websocketLib.Conn) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	agentManager := GetAgentAsyncCopilotManager()
+	agentManager := coreAgent.GetAgentAsyncCopilotManager()
 
 	go func() {
 		defer cancel()
@@ -151,7 +144,7 @@ func AcceptArtifact(c *fiber.Ctx) error {
 	var req struct {
 		Feedback string `json:"feedback"`
 	}
-	_ = c.BodyParser(&req) // Feedback is optional
+	_ = c.BodyParser(&req)
 
 	if err := getChatService().AcceptArtifact(c.Context(), messageID, req.Feedback); err != nil {
 		return response.Error(c, err)
@@ -171,7 +164,7 @@ func RejectArtifact(c *fiber.Ctx) error {
 	var req struct {
 		Feedback string `json:"feedback"`
 	}
-	_ = c.BodyParser(&req) // Feedback is optional
+	_ = c.BodyParser(&req)
 
 	if err := getChatService().RejectArtifact(c.Context(), messageID, req.Feedback); err != nil {
 		return response.Error(c, err)

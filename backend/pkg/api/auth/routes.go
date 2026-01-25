@@ -13,7 +13,7 @@ func Register(app *fiber.App) {
 
 	// Public routes
 	auth.Post("/login", Login)
-	auth.Post("/register", Register_)
+	auth.Post("/register", RegisterHandler)
 	auth.Post("/logout", Logout)
 
 	// Protected routes (require authentication)

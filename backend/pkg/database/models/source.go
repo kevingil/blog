@@ -1,10 +1,7 @@
 package models
 
 import (
-	"encoding/json"
 	"time"
-
-	"backend/pkg/core/source"
 
 	"github.com/google/uuid"
 	"github.com/pgvector/pgvector-go"
@@ -26,54 +23,4 @@ type Source struct {
 
 func (Source) TableName() string {
 	return "article_source"
-}
-
-// ToCore converts the GORM model to the domain type
-func (m *Source) ToCore() *source.Source {
-	var metaData map[string]interface{}
-	if m.MetaData != nil {
-		_ = json.Unmarshal(m.MetaData, &metaData)
-	}
-
-	var embedding []float32
-	if m.Embedding.Slice() != nil {
-		embedding = m.Embedding.Slice()
-	}
-
-	return &source.Source{
-		ID:         m.ID,
-		ArticleID:  m.ArticleID,
-		Title:      m.Title,
-		Content:    m.Content,
-		URL:        m.URL,
-		SourceType: m.SourceType,
-		Embedding:  embedding,
-		MetaData:   metaData,
-		CreatedAt:  m.CreatedAt,
-	}
-}
-
-// SourceFromCore creates a GORM model from the domain type
-func SourceFromCore(s *source.Source) *Source {
-	var metaData datatypes.JSON
-	if s.MetaData != nil {
-		metaData, _ = datatypes.NewJSONType(s.MetaData).MarshalJSON()
-	}
-
-	var embedding pgvector.Vector
-	if len(s.Embedding) > 0 {
-		embedding = pgvector.NewVector(s.Embedding)
-	}
-
-	return &Source{
-		ID:         s.ID,
-		ArticleID:  s.ArticleID,
-		Title:      s.Title,
-		Content:    s.Content,
-		URL:        s.URL,
-		SourceType: s.SourceType,
-		Embedding:  embedding,
-		MetaData:   metaData,
-		CreatedAt:  s.CreatedAt,
-	}
 }

@@ -1,35 +1,31 @@
 package adapters
 
 import (
-	"backend/pkg/api/source"
 	"backend/pkg/core/ml/llm/tools"
+	coreSource "backend/pkg/core/source"
 	"backend/pkg/database/models"
 	"context"
 
 	"github.com/google/uuid"
 )
 
-// SourceServiceAdapter adapts source.ArticleSourceService to match the tools.ExaSourceService interface
-type SourceServiceAdapter struct {
-	service *source.ArticleSourceService
-}
+// SourceServiceAdapter adapts core/source functions to match the tools.ExaSourceService interface
+type SourceServiceAdapter struct{}
 
-// NewSourceServiceAdapter creates a new adapter for the ArticleSourceService
-func NewSourceServiceAdapter(service *source.ArticleSourceService) *SourceServiceAdapter {
-	return &SourceServiceAdapter{
-		service: service,
-	}
+// NewSourceServiceAdapter creates a new adapter for the source service
+func NewSourceServiceAdapter() *SourceServiceAdapter {
+	return &SourceServiceAdapter{}
 }
 
 // ScrapeAndCreateSource implements the tools.ExaSourceService interface
 func (a *SourceServiceAdapter) ScrapeAndCreateSource(ctx context.Context, articleID uuid.UUID, targetURL string) (*models.Source, error) {
-	return a.service.ScrapeAndCreateSource(ctx, articleID, targetURL)
+	return coreSource.ScrapeAndCreate(ctx, articleID, targetURL)
 }
 
 // CreateSource implements the tools.ExaSourceService interface
 func (a *SourceServiceAdapter) CreateSource(ctx context.Context, req tools.CreateSourceRequest) (*models.Source, error) {
-	// Convert tools.CreateSourceRequest to source.CreateSourceRequest
-	serviceReq := source.CreateSourceRequest{
+	// Convert tools.CreateSourceRequest to core source.CreateRequest
+	serviceReq := coreSource.CreateRequest{
 		ArticleID:  req.ArticleID,
 		Title:      req.Title,
 		Content:    req.Content,
@@ -37,5 +33,5 @@ func (a *SourceServiceAdapter) CreateSource(ctx context.Context, req tools.Creat
 		SourceType: req.SourceType,
 	}
 
-	return a.service.CreateSource(ctx, serviceReq)
+	return coreSource.Create(ctx, serviceReq)
 }

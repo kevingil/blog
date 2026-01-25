@@ -24,8 +24,9 @@ type Page struct {
 
 // ListOptions represents options for listing pages
 type ListOptions struct {
-	Page    int
-	PerPage int
+	Page        int
+	PerPage     int
+	IsPublished *bool
 }
 
 // PageStore defines the data access interface for pages

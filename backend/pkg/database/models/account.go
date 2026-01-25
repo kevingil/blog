@@ -1,10 +1,7 @@
 package models
 
 import (
-	"encoding/json"
 	"time"
-
-	"backend/pkg/core/auth"
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
@@ -34,52 +31,4 @@ type Account struct {
 
 func (Account) TableName() string {
 	return "account"
-}
-
-// ToCore converts the GORM model to the domain type
-func (m *Account) ToCore() *auth.Account {
-	var socialLinks map[string]interface{}
-	if m.SocialLinks != nil {
-		_ = json.Unmarshal(m.SocialLinks, &socialLinks)
-	}
-
-	return &auth.Account{
-		ID:              m.ID,
-		Name:            m.Name,
-		Email:           m.Email,
-		PasswordHash:    m.PasswordHash,
-		Role:            m.Role,
-		CreatedAt:       m.CreatedAt,
-		UpdatedAt:       m.UpdatedAt,
-		Bio:             m.Bio,
-		ProfileImage:    m.ProfileImage,
-		EmailPublic:     m.EmailPublic,
-		SocialLinks:     socialLinks,
-		MetaDescription: m.MetaDescription,
-		OrganizationID:  m.OrganizationID,
-	}
-}
-
-// AccountFromCore creates a GORM model from the domain type
-func AccountFromCore(a *auth.Account) *Account {
-	var socialLinks datatypes.JSON
-	if a.SocialLinks != nil {
-		socialLinks, _ = datatypes.NewJSONType(a.SocialLinks).MarshalJSON()
-	}
-
-	return &Account{
-		ID:              a.ID,
-		Name:            a.Name,
-		Email:           a.Email,
-		PasswordHash:    a.PasswordHash,
-		Role:            a.Role,
-		CreatedAt:       a.CreatedAt,
-		UpdatedAt:       a.UpdatedAt,
-		Bio:             a.Bio,
-		ProfileImage:    a.ProfileImage,
-		EmailPublic:     a.EmailPublic,
-		SocialLinks:     socialLinks,
-		MetaDescription: a.MetaDescription,
-		OrganizationID:  a.OrganizationID,
-	}
 }

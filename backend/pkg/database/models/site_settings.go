@@ -3,8 +3,6 @@ package models
 import (
 	"time"
 
-	"backend/pkg/core/profile"
-
 	"github.com/google/uuid"
 )
 
@@ -24,28 +22,4 @@ type SiteSettings struct {
 
 func (SiteSettings) TableName() string {
 	return "site_settings"
-}
-
-// ToCore converts the GORM model to the domain type
-func (m *SiteSettings) ToCore() *profile.SiteSettings {
-	return &profile.SiteSettings{
-		ID:                   m.ID,
-		PublicProfileType:    m.PublicProfileType,
-		PublicUserID:         m.PublicUserID,
-		PublicOrganizationID: m.PublicOrganizationID,
-		CreatedAt:            m.CreatedAt,
-		UpdatedAt:            m.UpdatedAt,
-	}
-}
-
-// SiteSettingsFromCore creates a GORM model from the domain type
-func SiteSettingsFromCore(s *profile.SiteSettings) *SiteSettings {
-	return &SiteSettings{
-		ID:                   s.ID,
-		PublicProfileType:    s.PublicProfileType,
-		PublicUserID:         s.PublicUserID,
-		PublicOrganizationID: s.PublicOrganizationID,
-		CreatedAt:            s.CreatedAt,
-		UpdatedAt:            s.UpdatedAt,
-	}
 }

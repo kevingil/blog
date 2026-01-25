@@ -15,16 +15,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// Init initializes all API services (call this before RegisterRoutes)
-func Init() {
-	article.InitArticleService()
-	auth.InitAuthService()
-	organization.InitOrganizationService()
-	page.InitPagesService()
-	source.InitSourcesService()
-	profile.InitProfileService()
-}
-
 // RegisterRoutes registers all API routes on the app
 func RegisterRoutes(app *fiber.App) {
 	// Global middleware

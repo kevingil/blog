@@ -22,8 +22,7 @@ package main
 
 import (
 	"backend/pkg/api"
-	"backend/pkg/api/agent"
-	"backend/pkg/api/source"
+	coreAgent "backend/pkg/core/agent"
 	"backend/pkg/config"
 	"backend/pkg/core/chat"
 	"backend/pkg/database"
@@ -42,14 +41,9 @@ func main() {
 	// Initialize database (makes it available via database.DB())
 	database.Init()
 
-	// Initialize API services (singleton pattern)
-	api.Init()
-
-	// Initialize Agent-powered copilot manager
-	// Note: Sources and chat services are initialized via api.Init()
-	sourcesService := source.Sources()
+	// Initialize Agent-powered copilot manager with chat service
 	chatService := chat.NewMessageService(database.New())
-	if err := agent.InitializeAgentCopilotManager(sourcesService, chatService); err != nil {
+	if err := coreAgent.InitializeWithDefaults(chatService); err != nil {
 		log.Printf("Warning: Failed to initialize AgentCopilotManager: %v", err)
 	}
 	log.Printf("Initialized Agent Services")
