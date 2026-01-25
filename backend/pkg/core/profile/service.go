@@ -235,16 +235,3 @@ func parseSocialLinks(data datatypes.JSON) map[string]string {
 	return result
 }
 
-// Legacy Service type for backward compatibility during migration
-
-type Service struct {
-	settingsStore SiteSettingsStore
-	profileStore  ProfileStore
-}
-
-func NewService(settingsStore SiteSettingsStore, profileStore ProfileStore) *Service {
-	return &Service{
-		settingsStore: settingsStore,
-		profileStore:  profileStore,
-	}
-}

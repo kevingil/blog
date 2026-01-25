@@ -243,22 +243,3 @@ func stringValue(s *string) string {
 	return *s
 }
 
-// Legacy Service type for backward compatibility
-
-type Service struct {
-	store        OrganizationStore
-	accountStore interface {
-		FindByID(ctx context.Context, id uuid.UUID) (interface{}, error)
-		Update(ctx context.Context, account interface{}) error
-	}
-}
-
-func NewService(store OrganizationStore, accountStore interface {
-	FindByID(ctx context.Context, id uuid.UUID) (interface{}, error)
-	Update(ctx context.Context, account interface{}) error
-}) *Service {
-	return &Service{
-		store:        store,
-		accountStore: accountStore,
-	}
-}

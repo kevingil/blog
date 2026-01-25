@@ -473,13 +473,3 @@ func extractMainContent(doc *goquery.Document) string {
 	return result
 }
 
-// Legacy Service type for backward compatibility
-// TODO: Remove after full migration to package-level functions
-
-type Service struct {
-	store SourceStore
-}
-
-func NewService(store SourceStore) *Service {
-	return &Service{store: store}
-}

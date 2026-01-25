@@ -136,12 +136,3 @@ func Delete(ctx context.Context, id uuid.UUID) error {
 	return repo.Delete(ctx, id)
 }
 
-// Legacy Service type for backward compatibility
-
-type Service struct {
-	store PageStore
-}
-
-func NewService(store PageStore) *Service {
-	return &Service{store: store}
-}

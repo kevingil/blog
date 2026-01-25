@@ -1000,17 +1000,3 @@ func regenerateArticleEmbedding(ctx context.Context, articleID uuid.UUID, conten
 	return nil
 }
 
-// Legacy Service type for backward compatibility
-// TODO: Remove after full migration to package-level functions
-
-type Service struct {
-	store    ArticleStore
-	tagStore tag.TagStore
-}
-
-func NewService(store ArticleStore, tagStore tag.TagStore) *Service {
-	return &Service{
-		store:    store,
-		tagStore: tagStore,
-	}
-}

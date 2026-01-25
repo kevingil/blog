@@ -258,25 +258,3 @@ func ensureTagsExist(ctx context.Context, db *gorm.DB, names []string) ([]int64,
 	return tagIDs, nil
 }
 
-// Legacy Service type for backward compatibility during migration
-// TODO: Remove after full migration to package-level functions
-
-// Service provides business logic for projects (deprecated - use package functions)
-type Service struct {
-	store    ProjectStore
-	tagStore interface {
-		FindByIDs(ctx context.Context, ids []int64) ([]struct{ Name string }, error)
-		EnsureExists(ctx context.Context, names []string) ([]int64, error)
-	}
-}
-
-// NewService creates a new project service (deprecated - use package functions)
-func NewService(store ProjectStore, tagStore interface {
-	FindByIDs(ctx context.Context, ids []int64) ([]struct{ Name string }, error)
-	EnsureExists(ctx context.Context, names []string) ([]int64, error)
-}) *Service {
-	return &Service{
-		store:    store,
-		tagStore: tagStore,
-	}
-}
