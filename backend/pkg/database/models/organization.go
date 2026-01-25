@@ -10,8 +10,8 @@ import (
 	"gorm.io/datatypes"
 )
 
-// OrganizationModel is the GORM model for organizations
-type OrganizationModel struct {
+// Organization is the GORM model for organizations
+type Organization struct {
 	ID              uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
 	Name            string         `json:"name" gorm:"not null"`
 	Slug            string         `json:"slug" gorm:"uniqueIndex;not null"`
@@ -25,12 +25,12 @@ type OrganizationModel struct {
 	UpdatedAt       time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
-func (OrganizationModel) TableName() string {
+func (Organization) TableName() string {
 	return "organization"
 }
 
 // ToCore converts the GORM model to the domain type
-func (m *OrganizationModel) ToCore() *organization.Organization {
+func (m *Organization) ToCore() *organization.Organization {
 	var socialLinks map[string]interface{}
 	if m.SocialLinks != nil {
 		_ = json.Unmarshal(m.SocialLinks, &socialLinks)
@@ -51,14 +51,14 @@ func (m *OrganizationModel) ToCore() *organization.Organization {
 	}
 }
 
-// OrganizationModelFromCore creates a GORM model from the domain type
-func OrganizationModelFromCore(o *organization.Organization) *OrganizationModel {
+// OrganizationFromCore creates a GORM model from the domain type
+func OrganizationFromCore(o *organization.Organization) *Organization {
 	var socialLinks datatypes.JSON
 	if o.SocialLinks != nil {
 		socialLinks, _ = datatypes.NewJSONType(o.SocialLinks).MarshalJSON()
 	}
 
-	return &OrganizationModel{
+	return &Organization{
 		ID:              o.ID,
 		Name:            o.Name,
 		Slug:            o.Slug,

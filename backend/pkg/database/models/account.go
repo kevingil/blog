@@ -10,8 +10,8 @@ import (
 	"gorm.io/datatypes"
 )
 
-// AccountModel is the GORM model for accounts
-type AccountModel struct {
+// Account is the GORM model for accounts
+type Account struct {
 	ID           uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
 	Name         string    `json:"name" gorm:"not null"`
 	Email        string    `json:"email" gorm:"uniqueIndex;not null"`
@@ -28,16 +28,16 @@ type AccountModel struct {
 	MetaDescription *string        `json:"meta_description"`
 
 	// Organization relationship (optional)
-	OrganizationID *uuid.UUID         `json:"organization_id" gorm:"type:uuid"`
-	Organization   *OrganizationModel `json:"organization,omitempty" gorm:"foreignKey:OrganizationID"`
+	OrganizationID *uuid.UUID    `json:"organization_id" gorm:"type:uuid"`
+	Organization   *Organization `json:"organization,omitempty" gorm:"foreignKey:OrganizationID"`
 }
 
-func (AccountModel) TableName() string {
+func (Account) TableName() string {
 	return "account"
 }
 
 // ToCore converts the GORM model to the domain type
-func (m *AccountModel) ToCore() *auth.Account {
+func (m *Account) ToCore() *auth.Account {
 	var socialLinks map[string]interface{}
 	if m.SocialLinks != nil {
 		_ = json.Unmarshal(m.SocialLinks, &socialLinks)
@@ -60,14 +60,14 @@ func (m *AccountModel) ToCore() *auth.Account {
 	}
 }
 
-// AccountModelFromCore creates a GORM model from the domain type
-func AccountModelFromCore(a *auth.Account) *AccountModel {
+// AccountFromCore creates a GORM model from the domain type
+func AccountFromCore(a *auth.Account) *Account {
 	var socialLinks datatypes.JSON
 	if a.SocialLinks != nil {
 		socialLinks, _ = datatypes.NewJSONType(a.SocialLinks).MarshalJSON()
 	}
 
-	return &AccountModel{
+	return &Account{
 		ID:              a.ID,
 		Name:            a.Name,
 		Email:           a.Email,

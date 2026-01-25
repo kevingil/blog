@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"backend/pkg/models"
+	"backend/pkg/database/models"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"

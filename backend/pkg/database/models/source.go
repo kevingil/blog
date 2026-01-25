@@ -11,8 +11,8 @@ import (
 	"gorm.io/datatypes"
 )
 
-// SourceModel is the GORM model for article sources
-type SourceModel struct {
+// Source is the GORM model for article sources
+type Source struct {
 	ID         uuid.UUID       `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
 	ArticleID  uuid.UUID       `json:"article_id" gorm:"type:uuid;not null;index"`
 	Title      string          `json:"title"`
@@ -24,12 +24,12 @@ type SourceModel struct {
 	CreatedAt  time.Time       `json:"created_at" gorm:"autoCreateTime"`
 }
 
-func (SourceModel) TableName() string {
+func (Source) TableName() string {
 	return "article_source"
 }
 
 // ToCore converts the GORM model to the domain type
-func (m *SourceModel) ToCore() *source.Source {
+func (m *Source) ToCore() *source.Source {
 	var metaData map[string]interface{}
 	if m.MetaData != nil {
 		_ = json.Unmarshal(m.MetaData, &metaData)
@@ -53,8 +53,8 @@ func (m *SourceModel) ToCore() *source.Source {
 	}
 }
 
-// SourceModelFromCore creates a GORM model from the domain type
-func SourceModelFromCore(s *source.Source) *SourceModel {
+// SourceFromCore creates a GORM model from the domain type
+func SourceFromCore(s *source.Source) *Source {
 	var metaData datatypes.JSON
 	if s.MetaData != nil {
 		metaData, _ = datatypes.NewJSONType(s.MetaData).MarshalJSON()
@@ -65,7 +65,7 @@ func SourceModelFromCore(s *source.Source) *SourceModel {
 		embedding = pgvector.NewVector(s.Embedding)
 	}
 
-	return &SourceModel{
+	return &Source{
 		ID:         s.ID,
 		ArticleID:  s.ArticleID,
 		Title:      s.Title,

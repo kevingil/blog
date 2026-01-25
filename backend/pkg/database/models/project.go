@@ -9,8 +9,8 @@ import (
 	"github.com/lib/pq"
 )
 
-// ProjectModel is the GORM model for projects
-type ProjectModel struct {
+// Project is the GORM model for projects
+type Project struct {
 	ID          uuid.UUID     `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
 	Title       string        `json:"title" gorm:"not null"`
 	Description string        `json:"description" gorm:"type:text;not null"`
@@ -22,12 +22,12 @@ type ProjectModel struct {
 	UpdatedAt   time.Time     `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
-func (ProjectModel) TableName() string {
+func (Project) TableName() string {
 	return "project"
 }
 
 // ToCore converts the GORM model to the domain type
-func (m *ProjectModel) ToCore() *project.Project {
+func (m *Project) ToCore() *project.Project {
 	return &project.Project{
 		ID:          m.ID,
 		Title:       m.Title,
@@ -41,9 +41,9 @@ func (m *ProjectModel) ToCore() *project.Project {
 	}
 }
 
-// ProjectModelFromCore creates a GORM model from the domain type
-func ProjectModelFromCore(p *project.Project) *ProjectModel {
-	return &ProjectModel{
+// ProjectFromCore creates a GORM model from the domain type
+func ProjectFromCore(p *project.Project) *Project {
+	return &Project{
 		ID:          p.ID,
 		Title:       p.Title,
 		Description: p.Description,
