@@ -1794,42 +1794,26 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       <div className="flex-1">
         {/* Article Metadata Card */}
         
-            {/* Article Title Section */}
+            {/* Article Title Section with Image and Save */}
             <div className="mb-6">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                <div className="flex-1 w-full sm:w-auto">
-                  <Input
-                    {...register('title')}
-                    placeholder="Article Title"
-                    className="w-full text-lg font-medium"
-                  />
-                  {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title.message}</p>}
-                </div>
-              </div>
-            </div>
-            {/* Article Tools Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-4">
-              {/* Header Image Section */}
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-row items-center gap-3">
+                {/* Edit Image Trigger */}
                 <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
                   <DialogTrigger asChild>
-                    <Card className="w-full h-32 flex items-center justify-center overflow-hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                      <div className="flex flex-col px-2 gap-2">
-                        <div className="text-xs">Image</div>
-                      <ImageLoader
-                        article={article}
-                        newImageGenerationRequestId={newImageGenerationRequestId}
-                        stagedImageUrl={stagedImageUrl}
-                        setStagedImageUrl={setStagedImageUrl}
-                      />
-                      </div>
-                      {(!stagedImageUrl && !article?.article.draft_image_url) && (
-                        <div className="text-center">
-                          <UploadIcon className="w-6 h-6 mx-auto mb-1 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground">Click to add image</span>
-                        </div>
+                    <button
+                      type="button"
+                      className="w-12 h-10 flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex-shrink-0"
+                    >
+                      {(stagedImageUrl || article?.article.draft_image_url) ? (
+                        <img 
+                          src={stagedImageUrl || article?.article.draft_image_url} 
+                          alt="Article header" 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <ImageIcon className="w-5 h-5 text-muted-foreground" />
                       )}
-                    </Card>
+                    </button>
                   </DialogTrigger>
 
                   {/* Modal content for image editing */}
@@ -2050,8 +2034,39 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
-              </div>
 
+                {/* Title Input */}
+                <div className="flex-1">
+                  <Input
+                    {...register('title')}
+                    placeholder="Article Title"
+                    className="w-full text-lg font-medium"
+                  />
+                  {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title.message}</p>}
+                </div>
+
+                {/* Save Button */}
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (diffing) {
+                      rejectDiff();
+                    }
+                    handleSubmit((data) => onSubmit(data, false))();
+                  }}
+                  disabled={createArticleMutation.isPending || updateArticleMutation.isPending}
+                  className="flex-shrink-0"
+                >
+                  {(createArticleMutation.isPending || updateArticleMutation.isPending) ? 
+                    (isNew ? 'Creating...' : 'Saving...') : 
+                    'Save'
+                  }
+                </Button>
+              </div>
+            </div>
+
+            {/* Article Tools Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
               {/* Sources Preview Section */}
               <SourcesPreview
                 articleId={article?.article.id}
@@ -2290,43 +2305,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   className="tiptap w-full border-none rounded-b-md h-[calc(100vh-400px)] overflow-y-auto focus:outline-none"
                 />
                 {errors.content && <p className="text-red-500">{errors.content.message}</p>}
-              </div>
-
-<div className="w-full flex flex-row gap-2 justify-between mt-4">
-              <Button variant="secondary">
-                <Link to="/dashboard/blog">
-                  {isNew ? 'Cancel' : 'Go Back'}
-                </Link>
-              </Button>
-              <div className='flex items-center justify-center gap-2'>
-                {!isNew && 
-                  <Button
-                    variant="outline"
-                  type="submit"
-                  onClick={() => {
-                    if (diffing) {
-                      // Reject pending diff changes before saving
-                      rejectDiff();
-                    }
-                    handleSubmit((data) => onSubmit(data, false))();
-                  }}
-                  disabled={updateArticleMutation.isPending}>
-                   {updateArticleMutation.isPending ? 'Saving...' : 'Save'}
-                  </Button>
-                }
-              <Button type='submit' disabled={createArticleMutation.isPending || updateArticleMutation.isPending} onClick={() => {
-                if (diffing) {
-                  // Reject pending diff changes before saving
-                  rejectDiff();
-                }
-                handleSubmit((data) => onSubmit(data, true))();
-              }}>
-                {(createArticleMutation.isPending || updateArticleMutation.isPending) ? 
-                  (isNew ? 'Creating...' : 'Updating...') : 
-                  (isNew ? 'Create Article' : 'Save & Return')
-                }
-              </Button>
-              </div>
               </div>
 
           </form>
