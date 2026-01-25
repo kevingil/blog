@@ -2,15 +2,13 @@
 package response
 
 import (
-	"blog-agent-go/backend/internal/errors"
-	
 	"github.com/gofiber/fiber/v2"
 )
 
 // ErrorResponse represents a standardized error response structure.
 type ErrorResponse struct {
-	Error string                 `json:"error"`
-	Code  string                 `json:"code,omitempty"`
+	Error   string                 `json:"error"`
+	Code    string                 `json:"code,omitempty"`
 	Details map[string]interface{} `json:"details,omitempty"`
 }
 
@@ -35,21 +33,9 @@ type PaginatedResponse struct {
 }
 
 // SendError sends an error response with appropriate HTTP status code.
-// Handles AppError types with structured error information, defaults to 500 for other errors.
+// Uses MapCoreError to map domain errors to HTTP responses.
 func SendError(c *fiber.Ctx, err error) error {
-	if appErr, ok := err.(*errors.AppError); ok {
-		return c.Status(appErr.StatusCode).JSON(ErrorResponse{
-			Error:   appErr.Message,
-			Code:    string(appErr.Code),
-			Details: appErr.Details,
-		})
-	}
-	
-	// Default to internal server error
-	return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
-		Error: err.Error(),
-		Code:  string(errors.ErrCodeInternal),
-	})
+	return MapCoreError(c, err)
 }
 
 // SendSuccess sends a successful response with the provided data.

@@ -3,8 +3,7 @@ package response
 import (
 	"errors"
 
-	"blog-agent-go/backend/internal/core"
-	apperrors "blog-agent-go/backend/internal/errors"
+	"backend/pkg/core"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -12,7 +11,7 @@ import (
 // MapCoreError maps core domain errors to HTTP responses
 // This provides a clean separation between domain errors and HTTP concerns
 func MapCoreError(c *fiber.Ctx, err error) error {
-	// First check for core domain errors
+	// Check for core domain errors using errors.Is (handles wrapped errors)
 	switch {
 	case errors.Is(err, core.ErrNotFound):
 		return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
@@ -50,6 +49,30 @@ func MapCoreError(c *fiber.Ctx, err error) error {
 			Code:  "INVALID_INPUT",
 		})
 
+	case errors.Is(err, core.ErrTokenExpired):
+		return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse{
+			Error: err.Error(),
+			Code:  "TOKEN_EXPIRED",
+		})
+
+	case errors.Is(err, core.ErrTokenInvalid):
+		return c.Status(fiber.StatusUnauthorized).JSON(ErrorResponse{
+			Error: err.Error(),
+			Code:  "INVALID_TOKEN",
+		})
+
+	case errors.Is(err, core.ErrDatabase):
+		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
+			Error: "Database error",
+			Code:  "DATABASE_ERROR",
+		})
+
+	case errors.Is(err, core.ErrExternal):
+		return c.Status(fiber.StatusBadGateway).JSON(ErrorResponse{
+			Error: err.Error(),
+			Code:  "EXTERNAL_SERVICE_ERROR",
+		})
+
 	case errors.Is(err, core.ErrInternal):
 		return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
 			Error: "Internal server error",
@@ -84,16 +107,7 @@ func MapCoreError(c *fiber.Ctx, err error) error {
 		})
 	}
 
-	// Fall back to legacy AppError handling for backwards compatibility
-	if appErr, ok := err.(*apperrors.AppError); ok {
-		return c.Status(appErr.StatusCode).JSON(ErrorResponse{
-			Error:   appErr.Message,
-			Code:    string(appErr.Code),
-			Details: appErr.Details,
-		})
-	}
-
-	// Default to internal server error
+	// Default to internal server error for unknown errors
 	return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{
 		Error: err.Error(),
 		Code:  "INTERNAL_ERROR",
