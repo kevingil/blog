@@ -115,6 +115,31 @@ func GetConversationHistory(c *fiber.Ctx) error {
 	})
 }
 
+// ClearConversationHistory handles DELETE /agent/conversations/:articleId
+func ClearConversationHistory(c *fiber.Ctx) error {
+	articleID := c.Params("articleId")
+	if articleID == "" {
+		return response.Error(c, core.InvalidInputError("Article ID is required"))
+	}
+
+	log.Printf("[ConversationHistory] Clearing messages for article: %s", articleID)
+
+	articleUUID, err := uuid.Parse(articleID)
+	if err != nil {
+		log.Printf("[ConversationHistory] Invalid article ID format: %s", articleID)
+		return response.Error(c, core.InvalidInputError("Invalid article ID format"))
+	}
+
+	if err := getChatService().ClearConversationHistory(c.Context(), articleUUID); err != nil {
+		log.Printf("[ConversationHistory] Failed to clear messages: %v", err)
+		return response.Error(c, err)
+	}
+
+	log.Printf("[ConversationHistory] Successfully cleared messages for article %s", articleID)
+
+	return response.Success(c, fiber.Map{"success": true})
+}
+
 // GetPendingArtifacts handles GET /agent/artifacts/:articleId/pending
 func GetPendingArtifacts(c *fiber.Ctx) error {
 	articleIDStr := c.Params("articleId")

@@ -170,6 +170,22 @@ func (s *MessageService) GetConversationHistory(ctx context.Context, articleID u
 	return messages, nil
 }
 
+// ClearConversationHistory deletes all chat messages for an article
+func (s *MessageService) ClearConversationHistory(ctx context.Context, articleID uuid.UUID) error {
+	log.Printf("[MessageService] 🗑️ ClearConversationHistory called for article: %s", articleID)
+
+	db := s.db.GetDB()
+	result := db.Where("article_id = ?", articleID).Delete(&models.ChatMessage{})
+
+	if result.Error != nil {
+		log.Printf("[MessageService] ❌ Failed to clear conversation history: %v", result.Error)
+		return core.InternalError("Failed to clear conversation history")
+	}
+
+	log.Printf("[MessageService] ✅ Cleared %d messages for article %s", result.RowsAffected, articleID)
+	return nil
+}
+
 // UpdateMessageMetadata updates the metadata of an existing message
 func (s *MessageService) UpdateMessageMetadata(ctx context.Context, messageID uuid.UUID, metaData *metadata.MessageMetaData) error {
 	// Validate metadata

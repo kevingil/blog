@@ -17,6 +17,7 @@ func Register(app *fiber.App) {
 	// Agent - Conversation and artifact management (requires authentication)
 	agentGroup := app.Group("/agent", middleware.Auth())
 	agentGroup.Get("/conversations/:articleId", GetConversationHistory)
+	agentGroup.Delete("/conversations/:articleId", ClearConversationHistory)
 	agentGroup.Get("/artifacts/:articleId/pending", GetPendingArtifacts)
 	agentGroup.Post("/artifacts/:messageId/accept", AcceptArtifact)
 	agentGroup.Post("/artifacts/:messageId/reject", RejectArtifact)
