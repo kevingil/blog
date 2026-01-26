@@ -1,3 +1,4 @@
+import * as React from "react";
 import { 
   Search, 
   FileSearch, 
@@ -12,6 +13,7 @@ import {
   Loader2,
   CheckCircle2,
   XCircle,
+  ChevronUp,
 } from "lucide-react";
 import {
   ToolCall,
@@ -45,10 +47,22 @@ interface ToolGroupDisplayProps {
 const ARTIFACT_TOOLS = new Set(['edit_text', 'rewrite_document']);
 
 /**
+ * Tools that can be expanded to show content (but still use subtle styling)
+ */
+const EXPANDABLE_TOOLS = new Set(['read_document', 'search_web_sources', 'ask_question']);
+
+/**
  * Check if a tool should use the full card UI
  */
 function isArtifactTool(toolName: string): boolean {
   return ARTIFACT_TOOLS.has(toolName);
+}
+
+/**
+ * Check if a tool can be expanded to show details
+ */
+function isExpandableTool(toolName: string): boolean {
+  return EXPANDABLE_TOOLS.has(toolName);
 }
 
 /**
@@ -341,9 +355,63 @@ function ImagePromptResult({ result }: { result?: Record<string, unknown> }) {
 }
 
 /**
+ * Get expandable content for a tool (returns null if not expandable or no content)
+ */
+function getExpandableContent(call: ToolCallRecord): React.ReactNode | null {
+  if (call.status !== 'completed' || !call.result) return null;
+  
+  switch (call.name) {
+    case 'read_document': {
+      const content = call.result.content as string;
+      if (!content) return null;
+      return (
+        <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono">
+          {content}
+        </pre>
+      );
+    }
+    case 'search_web_sources':
+    case 'get_relevant_sources': {
+      const searchResults = (call.result.search_results || call.result.relevant_sources || []) as SearchResult[];
+      if (searchResults.length === 0) return null;
+      return (
+        <div className="flex flex-wrap gap-1.5">
+          {searchResults.slice(0, 6).map((sr, idx) => (
+            <Source href={sr.url} key={sr.url || idx}>
+              <SourceTrigger label={getDomain(sr.url)} showFavicon />
+              <SourceContent
+                title={sr.title}
+                description={sr.summary || sr.text_preview || sr.highlights?.[0]}
+                metadata={{ author: sr.author, published: sr.published_date }}
+              />
+            </Source>
+          ))}
+        </div>
+      );
+    }
+    case 'ask_question': {
+      const answer = call.result.answer as string;
+      if (!answer) return null;
+      return (
+        <div className="text-sm text-muted-foreground">
+          {answer}
+        </div>
+      );
+    }
+    default:
+      return null;
+  }
+}
+
+/**
  * Subtle inline tool display (for non-artifact tools like read_document, search, etc.)
  */
 function SubtleToolDisplay({ call }: { call: ToolCallRecord }) {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const canExpand = isExpandableTool(call.name) && call.status === 'completed';
+  const expandableContent = canExpand ? getExpandableContent(call) : null;
+  const hasContent = expandableContent !== null;
+
   const getStatusIcon = () => {
     switch (call.status) {
       case 'running':
@@ -358,16 +426,48 @@ function SubtleToolDisplay({ call }: { call: ToolCallRecord }) {
     }
   };
 
+  const handleClick = () => {
+    if (hasContent) {
+      setIsOpen((prev) => !prev);
+    }
+  };
+
   return (
-    <div className="flex items-center gap-2 py-1 text-sm text-muted-foreground">
-      <span className="flex-shrink-0 w-3 flex justify-center">
-        <span className="text-muted-foreground/70 text-xs">•</span>
-      </span>
-      <span className="flex-shrink-0 text-muted-foreground/70">
-        {getToolIcon(call.name)}
-      </span>
-      <span className="truncate">{getToolDisplayName(call.name)}</span>
-      {getStatusIcon()}
+    <div>
+      <button
+        onClick={handleClick}
+        disabled={!hasContent}
+        className={cn(
+          "flex w-full items-center gap-2 py-1 text-sm text-muted-foreground text-left",
+          hasContent && "hover:text-foreground cursor-pointer",
+          !hasContent && "cursor-default"
+        )}
+      >
+        <span className="flex-shrink-0 w-3 flex justify-center">
+          <span className="text-muted-foreground/70 text-xs">•</span>
+        </span>
+        <span className="flex-shrink-0 text-muted-foreground/70">
+          {getToolIcon(call.name)}
+        </span>
+        <span className="truncate flex-1">{getToolDisplayName(call.name)}</span>
+        {getStatusIcon()}
+        {hasContent && (
+          <ChevronUp
+            className={cn(
+              "h-4 w-4 text-muted-foreground/50 transition-transform duration-200 flex-shrink-0",
+              !isOpen && "rotate-180"
+            )}
+          />
+        )}
+      </button>
+      
+      {isOpen && hasContent && (
+        <div className="ml-5 pl-3 border-l border-border/50 mt-1 max-h-48 overflow-y-auto">
+          <div className="py-1.5">
+            {expandableContent}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

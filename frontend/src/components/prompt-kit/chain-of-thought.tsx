@@ -179,6 +179,7 @@ export function ChainOfThoughtContent({ children, className }: ChainOfThoughtCon
     <div className={cn(
       "ml-5 pl-3 border-l border-border/50 text-sm text-muted-foreground",
       "animate-in fade-in-0 slide-in-from-top-1 duration-200",
+      "max-h-48 overflow-y-auto",
       className
     )}>
       <div className="py-1.5 whitespace-pre-wrap leading-relaxed">
