@@ -65,7 +65,14 @@ import {
   StepsContent, 
   StepsItem 
 } from "@/components/prompt-kit/steps";
-import { ReasoningStep } from "@/components/prompt-kit/chain-of-thought";
+import { 
+  ChainOfThought,
+  ChainOfThoughtStep,
+  ChainOfThoughtTrigger,
+  ChainOfThoughtContent,
+  ChainOfThoughtItem,
+  ReasoningStep 
+} from "@/components/prompt-kit/chain-of-thought";
 import { cn } from '@/lib/utils';
 import { FileDiff, Wrench, BookOpen, FileSearch, PlusCircle, FileText, ImageIcon } from "lucide-react";
 import { 
@@ -1079,6 +1086,43 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   citations: output?.citations || [],
                 };
               }
+            }
+            
+            // Extract chain of thought steps from metadata
+            if (msg.meta_data?.steps && msg.meta_data.steps.length > 0) {
+              chatMsg.steps = msg.meta_data.steps.map((step: any) => {
+                const turnStep: TurnStep = { type: step.type };
+                if (step.type === 'reasoning' && step.reasoning) {
+                  turnStep.thinking = {
+                    content: step.reasoning.content || '',
+                    duration_ms: step.reasoning.duration_ms,
+                    visible: step.reasoning.visible ?? true,
+                  };
+                } else if (step.type === 'tool' && step.tool) {
+                  // Convert tool step to tool_group format
+                  turnStep.toolGroup = {
+                    group_id: step.tool.tool_id,
+                    status: step.tool.status === 'completed' ? 'completed' : 
+                            step.tool.status === 'error' ? 'error' : 'running',
+                    calls: [{
+                      id: step.tool.tool_id,
+                      name: step.tool.tool_name,
+                      input: step.tool.input || {},
+                      status: step.tool.status === 'completed' ? 'completed' : 
+                              step.tool.status === 'error' ? 'error' : 'running',
+                      result: step.tool.output,
+                      error: step.tool.error,
+                      started_at: step.tool.started_at || '',
+                      completed_at: step.tool.completed_at,
+                      duration_ms: step.tool.duration_ms,
+                    }],
+                  };
+                  turnStep.type = 'tool_group'; // Convert 'tool' to 'tool_group' for frontend
+                } else if (step.type === 'content' && step.content) {
+                  turnStep.content = step.content;
+                }
+                return turnStep;
+              });
             }
             
             return chatMsg;
@@ -2786,6 +2830,79 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   return null;
                 }
                 
+                // NEW: Use chain of thought steps if available
+                if (m.steps && m.steps.length > 0) {
+                  return (
+                    <div key={i} className="w-full space-y-2">
+                      <ChainOfThought>
+                        {m.steps.map((step, stepIdx) => {
+                          const isLastStep = stepIdx === m.steps!.length - 1;
+                          
+                          if (step.type === 'reasoning' && step.thinking?.content) {
+                            return (
+                              <ChainOfThoughtStep 
+                                key={stepIdx}
+                                type="reasoning" 
+                                status={step.isStreaming ? 'running' : 'completed'}
+                                isStreaming={step.isStreaming}
+                                isLast={isLastStep}
+                              >
+                                <ChainOfThoughtTrigger
+                                  badge={
+                                    step.thinking.duration_ms != null && !step.isStreaming ? (
+                                      <span className="text-xs px-1.5 py-0.5 rounded-full font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                                        {Math.round(step.thinking.duration_ms)}ms
+                                      </span>
+                                    ) : undefined
+                                  }
+                                >
+                                  {step.isStreaming ? "Reasoning..." : "Reasoning"}
+                                </ChainOfThoughtTrigger>
+                                <ChainOfThoughtContent>
+                                  {step.thinking.content}
+                                </ChainOfThoughtContent>
+                              </ChainOfThoughtStep>
+                            );
+                          }
+                          
+                          if (step.type === 'tool_group' && step.toolGroup) {
+                            return (
+                              <ChainOfThoughtStep 
+                                key={stepIdx} 
+                                type="tool" 
+                                status="completed" 
+                                isLast={isLastStep}
+                              >
+                                <ToolGroupDisplay group={step.toolGroup} />
+                              </ChainOfThoughtStep>
+                            );
+                          }
+                          
+                          if (step.type === 'content' && step.content) {
+                            return (
+                              <ChainOfThoughtItem key={stepIdx}>
+                                <div className="prose prose-sm max-w-none dark:prose-invert">
+                                  <Markdown>{step.content}</Markdown>
+                                </div>
+                              </ChainOfThoughtItem>
+                            );
+                          }
+                          
+                          return null;
+                        })}
+                      </ChainOfThought>
+                      
+                      {/* Render content after steps if there's additional content */}
+                      {m.content && !m.steps.some(s => s.type === 'content' && s.content === m.content) && (
+                        <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
+                          <Markdown>{m.content}</Markdown>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                
+                // LEGACY: Fall back to old rendering if no steps
                 // Check if there's reasoning content to display
                 const thinkingContent = m.meta_data?.thinking?.content;
                 const isReasoningStreaming = m.isReasoningStreaming;

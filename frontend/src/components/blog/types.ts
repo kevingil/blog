@@ -204,12 +204,40 @@ export interface MessageMetaData {
   tool_group?: ToolGroup;
   artifacts?: Artifact[];
 
+  // Chain of thought steps (reasoning -> tool -> reasoning -> content)
+  steps?: ChainOfThoughtStepFromBackend[];
+
   // Legacy fields (for backward compatibility)
   artifact?: LegacyArtifactInfo;
   task_status?: TaskStatus;
   tool_execution?: ToolExecution;
   context?: MessageContext;
   user_action?: UserAction;
+}
+
+/**
+ * Chain of thought step from backend metadata
+ */
+export interface ChainOfThoughtStepFromBackend {
+  type: 'reasoning' | 'tool' | 'content';
+  reasoning?: ThinkingBlock;
+  tool?: ToolStepInfo;
+  content?: string;
+}
+
+/**
+ * Tool execution info in a chain of thought step
+ */
+export interface ToolStepInfo {
+  tool_id: string;
+  tool_name: string;
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  status: string;
+  error?: string;
+  started_at?: string;
+  completed_at?: string;
+  duration_ms?: number;
 }
 
 export interface LegacyArtifactInfo {
