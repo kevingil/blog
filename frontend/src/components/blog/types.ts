@@ -110,6 +110,7 @@ export interface StreamResponse {
   type: StreamEventType;
   content?: string;
   iteration?: number;
+  step_index?: number; // Which step in the chain of thought this event belongs to
 
   // Legacy tool fields
   tool_id?: string;

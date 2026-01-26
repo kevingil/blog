@@ -5,7 +5,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo, ArrowUp, Square } from "lucide-react"
+import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo, ArrowUp, Square, Settings, Trash2 } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -41,7 +41,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { ThinkShimmerBlock } from "@/components/ui/think-shimmer";
 import { Markdown } from "@/components/ui/markdown";
-import { getConversationHistory } from "@/services/conversations";
+import { getConversationHistory, clearConversationHistory } from "@/services/conversations";
 // Artifact accept/reject is now handled by the sticky DiffActionBar
 import { WebSearchSteps, WebSearchToolContext } from "./WebSearchSteps";
 import { DiffActionBar } from "./DiffActionBar";
@@ -51,6 +51,7 @@ import type {
   ToolGroup, 
   ThinkingBlock, 
   Artifact as NewArtifact,
+  TurnStep,
 } from "./types";
 import { 
   ToolCall, 
@@ -202,6 +203,10 @@ type ChatMessage = {
   tool_group?: ToolGroup;
   // New: Thinking/chain of thought
   thinking?: ThinkingBlock;
+  // Chain of thought steps (reasoning -> tool -> reasoning -> content)
+  steps?: TurnStep[];
+  // Streaming state
+  isReasoningStreaming?: boolean;
   // Legacy tool_context for backward compatibility
   tool_context?: {
     tool_name: string;
@@ -228,8 +233,6 @@ type ChatMessage = {
     reason?: string;
   };
   created_at?: string;
-  // Streaming state
-  isReasoningStreaming?: boolean;
 };
 
 // === TipTap Diff Extension ================================================
@@ -635,6 +638,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [isThinking, setIsThinking] = useState(false);
   const [thinkingMessage, setThinkingMessage] = useState<string>('Thinking...');
   const chatMessagesRef = useRef<HTMLDivElement>(null);
+  const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
+  const [clearingChat, setClearingChat] = useState(false);
   
   // (deprecated) pending edit/patch state removed in favor of inline diffs
   
@@ -1385,11 +1390,33 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     const updated = [...prev];
                     if (updated[assistantIndex]) {
                       const currentMsg = updated[assistantIndex];
+                      const steps = [...(currentMsg.steps || [])];
+                      const stepIdx = msg.step_index ?? 0;
+                      
+                      // Ensure step exists at stepIdx
+                      while (steps.length <= stepIdx) {
+                        steps.push({ type: 'reasoning', thinking: { content: '', visible: true }, isStreaming: true });
+                      }
+                      
+                      // Append to the reasoning step at stepIdx
+                      if (steps[stepIdx].type === 'reasoning' && steps[stepIdx].thinking) {
+                        steps[stepIdx] = {
+                          ...steps[stepIdx],
+                          thinking: {
+                            ...steps[stepIdx].thinking!,
+                            content: (steps[stepIdx].thinking!.content || '') + msg.thinking_content,
+                          },
+                          isStreaming: true,
+                        };
+                      }
+                      
+                      // Also update legacy thinking for backward compatibility
                       const currentMetaData = currentMsg.meta_data || {};
                       const currentThinking = currentMetaData.thinking || { content: '', visible: true };
                       
                       updated[assistantIndex] = {
                         ...currentMsg,
+                        steps,
                         meta_data: {
                           ...currentMetaData,
                           thinking: {
@@ -1412,9 +1439,34 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   setChatMessages((prev) => {
                     const updated = [...prev];
                     if (updated[assistantIndex]) {
+                      const currentMsg = updated[assistantIndex];
+                      const steps = [...(currentMsg.steps || [])];
+                      const stepIdx = msg.step_index ?? steps.length;
+                      
+                      // Mark any previous reasoning steps as done
+                      steps.forEach((step, idx) => {
+                        if (step.type === 'reasoning' && step.isStreaming) {
+                          steps[idx] = { ...step, isStreaming: false };
+                        }
+                      });
+                      
+                      // Ensure content step exists at stepIdx
+                      if (steps.length <= stepIdx) {
+                        steps.push({ type: 'content', content: '' });
+                      }
+                      
+                      // Append to content step
+                      if (steps[stepIdx].type === 'content') {
+                        steps[stepIdx] = {
+                          ...steps[stepIdx],
+                          content: (steps[stepIdx].content || '') + msg.content,
+                        };
+                      }
+                      
                       updated[assistantIndex] = {
-                        ...updated[assistantIndex],
-                        content: (updated[assistantIndex].content || '') + msg.content,
+                        ...currentMsg,
+                        steps,
+                        content: (currentMsg.content || '') + msg.content,
                         isReasoningStreaming: false, // Reasoning is complete when content starts
                       };
                     }
@@ -1474,7 +1526,46 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 
                 // Display tool usage feedback using tool_context for all tools
                 if (msg.tool_name) {
-                  // All tools now use tool_context for unified rendering
+                  // Also add tool step to the current assistant message's steps array
+                  setChatMessages((prev) => {
+                    const updated = [...prev];
+                    if (updated[assistantIndex]) {
+                      const currentMsg = updated[assistantIndex];
+                      const steps = [...(currentMsg.steps || [])];
+                      
+                      // Mark any previous reasoning steps as done
+                      steps.forEach((step, idx) => {
+                        if (step.type === 'reasoning' && step.isStreaming) {
+                          steps[idx] = { ...step, isStreaming: false };
+                        }
+                      });
+                      
+                      // Add tool step
+                      steps.push({
+                        type: 'tool_group',
+                        toolGroup: {
+                          group_id: msg.tool_id || `tool-${Date.now()}`,
+                          status: 'running',
+                          calls: [{
+                            id: msg.tool_id || `call-${Date.now()}`,
+                            name: msg.tool_name,
+                            input: msg.tool_input as Record<string, unknown> || {},
+                            status: 'running',
+                            started_at: new Date().toISOString(),
+                          }],
+                        },
+                      });
+                      
+                      updated[assistantIndex] = {
+                        ...currentMsg,
+                        steps,
+                        isReasoningStreaming: false,
+                      };
+                    }
+                    return updated;
+                  });
+                  
+                  // Also add legacy tool_context message for backward compatibility
                   const toolContext: ChatMessage['tool_context'] = {
                     tool_name: msg.tool_name,
                     tool_id: msg.tool_id || '',
@@ -1514,7 +1605,46 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     if (msg.tool_result.content) {
                       const toolResult = JSON.parse(msg.tool_result.content);
                       
-                      // Update the matching tool_context message with completed status
+                      // Update tool steps in the assistant message
+                      setChatMessages((prev) => {
+                        const updated = [...prev];
+                        if (updated[assistantIndex] && updated[assistantIndex].steps) {
+                          const steps = [...updated[assistantIndex].steps!];
+                          // Find and update the matching tool step
+                          for (let i = steps.length - 1; i >= 0; i--) {
+                            if (steps[i].type === 'tool_group' && steps[i].toolGroup) {
+                              const calls = steps[i].toolGroup!.calls;
+                              for (let j = 0; j < calls.length; j++) {
+                                if (calls[j].name === toolResult.tool_name && calls[j].status === 'running') {
+                                  calls[j] = {
+                                    ...calls[j],
+                                    status: 'completed',
+                                    result: toolResult,
+                                    completed_at: new Date().toISOString(),
+                                  };
+                                  steps[i] = {
+                                    ...steps[i],
+                                    toolGroup: {
+                                      ...steps[i].toolGroup!,
+                                      status: 'completed',
+                                      calls: [...calls],
+                                    },
+                                  };
+                                  break;
+                                }
+                              }
+                              break;
+                            }
+                          }
+                          updated[assistantIndex] = {
+                            ...updated[assistantIndex],
+                            steps,
+                          };
+                        }
+                        return updated;
+                      });
+                      
+                      // Update the matching tool_context message with completed status (legacy)
                       setChatMessages((prev) => {
                         const updated = [...prev];
                         // Find last matching tool_use message that's still running
@@ -2304,6 +2434,80 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   <RefreshCw className={cn('h-4 w-4', generatingRewrite && 'animate-spin')} />
                   Regenerate
                 </Button>
+              )}
+
+              {/* Settings Button */}
+              {!isNew && (
+                <Drawer open={showSettingsDrawer} onOpenChange={setShowSettingsDrawer}>
+                  <DrawerTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                    >
+                      <Settings className="h-4 w-4" />
+                    </Button>
+                  </DrawerTrigger>
+                  <DrawerContent>
+                    <DrawerHeader>
+                      <DrawerTitle>Chat Settings</DrawerTitle>
+                      <DrawerDescription>
+                        Manage your chat assistant settings
+                      </DrawerDescription>
+                    </DrawerHeader>
+                    <div className="p-4 space-y-4">
+                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="space-y-1">
+                          <p className="font-medium">Clear Chat History</p>
+                          <p className="text-sm text-muted-foreground">
+                            Remove all messages and start fresh with a new conversation
+                          </p>
+                        </div>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={clearingChat}
+                          onClick={async () => {
+                            if (!article?.article?.id) return;
+                            setClearingChat(true);
+                            try {
+                              await clearConversationHistory(article.article.id);
+                              // Reload conversation to get the fresh initial greeting
+                              const result = await getConversationHistory(article.article.id);
+                              setChatMessages(result.messages?.map((msg: any) => ({
+                                id: msg.id,
+                                role: msg.role,
+                                content: msg.content,
+                              })) || []);
+                              toast({
+                                title: "Chat cleared",
+                                description: "Your conversation history has been reset.",
+                              });
+                              setShowSettingsDrawer(false);
+                            } catch (error) {
+                              console.error('Failed to clear chat history:', error);
+                              toast({
+                                title: "Error",
+                                description: "Failed to clear chat history. Please try again.",
+                                variant: "destructive",
+                              });
+                            } finally {
+                              setClearingChat(false);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          {clearingChat ? 'Clearing...' : 'Clear'}
+                        </Button>
+                      </div>
+                    </div>
+                    <DrawerFooter>
+                      <DrawerClose asChild>
+                        <Button variant="outline">Close</Button>
+                      </DrawerClose>
+                    </DrawerFooter>
+                  </DrawerContent>
+                </Drawer>
               )}
             </div>
 
