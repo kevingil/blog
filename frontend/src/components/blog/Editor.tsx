@@ -2865,7 +2865,30 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                 status="completed" 
                                 isLast={isLastStep}
                               >
-                                <ToolGroupDisplay group={step.toolGroup} />
+                                <ToolGroupDisplay 
+                                  group={step.toolGroup}
+                                  onArtifactAction={(toolId, action) => {
+                                    const call = step.toolGroup?.calls.find(c => c.id === toolId);
+                                    if (call && (call.name === 'edit_text' || call.name === 'rewrite_document')) {
+                                      const result = call.result;
+                                      if (action === 'accept' && result && editor) {
+                                        const oldContent = (result.original_text || result.original_content) as string;
+                                        const newContent = (result.new_text || result.new_content) as string;
+                                        const reason = (result.reason as string) || '';
+                                        
+                                        if (newContent) {
+                                          if (call.name === 'edit_text' && oldContent) {
+                                            applyTextEdit(oldContent, newContent, reason);
+                                          } else {
+                                            const currentHtml = editor.getHTML();
+                                            const newHtml = mdParser.render(newContent);
+                                            enterDiffPreview(currentHtml, newHtml, reason);
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }}
+                                />
                               </ChainOfThoughtStep>
                             );
                           }
