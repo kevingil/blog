@@ -222,15 +222,14 @@ func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, cont
 			logging.WriteToolResultsJson(sessionID, seqId, toolResults)
 		}
 		if (agentMessage.FinishReason() == message.FinishReasonToolUse) && toolResults != nil {
-			// Stream the acknowledgment message to the user before continuing with tool execution
-			if agentMessage.Content().String() != "" {
-				responseEvent := AgentEvent{
-					Type:    AgentEventTypeResponse,
-					Message: agentMessage,
-					Done:    false,
-				}
-				events <- responseEvent
+			// Stream the tool call message to the manager (even without text content)
+			// This is necessary for the manager to track tool steps in chain of thought
+			responseEvent := AgentEvent{
+				Type:    AgentEventTypeResponse,
+				Message: agentMessage,
+				Done:    false,
 			}
+			events <- responseEvent
 
 			// Stream the tool results message
 			toolEvent := AgentEvent{
