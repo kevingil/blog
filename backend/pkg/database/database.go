@@ -1,11 +1,10 @@
 package database
 
 import (
+	"backend/pkg/database/models"
 	"fmt"
 	"log"
 	"os"
-
-	"backend/pkg/database/models"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"

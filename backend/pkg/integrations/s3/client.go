@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -99,6 +100,16 @@ func (c *Client) ListFiles(ctx context.Context, prefix string) ([]FileData, []Fo
 			FileCount:    0,
 		})
 	}
+
+	// Sort files by LastModified descending (newest first)
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].LastModified.After(files[j].LastModified)
+	})
+
+	// Sort folders by name alphabetically
+	sort.Slice(folders, func(i, j int) bool {
+		return folders[i].Name < folders[j].Name
+	})
 
 	return files, folders, nil
 }
