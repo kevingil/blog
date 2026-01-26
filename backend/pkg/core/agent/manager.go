@@ -125,7 +125,6 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 	writingTools := []tools.BaseTool{
 		tools.NewReadDocumentTool(),
 		tools.NewEditTextTool(),
-		tools.NewAnalyzeDocumentTool(),
 		tools.NewGenerateImagePromptTool(textGenService),
 		tools.NewGenerateTextContentTool(textGenService),
 	}
@@ -358,9 +357,9 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	userPrompt := asyncReq.Request.Message
 	if asyncReq.Request.DocumentContent != "" {
 		ctx = tools.WithDocumentContent(ctx, asyncReq.Request.DocumentContent, "")
-		outline := generateHTMLOutline(asyncReq.Request.DocumentContent)
-		userPrompt += "\n\n--- Document Outline (use read_document for full content) ---\n" + outline
-		log.Printf("[Agent] Document outline generated (%d lines), full HTML content stored in context", strings.Count(outline, "\n")+1)
+		layout := generateHTMLOutline(asyncReq.Request.DocumentContent)
+		userPrompt += "\n\n--- Document Layout (use read_document to see full content) ---\n" + layout
+		log.Printf("[Agent] Document layout generated (%d headers), full content stored in context", strings.Count(layout, "\n")+1)
 	}
 
 	asyncReq.iteration = 1
@@ -919,23 +918,48 @@ func convertHTMLToMarkdown(html string) (string, error) {
 	return markdown, nil
 }
 
+// generateHTMLOutline extracts only headers from HTML to show document structure
+// Returns a tree-like layout with line numbers for navigation
 func generateHTMLOutline(html string) string {
 	lines := strings.Split(html, "\n")
 	var outline []string
 
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "<h1") || strings.HasPrefix(trimmed, "<h2") ||
-			strings.HasPrefix(trimmed, "<h3") || strings.HasPrefix(trimmed, "<h4") ||
-			strings.HasPrefix(trimmed, "<h5") || strings.HasPrefix(trimmed, "<h6") {
-			outline = append(outline, fmt.Sprintf("%4d| %s", i+1, line))
-		} else if strings.HasPrefix(trimmed, "<p") && len(trimmed) > 60 {
-			preview := trimmed
-			if len(preview) > 80 {
-				preview = preview[:80] + "..."
-			}
-			outline = append(outline, fmt.Sprintf("%4d| %s", i+1, preview))
+		
+		// Extract header level and text
+		var level int
+		var headerText string
+		
+		if strings.HasPrefix(trimmed, "<h1") {
+			level = 1
+		} else if strings.HasPrefix(trimmed, "<h2") {
+			level = 2
+		} else if strings.HasPrefix(trimmed, "<h3") {
+			level = 3
+		} else if strings.HasPrefix(trimmed, "<h4") {
+			level = 4
+		} else if strings.HasPrefix(trimmed, "<h5") {
+			level = 5
+		} else if strings.HasPrefix(trimmed, "<h6") {
+			level = 6
+		} else {
+			continue
 		}
+		
+		// Extract text content from header tag
+		headerText = extractHeaderText(trimmed)
+		if headerText == "" {
+			continue
+		}
+		
+		// Create indentation based on level (h2 = no indent, h3 = 2 spaces, etc.)
+		indent := ""
+		if level > 2 {
+			indent = strings.Repeat("  ", level-2)
+		}
+		
+		outline = append(outline, fmt.Sprintf("%s- %s (line %d)", indent, headerText, i+1))
 	}
 
 	if len(outline) == 0 {
@@ -943,4 +967,39 @@ func generateHTMLOutline(html string) string {
 	}
 
 	return strings.Join(outline, "\n")
+}
+
+// extractHeaderText removes HTML tags and returns just the text content
+func extractHeaderText(header string) string {
+	// Find the closing > of the opening tag
+	start := strings.Index(header, ">")
+	if start == -1 {
+		return ""
+	}
+	// Find the opening < of the closing tag
+	end := strings.LastIndex(header, "</")
+	if end == -1 {
+		end = len(header)
+	}
+	
+	text := header[start+1 : end]
+	// Clean up any nested tags (like <strong>, <em>, etc.)
+	text = stripHTMLTags(text)
+	return strings.TrimSpace(text)
+}
+
+// stripHTMLTags removes all HTML tags from a string
+func stripHTMLTags(s string) string {
+	var result strings.Builder
+	inTag := false
+	for _, r := range s {
+		if r == '<' {
+			inTag = true
+		} else if r == '>' {
+			inTag = false
+		} else if !inTag {
+			result.WriteRune(r)
+		}
+	}
+	return result.String()
 }

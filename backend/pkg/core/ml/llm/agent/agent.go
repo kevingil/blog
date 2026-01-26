@@ -303,7 +303,6 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 		"ask_question":             true,
 		"get_relevant_sources":     true,
 		"fetch_url":                true,
-		"analyze_document":         true,
 		"add_context_from_sources": true,
 	}
 

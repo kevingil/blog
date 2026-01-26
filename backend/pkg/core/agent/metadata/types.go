@@ -244,7 +244,6 @@ var ToolCategories = map[string]ToolCategory{
 	"ask_question":             ToolCategoryResearch,
 	"get_relevant_sources":     ToolCategoryResearch,
 	"fetch_url":                ToolCategoryResearch,
-	"analyze_document":         ToolCategoryAnalysis,
 	"add_context_from_sources": ToolCategoryAnalysis,
 	"edit_text":                ToolCategoryEditing,
 	"generate_text_content":    ToolCategoryGeneration,
@@ -258,7 +257,6 @@ func IsParallelizable(toolName string) bool {
 		"ask_question":             true,
 		"get_relevant_sources":     true,
 		"fetch_url":                true,
-		"analyze_document":         true,
 		"add_context_from_sources": true,
 	}
 	return parallelTools[toolName]
