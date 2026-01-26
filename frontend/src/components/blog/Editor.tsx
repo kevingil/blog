@@ -751,7 +751,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     },
     onError: (error) => {
       console.error('Error updating article:', error);
-      toast({ title: "Error", description: "Failed to save draft. Please try again.", variant: "destructive" });
+      const errorMessage = error instanceof Error ? error.message : "Failed to save draft. Please try again.";
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
     }
   });
 
@@ -766,7 +767,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     },
     onError: (error) => {
       console.error('Error publishing article:', error);
-      toast({ title: "Error", description: "Failed to publish article. Please try again.", variant: "destructive" });
+      const errorMessage = error instanceof Error ? error.message : "Failed to publish article. Please try again.";
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
     }
   });
 
