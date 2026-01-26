@@ -3,6 +3,7 @@ package config
 import (
 	"backend/pkg/core/ml/llm/models"
 	"os"
+	"sync"
 )
 
 type AgentName string
@@ -31,7 +32,7 @@ type MCPServer struct {
 type AgentConfig struct {
 	Model           models.ModelID `json:"model"`
 	MaxTokens       int64          `json:"max_tokens"`
-	ReasoningEffort int            `json:"reasoning_effort"`
+	ReasoningEffort string         `json:"reasoning_effort"` // "low", "medium", or "high"
 }
 
 type ProviderConfig struct {
@@ -48,9 +49,14 @@ type Config struct {
 	MCPServers   map[string]MCPServer                    `json:"mcp_servers"`
 }
 
-var globalConfig *Config
+var (
+	globalConfig *Config
+	configOnce   sync.Once
+)
 
-func init() {
+// initConfig initializes the config lazily to ensure environment variables
+// from .env are loaded first
+func initConfig() {
 	workingDir, _ := os.Getwd()
 	globalConfig = &Config{
 		Debug:        os.Getenv("DEBUG") == "true",
@@ -60,12 +66,12 @@ func init() {
 			AgentCopilot: {
 				Model:           models.GptOss120b,
 				MaxTokens:       18192,
-				ReasoningEffort: 1, // medium
+				ReasoningEffort: "medium",
 			},
 			AgentWriter: {
 				Model:           models.GPT5,
 				MaxTokens:       4000,
-				ReasoningEffort: 1,
+				ReasoningEffort: "medium",
 			},
 		},
 		Providers: map[models.ModelProvider]ProviderConfig{
@@ -101,10 +107,12 @@ func init() {
 }
 
 func Get() *Config {
+	configOnce.Do(initConfig)
 	return globalConfig
 }
 
 func UpdateAgentModel(agentName AgentName, modelID models.ModelID) error {
+	configOnce.Do(initConfig)
 	if globalConfig.Agents == nil {
 		globalConfig.Agents = make(map[AgentName]AgentConfig)
 	}

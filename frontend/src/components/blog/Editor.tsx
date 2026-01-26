@@ -751,7 +751,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     },
     onError: (error) => {
       console.error('Error updating article:', error);
-      toast({ title: "Error", description: "Failed to save draft. Please try again.", variant: "destructive" });
+      const errorMessage = error instanceof Error ? error.message : "Failed to save draft. Please try again.";
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
     }
   });
 
@@ -766,7 +767,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     },
     onError: (error) => {
       console.error('Error publishing article:', error);
-      toast({ title: "Error", description: "Failed to publish article. Please try again.", variant: "destructive" });
+      const errorMessage = error instanceof Error ? error.message : "Failed to publish article. Please try again.";
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
     }
   });
 
@@ -2657,44 +2659,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           )}
           
         <div className="p-4 border-t space-y-2">
-          <div className="flex gap-1 flex-wrap">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const message = 'Please rewrite this article to make it more engaging and clear';
-                setChatInput(message);
-                sendChatWithMessage(message);
-              }}
-              disabled={chatLoading}
-            >
-              ✨ Improve
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const message = 'Fix any grammar and spelling issues in this article';
-                setChatInput(message);
-                sendChatWithMessage(message);
-              }}
-              disabled={chatLoading}
-            >
-              ✓ Fix Grammar
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const message = 'Make this article shorter and more concise';
-                setChatInput(message);
-                sendChatWithMessage(message);
-              }}
-              disabled={chatLoading}
-            >
-              📝 Shorten
-            </Button>
-          </div>
           <PromptInput
             value={chatInput}
             onValueChange={setChatInput}

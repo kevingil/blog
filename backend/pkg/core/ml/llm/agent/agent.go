@@ -681,11 +681,15 @@ func createAgentProvider(agentName config.AgentName) (provider.Provider, error) 
 		provider.WithSystemMessage(prompt.GetAgentPrompt(agentName, model.Provider)),
 		provider.WithMaxTokens(maxTokens),
 	}
-	if model.Provider == models.ProviderOpenAI || model.Provider == models.ProviderLocal && model.CanReason {
+	if (model.Provider == models.ProviderOpenAI || model.Provider == models.ProviderGROQ) && model.CanReason {
+		reasoningEffort := agentConfig.ReasoningEffort
+		if reasoningEffort == "" {
+			reasoningEffort = "medium"
+		}
 		opts = append(
 			opts,
 			provider.WithOpenAIOptions(
-				provider.WithReasoningEffort(fmt.Sprintf("%d", agentConfig.ReasoningEffort)),
+				provider.WithReasoningEffort(reasoningEffort),
 			),
 		)
 	} else if model.Provider == models.ProviderAnthropic && model.CanReason {

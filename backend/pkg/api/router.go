@@ -11,6 +11,7 @@ import (
 	"backend/pkg/api/profile"
 	"backend/pkg/api/project"
 	"backend/pkg/api/source"
+	"backend/pkg/api/storage"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -32,6 +33,7 @@ func RegisterRoutes(app *fiber.App) {
 	profile.Register(app)
 	auth.Register(app)
 	agent.Register(app)
+	storage.Register(app)
 
 	// Health check
 	app.Get("/health", func(c *fiber.Ctx) error {

@@ -22,6 +22,9 @@ type MessageMetaData struct {
 
 	// Attached files/resources
 	Attachments []Attachment `json:"attachments,omitempty"`
+
+	// Chain of thought reasoning (from reasoning models)
+	Thinking *ThinkingBlock `json:"thinking,omitempty"`
 }
 
 // ArtifactInfo represents a content artifact (edit, rewrite, suggestion)

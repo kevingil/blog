@@ -8,15 +8,15 @@ import (
 
 // Project represents a portfolio project
 type Project struct {
-	ID          uuid.UUID
-	Title       string
-	Description string
-	Content     string
-	TagIDs      []int64
-	ImageURL    string
-	URL         string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID          uuid.UUID `json:"id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Content     string    `json:"content"`
+	TagIDs      []int64   `json:"tag_ids,omitempty"`
+	ImageURL    string    `json:"image_url,omitempty"`
+	URL         string    `json:"url,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // ProjectListOptions represents options for listing projects
