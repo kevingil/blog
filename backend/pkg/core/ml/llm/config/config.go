@@ -3,6 +3,7 @@ package config
 import (
 	"backend/pkg/core/ml/llm/models"
 	"os"
+	"sync"
 )
 
 type AgentName string
@@ -48,9 +49,14 @@ type Config struct {
 	MCPServers   map[string]MCPServer                    `json:"mcp_servers"`
 }
 
-var globalConfig *Config
+var (
+	globalConfig *Config
+	configOnce   sync.Once
+)
 
-func init() {
+// initConfig initializes the config lazily to ensure environment variables
+// from .env are loaded first
+func initConfig() {
 	workingDir, _ := os.Getwd()
 	globalConfig = &Config{
 		Debug:        os.Getenv("DEBUG") == "true",
@@ -101,10 +107,12 @@ func init() {
 }
 
 func Get() *Config {
+	configOnce.Do(initConfig)
 	return globalConfig
 }
 
 func UpdateAgentModel(agentName AgentName, modelID models.ModelID) error {
+	configOnce.Do(initConfig)
 	if globalConfig.Agents == nil {
 		globalConfig.Agents = make(map[AgentName]AgentConfig)
 	}
