@@ -26,6 +26,7 @@ import {
   SourceContent,
   SourceTrigger,
 } from "@/components/prompt-kit/source";
+import { DiffArtifact } from "./DiffArtifact";
 import type { 
   ToolGroup, 
   ToolCallRecord, 
@@ -475,23 +476,45 @@ function SubtleToolDisplay({ call }: { call: ToolCallRecord }) {
 /**
  * Renders a group of tool calls using appropriate UI based on tool type
  */
-export function ToolGroupDisplay({ group }: ToolGroupDisplayProps) {
+export function ToolGroupDisplay({ group, onArtifactAction }: ToolGroupDisplayProps) {
   return (
     <div className="space-y-1">
       {group.calls.map((call) => {
-        // Use full card UI for artifact tools
-        if (isArtifactTool(call.name)) {
+        // Use DiffArtifact for edit tools
+        if (isArtifactTool(call.name) && call.status === 'completed' && call.result) {
+          const result = call.result;
+          // edit_text uses original_text/new_text, rewrite_document uses original_content/new_content
+          const oldText = (result.original_text || result.original_content || '') as string;
+          const newText = (result.new_text || result.new_content || '') as string;
+          const reason = (result.reason || '') as string;
+          
+          return (
+            <DiffArtifact
+              key={call.id}
+              title={getToolDisplayName(call.name)}
+              description={reason}
+              oldText={oldText}
+              newText={newText}
+              onApply={onArtifactAction ? () => onArtifactAction(call.id, 'accept') : undefined}
+            />
+          );
+        }
+        
+        // Show loading state for running artifact tools
+        if (isArtifactTool(call.name) && (call.status === 'running' || call.status === 'pending')) {
           return (
             <ToolCall 
               key={call.id} 
               status={mapStatus(call.status)}
-              defaultOpen={call.status === 'completed'}
+              defaultOpen={true}
             >
               <ToolCallTrigger icon={getToolIcon(call.name)}>
                 {getToolDisplayName(call.name)}
               </ToolCallTrigger>
               <ToolCallContent>
-                <ToolResultContent call={call} />
+                <ToolCallStatusItem status="running">
+                  {call.name === 'edit_text' ? 'Analyzing text selection...' : 'Analyzing document...'}
+                </ToolCallStatusItem>
               </ToolCallContent>
             </ToolCall>
           );

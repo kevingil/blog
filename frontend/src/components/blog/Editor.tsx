@@ -243,21 +243,299 @@ type ChatMessage = {
 };
 
 // === TipTap Diff Extension ================================================
+//
+// This extension provides inline diff highlighting for the TipTap editor.
+// It visualizes changes between old and new content with green (added) and
+// red strikethrough (removed) decorations.
+//
+// ## Architecture
+//
+// The diff system operates in two modes:
+//
+// ### 1. PRECISE MODE (for edit_text operations)
+// When we know exactly what was replaced and where:
+// - Receives: originalText, newText, and the HTML index where the edit occurred
+// - Extracts plain text from editor's document (NOT htmlToPlainText) for accuracy
+// - Detects common edit patterns for reliable highlighting:
+//   - INSERT BEFORE: Uses indexOf() to find preserved text position in editor
+//   - INSERT AFTER: "Summary" → "Summary + New content" (new starts with original)
+//   - PURE REPLACEMENT: Original text completely replaced
+//   - COMPLEX: Falls back to word-level diff
+// - Avoids false matches that occur when diffing entire documents
+//
+// ### 2. FULL DOCUMENT MODE (for rewrite_document operations)
+// When the entire document is rewritten:
+// - Compares full old vs new document plain text
+// - Uses word-level diff (diffWords) for change detection
+// - Includes structural change detection (same text, different HTML tag)
+//
+// ## Position Mapping
+//
+// HTML content is converted to plain text for diffing, then diff positions
+// are mapped back to ProseMirror editor positions. Key considerations:
+// - HTML tags don't appear in plain text but affect editor positions
+// - Text node boundaries require careful offset-to-position mapping
+// - The offsetToPos function handles gaps between text nodes
+//
+// CRITICAL: For PRECISE MODE, plain text MUST be extracted from the editor's
+// document (tr.doc.descendants) rather than using htmlToPlainText(). This is
+// because htmlToPlainText() can include whitespace (like newlines) that
+// ProseMirror treats as structural boundaries, causing character count
+// mismatches that result in incorrect highlight boundaries.
+//
+// ## Usage Flow
+//
+// 1. enterDiffPreview() is called with old/new HTML and optional editInfo
+// 2. Editor content is set to new HTML
+// 3. showDiff command computes diff parts based on mode
+// 4. ProseMirror plugin applies decorations based on diff parts
+// 5. User accepts (keeps new) or rejects (reverts to old)
+//
+// =========================================================================
+
+// Represents a text segment with its HTML context and position
+type TextSegment = {
+  text: string;
+  tagContext: string; // e.g., "h2", "p", "h3"
+  startOffset: number; // position in plain text
+  endOffset: number;
+};
+
+// Extract text segments with their tag context from HTML
+function extractTextSegments(html: string): TextSegment[] {
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  const segments: TextSegment[] = [];
+  let currentOffset = 0;
+  
+  function walk(node: Node, parentTag: string) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent || '';
+      if (text.length > 0) {
+        segments.push({ 
+          text, 
+          tagContext: parentTag,
+          startOffset: currentOffset,
+          endOffset: currentOffset + text.length
+        });
+        currentOffset += text.length;
+      }
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as Element;
+      const tag = el.tagName.toLowerCase();
+      for (const child of Array.from(el.childNodes)) {
+        walk(child, tag);
+      }
+    }
+  }
+  
+  for (const child of Array.from(div.childNodes)) {
+    walk(child, 'root');
+  }
+  return segments;
+}
+
+// Extract plain text from HTML (for position mapping)
+function htmlToPlainText(html: string): string {
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  return div.textContent || div.innerText || '';
+}
+
+// Type for diff parts (compatible with diffWords output from 'diff' library)
+// - added: true if this text was inserted
+// - removed: true if this text was deleted
+// - value: the actual text content
+// - count: optional word count (from diffWords)
+type DiffPart = { added?: boolean; removed?: boolean; value: string; count?: number };
+
+// Detect structural changes where text content is the same but HTML tag changed.
+// For example, if "Summary" was in <h3> but is now in <h2>, this marks it as changed.
+// Used in FULL DOCUMENT MODE to highlight tag-level modifications.
+function detectStructuralChanges(
+  oldSegments: TextSegment[],
+  newSegments: TextSegment[],
+  parts: DiffPart[]
+): DiffPart[] {
+  // Build a map of text -> tag for old content
+  const oldTextToTag = new Map<string, string>();
+  for (const seg of oldSegments) {
+    const trimmed = seg.text.trim();
+    if (trimmed) {
+      oldTextToTag.set(trimmed, seg.tagContext);
+    }
+  }
+  
+  // Build a map of text -> tag for new content  
+  const newTextToTag = new Map<string, string>();
+  for (const seg of newSegments) {
+    const trimmed = seg.text.trim();
+    if (trimmed) {
+      newTextToTag.set(trimmed, seg.tagContext);
+    }
+  }
+  
+  // Process parts and mark structural changes
+  const result: DiffPart[] = [];
+  
+  for (const part of parts) {
+    // Only check unchanged parts for structural changes
+    if (!part.added && !part.removed) {
+      const trimmed = part.value.trim();
+      const oldTag = oldTextToTag.get(trimmed);
+      const newTag = newTextToTag.get(trimmed);
+      
+      // If same text exists in both but with different tags, mark as changed
+      if (oldTag && newTag && oldTag !== newTag) {
+        result.push({ added: true, value: part.value });
+      } else {
+        result.push(part);
+      }
+    } else {
+      result.push(part);
+    }
+  }
+  
+  return result;
+}
+
 const DIFF_PLUGIN_KEY = new PluginKey('diff-highlighter');
 const DiffHighlighter = Extension.create({
   name: 'diffHighlighter',
   addStorage() {
     return {
       active: false as boolean,
-      parts: [] as Array<{ added?: boolean; removed?: boolean; value: string }>,
+      parts: [] as DiffPart[],
     };
   },
   addCommands() {
     return {
       showDiff:
-        (oldText: string, newText: string) => ({ tr, dispatch }: { tr: unknown; dispatch: (tr: unknown) => void }) => {
+        (oldHtml: string, newHtml: string, editInfo?: { originalText: string; newText: string; htmlIndex: number }) =>
+          ({ tr, dispatch }: { tr: unknown; dispatch: (tr: unknown) => void }) => {
           try {
-            const parts = diffWords(oldText, newText);
+            let parts: DiffPart[];
+            
+            if (editInfo) {
+              // PRECISE MODE: Use exact edit boundaries for edit_text operations
+              // This avoids false matches from diffing the entire document
+              
+              // Extract plain text from the original and new edit content
+              const originalPlainText = htmlToPlainText(editInfo.originalText);
+              const newPlainText = htmlToPlainText(editInfo.newText);
+              
+              // IMPORTANT: Get plain text from the EDITOR'S document, not htmlToPlainText
+              // This ensures lengths match exactly with the text nodes used in offsetToPos
+              // htmlToPlainText can include whitespace that the editor treats as structural
+              const doc = (tr as any).doc;
+              let fullNewPlainText = '';
+              doc.descendants((node: any) => {
+                if (node.isText) {
+                  fullNewPlainText += node.text || '';
+                }
+                return true;
+              });
+              
+              parts = [];
+              
+              // Find where the edit occurred by locating the HTML index position
+              const beforeEditHtml = newHtml.substring(0, editInfo.htmlIndex);
+              const editStartOffset = htmlToPlainText(beforeEditHtml).length;
+              
+              // Detect common edit patterns
+              const isInsertBefore = newPlainText.endsWith(originalPlainText) && newPlainText.length > originalPlainText.length;
+              const isInsertAfter = newPlainText.startsWith(originalPlainText) && newPlainText.length > originalPlainText.length;
+              const isPureReplacement = !newPlainText.includes(originalPlainText);
+              
+              // Add unchanged prefix (content before the edit location)
+              if (editStartOffset > 0) {
+                parts.push({ value: fullNewPlainText.substring(0, editStartOffset) });
+              }
+              
+              if (isInsertBefore) {
+                // INSERT BEFORE: "Summary" → "New content...Summary"
+                // Find where the preserved text (originalPlainText) appears in the editor's text
+                // Search from editStartOffset onwards to find the preserved content
+                const preservedStartInEditor = fullNewPlainText.indexOf(originalPlainText, editStartOffset);
+                
+                if (preservedStartInEditor !== -1) {
+                  // The inserted content is everything from editStartOffset to preservedStartInEditor
+                  const insertedValue = fullNewPlainText.substring(editStartOffset, preservedStartInEditor);
+                  // The preserved content is from preservedStartInEditor for the length of originalPlainText
+                  const preservedValue = fullNewPlainText.substring(preservedStartInEditor, preservedStartInEditor + originalPlainText.length);
+                  
+                  parts.push({ added: true, value: insertedValue });
+                  parts.push({ value: preservedValue });
+                  
+                  // Content after the edit
+                  const editEndOffset = preservedStartInEditor + originalPlainText.length;
+                  if (editEndOffset < fullNewPlainText.length) {
+                    parts.push({ value: fullNewPlainText.substring(editEndOffset) });
+                  }
+                } else {
+                  // Fallback: couldn't find preserved text, highlight the whole new content
+                  const insertedLength = newPlainText.length - originalPlainText.length;
+                  parts.push({ added: true, value: fullNewPlainText.substring(editStartOffset, editStartOffset + insertedLength) });
+                  parts.push({ value: fullNewPlainText.substring(editStartOffset + insertedLength) });
+                }
+              } else if (isInsertAfter) {
+                // INSERT AFTER: "Summary" → "Summary...New content"
+                const preservedLength = originalPlainText.length;
+                const insertedLength = newPlainText.length - originalPlainText.length;
+                
+                // The preserved original content (not highlighted)
+                parts.push({ value: fullNewPlainText.substring(editStartOffset, editStartOffset + preservedLength) });
+                
+                // The inserted content (highlighted)
+                parts.push({ added: true, value: fullNewPlainText.substring(editStartOffset + preservedLength, editStartOffset + preservedLength + insertedLength) });
+                
+                // Content after the edit
+                const editEndOffset = editStartOffset + newPlainText.length;
+                if (editEndOffset < fullNewPlainText.length) {
+                  parts.push({ value: fullNewPlainText.substring(editEndOffset) });
+                }
+              } else if (isPureReplacement) {
+                // PURE REPLACEMENT: original completely replaced
+                // Show removed text as widget, new text as highlighted
+                if (originalPlainText.length > 0) {
+                  parts.push({ removed: true, value: originalPlainText });
+                }
+                parts.push({ added: true, value: fullNewPlainText.substring(editStartOffset, editStartOffset + newPlainText.length) });
+                
+                // Content after the edit
+                const editEndOffset = editStartOffset + newPlainText.length;
+                if (editEndOffset < fullNewPlainText.length) {
+                  parts.push({ value: fullNewPlainText.substring(editEndOffset) });
+                }
+              } else {
+                // COMPLEX EDIT: original appears somewhere in the middle
+                // Use word-level diff as fallback
+                const editDiffParts = diffWords(originalPlainText, newPlainText);
+                for (const part of editDiffParts) {
+                  parts.push(part as DiffPart);
+                }
+                
+                // Content after the edit
+                const editEndOffset = editStartOffset + newPlainText.length;
+                if (editEndOffset < fullNewPlainText.length) {
+                  parts.push({ value: fullNewPlainText.substring(editEndOffset) });
+                }
+              }
+            } else {
+              // FULL DOCUMENT MODE: For rewrite_document operations
+              // Extract plain text for position-accurate diffing
+              const oldText = htmlToPlainText(oldHtml);
+              const newText = htmlToPlainText(newHtml);
+              
+              // Compute diff on plain text (positions will match editor)
+              const rawParts = diffWords(oldText, newText);
+              
+              // Detect structural changes (same text, different tag)
+              const oldSegments = extractTextSegments(oldHtml);
+              const newSegments = extractTextSegments(newHtml);
+              parts = detectStructuralChanges(oldSegments, newSegments, rawParts as DiffPart[]);
+            }
+            
             // @ts-ignore
             this.storage.active = true;
             // @ts-ignore
@@ -311,11 +589,18 @@ const DiffHighlighter = Extension.create({
               let acc = 0;
               for (const n of textNodes) {
                 const len = n.text.length;
-                if (offset <= acc + len) {
+                // Use < not <= to correctly handle text node boundaries
+                // When offset equals acc + len, we want the START of the next node
+                if (offset < acc + len) {
                   const within = offset - acc;
                   return n.from + within;
                 }
                 acc += len;
+              }
+              // Handle offset at or beyond end of all text
+              if (textNodes.length > 0) {
+                const last = textNodes[textNodes.length - 1];
+                return last.to;
               }
               return doc.content.size - 1;
             };
@@ -875,22 +1160,37 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
 
   // Inline diff lifecycle helpers
-  const enterDiffPreview = (oldHtml: string, newHtml: string, reason?: string) => {
+  // editInfo is optional - if provided, uses precise edit boundaries instead of full-doc diff
+  const enterDiffPreview = (
+    oldHtml: string, 
+    newHtml: string, 
+    reason?: string,
+    editInfo?: { originalText: string; newText: string; htmlIndex: number }
+  ) => {
     if (!editor) return;
-    // Use full HTML content for accurate diff generation - don't strip anything
-    const oldText = oldHtml;
-    const newText = newHtml;
+    
+    // Set the editor content to the new HTML
     editor.commands.setContent(newHtml);
+    
+    // Store original and new HTML for accept/reject actions
     setOriginalDocument(oldHtml);
     setPendingNewDocument(newHtml);
     setCurrentDiffReason(reason || '');
     setDiffing(true);
+    
     // @ts-ignore custom command provided by DiffHighlighter
     if ((editor as any).commands?.showDiff) {
       // @ts-ignore
-      (editor as any).commands.showDiff(oldText, newText);
+      if (editInfo) {
+        // Use precise edit boundaries - much more accurate for edit_text operations
+        (editor as any).commands.showDiff(oldHtml, newHtml, editInfo);
+      } else {
+        // Fall back to full document diff for rewrite operations
+        (editor as any).commands.showDiff(oldHtml, newHtml);
+      }
     }
-    // Force a tiny transaction to ensure decorations render even if doc didn't change further
+    
+    // Force a tiny transaction to ensure decorations render
     editor.chain().focus().setTextSelection({ from: 1, to: 1 }).run();
   };
 
@@ -1253,7 +1553,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     // Replace HTML directly
     const newHtml = oldHtml.substring(0, index) + newText + oldHtml.substring(index + originalText.length);
     
-    enterDiffPreview(oldHtml, newHtml, reason);
+    // Pass edit info for precise highlighting
+    enterDiffPreview(oldHtml, newHtml, reason, {
+      originalText,
+      newText,
+      htmlIndex: index
+    });
   };
 
   // Apply patch from AI assistant (HTML-based search/replace)
@@ -2482,7 +2787,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
               {/* Settings Button */}
               {!isNew && (
-                <Drawer open={showSettingsDrawer} onOpenChange={setShowSettingsDrawer}>
+                <Drawer open={showSettingsDrawer} onOpenChange={setShowSettingsDrawer} direction="right">
                   <DrawerTrigger asChild>
                     <Button
                       type="button"
@@ -2865,7 +3170,30 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                 status="completed" 
                                 isLast={isLastStep}
                               >
-                                <ToolGroupDisplay group={step.toolGroup} />
+                                <ToolGroupDisplay 
+                                  group={step.toolGroup}
+                                  onArtifactAction={(toolId, action) => {
+                                    const call = step.toolGroup?.calls.find(c => c.id === toolId);
+                                    if (call && (call.name === 'edit_text' || call.name === 'rewrite_document')) {
+                                      const result = call.result;
+                                      if (action === 'accept' && result && editor) {
+                                        const oldContent = (result.original_text || result.original_content) as string;
+                                        const newContent = (result.new_text || result.new_content) as string;
+                                        const reason = (result.reason as string) || '';
+                                        
+                                        if (newContent) {
+                                          if (call.name === 'edit_text' && oldContent) {
+                                            applyTextEdit(oldContent, newContent, reason);
+                                          } else {
+                                            const currentHtml = editor.getHTML();
+                                            const newHtml = mdParser.render(newContent);
+                                            enterDiffPreview(currentHtml, newHtml, reason);
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }}
+                                />
                               </ChainOfThoughtStep>
                             );
                           }
