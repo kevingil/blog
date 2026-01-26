@@ -31,7 +31,7 @@ type MCPServer struct {
 type AgentConfig struct {
 	Model           models.ModelID `json:"model"`
 	MaxTokens       int64          `json:"max_tokens"`
-	ReasoningEffort int            `json:"reasoning_effort"`
+	ReasoningEffort string         `json:"reasoning_effort"` // "low", "medium", or "high"
 }
 
 type ProviderConfig struct {
@@ -60,12 +60,12 @@ func init() {
 			AgentCopilot: {
 				Model:           models.GptOss120b,
 				MaxTokens:       18192,
-				ReasoningEffort: 1, // medium
+				ReasoningEffort: "medium",
 			},
 			AgentWriter: {
 				Model:           models.GPT5,
 				MaxTokens:       4000,
-				ReasoningEffort: 1,
+				ReasoningEffort: "medium",
 			},
 		},
 		Providers: map[models.ModelProvider]ProviderConfig{
