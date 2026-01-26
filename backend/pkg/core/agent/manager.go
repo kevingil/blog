@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -404,14 +403,8 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 				Iteration:       event.Iteration,
 			}
 		case agent.AgentEventTypeReasoningDelta:
-			// #region agent log
-			func() { f, _ := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); defer f.Close(); fmt.Fprintf(f, `{"location":"manager.go:H1-reasoning","message":"reasoning_delta received","data":{"currentStepType":"%s","currentStepIdx":%d,"numSteps":%d,"iteration":%d,"deltaPreview":"%s"},"hypothesisId":"H1","timestamp":%d}`+"\n", asyncReq.currentStepType, asyncReq.currentStepIdx, len(asyncReq.steps), asyncReq.iteration, strings.ReplaceAll(truncate(event.ReasoningDelta, 50), "\n", "\\n"), time.Now().UnixMilli()) }()
-			// #endregion
 			// If current step is not reasoning, start a new reasoning step
 			if asyncReq.currentStepType != "reasoning" {
-				// #region agent log
-				func() { f, _ := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); defer f.Close(); fmt.Fprintf(f, `{"location":"manager.go:H1-new-step","message":"creating NEW reasoning step","data":{"oldStepType":"%s","newStepIdx":%d},"hypothesisId":"H1","timestamp":%d}`+"\n", asyncReq.currentStepType, len(asyncReq.steps), time.Now().UnixMilli()) }()
-				// #endregion
 				asyncReq.currentStepIdx = len(asyncReq.steps)
 				asyncReq.steps = append(asyncReq.steps, TurnStep{
 					Type:      "reasoning",
@@ -453,10 +446,12 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 			if event.Message.ID != "" {
 				asyncReq.iteration++
 				toolCalls := event.Message.ToolCalls()
-				// #region agent log
-				func() { f, _ := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); defer f.Close(); fmt.Fprintf(f, `{"location":"manager.go:H2-response","message":"AgentEventTypeResponse","data":{"iteration":%d,"hasToolCalls":%t,"numToolCalls":%d,"currentStepType":"%s","numSteps":%d},"hypothesisId":"H2","timestamp":%d}`+"\n", asyncReq.iteration, len(toolCalls) > 0, len(toolCalls), asyncReq.currentStepType, len(asyncReq.steps), time.Now().UnixMilli()) }()
-				// #endregion
-				m.saveAssistantMessage(ctx, asyncReq, event.Message, articleID)
+				
+				// Only save message when there are NO tool calls (final response)
+				// When there are tool calls, we continue accumulating steps
+				if len(toolCalls) == 0 {
+					m.saveAssistantMessage(ctx, asyncReq, event.Message, articleID)
+				}
 
 				if len(toolCalls) > 0 {
 					textContent := event.Message.Content().String()
@@ -490,9 +485,6 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 							},
 						})
 						asyncReq.currentStepType = "tool"
-						// #region agent log
-						func() { f, _ := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); defer f.Close(); fmt.Fprintf(f, `{"location":"manager.go:H4-tool-step","message":"created tool step","data":{"toolName":"%s","newStepIdx":%d,"currentStepType":"%s"},"hypothesisId":"H4","timestamp":%d}`+"\n", toolCall.Name, asyncReq.currentStepIdx, asyncReq.currentStepType, time.Now().UnixMilli()) }()
-						// #endregion
 
 						asyncReq.ResponseChan <- StreamResponse{
 							RequestID: asyncReq.ID,
@@ -756,9 +748,6 @@ func (m *AgentAsyncCopilotManager) saveAssistantMessage(ctx context.Context, asy
 	// Include chain of thought steps if present
 	if len(asyncReq.steps) > 0 {
 		log.Printf("[Agent]    Has %d chain of thought steps", len(asyncReq.steps))
-		// #region agent log
-		func() { stepTypes := make([]string, len(asyncReq.steps)); for i, s := range asyncReq.steps { stepTypes[i] = s.Type }; f, _ := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); defer f.Close(); fmt.Fprintf(f, `{"location":"manager.go:H3-save","message":"saveAssistantMessage with steps","data":{"numSteps":%d,"stepTypes":%q,"iteration":%d},"hypothesisId":"H3","timestamp":%d}`+"\n", len(asyncReq.steps), stepTypes, asyncReq.iteration, time.Now().UnixMilli()) }()
-		// #endregion
 		
 		// Convert TurnStep to ChainOfThoughtStep
 		cotSteps := make([]metadata.ChainOfThoughtStep, len(asyncReq.steps))
@@ -808,9 +797,6 @@ func (m *AgentAsyncCopilotManager) saveAssistantMessage(ctx context.Context, asy
 		asyncReq.steps = nil
 		asyncReq.currentStepType = ""
 		asyncReq.currentStepIdx = 0
-		// #region agent log
-		func() { f, _ := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); defer f.Close(); fmt.Fprintf(f, `{"location":"manager.go:H3-reset","message":"steps RESET after save","data":{"iteration":%d},"hypothesisId":"H3","timestamp":%d}`+"\n", asyncReq.iteration, time.Now().UnixMilli()) }()
-		// #endregion
 	}
 
 	toolCalls := msg.ToolCalls()
