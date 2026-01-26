@@ -255,8 +255,9 @@ type ChatMessage = {
 // ### 1. PRECISE MODE (for edit_text operations)
 // When we know exactly what was replaced and where:
 // - Receives: originalText, newText, and the HTML index where the edit occurred
+// - Extracts plain text from editor's document (NOT htmlToPlainText) for accuracy
 // - Detects common edit patterns for reliable highlighting:
-//   - INSERT BEFORE: "Summary" → "New content + Summary" (new ends with original)
+//   - INSERT BEFORE: Uses indexOf() to find preserved text position in editor
 //   - INSERT AFTER: "Summary" → "Summary + New content" (new starts with original)
 //   - PURE REPLACEMENT: Original text completely replaced
 //   - COMPLEX: Falls back to word-level diff
@@ -275,6 +276,12 @@ type ChatMessage = {
 // - HTML tags don't appear in plain text but affect editor positions
 // - Text node boundaries require careful offset-to-position mapping
 // - The offsetToPos function handles gaps between text nodes
+//
+// CRITICAL: For PRECISE MODE, plain text MUST be extracted from the editor's
+// document (tr.doc.descendants) rather than using htmlToPlainText(). This is
+// because htmlToPlainText() can include whitespace (like newlines) that
+// ProseMirror treats as structural boundaries, causing character count
+// mismatches that result in incorrect highlight boundaries.
 //
 // ## Usage Flow
 //
