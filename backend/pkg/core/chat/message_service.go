@@ -12,6 +12,7 @@ import (
 	"backend/pkg/core/agent/metadata"
 	"backend/pkg/database"
 	"backend/pkg/database/models"
+	"backend/pkg/database/repository"
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
@@ -20,13 +21,13 @@ import (
 
 // MessageService provides operations for managing chat messages
 type MessageService struct {
-	db database.Service
+	repo *repository.ChatMessageRepository
 }
 
 // NewMessageService creates a new chat message service
 func NewMessageService(db database.Service) *MessageService {
 	return &MessageService{
-		db: db,
+		repo: repository.NewChatMessageRepository(db.GetDB()),
 	}
 }
 
@@ -80,8 +81,7 @@ func (s *MessageService) SaveMessage(ctx context.Context, articleID uuid.UUID, r
 		MetaData:  metaDataJSON,
 	}
 
-	db := s.db.GetDB()
-	if err := db.Create(message).Error; err != nil {
+	if err := s.repo.Create(ctx, message); err != nil {
 		log.Printf("[MessageService] ❌ Database INSERT failed: %v", err)
 		return nil, core.InternalError("Failed to save message")
 	}
@@ -107,15 +107,7 @@ func (s *MessageService) GetConversationHistory(ctx context.Context, articleID u
 	fmt.Printf("[MessageService]    Article ID: %s\n", articleID)
 	fmt.Printf("[MessageService]    Limit: %d\n", limit)
 
-	db := s.db.GetDB()
-	var messages []models.ChatMessage
-
-	// Get the most recent N messages by ordering DESC, then reverse for chronological order
-	err := db.Where("article_id = ?", articleID).
-		Order("created_at DESC").
-		Limit(limit).
-		Find(&messages).Error
-
+	messages, err := s.repo.GetByArticleID(ctx, articleID, limit)
 	if err != nil {
 		fmt.Printf("[MessageService] ❌ Database query failed: %v\n", err)
 		return nil, core.InternalError("Failed to retrieve conversation history")
@@ -140,7 +132,7 @@ func (s *MessageService) GetConversationHistory(ctx context.Context, articleID u
 		}
 
 		// Save to database so it persists
-		if err := db.Create(initialMessage).Error; err != nil {
+		if err := s.repo.Create(ctx, initialMessage); err != nil {
 			fmt.Printf("[MessageService] ⚠️  Failed to save initial greeting: %v\n", err)
 			// Still return it even if save failed
 			initialMessage.ID = uuid.New()
@@ -174,15 +166,13 @@ func (s *MessageService) GetConversationHistory(ctx context.Context, articleID u
 func (s *MessageService) ClearConversationHistory(ctx context.Context, articleID uuid.UUID) error {
 	log.Printf("[MessageService] 🗑️ ClearConversationHistory called for article: %s", articleID)
 
-	db := s.db.GetDB()
-	result := db.Where("article_id = ?", articleID).Delete(&models.ChatMessage{})
-
-	if result.Error != nil {
-		log.Printf("[MessageService] ❌ Failed to clear conversation history: %v", result.Error)
+	rowsAffected, err := s.repo.DeleteByArticleID(ctx, articleID)
+	if err != nil {
+		log.Printf("[MessageService] ❌ Failed to clear conversation history: %v", err)
 		return core.InternalError("Failed to clear conversation history")
 	}
 
-	log.Printf("[MessageService] ✅ Cleared %d messages for article %s", result.RowsAffected, articleID)
+	log.Printf("[MessageService] ✅ Cleared %d messages for article %s", rowsAffected, articleID)
 	return nil
 }
 
@@ -199,16 +189,12 @@ func (s *MessageService) UpdateMessageMetadata(ctx context.Context, messageID uu
 		return core.InternalError("Failed to marshal metadata")
 	}
 
-	db := s.db.GetDB()
-	result := db.Model(&models.ChatMessage{}).
-		Where("id = ?", messageID).
-		Update("meta_data", datatypes.JSON(jsonBytes))
-
-	if result.Error != nil {
+	rowsAffected, err := s.repo.UpdateMetaData(ctx, messageID, jsonBytes)
+	if err != nil {
 		return core.InternalError("Failed to update message metadata")
 	}
 
-	if result.RowsAffected == 0 {
+	if rowsAffected == 0 {
 		return core.NotFoundError("Message")
 	}
 
@@ -217,11 +203,9 @@ func (s *MessageService) UpdateMessageMetadata(ctx context.Context, messageID uu
 
 // UpdateArtifactStatus updates the status of an artifact within a message
 func (s *MessageService) UpdateArtifactStatus(ctx context.Context, messageID uuid.UUID, artifactID, status string) error {
-	db := s.db.GetDB()
-
 	// Get the current message
-	var message models.ChatMessage
-	if err := db.First(&message, messageID).Error; err != nil {
+	message, err := s.repo.GetByID(ctx, messageID)
+	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return core.NotFoundError("Message")
 		}
@@ -257,29 +241,20 @@ func (s *MessageService) UpdateArtifactStatus(ctx context.Context, messageID uui
 
 // GetMessageByID retrieves a single message by ID
 func (s *MessageService) GetMessageByID(ctx context.Context, messageID uuid.UUID) (*models.ChatMessage, error) {
-	db := s.db.GetDB()
-	var message models.ChatMessage
-
-	if err := db.First(&message, messageID).Error; err != nil {
+	message, err := s.repo.GetByID(ctx, messageID)
+	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, core.NotFoundError("Message")
 		}
 		return nil, core.InternalError("Failed to retrieve message")
 	}
 
-	return &message, nil
+	return message, nil
 }
 
 // GetPendingArtifacts retrieves all messages with pending artifacts for an article
 func (s *MessageService) GetPendingArtifacts(ctx context.Context, articleID uuid.UUID) ([]models.ChatMessage, error) {
-	db := s.db.GetDB()
-	var messages []models.ChatMessage
-
-	// Query for messages where meta_data->'artifact'->>'status' = 'pending'
-	err := db.Where("article_id = ? AND meta_data->'artifact'->>'status' = ?", articleID, metadata.ArtifactStatusPending).
-		Order("created_at DESC").
-		Find(&messages).Error
-
+	messages, err := s.repo.GetPendingArtifacts(ctx, articleID)
 	if err != nil {
 		return nil, core.InternalError("Failed to retrieve pending artifacts")
 	}
