@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils"
+import { useTheme } from "@/components/theme-provider"
 import React, { useEffect, useState } from "react"
 import { codeToHtml } from "shiki"
 
@@ -32,11 +33,19 @@ export type CodeBlockCodeProps = {
 function CodeBlockCode({
   code,
   language = "tsx",
-  theme = "github-light",
+  theme: themeProp,
   className,
   ...props
 }: CodeBlockCodeProps) {
   const [highlightedHtml, setHighlightedHtml] = useState<string | null>(null)
+  const { theme: appTheme } = useTheme()
+  
+  // Determine if dark mode is active
+  const isDark = appTheme === "dark" || 
+    (appTheme === "system" && typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches)
+  
+  // Use provided theme or auto-select based on dark mode
+  const resolvedTheme = themeProp ?? (isDark ? "github-dark" : "github-light")
 
   useEffect(() => {
     async function highlight() {
@@ -45,14 +54,14 @@ function CodeBlockCode({
         return
       }
 
-      const html = await codeToHtml(code, { lang: language, theme })
+      const html = await codeToHtml(code, { lang: language, theme: resolvedTheme })
       setHighlightedHtml(html)
     }
     highlight()
-  }, [code, language, theme])
+  }, [code, language, resolvedTheme])
 
   const classNames = cn(
-    "w-full overflow-x-auto text-[13px] [&>pre]:px-4 [&>pre]:py-4",
+    "w-full overflow-x-auto text-[13px] [&>pre]:px-4 [&>pre]:py-4 [&>pre]:min-w-full [&>pre]:w-fit",
     className
   )
 
