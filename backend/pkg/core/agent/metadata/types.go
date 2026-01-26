@@ -23,8 +23,11 @@ type MessageMetaData struct {
 	// Attached files/resources
 	Attachments []Attachment `json:"attachments,omitempty"`
 
-	// Chain of thought reasoning (from reasoning models)
+	// Chain of thought reasoning (from reasoning models) - LEGACY, use Steps instead
 	Thinking *ThinkingBlock `json:"thinking,omitempty"`
+
+	// Chain of thought steps (reasoning -> tool -> reasoning -> content)
+	Steps []ChainOfThoughtStep `json:"steps,omitempty"`
 }
 
 // ArtifactInfo represents a content artifact (edit, rewrite, suggestion)
@@ -160,6 +163,28 @@ type ThinkingBlock struct {
 	Visible    bool   `json:"visible"` // Whether to show in UI by default
 }
 
+// ChainOfThoughtStep represents a single step in the chain of thought
+// Steps are ordered: reasoning -> tool -> reasoning -> content
+type ChainOfThoughtStep struct {
+	Type      string                 `json:"type"`                // "reasoning", "tool", "content"
+	Reasoning *ThinkingBlock         `json:"reasoning,omitempty"` // Present when Type == "reasoning"
+	Tool      *ToolStepInfo          `json:"tool,omitempty"`      // Present when Type == "tool"
+	Content   string                 `json:"content,omitempty"`   // Present when Type == "content"
+}
+
+// ToolStepInfo represents tool execution info in a chain of thought step
+type ToolStepInfo struct {
+	ToolID      string                 `json:"tool_id"`
+	ToolName    string                 `json:"tool_name"`
+	Input       map[string]interface{} `json:"input,omitempty"`
+	Output      map[string]interface{} `json:"output,omitempty"`
+	Status      string                 `json:"status"` // "running", "completed", "error"
+	Error       string                 `json:"error,omitempty"`
+	StartedAt   string                 `json:"started_at,omitempty"`
+	CompletedAt string                 `json:"completed_at,omitempty"`
+	DurationMs  int64                  `json:"duration_ms,omitempty"`
+}
+
 // ToolGroup represents a group of tool calls that can be executed in parallel
 type ToolGroup struct {
 	GroupID string           `json:"group_id"`
@@ -244,7 +269,6 @@ var ToolCategories = map[string]ToolCategory{
 	"ask_question":             ToolCategoryResearch,
 	"get_relevant_sources":     ToolCategoryResearch,
 	"fetch_url":                ToolCategoryResearch,
-	"analyze_document":         ToolCategoryAnalysis,
 	"add_context_from_sources": ToolCategoryAnalysis,
 	"edit_text":                ToolCategoryEditing,
 	"generate_text_content":    ToolCategoryGeneration,
@@ -258,7 +282,6 @@ func IsParallelizable(toolName string) bool {
 		"ask_question":             true,
 		"get_relevant_sources":     true,
 		"fetch_url":                true,
-		"analyze_document":         true,
 		"add_context_from_sources": true,
 	}
 	return parallelTools[toolName]

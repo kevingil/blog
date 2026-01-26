@@ -1,4 +1,4 @@
-import { apiGet } from './authenticatedFetch';
+import { apiGet, apiDelete } from './authenticatedFetch';
 import type { ChatMessage } from './artifacts';
 
 export interface ConversationHistory {
@@ -18,6 +18,15 @@ export async function getConversationHistory(
 
   return apiGet<ConversationHistory>(
     `/agent/conversations/${articleId}?${params}`
+  );
+}
+
+// Clear conversation history for an article
+export async function clearConversationHistory(
+  articleId: string
+): Promise<{ success: boolean }> {
+  return apiDelete<{ success: boolean }>(
+    `/agent/conversations/${articleId}`
   );
 }
 

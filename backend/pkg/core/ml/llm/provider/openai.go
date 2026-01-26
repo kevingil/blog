@@ -367,23 +367,66 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 						}
 					}
 
-				case "response.output_item.added":
-					// New output item added - check if it's a function call
-					added := event.AsResponseOutputItemAdded()
-					if added.Item.Type == "function_call" {
-						tc := &message.ToolCall{
-							ID:       added.Item.CallID,
-							Name:     added.Item.Name,
-							Input:    "",
-							Type:     "function",
-							Finished: false,
-						}
-						toolCallMap[added.Item.ID] = tc
-						eventChan <- ProviderEvent{
-							Type:     EventToolUseStart,
-							ToolCall: tc,
+			case "response.output_item.added":
+				// New output item added - check if it's a function call or reasoning
+				added := event.AsResponseOutputItemAdded()
+				if added.Item.Type == "function_call" {
+					tc := &message.ToolCall{
+						ID:       added.Item.CallID,
+						Name:     added.Item.Name,
+						Input:    "",
+						Type:     "function",
+						Finished: false,
+					}
+					toolCallMap[added.Item.ID] = tc
+					eventChan <- ProviderEvent{
+						Type:     EventToolUseStart,
+						ToolCall: tc,
+					}
+				} else if added.Item.Type == "reasoning" {
+					// Groq reasoning item added - extract content if available
+					rawJSON := event.RawJSON()
+					var reasoningItem struct {
+						Item struct {
+							Content []struct {
+								Type string `json:"type"`
+								Text string `json:"text"`
+							} `json:"content"`
+						} `json:"item"`
+					}
+					if err := json.Unmarshal([]byte(rawJSON), &reasoningItem); err == nil {
+						for _, c := range reasoningItem.Item.Content {
+							if c.Type == "reasoning_text" && c.Text != "" {
+								currentReasoning += c.Text
+								eventChan <- ProviderEvent{
+									Type:     EventThinkingDelta,
+									Thinking: c.Text,
+								}
+							}
 						}
 					}
+				}
+
+			case "response.reasoning_text.delta", "response.reasoning.delta":
+				// Groq reasoning text delta (alternative event types)
+				rawJSON := event.RawJSON()
+				var deltaEvent struct {
+					Delta string `json:"delta"`
+					Text  string `json:"text"`
+				}
+				if err := json.Unmarshal([]byte(rawJSON), &deltaEvent); err == nil {
+					delta := deltaEvent.Delta
+					if delta == "" {
+						delta = deltaEvent.Text
+					}
+					if delta != "" {
+						currentReasoning += delta
+						eventChan <- ProviderEvent{
+							Type:     EventThinkingDelta,
+							Thinking: delta,
+						}
+					}
+				}
 
 				case "response.function_call_arguments.delta":
 					// Tool call arguments delta
@@ -415,10 +458,14 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 					completed := event.AsResponseCompleted()
 					finalResponse = &completed.Response
 
-				case "error":
-					// Handle error event
-					log.Printf("Stream error event: %s", event.RawJSON())
-				}
+			case "error":
+				// Handle error event
+				log.Printf("Stream error event: %s", event.RawJSON())
+
+			default:
+				// Log unhandled event types to debug Groq reasoning and other providers
+				log.Printf("[OpenAI Provider] Unhandled event type: %s, raw: %s", event.Type, event.RawJSON())
+			}
 			}
 
 			err := stream.Err()

@@ -166,9 +166,15 @@ func (m *MessageMetaData) WithAttachments(attachments []Attachment) *MessageMeta
 	return m
 }
 
-// WithThinking adds thinking/reasoning content to metadata
+// WithThinking adds thinking/reasoning content to metadata (LEGACY - use WithSteps for new code)
 func (m *MessageMetaData) WithThinking(thinking *ThinkingBlock) *MessageMetaData {
 	m.Thinking = thinking
+	return m
+}
+
+// WithSteps adds chain of thought steps to metadata
+func (m *MessageMetaData) WithSteps(steps []ChainOfThoughtStep) *MessageMetaData {
+	m.Steps = steps
 	return m
 }
 

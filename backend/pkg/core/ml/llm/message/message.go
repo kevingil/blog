@@ -143,11 +143,6 @@ func (m *Message) AppendContent(content string) {
 	m.Parts = append(m.Parts, TextContent{Text: content})
 }
 
-func (m *Message) AppendReasoningContent(content string) {
-	// For reasoning content, we can store it as metadata or append to text
-	m.AppendContent(content)
-}
-
 func (m *Message) AddFinish(reason FinishReason) {
 	finish := Finish{
 		Reason: reason,

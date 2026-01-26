@@ -66,7 +66,10 @@ type AgentAsyncRequest struct {
 	cancel       context.CancelFunc
 	SessionID    string
 	iteration    int
-	reasoning    string // Accumulated reasoning content from reasoning models
+	// Chain of thought step tracking
+	steps           []TurnStep // Ordered steps in this turn
+	currentStepType string     // "reasoning", "tool", "content", or ""
+	currentStepIdx  int        // Index of current step being built
 }
 
 // Global singleton for backward compatibility
@@ -125,7 +128,6 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 	writingTools := []tools.BaseTool{
 		tools.NewReadDocumentTool(),
 		tools.NewEditTextTool(),
-		tools.NewAnalyzeDocumentTool(),
 		tools.NewGenerateImagePromptTool(textGenService),
 		tools.NewGenerateTextContentTool(textGenService),
 	}
@@ -358,9 +360,9 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	userPrompt := asyncReq.Request.Message
 	if asyncReq.Request.DocumentContent != "" {
 		ctx = tools.WithDocumentContent(ctx, asyncReq.Request.DocumentContent, "")
-		outline := generateHTMLOutline(asyncReq.Request.DocumentContent)
-		userPrompt += "\n\n--- Document Outline (use read_document for full content) ---\n" + outline
-		log.Printf("[Agent] Document outline generated (%d lines), full HTML content stored in context", strings.Count(outline, "\n")+1)
+		layout := generateHTMLOutline(asyncReq.Request.DocumentContent)
+		userPrompt += "\n\n--- Document Layout (use read_document to see full content) ---\n" + layout
+		log.Printf("[Agent] Document layout generated (%d headers), full content stored in context", strings.Count(layout, "\n")+1)
 	}
 
 	asyncReq.iteration = 1
@@ -401,27 +403,56 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 				Iteration:       event.Iteration,
 			}
 		case agent.AgentEventTypeReasoningDelta:
-			// Accumulate reasoning for persistence
-			asyncReq.reasoning += event.ReasoningDelta
+			// If current step is not reasoning, start a new reasoning step
+			if asyncReq.currentStepType != "reasoning" {
+				asyncReq.currentStepIdx = len(asyncReq.steps)
+				asyncReq.steps = append(asyncReq.steps, TurnStep{
+					Type:      "reasoning",
+					Reasoning: &ReasoningStep{Content: "", Visible: true},
+				})
+				asyncReq.currentStepType = "reasoning"
+			}
+			// Append to current reasoning step
+			asyncReq.steps[asyncReq.currentStepIdx].Reasoning.Content += event.ReasoningDelta
+
 			asyncReq.ResponseChan <- StreamResponse{
 				RequestID:       asyncReq.ID,
 				Type:            StreamTypeReasoningDelta,
 				ThinkingContent: event.ReasoningDelta,
 				Iteration:       asyncReq.iteration,
+				StepIndex:       asyncReq.currentStepIdx,
 			}
 		case agent.AgentEventTypeContentDelta:
+			// If current step is not content, start a new content step
+			if asyncReq.currentStepType != "content" {
+				asyncReq.currentStepIdx = len(asyncReq.steps)
+				asyncReq.steps = append(asyncReq.steps, TurnStep{
+					Type:    "content",
+					Content: "",
+				})
+				asyncReq.currentStepType = "content"
+			}
+			// Append to current content step
+			asyncReq.steps[asyncReq.currentStepIdx].Content += event.ContentDelta
+
 			asyncReq.ResponseChan <- StreamResponse{
 				RequestID: asyncReq.ID,
 				Type:      "content_delta",
 				Content:   event.ContentDelta,
 				Iteration: asyncReq.iteration,
+				StepIndex: asyncReq.currentStepIdx,
 			}
 		case agent.AgentEventTypeResponse:
 			if event.Message.ID != "" {
 				asyncReq.iteration++
-				m.saveAssistantMessage(ctx, asyncReq, event.Message, articleID)
-
 				toolCalls := event.Message.ToolCalls()
+				
+				// Only save message when there are NO tool calls (final response)
+				// When there are tool calls, we continue accumulating steps
+				if len(toolCalls) == 0 {
+					m.saveAssistantMessage(ctx, asyncReq, event.Message, articleID)
+				}
+
 				if len(toolCalls) > 0 {
 					textContent := event.Message.Content().String()
 					if textContent != "" {
@@ -434,31 +465,55 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 					}
 
 					for _, toolCall := range toolCalls {
-						var toolInput interface{}
+						var toolInput map[string]interface{}
 						if toolCall.Input != "" {
-							var jsonInput map[string]interface{}
-							if err := json.Unmarshal([]byte(toolCall.Input), &jsonInput); err == nil {
-								toolInput = jsonInput
-							} else {
-								toolInput = toolCall.Input
+							if err := json.Unmarshal([]byte(toolCall.Input), &toolInput); err != nil {
+								toolInput = map[string]interface{}{"raw": toolCall.Input}
 							}
 						}
+
+						// Create tool step in chain of thought
+						asyncReq.currentStepIdx = len(asyncReq.steps)
+						asyncReq.steps = append(asyncReq.steps, TurnStep{
+							Type: "tool",
+							Tool: &ToolStepPayload{
+								ToolID:    toolCall.ID,
+								ToolName:  toolCall.Name,
+								Input:     toolInput,
+								Status:    "running",
+								StartedAt: time.Now().Format(time.RFC3339),
+							},
+						})
+						asyncReq.currentStepType = "tool"
 
 						asyncReq.ResponseChan <- StreamResponse{
 							RequestID: asyncReq.ID,
 							Type:      "tool_use",
 							Iteration: asyncReq.iteration,
+							StepIndex: asyncReq.currentStepIdx,
 							ToolID:    toolCall.ID,
 							ToolName:  toolCall.Name,
 							ToolInput: toolInput,
 						}
 					}
 				} else {
+					// Final content response - create content step
+					content := event.Message.Content().String()
+					if content != "" {
+						asyncReq.currentStepIdx = len(asyncReq.steps)
+						asyncReq.steps = append(asyncReq.steps, TurnStep{
+							Type:    "content",
+							Content: content,
+						})
+						asyncReq.currentStepType = "content"
+					}
+
 					asyncReq.ResponseChan <- StreamResponse{
 						RequestID: asyncReq.ID,
 						Type:      "text",
-						Content:   event.Message.Content().String(),
+						Content:   content,
 						Iteration: asyncReq.iteration,
+						StepIndex: asyncReq.currentStepIdx,
 					}
 				}
 			}
@@ -481,8 +536,10 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 					}
 
 					status := "completed"
+					errorStr := ""
 					if toolResult.IsError {
 						status = "error"
+						errorStr = toolResult.Content
 					}
 
 					toolCalls = append(toolCalls, ToolCallPayload{
@@ -491,6 +548,18 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 						Status: status,
 						Result: resultData,
 					})
+
+					// Update the matching tool step with result
+					for i := range asyncReq.steps {
+						if asyncReq.steps[i].Type == "tool" && asyncReq.steps[i].Tool != nil &&
+							asyncReq.steps[i].Tool.ToolID == toolResult.ToolCallID {
+							asyncReq.steps[i].Tool.Status = status
+							asyncReq.steps[i].Tool.Output = resultData
+							asyncReq.steps[i].Tool.CompletedAt = time.Now().Format(time.RFC3339)
+							asyncReq.steps[i].Tool.Error = errorStr
+							break
+						}
+					}
 				}
 
 				savedMsg := m.saveToolResultMessage(ctx, asyncReq, event.Message, toolResults, articleID)
@@ -676,15 +745,58 @@ func (m *AgentAsyncCopilotManager) saveAssistantMessage(ctx context.Context, asy
 
 	msgMetadata := metadata.BuildMetaData().WithContext(msgContext)
 
-	// Include reasoning/thinking content if present
-	if asyncReq.reasoning != "" {
-		log.Printf("[Agent]    Has reasoning content: %d chars", len(asyncReq.reasoning))
-		msgMetadata.WithThinking(&metadata.ThinkingBlock{
-			Content: asyncReq.reasoning,
-			Visible: true,
-		})
-		// Reset reasoning for next turn
-		asyncReq.reasoning = ""
+	// Include chain of thought steps if present
+	if len(asyncReq.steps) > 0 {
+		log.Printf("[Agent]    Has %d chain of thought steps", len(asyncReq.steps))
+		
+		// Convert TurnStep to ChainOfThoughtStep
+		cotSteps := make([]metadata.ChainOfThoughtStep, len(asyncReq.steps))
+		for i, step := range asyncReq.steps {
+			cotSteps[i] = metadata.ChainOfThoughtStep{
+				Type:    step.Type,
+				Content: step.Content,
+			}
+			if step.Reasoning != nil {
+				cotSteps[i].Reasoning = &metadata.ThinkingBlock{
+					Content:    step.Reasoning.Content,
+					DurationMs: step.Reasoning.DurationMs,
+					Visible:    step.Reasoning.Visible,
+				}
+			}
+			if step.Tool != nil {
+				cotSteps[i].Tool = &metadata.ToolStepInfo{
+					ToolID:      step.Tool.ToolID,
+					ToolName:    step.Tool.ToolName,
+					Input:       step.Tool.Input,
+					Output:      step.Tool.Output,
+					Status:      step.Tool.Status,
+					Error:       step.Tool.Error,
+					StartedAt:   step.Tool.StartedAt,
+					CompletedAt: step.Tool.CompletedAt,
+					DurationMs:  step.Tool.DurationMs,
+				}
+			}
+		}
+		msgMetadata.WithSteps(cotSteps)
+		
+		// Also set legacy Thinking field for backward compatibility (combine all reasoning)
+		var allReasoning string
+		for _, step := range asyncReq.steps {
+			if step.Type == "reasoning" && step.Reasoning != nil {
+				allReasoning += step.Reasoning.Content
+			}
+		}
+		if allReasoning != "" {
+			msgMetadata.WithThinking(&metadata.ThinkingBlock{
+				Content: allReasoning,
+				Visible: true,
+			})
+		}
+		
+		// Reset steps for next turn
+		asyncReq.steps = nil
+		asyncReq.currentStepType = ""
+		asyncReq.currentStepIdx = 0
 	}
 
 	toolCalls := msg.ToolCalls()
@@ -919,23 +1031,48 @@ func convertHTMLToMarkdown(html string) (string, error) {
 	return markdown, nil
 }
 
+// generateHTMLOutline extracts only headers from HTML to show document structure
+// Returns a tree-like layout with line numbers for navigation
 func generateHTMLOutline(html string) string {
 	lines := strings.Split(html, "\n")
 	var outline []string
 
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "<h1") || strings.HasPrefix(trimmed, "<h2") ||
-			strings.HasPrefix(trimmed, "<h3") || strings.HasPrefix(trimmed, "<h4") ||
-			strings.HasPrefix(trimmed, "<h5") || strings.HasPrefix(trimmed, "<h6") {
-			outline = append(outline, fmt.Sprintf("%4d| %s", i+1, line))
-		} else if strings.HasPrefix(trimmed, "<p") && len(trimmed) > 60 {
-			preview := trimmed
-			if len(preview) > 80 {
-				preview = preview[:80] + "..."
-			}
-			outline = append(outline, fmt.Sprintf("%4d| %s", i+1, preview))
+		
+		// Extract header level and text
+		var level int
+		var headerText string
+		
+		if strings.HasPrefix(trimmed, "<h1") {
+			level = 1
+		} else if strings.HasPrefix(trimmed, "<h2") {
+			level = 2
+		} else if strings.HasPrefix(trimmed, "<h3") {
+			level = 3
+		} else if strings.HasPrefix(trimmed, "<h4") {
+			level = 4
+		} else if strings.HasPrefix(trimmed, "<h5") {
+			level = 5
+		} else if strings.HasPrefix(trimmed, "<h6") {
+			level = 6
+		} else {
+			continue
 		}
+		
+		// Extract text content from header tag
+		headerText = extractHeaderText(trimmed)
+		if headerText == "" {
+			continue
+		}
+		
+		// Create indentation based on level (h2 = no indent, h3 = 2 spaces, etc.)
+		indent := ""
+		if level > 2 {
+			indent = strings.Repeat("  ", level-2)
+		}
+		
+		outline = append(outline, fmt.Sprintf("%s- %s (line %d)", indent, headerText, i+1))
 	}
 
 	if len(outline) == 0 {
@@ -943,4 +1080,39 @@ func generateHTMLOutline(html string) string {
 	}
 
 	return strings.Join(outline, "\n")
+}
+
+// extractHeaderText removes HTML tags and returns just the text content
+func extractHeaderText(header string) string {
+	// Find the closing > of the opening tag
+	start := strings.Index(header, ">")
+	if start == -1 {
+		return ""
+	}
+	// Find the opening < of the closing tag
+	end := strings.LastIndex(header, "</")
+	if end == -1 {
+		end = len(header)
+	}
+	
+	text := header[start+1 : end]
+	// Clean up any nested tags (like <strong>, <em>, etc.)
+	text = stripHTMLTags(text)
+	return strings.TrimSpace(text)
+}
+
+// stripHTMLTags removes all HTML tags from a string
+func stripHTMLTags(s string) string {
+	var result strings.Builder
+	inTag := false
+	for _, r := range s {
+		if r == '<' {
+			inTag = true
+		} else if r == '>' {
+			inTag = false
+		} else if !inTag {
+			result.WriteRune(r)
+		}
+	}
+	return result.String()
 }

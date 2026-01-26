@@ -222,15 +222,14 @@ func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, cont
 			logging.WriteToolResultsJson(sessionID, seqId, toolResults)
 		}
 		if (agentMessage.FinishReason() == message.FinishReasonToolUse) && toolResults != nil {
-			// Stream the acknowledgment message to the user before continuing with tool execution
-			if agentMessage.Content().String() != "" {
-				responseEvent := AgentEvent{
-					Type:    AgentEventTypeResponse,
-					Message: agentMessage,
-					Done:    false,
-				}
-				events <- responseEvent
+			// Stream the tool call message to the manager (even without text content)
+			// This is necessary for the manager to track tool steps in chain of thought
+			responseEvent := AgentEvent{
+				Type:    AgentEventTypeResponse,
+				Message: agentMessage,
+				Done:    false,
 			}
+			events <- responseEvent
 
 			// Stream the tool results message
 			toolEvent := AgentEvent{
@@ -303,7 +302,6 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 		"ask_question":             true,
 		"get_relevant_sources":     true,
 		"fetch_url":                true,
-		"analyze_document":         true,
 		"add_context_from_sources": true,
 	}
 
@@ -506,7 +504,8 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 
 	switch event.Type {
 	case provider.EventThinkingDelta:
-		assistantMsg.AppendReasoningContent(event.Thinking)
+		// Reasoning is tracked separately in manager.asyncReq.reasoning
+		// and saved to message metadata - no need to store in message content
 		a.messages.Update(ctx, *assistantMsg)
 
 		// Emit reasoning delta event for real-time streaming
