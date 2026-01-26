@@ -2482,7 +2482,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
               {/* Settings Button */}
               {!isNew && (
-                <Drawer open={showSettingsDrawer} onOpenChange={setShowSettingsDrawer}>
+                <Drawer open={showSettingsDrawer} onOpenChange={setShowSettingsDrawer} direction="right">
                   <DrawerTrigger asChild>
                     <Button
                       type="button"
