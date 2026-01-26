@@ -2659,44 +2659,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           )}
           
         <div className="p-4 border-t space-y-2">
-          <div className="flex gap-1 flex-wrap">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const message = 'Please rewrite this article to make it more engaging and clear';
-                setChatInput(message);
-                sendChatWithMessage(message);
-              }}
-              disabled={chatLoading}
-            >
-              ✨ Improve
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const message = 'Fix any grammar and spelling issues in this article';
-                setChatInput(message);
-                sendChatWithMessage(message);
-              }}
-              disabled={chatLoading}
-            >
-              ✓ Fix Grammar
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const message = 'Make this article shorter and more concise';
-                setChatInput(message);
-                sendChatWithMessage(message);
-              }}
-              disabled={chatLoading}
-            >
-              📝 Shorten
-            </Button>
-          </div>
           <PromptInput
             value={chatInput}
             onValueChange={setChatInput}
