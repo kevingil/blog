@@ -2847,15 +2847,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                 isStreaming={step.isStreaming}
                                 isLast={isLastStep}
                               >
-                                <ChainOfThoughtTrigger
-                                  badge={
-                                    step.thinking.duration_ms != null && !step.isStreaming ? (
-                                      <span className="text-xs px-1.5 py-0.5 rounded-full font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-                                        {Math.round(step.thinking.duration_ms)}ms
-                                      </span>
-                                    ) : undefined
-                                  }
-                                >
+                                <ChainOfThoughtTrigger>
                                   {step.isStreaming ? "Reasoning..." : "Reasoning"}
                                 </ChainOfThoughtTrigger>
                                 <ChainOfThoughtContent>

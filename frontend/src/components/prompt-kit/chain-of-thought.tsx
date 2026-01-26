@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ChevronDown, Brain, Wrench, Loader2 } from "lucide-react"
+import { ChevronUp, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // =============================================================================
@@ -91,7 +91,7 @@ export function ChainOfThoughtStep({
       <div className={cn("relative", className)}>
         {/* Vertical connector line */}
         {!isLast && (
-          <div className="absolute left-[15px] top-[32px] bottom-0 w-px bg-border" />
+          <div className="absolute left-[5px] top-[22px] bottom-0 w-px bg-border/50" />
         )}
         <div className="relative">
           {children}
@@ -120,54 +120,43 @@ export function ChainOfThoughtTrigger({
 }: ChainOfThoughtTriggerProps) {
   const { isOpen, toggleOpen, type, status, isStreaming } = useChainOfThoughtStepContext()
 
-  const getDefaultIcon = () => {
-    switch (type) {
-      case 'reasoning':
-        return <Brain className="h-4 w-4" />
-      case 'tool':
-        return <Wrench className="h-4 w-4" />
-      default:
-        return null
-    }
-  }
-
   const getStatusIndicator = () => {
     if (isStreaming || status === 'running') {
-      return <Loader2 className="h-3.5 w-3.5 text-purple-500 animate-spin" />
+      return <Loader2 className="h-3 w-3 text-muted-foreground animate-spin" />
     }
     return null
   }
 
-  const displayIcon = icon || getDefaultIcon()
+  // Simple bullet point icon
+  const bulletIcon = icon || (
+    <span className="text-muted-foreground/70 text-xs">•</span>
+  )
 
   return (
     <button
       onClick={toggleOpen}
       className={cn(
-        "flex w-full items-center gap-2 px-3 py-2 text-left text-sm",
-        "hover:bg-muted/50 transition-colors rounded-lg",
-        "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "flex w-full items-center gap-2 py-1 text-left text-sm",
+        "hover:text-foreground transition-colors",
+        "focus:outline-none",
+        "text-muted-foreground",
         className
       )}
     >
-      {displayIcon && (
-        <span className="flex-shrink-0 text-muted-foreground">
-          {displayIcon}
-        </span>
-      )}
+      <span className="flex-shrink-0 w-3 flex justify-center">
+        {bulletIcon}
+      </span>
       <span className="flex-1 min-w-0 flex items-center gap-2">
-        <span className="truncate font-medium">{children}</span>
+        <span className="truncate">{children}</span>
         {badge}
-      </span>
-      <span className="flex items-center gap-2 flex-shrink-0">
         {getStatusIndicator()}
-        <ChevronDown
-          className={cn(
-            "h-4 w-4 text-muted-foreground transition-transform duration-200",
-            isOpen && "rotate-180"
-          )}
-        />
       </span>
+      <ChevronUp
+        className={cn(
+          "h-4 w-4 text-muted-foreground/50 transition-transform duration-200 flex-shrink-0",
+          !isOpen && "rotate-180"
+        )}
+      />
     </button>
   )
 }
@@ -188,11 +177,11 @@ export function ChainOfThoughtContent({ children, className }: ChainOfThoughtCon
 
   return (
     <div className={cn(
-      "ml-6 pl-4 border-l-2 border-muted text-sm text-muted-foreground",
+      "ml-5 pl-3 border-l border-border/50 text-sm text-muted-foreground",
       "animate-in fade-in-0 slide-in-from-top-1 duration-200",
       className
     )}>
-      <div className="py-2 whitespace-pre-wrap">
+      <div className="py-1.5 whitespace-pre-wrap leading-relaxed">
         {children}
       </div>
     </div>
@@ -210,7 +199,7 @@ interface ChainOfThoughtItemProps {
 
 export function ChainOfThoughtItem({ children, className }: ChainOfThoughtItemProps) {
   return (
-    <div className={cn("py-1", className)}>
+    <div className={cn("py-1 ml-5", className)}>
       {children}
     </div>
   )
@@ -245,15 +234,7 @@ export function ReasoningStep({
       isLast={isLast}
       className={className}
     >
-      <ChainOfThoughtTrigger
-        badge={
-          durationMs != null && !isStreaming ? (
-            <span className="text-xs px-1.5 py-0.5 rounded-full font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-              {Math.round(durationMs)}ms
-            </span>
-          ) : undefined
-        }
-      >
+      <ChainOfThoughtTrigger>
         {isStreaming ? "Reasoning..." : "Reasoning"}
       </ChainOfThoughtTrigger>
       <ChainOfThoughtContent>

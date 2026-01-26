@@ -8,7 +8,10 @@ import {
   PlusCircle, 
   Link2, 
   MessageSquare,
-  Wrench 
+  Wrench,
+  Loader2,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import {
   ToolCall,
@@ -29,10 +32,23 @@ import type {
   AnswerResult,
 } from "./types";
 import { getToolDisplayName } from "./types";
+import { cn } from "@/lib/utils";
 
 interface ToolGroupDisplayProps {
   group: ToolGroup;
   onArtifactAction?: (toolId: string, action: 'accept' | 'reject') => void;
+}
+
+/**
+ * Tools that should use the full card UI (because they have artifacts)
+ */
+const ARTIFACT_TOOLS = new Set(['edit_text', 'rewrite_document']);
+
+/**
+ * Check if a tool should use the full card UI
+ */
+function isArtifactTool(toolName: string): boolean {
+  return ARTIFACT_TOOLS.has(toolName);
 }
 
 /**
@@ -70,6 +86,7 @@ function getToolIcon(toolName: string) {
     case 'edit_text':
       return <FileDiff className="h-4 w-4" />;
     case 'analyze_document':
+    case 'read_document':
       return <BookOpen className="h-4 w-4" />;
     case 'add_context_from_sources':
       return <PlusCircle className="h-4 w-4" />;
@@ -324,30 +341,65 @@ function ImagePromptResult({ result }: { result?: Record<string, unknown> }) {
 }
 
 /**
- * Renders a group of tool calls using Prompt Kit ToolCall components
+ * Subtle inline tool display (for non-artifact tools like read_document, search, etc.)
+ */
+function SubtleToolDisplay({ call }: { call: ToolCallRecord }) {
+  const getStatusIcon = () => {
+    switch (call.status) {
+      case 'running':
+      case 'pending':
+        return <Loader2 className="h-3 w-3 text-muted-foreground animate-spin" />;
+      case 'completed':
+        return <CheckCircle2 className="h-3 w-3 text-green-500" />;
+      case 'error':
+        return <XCircle className="h-3 w-3 text-red-500" />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2 py-1 text-sm text-muted-foreground">
+      <span className="flex-shrink-0 w-3 flex justify-center">
+        <span className="text-muted-foreground/70 text-xs">•</span>
+      </span>
+      <span className="flex-shrink-0 text-muted-foreground/70">
+        {getToolIcon(call.name)}
+      </span>
+      <span className="truncate">{getToolDisplayName(call.name)}</span>
+      {getStatusIcon()}
+    </div>
+  );
+}
+
+/**
+ * Renders a group of tool calls using appropriate UI based on tool type
  */
 export function ToolGroupDisplay({ group }: ToolGroupDisplayProps) {
   return (
-    <div className="space-y-2">
-      {group.calls.map((call) => (
-        <ToolCall 
-          key={call.id} 
-          status={mapStatus(call.status)}
-          defaultOpen={call.status === 'completed'}
-        >
-          <ToolCallTrigger icon={getToolIcon(call.name)}>
-            {getToolDisplayName(call.name)}
-            {call.status === 'completed' && call.duration_ms != null && call.duration_ms > 0 && (
-              <span className="text-xs text-muted-foreground/70 ml-2">
-                {Math.round(call.duration_ms)}ms
-              </span>
-            )}
-          </ToolCallTrigger>
-          <ToolCallContent>
-            <ToolResultContent call={call} />
-          </ToolCallContent>
-        </ToolCall>
-      ))}
+    <div className="space-y-1">
+      {group.calls.map((call) => {
+        // Use full card UI for artifact tools
+        if (isArtifactTool(call.name)) {
+          return (
+            <ToolCall 
+              key={call.id} 
+              status={mapStatus(call.status)}
+              defaultOpen={call.status === 'completed'}
+            >
+              <ToolCallTrigger icon={getToolIcon(call.name)}>
+                {getToolDisplayName(call.name)}
+              </ToolCallTrigger>
+              <ToolCallContent>
+                <ToolResultContent call={call} />
+              </ToolCallContent>
+            </ToolCall>
+          );
+        }
+        
+        // Use subtle inline display for other tools
+        return <SubtleToolDisplay key={call.id} call={call} />;
+      })}
     </div>
   );
 }
