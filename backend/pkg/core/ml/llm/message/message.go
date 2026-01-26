@@ -143,13 +143,6 @@ func (m *Message) AppendContent(content string) {
 	m.Parts = append(m.Parts, TextContent{Text: content})
 }
 
-func (m *Message) AppendReasoningContent(content string) {
-	// No-op: Reasoning content is tracked separately in the manager (asyncReq.reasoning)
-	// and saved to message metadata. Do NOT append to message content.
-	// Previously this called m.AppendContent(content) which caused reasoning
-	// to be mixed into the response content.
-}
-
 func (m *Message) AddFinish(reason FinishReason) {
 	finish := Finish{
 		Reason: reason,

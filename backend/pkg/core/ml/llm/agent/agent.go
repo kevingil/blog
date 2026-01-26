@@ -505,7 +505,8 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 
 	switch event.Type {
 	case provider.EventThinkingDelta:
-		assistantMsg.AppendReasoningContent(event.Thinking)
+		// Reasoning is tracked separately in manager.asyncReq.reasoning
+		// and saved to message metadata - no need to store in message content
 		a.messages.Update(ctx, *assistantMsg)
 
 		// Emit reasoning delta event for real-time streaming
