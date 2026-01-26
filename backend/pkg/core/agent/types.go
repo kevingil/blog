@@ -45,6 +45,7 @@ type StreamResponse struct {
 	Type      string `json:"type"`
 	Content   string `json:"content,omitempty"`
 	Iteration int    `json:"iteration,omitempty"`
+	StepIndex int    `json:"step_index,omitempty"` // Which step in the chain of thought this event belongs to
 
 	// Tool-specific fields for tool_use blocks (legacy)
 	ToolID    string      `json:"tool_id,omitempty"`
@@ -157,4 +158,37 @@ type ArtifactUpdate struct {
 	Message  string      `json:"message"`
 	Result   interface{} `json:"result,omitempty"`
 	Error    string      `json:"error,omitempty"`
+}
+
+// =============================================================================
+// Chain of Thought Step Types
+// =============================================================================
+
+// TurnStep represents a single step in the chain of thought
+// Steps are ordered: reasoning -> tool -> reasoning -> content
+type TurnStep struct {
+	Type      string           `json:"type"`                 // "reasoning", "tool", "content"
+	Reasoning *ReasoningStep   `json:"reasoning,omitempty"`  // Present when Type == "reasoning"
+	Tool      *ToolStepPayload `json:"tool,omitempty"`       // Present when Type == "tool"
+	Content   string           `json:"content,omitempty"`    // Present when Type == "content"
+}
+
+// ReasoningStep represents a reasoning/thinking step in the chain
+type ReasoningStep struct {
+	Content    string `json:"content"`
+	DurationMs int64  `json:"duration_ms,omitempty"`
+	Visible    bool   `json:"visible,omitempty"`
+}
+
+// ToolStepPayload represents a tool call step in the chain
+type ToolStepPayload struct {
+	ToolID      string                 `json:"tool_id"`
+	ToolName    string                 `json:"tool_name"`
+	Input       map[string]interface{} `json:"input,omitempty"`
+	Output      map[string]interface{} `json:"output,omitempty"`
+	Status      string                 `json:"status"` // "running", "completed", "error"
+	Error       string                 `json:"error,omitempty"`
+	StartedAt   string                 `json:"started_at,omitempty"`
+	CompletedAt string                 `json:"completed_at,omitempty"`
+	DurationMs  int64                  `json:"duration_ms,omitempty"`
 }

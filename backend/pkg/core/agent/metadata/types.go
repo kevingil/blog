@@ -23,8 +23,11 @@ type MessageMetaData struct {
 	// Attached files/resources
 	Attachments []Attachment `json:"attachments,omitempty"`
 
-	// Chain of thought reasoning (from reasoning models)
+	// Chain of thought reasoning (from reasoning models) - LEGACY, use Steps instead
 	Thinking *ThinkingBlock `json:"thinking,omitempty"`
+
+	// Chain of thought steps (reasoning -> tool -> reasoning -> content)
+	Steps []ChainOfThoughtStep `json:"steps,omitempty"`
 }
 
 // ArtifactInfo represents a content artifact (edit, rewrite, suggestion)
@@ -158,6 +161,28 @@ type ThinkingBlock struct {
 	Content    string `json:"content"`
 	DurationMs int64  `json:"duration_ms,omitempty"`
 	Visible    bool   `json:"visible"` // Whether to show in UI by default
+}
+
+// ChainOfThoughtStep represents a single step in the chain of thought
+// Steps are ordered: reasoning -> tool -> reasoning -> content
+type ChainOfThoughtStep struct {
+	Type      string                 `json:"type"`                // "reasoning", "tool", "content"
+	Reasoning *ThinkingBlock         `json:"reasoning,omitempty"` // Present when Type == "reasoning"
+	Tool      *ToolStepInfo          `json:"tool,omitempty"`      // Present when Type == "tool"
+	Content   string                 `json:"content,omitempty"`   // Present when Type == "content"
+}
+
+// ToolStepInfo represents tool execution info in a chain of thought step
+type ToolStepInfo struct {
+	ToolID      string                 `json:"tool_id"`
+	ToolName    string                 `json:"tool_name"`
+	Input       map[string]interface{} `json:"input,omitempty"`
+	Output      map[string]interface{} `json:"output,omitempty"`
+	Status      string                 `json:"status"` // "running", "completed", "error"
+	Error       string                 `json:"error,omitempty"`
+	StartedAt   string                 `json:"started_at,omitempty"`
+	CompletedAt string                 `json:"completed_at,omitempty"`
+	DurationMs  int64                  `json:"duration_ms,omitempty"`
 }
 
 // ToolGroup represents a group of tool calls that can be executed in parallel

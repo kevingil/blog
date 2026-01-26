@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -66,7 +67,10 @@ type AgentAsyncRequest struct {
 	cancel       context.CancelFunc
 	SessionID    string
 	iteration    int
-	reasoning    string // Accumulated reasoning content from reasoning models
+	// Chain of thought step tracking
+	steps           []TurnStep // Ordered steps in this turn
+	currentStepType string     // "reasoning", "tool", "content", or ""
+	currentStepIdx  int        // Index of current step being built
 }
 
 // Global singleton for backward compatibility
@@ -400,27 +404,60 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 				Iteration:       event.Iteration,
 			}
 		case agent.AgentEventTypeReasoningDelta:
-			// Accumulate reasoning for persistence
-			asyncReq.reasoning += event.ReasoningDelta
+			// #region agent log
+			func() { f, _ := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); defer f.Close(); fmt.Fprintf(f, `{"location":"manager.go:H1-reasoning","message":"reasoning_delta received","data":{"currentStepType":"%s","currentStepIdx":%d,"numSteps":%d,"iteration":%d,"deltaPreview":"%s"},"hypothesisId":"H1","timestamp":%d}`+"\n", asyncReq.currentStepType, asyncReq.currentStepIdx, len(asyncReq.steps), asyncReq.iteration, strings.ReplaceAll(truncate(event.ReasoningDelta, 50), "\n", "\\n"), time.Now().UnixMilli()) }()
+			// #endregion
+			// If current step is not reasoning, start a new reasoning step
+			if asyncReq.currentStepType != "reasoning" {
+				// #region agent log
+				func() { f, _ := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); defer f.Close(); fmt.Fprintf(f, `{"location":"manager.go:H1-new-step","message":"creating NEW reasoning step","data":{"oldStepType":"%s","newStepIdx":%d},"hypothesisId":"H1","timestamp":%d}`+"\n", asyncReq.currentStepType, len(asyncReq.steps), time.Now().UnixMilli()) }()
+				// #endregion
+				asyncReq.currentStepIdx = len(asyncReq.steps)
+				asyncReq.steps = append(asyncReq.steps, TurnStep{
+					Type:      "reasoning",
+					Reasoning: &ReasoningStep{Content: "", Visible: true},
+				})
+				asyncReq.currentStepType = "reasoning"
+			}
+			// Append to current reasoning step
+			asyncReq.steps[asyncReq.currentStepIdx].Reasoning.Content += event.ReasoningDelta
+
 			asyncReq.ResponseChan <- StreamResponse{
 				RequestID:       asyncReq.ID,
 				Type:            StreamTypeReasoningDelta,
 				ThinkingContent: event.ReasoningDelta,
 				Iteration:       asyncReq.iteration,
+				StepIndex:       asyncReq.currentStepIdx,
 			}
 		case agent.AgentEventTypeContentDelta:
+			// If current step is not content, start a new content step
+			if asyncReq.currentStepType != "content" {
+				asyncReq.currentStepIdx = len(asyncReq.steps)
+				asyncReq.steps = append(asyncReq.steps, TurnStep{
+					Type:    "content",
+					Content: "",
+				})
+				asyncReq.currentStepType = "content"
+			}
+			// Append to current content step
+			asyncReq.steps[asyncReq.currentStepIdx].Content += event.ContentDelta
+
 			asyncReq.ResponseChan <- StreamResponse{
 				RequestID: asyncReq.ID,
 				Type:      "content_delta",
 				Content:   event.ContentDelta,
 				Iteration: asyncReq.iteration,
+				StepIndex: asyncReq.currentStepIdx,
 			}
 		case agent.AgentEventTypeResponse:
 			if event.Message.ID != "" {
 				asyncReq.iteration++
+				toolCalls := event.Message.ToolCalls()
+				// #region agent log
+				func() { f, _ := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); defer f.Close(); fmt.Fprintf(f, `{"location":"manager.go:H2-response","message":"AgentEventTypeResponse","data":{"iteration":%d,"hasToolCalls":%t,"numToolCalls":%d,"currentStepType":"%s","numSteps":%d},"hypothesisId":"H2","timestamp":%d}`+"\n", asyncReq.iteration, len(toolCalls) > 0, len(toolCalls), asyncReq.currentStepType, len(asyncReq.steps), time.Now().UnixMilli()) }()
+				// #endregion
 				m.saveAssistantMessage(ctx, asyncReq, event.Message, articleID)
 
-				toolCalls := event.Message.ToolCalls()
 				if len(toolCalls) > 0 {
 					textContent := event.Message.Content().String()
 					if textContent != "" {
@@ -433,31 +470,58 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 					}
 
 					for _, toolCall := range toolCalls {
-						var toolInput interface{}
+						var toolInput map[string]interface{}
 						if toolCall.Input != "" {
-							var jsonInput map[string]interface{}
-							if err := json.Unmarshal([]byte(toolCall.Input), &jsonInput); err == nil {
-								toolInput = jsonInput
-							} else {
-								toolInput = toolCall.Input
+							if err := json.Unmarshal([]byte(toolCall.Input), &toolInput); err != nil {
+								toolInput = map[string]interface{}{"raw": toolCall.Input}
 							}
 						}
+
+						// Create tool step in chain of thought
+						asyncReq.currentStepIdx = len(asyncReq.steps)
+						asyncReq.steps = append(asyncReq.steps, TurnStep{
+							Type: "tool",
+							Tool: &ToolStepPayload{
+								ToolID:    toolCall.ID,
+								ToolName:  toolCall.Name,
+								Input:     toolInput,
+								Status:    "running",
+								StartedAt: time.Now().Format(time.RFC3339),
+							},
+						})
+						asyncReq.currentStepType = "tool"
+						// #region agent log
+						func() { f, _ := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); defer f.Close(); fmt.Fprintf(f, `{"location":"manager.go:H4-tool-step","message":"created tool step","data":{"toolName":"%s","newStepIdx":%d,"currentStepType":"%s"},"hypothesisId":"H4","timestamp":%d}`+"\n", toolCall.Name, asyncReq.currentStepIdx, asyncReq.currentStepType, time.Now().UnixMilli()) }()
+						// #endregion
 
 						asyncReq.ResponseChan <- StreamResponse{
 							RequestID: asyncReq.ID,
 							Type:      "tool_use",
 							Iteration: asyncReq.iteration,
+							StepIndex: asyncReq.currentStepIdx,
 							ToolID:    toolCall.ID,
 							ToolName:  toolCall.Name,
 							ToolInput: toolInput,
 						}
 					}
 				} else {
+					// Final content response - create content step
+					content := event.Message.Content().String()
+					if content != "" {
+						asyncReq.currentStepIdx = len(asyncReq.steps)
+						asyncReq.steps = append(asyncReq.steps, TurnStep{
+							Type:    "content",
+							Content: content,
+						})
+						asyncReq.currentStepType = "content"
+					}
+
 					asyncReq.ResponseChan <- StreamResponse{
 						RequestID: asyncReq.ID,
 						Type:      "text",
-						Content:   event.Message.Content().String(),
+						Content:   content,
 						Iteration: asyncReq.iteration,
+						StepIndex: asyncReq.currentStepIdx,
 					}
 				}
 			}
@@ -480,8 +544,10 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 					}
 
 					status := "completed"
+					errorStr := ""
 					if toolResult.IsError {
 						status = "error"
+						errorStr = toolResult.Content
 					}
 
 					toolCalls = append(toolCalls, ToolCallPayload{
@@ -490,6 +556,18 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 						Status: status,
 						Result: resultData,
 					})
+
+					// Update the matching tool step with result
+					for i := range asyncReq.steps {
+						if asyncReq.steps[i].Type == "tool" && asyncReq.steps[i].Tool != nil &&
+							asyncReq.steps[i].Tool.ToolID == toolResult.ToolCallID {
+							asyncReq.steps[i].Tool.Status = status
+							asyncReq.steps[i].Tool.Output = resultData
+							asyncReq.steps[i].Tool.CompletedAt = time.Now().Format(time.RFC3339)
+							asyncReq.steps[i].Tool.Error = errorStr
+							break
+						}
+					}
 				}
 
 				savedMsg := m.saveToolResultMessage(ctx, asyncReq, event.Message, toolResults, articleID)
@@ -675,15 +753,64 @@ func (m *AgentAsyncCopilotManager) saveAssistantMessage(ctx context.Context, asy
 
 	msgMetadata := metadata.BuildMetaData().WithContext(msgContext)
 
-	// Include reasoning/thinking content if present
-	if asyncReq.reasoning != "" {
-		log.Printf("[Agent]    Has reasoning content: %d chars", len(asyncReq.reasoning))
-		msgMetadata.WithThinking(&metadata.ThinkingBlock{
-			Content: asyncReq.reasoning,
-			Visible: true,
-		})
-		// Reset reasoning for next turn
-		asyncReq.reasoning = ""
+	// Include chain of thought steps if present
+	if len(asyncReq.steps) > 0 {
+		log.Printf("[Agent]    Has %d chain of thought steps", len(asyncReq.steps))
+		// #region agent log
+		func() { stepTypes := make([]string, len(asyncReq.steps)); for i, s := range asyncReq.steps { stepTypes[i] = s.Type }; f, _ := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); defer f.Close(); fmt.Fprintf(f, `{"location":"manager.go:H3-save","message":"saveAssistantMessage with steps","data":{"numSteps":%d,"stepTypes":%q,"iteration":%d},"hypothesisId":"H3","timestamp":%d}`+"\n", len(asyncReq.steps), stepTypes, asyncReq.iteration, time.Now().UnixMilli()) }()
+		// #endregion
+		
+		// Convert TurnStep to ChainOfThoughtStep
+		cotSteps := make([]metadata.ChainOfThoughtStep, len(asyncReq.steps))
+		for i, step := range asyncReq.steps {
+			cotSteps[i] = metadata.ChainOfThoughtStep{
+				Type:    step.Type,
+				Content: step.Content,
+			}
+			if step.Reasoning != nil {
+				cotSteps[i].Reasoning = &metadata.ThinkingBlock{
+					Content:    step.Reasoning.Content,
+					DurationMs: step.Reasoning.DurationMs,
+					Visible:    step.Reasoning.Visible,
+				}
+			}
+			if step.Tool != nil {
+				cotSteps[i].Tool = &metadata.ToolStepInfo{
+					ToolID:      step.Tool.ToolID,
+					ToolName:    step.Tool.ToolName,
+					Input:       step.Tool.Input,
+					Output:      step.Tool.Output,
+					Status:      step.Tool.Status,
+					Error:       step.Tool.Error,
+					StartedAt:   step.Tool.StartedAt,
+					CompletedAt: step.Tool.CompletedAt,
+					DurationMs:  step.Tool.DurationMs,
+				}
+			}
+		}
+		msgMetadata.WithSteps(cotSteps)
+		
+		// Also set legacy Thinking field for backward compatibility (combine all reasoning)
+		var allReasoning string
+		for _, step := range asyncReq.steps {
+			if step.Type == "reasoning" && step.Reasoning != nil {
+				allReasoning += step.Reasoning.Content
+			}
+		}
+		if allReasoning != "" {
+			msgMetadata.WithThinking(&metadata.ThinkingBlock{
+				Content: allReasoning,
+				Visible: true,
+			})
+		}
+		
+		// Reset steps for next turn
+		asyncReq.steps = nil
+		asyncReq.currentStepType = ""
+		asyncReq.currentStepIdx = 0
+		// #region agent log
+		func() { f, _ := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); defer f.Close(); fmt.Fprintf(f, `{"location":"manager.go:H3-reset","message":"steps RESET after save","data":{"iteration":%d},"hypothesisId":"H3","timestamp":%d}`+"\n", asyncReq.iteration, time.Now().UnixMilli()) }()
+		// #endregion
 	}
 
 	toolCalls := msg.ToolCalls()
