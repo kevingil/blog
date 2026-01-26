@@ -3,8 +3,28 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 )
+
+var instance *Config
+
+// Init loads and validates the configuration. Call this once at startup.
+func Init() {
+	cfg, err := Load()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
+	instance = cfg
+}
+
+// Get returns the global configuration instance.
+func Get() *Config {
+	if instance == nil {
+		log.Fatal("Config not initialized. Call config.Init() first.")
+	}
+	return instance
+}
 
 // Config holds all configuration for the application loaded from environment variables.
 type Config struct {

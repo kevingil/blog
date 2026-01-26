@@ -4,50 +4,47 @@ import (
 	"context"
 	"time"
 
+	"backend/pkg/config"
 	"backend/pkg/core"
+	"backend/pkg/database"
+	"backend/pkg/database/repository"
+	"backend/pkg/types"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Service provides business logic for authentication
-type Service struct {
-	store     AccountStore
-	secretKey []byte
-}
-
-// NewService creates a new auth service
-func NewService(store AccountStore, secretKey string) *Service {
-	return &Service{
-		store:     store,
-		secretKey: []byte(secretKey),
-	}
-}
-
 // LoginRequest represents login credentials
-type LoginRequest struct {
-	Email    string
-	Password string
-}
+type LoginRequest = types.LoginRequest
 
 // LoginResponse represents the result of a successful login
-type LoginResponse struct {
-	Token string
-	User  UserData
-}
+type LoginResponse = types.LoginResponse
 
 // UserData represents user information returned after authentication
-type UserData struct {
-	ID    string
-	Name  string
-	Email string
-	Role  string
+type UserData = types.UserData
+
+// UpdateAccountRequest represents a request to update account info
+type UpdateAccountRequest = types.UpdateAccountRequest
+
+// UpdatePasswordRequest represents a request to change password
+type UpdatePasswordRequest = types.UpdatePasswordRequest
+
+// getRepo returns an account repository instance
+func getRepo() *repository.AccountRepository {
+	return repository.NewAccountRepository(database.DB())
+}
+
+// getSecretKey returns the JWT secret key from config
+func getSecretKey() []byte {
+	return []byte(config.Get().Auth.SecretKey)
 }
 
 // Login authenticates a user and returns a JWT token
-func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResponse, error) {
-	account, err := s.store.FindByEmail(ctx, req.Email)
+func Login(ctx context.Context, req LoginRequest) (*LoginResponse, error) {
+	repo := getRepo()
+
+	account, err := repo.FindByEmail(ctx, req.Email)
 	if err != nil {
 		return nil, core.ErrUnauthorized
 	}
@@ -61,7 +58,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResponse, 
 		"exp": time.Now().Add(time.Hour * 24).Unix(),
 	})
 
-	tokenString, err := token.SignedString(s.secretKey)
+	tokenString, err := token.SignedString(getSecretKey())
 	if err != nil {
 		return nil, err
 	}
@@ -78,9 +75,11 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResponse, 
 }
 
 // Register creates a new user account
-func (s *Service) Register(ctx context.Context, req RegisterRequest) error {
+func Register(ctx context.Context, req RegisterRequest) error {
+	repo := getRepo()
+
 	// Check if email already exists
-	existing, err := s.store.FindByEmail(ctx, req.Email)
+	existing, err := repo.FindByEmail(ctx, req.Email)
 	if err != nil && err != core.ErrNotFound {
 		return err
 	}
@@ -93,7 +92,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) error {
 		return err
 	}
 
-	account := &Account{
+	account := &types.Account{
 		ID:           uuid.New(),
 		Name:         req.Name,
 		Email:        req.Email,
@@ -101,16 +100,16 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) error {
 		Role:         "user",
 	}
 
-	return s.store.Save(ctx, account)
+	return repo.Save(ctx, account)
 }
 
 // ValidateToken validates a JWT token and returns the parsed token
-func (s *Service) ValidateToken(tokenString string) (*jwt.Token, error) {
+func ValidateToken(tokenString string) (*jwt.Token, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, core.ErrUnauthorized
 		}
-		return s.secretKey, nil
+		return getSecretKey(), nil
 	})
 
 	if err != nil || !token.Valid {
@@ -121,7 +120,7 @@ func (s *Service) ValidateToken(tokenString string) (*jwt.Token, error) {
 }
 
 // GetUserIDFromToken extracts the user ID from a validated token
-func (s *Service) GetUserIDFromToken(token *jwt.Token) (uuid.UUID, error) {
+func GetUserIDFromToken(token *jwt.Token) (uuid.UUID, error) {
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
 		return uuid.Nil, core.ErrUnauthorized
@@ -135,22 +134,18 @@ func (s *Service) GetUserIDFromToken(token *jwt.Token) (uuid.UUID, error) {
 	return uuid.Parse(sub)
 }
 
-// UpdateAccountRequest represents a request to update account info
-type UpdateAccountRequest struct {
-	Name  string
-	Email string
-}
-
 // UpdateAccount updates account information
-func (s *Service) UpdateAccount(ctx context.Context, accountID uuid.UUID, req UpdateAccountRequest) error {
-	account, err := s.store.FindByID(ctx, accountID)
+func UpdateAccount(ctx context.Context, accountID uuid.UUID, req UpdateAccountRequest) error {
+	repo := getRepo()
+
+	account, err := repo.FindByID(ctx, accountID)
 	if err != nil {
 		return err
 	}
 
 	// Check if email is already taken by another account
 	if req.Email != account.Email {
-		existing, err := s.store.FindByEmail(ctx, req.Email)
+		existing, err := repo.FindByEmail(ctx, req.Email)
 		if err != nil && err != core.ErrNotFound {
 			return err
 		}
@@ -162,18 +157,14 @@ func (s *Service) UpdateAccount(ctx context.Context, accountID uuid.UUID, req Up
 	account.Name = req.Name
 	account.Email = req.Email
 
-	return s.store.Update(ctx, account)
-}
-
-// UpdatePasswordRequest represents a request to change password
-type UpdatePasswordRequest struct {
-	CurrentPassword string
-	NewPassword     string
+	return repo.Update(ctx, account)
 }
 
 // UpdatePassword changes the user's password
-func (s *Service) UpdatePassword(ctx context.Context, accountID uuid.UUID, req UpdatePasswordRequest) error {
-	account, err := s.store.FindByID(ctx, accountID)
+func UpdatePassword(ctx context.Context, accountID uuid.UUID, req UpdatePasswordRequest) error {
+	repo := getRepo()
+
+	account, err := repo.FindByID(ctx, accountID)
 	if err != nil {
 		return err
 	}
@@ -190,12 +181,14 @@ func (s *Service) UpdatePassword(ctx context.Context, accountID uuid.UUID, req U
 	}
 
 	account.PasswordHash = string(hashedPassword)
-	return s.store.Update(ctx, account)
+	return repo.Update(ctx, account)
 }
 
 // DeleteAccount removes a user account after verifying password
-func (s *Service) DeleteAccount(ctx context.Context, accountID uuid.UUID, password string) error {
-	account, err := s.store.FindByID(ctx, accountID)
+func DeleteAccount(ctx context.Context, accountID uuid.UUID, password string) error {
+	repo := getRepo()
+
+	account, err := repo.FindByID(ctx, accountID)
 	if err != nil {
 		return err
 	}
@@ -205,12 +198,13 @@ func (s *Service) DeleteAccount(ctx context.Context, accountID uuid.UUID, passwo
 		return core.ErrUnauthorized
 	}
 
-	return s.store.Delete(ctx, accountID)
+	return repo.Delete(ctx, accountID)
 }
 
 // GetAccount retrieves an account by ID
-func (s *Service) GetAccount(ctx context.Context, accountID uuid.UUID) (*Account, error) {
-	return s.store.FindByID(ctx, accountID)
+func GetAccount(ctx context.Context, accountID uuid.UUID) (*types.Account, error) {
+	repo := getRepo()
+	return repo.FindByID(ctx, accountID)
 }
 
 // HashPassword hashes a password using bcrypt
@@ -227,3 +221,4 @@ func ComparePasswords(plainTextPassword, hashedPassword string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(plainTextPassword))
 	return err == nil
 }
+

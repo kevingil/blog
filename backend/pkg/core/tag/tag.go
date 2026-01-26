@@ -3,23 +3,20 @@ package tag
 
 import (
 	"context"
-	"time"
+
+	"backend/pkg/types"
 )
 
-// Tag represents a tag for categorizing articles and projects
-type Tag struct {
-	ID        int
-	Name      string
-	CreatedAt time.Time
-}
+// Tag is an alias to types.Tag for backward compatibility
+type Tag = types.Tag
 
 // TagStore defines the data access interface for tags
 type TagStore interface {
-	FindByID(ctx context.Context, id int) (*Tag, error)
-	FindByName(ctx context.Context, name string) (*Tag, error)
-	FindByIDs(ctx context.Context, ids []int64) ([]Tag, error)
+	FindByID(ctx context.Context, id int) (*types.Tag, error)
+	FindByName(ctx context.Context, name string) (*types.Tag, error)
+	FindByIDs(ctx context.Context, ids []int64) ([]types.Tag, error)
 	EnsureExists(ctx context.Context, names []string) ([]int64, error)
-	List(ctx context.Context) ([]Tag, error)
-	Save(ctx context.Context, tag *Tag) error
+	List(ctx context.Context) ([]types.Tag, error)
+	Save(ctx context.Context, tag *types.Tag) error
 	Delete(ctx context.Context, id int) error
 }

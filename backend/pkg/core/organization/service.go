@@ -2,70 +2,67 @@ package organization
 
 import (
 	"context"
+	"encoding/json"
 	"regexp"
 	"strings"
 
 	"backend/pkg/core"
-	"backend/pkg/core/auth"
+	"backend/pkg/database"
+	"backend/pkg/database/repository"
+	"backend/pkg/types"
 
 	"github.com/google/uuid"
 )
 
-// Service provides business logic for organizations
-type Service struct {
-	store        OrganizationStore
-	accountStore auth.AccountStore
+// getRepo returns an organization repository instance
+func getRepo() *repository.OrganizationRepository {
+	return repository.NewOrganizationRepository(database.DB())
 }
 
-// NewService creates a new organization service
-func NewService(store OrganizationStore, accountStore auth.AccountStore) *Service {
-	return &Service{
-		store:        store,
-		accountStore: accountStore,
-	}
-}
-
-// CreateRequest represents a request to create an organization
-type CreateRequest struct {
-	Name            string
-	Slug            string
-	Bio             *string
-	LogoURL         *string
-	WebsiteURL      *string
-	EmailPublic     *string
-	SocialLinks     map[string]interface{}
-	MetaDescription *string
-}
-
-// UpdateRequest represents a request to update an organization
-type UpdateRequest struct {
-	Name            *string
-	Slug            *string
-	Bio             *string
-	LogoURL         *string
-	WebsiteURL      *string
-	EmailPublic     *string
-	SocialLinks     *map[string]interface{}
-	MetaDescription *string
+// getAccountRepo returns an account repository instance
+func getAccountRepo() *repository.AccountRepository {
+	return repository.NewAccountRepository(database.DB())
 }
 
 // GetByID retrieves an organization by its ID
-func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Organization, error) {
-	return s.store.FindByID(ctx, id)
+func GetByID(ctx context.Context, id uuid.UUID) (*OrganizationResponse, error) {
+	repo := getRepo()
+	org, err := repo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(org), nil
 }
 
 // GetBySlug retrieves an organization by its slug
-func (s *Service) GetBySlug(ctx context.Context, slug string) (*Organization, error) {
-	return s.store.FindBySlug(ctx, slug)
+func GetBySlug(ctx context.Context, slug string) (*OrganizationResponse, error) {
+	repo := getRepo()
+	org, err := repo.FindBySlug(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(org), nil
 }
 
 // List retrieves all organizations
-func (s *Service) List(ctx context.Context) ([]Organization, error) {
-	return s.store.List(ctx)
+func List(ctx context.Context) ([]OrganizationResponse, error) {
+	repo := getRepo()
+	orgs, err := repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]OrganizationResponse, len(orgs))
+	for i, org := range orgs {
+		result[i] = *toResponse(&org)
+	}
+	return result, nil
 }
 
 // Create creates a new organization
-func (s *Service) Create(ctx context.Context, req CreateRequest) (*Organization, error) {
+func Create(ctx context.Context, req CreateRequest) (*OrganizationResponse, error) {
+	repo := getRepo()
+
 	// Generate slug if not provided
 	slug := req.Slug
 	if slug == "" {
@@ -73,7 +70,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*Organization,
 	}
 
 	// Check if slug already exists
-	existing, err := s.store.FindBySlug(ctx, slug)
+	existing, err := repo.FindBySlug(ctx, slug)
 	if err != nil && err != core.ErrNotFound {
 		return nil, err
 	}
@@ -81,7 +78,16 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*Organization,
 		return nil, core.ErrAlreadyExists
 	}
 
-	org := &Organization{
+	// Convert social links
+	var socialLinks map[string]interface{}
+	if req.SocialLinks != nil {
+		socialLinks = make(map[string]interface{})
+		for k, v := range *req.SocialLinks {
+			socialLinks[k] = v
+		}
+	}
+
+	org := &types.Organization{
 		ID:              uuid.New(),
 		Name:            req.Name,
 		Slug:            slug,
@@ -89,27 +95,29 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*Organization,
 		LogoURL:         req.LogoURL,
 		WebsiteURL:      req.WebsiteURL,
 		EmailPublic:     req.EmailPublic,
-		SocialLinks:     req.SocialLinks,
+		SocialLinks:     socialLinks,
 		MetaDescription: req.MetaDescription,
 	}
 
-	if err := s.store.Save(ctx, org); err != nil {
+	if err := repo.Save(ctx, org); err != nil {
 		return nil, err
 	}
 
-	return org, nil
+	return toResponse(org), nil
 }
 
 // Update updates an existing organization
-func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (*Organization, error) {
-	org, err := s.store.FindByID(ctx, id)
+func Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (*OrganizationResponse, error) {
+	repo := getRepo()
+
+	org, err := repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
 	// Check if new slug is unique
 	if req.Slug != nil && *req.Slug != org.Slug {
-		existing, err := s.store.FindBySlug(ctx, *req.Slug)
+		existing, err := repo.FindBySlug(ctx, *req.Slug)
 		if err != nil && err != core.ErrNotFound {
 			return nil, err
 		}
@@ -136,54 +144,65 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (
 		org.EmailPublic = req.EmailPublic
 	}
 	if req.SocialLinks != nil {
-		org.SocialLinks = *req.SocialLinks
+		socialLinks := make(map[string]interface{})
+		for k, v := range *req.SocialLinks {
+			socialLinks[k] = v
+		}
+		org.SocialLinks = socialLinks
 	}
 	if req.MetaDescription != nil {
 		org.MetaDescription = req.MetaDescription
 	}
 
-	if err := s.store.Update(ctx, org); err != nil {
+	if err := repo.Update(ctx, org); err != nil {
 		return nil, err
 	}
 
-	return org, nil
+	return toResponse(org), nil
 }
 
 // Delete removes an organization by its ID
-func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
-	return s.store.Delete(ctx, id)
+func Delete(ctx context.Context, id uuid.UUID) error {
+	repo := getRepo()
+	return repo.Delete(ctx, id)
 }
 
 // JoinOrganization sets the organization for a user account
-func (s *Service) JoinOrganization(ctx context.Context, accountID, orgID uuid.UUID) error {
+func JoinOrganization(ctx context.Context, accountID, orgID uuid.UUID) error {
+	orgRepo := getRepo()
+	accountRepo := getAccountRepo()
+
 	// Verify organization exists
-	_, err := s.store.FindByID(ctx, orgID)
+	_, err := orgRepo.FindByID(ctx, orgID)
 	if err != nil {
 		return err
 	}
 
 	// Get and update account
-	account, err := s.accountStore.FindByID(ctx, accountID)
+	account, err := accountRepo.FindByID(ctx, accountID)
 	if err != nil {
 		return err
 	}
 
 	account.OrganizationID = &orgID
-	return s.accountStore.Update(ctx, account)
+	return accountRepo.Update(ctx, account)
 }
 
 // LeaveOrganization clears the organization for a user account
-func (s *Service) LeaveOrganization(ctx context.Context, accountID uuid.UUID) error {
-	account, err := s.accountStore.FindByID(ctx, accountID)
+func LeaveOrganization(ctx context.Context, accountID uuid.UUID) error {
+	accountRepo := getAccountRepo()
+
+	account, err := accountRepo.FindByID(ctx, accountID)
 	if err != nil {
 		return err
 	}
 
 	account.OrganizationID = nil
-	return s.accountStore.Update(ctx, account)
+	return accountRepo.Update(ctx, account)
 }
 
-// Helper function to generate slug
+// Helper functions
+
 func generateSlug(name string) string {
 	slug := strings.ToLower(name)
 	slug = strings.ReplaceAll(slug, " ", "-")
@@ -194,3 +213,33 @@ func generateSlug(name string) string {
 	slug = strings.Trim(slug, "-")
 	return slug
 }
+
+func toResponse(org *types.Organization) *OrganizationResponse {
+	socialLinks := make(map[string]string)
+	if org.SocialLinks != nil {
+		data, err := json.Marshal(org.SocialLinks)
+		if err == nil {
+			json.Unmarshal(data, &socialLinks)
+		}
+	}
+
+	return &OrganizationResponse{
+		ID:              org.ID,
+		Name:            org.Name,
+		Slug:            org.Slug,
+		Bio:             stringValue(org.Bio),
+		LogoURL:         stringValue(org.LogoURL),
+		WebsiteURL:      stringValue(org.WebsiteURL),
+		EmailPublic:     stringValue(org.EmailPublic),
+		SocialLinks:     socialLinks,
+		MetaDescription: stringValue(org.MetaDescription),
+	}
+}
+
+func stringValue(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+

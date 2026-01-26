@@ -1,11 +1,18 @@
-import { ThinkingDisplay } from "./ThinkingDisplay";
 import { ToolGroupDisplay } from "./ToolGroupDisplay";
 import { DiffArtifact } from "./DiffArtifact";
 import { Markdown } from "@/components/ui/markdown";
+import {
+  ChainOfThought,
+  ChainOfThoughtStep,
+  ChainOfThoughtTrigger,
+  ChainOfThoughtContent,
+  ChainOfThoughtItem,
+} from "@/components/prompt-kit/chain-of-thought";
 import type { 
   AgentTurn, 
   Artifact, 
   MessageMetaData,
+  TurnStep,
 } from "./types";
 
 interface AgentMessageProps {
@@ -78,39 +85,176 @@ function ArtifactDisplay({
 }
 
 /**
+ * Renders a single step in the chain of thought
+ */
+function StepRenderer({ 
+  step, 
+  isLast,
+  onArtifactAction,
+  onApplyDiff,
+}: { 
+  step: TurnStep; 
+  isLast: boolean;
+  onArtifactAction?: (artifactId: string, action: 'accept' | 'reject') => void;
+  onApplyDiff?: (oldText: string, newText: string, reason?: string) => void;
+}) {
+  switch (step.type) {
+    case 'reasoning':
+      if (!step.thinking?.content) return null;
+      return (
+        <ChainOfThoughtStep 
+          type="reasoning" 
+          status={step.isStreaming ? 'running' : 'completed'}
+          isStreaming={step.isStreaming}
+          isLast={isLast}
+        >
+          <ChainOfThoughtTrigger
+            badge={
+              step.thinking.duration_ms != null && !step.isStreaming ? (
+                <span className="text-xs px-1.5 py-0.5 rounded-full font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                  {Math.round(step.thinking.duration_ms)}ms
+                </span>
+              ) : undefined
+            }
+          >
+            {step.isStreaming ? "Reasoning..." : "Reasoning"}
+          </ChainOfThoughtTrigger>
+          <ChainOfThoughtContent>
+            {step.thinking.content}
+          </ChainOfThoughtContent>
+        </ChainOfThoughtStep>
+      );
+    
+    case 'tool_group':
+      if (!step.toolGroup) return null;
+      return (
+        <ChainOfThoughtStep type="tool" status="completed" isLast={isLast}>
+          <ToolGroupDisplay group={step.toolGroup} />
+        </ChainOfThoughtStep>
+      );
+    
+    case 'content':
+      if (!step.content) return null;
+      return (
+        <ChainOfThoughtItem>
+          <div className="prose prose-sm max-w-none dark:prose-invert">
+            <Markdown>{step.content}</Markdown>
+          </div>
+        </ChainOfThoughtItem>
+      );
+    
+    default:
+      return null;
+  }
+}
+
+/**
  * Unified component that renders an agent turn properly
  */
 export function AgentMessage({ turn, onArtifactAction, onApplyDiff }: AgentMessageProps) {
-  return (
-    <div className="space-y-3">
-      {/* Chain of thought / thinking */}
-      {turn.thinking && (
-        <ThinkingDisplay thinking={turn.thinking} />
-      )}
-      
-      {/* Tool execution group */}
-      {turn.toolGroup && (
-        <ToolGroupDisplay group={turn.toolGroup} />
-      )}
-      
-      {/* Text content */}
-      {turn.content && (
-        <div className="prose prose-sm max-w-none dark:prose-invert">
-          <Markdown>{turn.content}</Markdown>
-        </div>
-      )}
-      
-      {/* Artifacts */}
-      {turn.artifacts?.map((artifact) => (
-        <ArtifactDisplay
-          key={artifact.id}
-          artifact={artifact}
-          onAction={(action) => onArtifactAction?.(artifact.id, action)}
-          onApplyDiff={onApplyDiff}
-        />
-      ))}
-    </div>
-  );
+  // If turn has steps array, use the new chain-of-thought rendering
+  if (turn.steps && turn.steps.length > 0) {
+    return (
+      <div className="space-y-3">
+        <ChainOfThought>
+          {turn.steps.map((step, idx) => (
+            <StepRenderer 
+              key={idx} 
+              step={step}
+              isLast={idx === turn.steps!.length - 1}
+              onArtifactAction={onArtifactAction}
+              onApplyDiff={onApplyDiff}
+            />
+          ))}
+        </ChainOfThought>
+        
+        {/* Artifacts (rendered outside chain) */}
+        {turn.artifacts?.map((artifact) => (
+          <ArtifactDisplay
+            key={artifact.id}
+            artifact={artifact}
+            onAction={(action) => onArtifactAction?.(artifact.id, action)}
+            onApplyDiff={onApplyDiff}
+          />
+        ))}
+      </div>
+    );
+  }
+  
+  // Legacy rendering - build steps from individual fields
+  const legacySteps: TurnStep[] = [];
+  
+  // Add reasoning step if present
+  if (turn.thinking?.content) {
+    legacySteps.push({
+      type: 'reasoning',
+      thinking: turn.thinking,
+      isStreaming: turn.isReasoningStreaming,
+    });
+  }
+  
+  // Add tool group step if present
+  if (turn.toolGroup) {
+    legacySteps.push({
+      type: 'tool_group',
+      toolGroup: turn.toolGroup,
+    });
+  }
+  
+  // Add content step if present
+  if (turn.content) {
+    legacySteps.push({
+      type: 'content',
+      content: turn.content,
+    });
+  }
+  
+  // If we have steps, render with chain-of-thought
+  if (legacySteps.length > 0) {
+    return (
+      <div className="space-y-3">
+        <ChainOfThought>
+          {legacySteps.map((step, idx) => (
+            <StepRenderer 
+              key={idx} 
+              step={step}
+              isLast={idx === legacySteps.length - 1}
+              onArtifactAction={onArtifactAction}
+              onApplyDiff={onApplyDiff}
+            />
+          ))}
+        </ChainOfThought>
+        
+        {/* Artifacts (rendered outside chain) */}
+        {turn.artifacts?.map((artifact) => (
+          <ArtifactDisplay
+            key={artifact.id}
+            artifact={artifact}
+            onAction={(action) => onArtifactAction?.(artifact.id, action)}
+            onApplyDiff={onApplyDiff}
+          />
+        ))}
+      </div>
+    );
+  }
+  
+  // Fallback: just render artifacts if nothing else
+  if (turn.artifacts && turn.artifacts.length > 0) {
+    return (
+      <div className="space-y-3">
+        {turn.artifacts.map((artifact) => (
+          <ArtifactDisplay
+            key={artifact.id}
+            artifact={artifact}
+            onAction={(action) => onArtifactAction?.(artifact.id, action)}
+            onApplyDiff={onApplyDiff}
+          />
+        ))}
+      </div>
+    );
+  }
+  
+  return null;
 }
 
 /**

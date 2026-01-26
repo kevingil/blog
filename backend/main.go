@@ -21,69 +21,49 @@
 package main
 
 import (
-	"backend/pkg/api/services"
+	"backend/pkg/api"
+	coreAgent "backend/pkg/core/agent"
 	"backend/pkg/config"
 	"backend/pkg/core/chat"
 	"backend/pkg/database"
-	"backend/pkg/server"
 	"fmt"
 	"log"
 
+	"github.com/gofiber/fiber/v2"
 	_ "github.com/joho/godotenv/autoload"
 )
 
 func main() {
-	// Load and validate configuration
-	cfg, err := config.Load()
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
-	}
+	// Initialize configuration (makes it available via config.Get())
+	config.Init()
+	cfg := config.Get()
 
-	// Initialize database service
-	dbService := database.New()
+	// Initialize database (makes it available via database.DB())
+	database.Init()
 
-	// Initialize AWS S3 client
-	s3Client := services.NewR2S3Client()
-
-	// Initialize services
-	authService := services.NewAuthService(dbService, cfg.Auth.SecretKey)
-	writerAgent := services.NewWriterAgent()
-	blogService := services.NewArticleService(dbService, writerAgent)
-	projectsService := services.NewProjectsService(dbService)
-	storageService := services.NewStorageService(s3Client, cfg.AWS.S3Bucket, cfg.AWS.S3URLPrefix)
-	imageService := services.NewImageGenerationService(dbService, storageService)
-	pagesService := services.NewPagesService(dbService)
-	sourcesService := services.NewArticleSourceService(dbService)
-	chatService := chat.NewMessageService(dbService)
-	profileService := services.NewProfileService(dbService)
-	organizationService := services.NewOrganizationService(dbService)
-
-	// Initialize the Agent-powered copilot manager with sources service and chat service
-	if err := services.InitializeAgentCopilotManager(sourcesService, chatService); err != nil {
+	// Initialize Agent-powered copilot manager with chat service
+	chatService := chat.NewMessageService(database.New())
+	if err := coreAgent.InitializeWithDefaults(chatService); err != nil {
 		log.Printf("Warning: Failed to initialize AgentCopilotManager: %v", err)
 	}
+	log.Printf("Initialized Agent Services")
 
-	log.Printf("Initialized Agent Services; AsyncCopilotManager and AgentCopilotManager")
+	// Create Fiber app and register routes
+	app := fiber.New(fiber.Config{
+		ErrorHandler: func(c *fiber.Ctx, err error) error {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		},
+	})
 
-	// Initialize and start server
-	srv := server.NewFiberServer(
-		dbService,
-		authService,
-		blogService,
-		projectsService,
-		imageService,
-		storageService,
-		pagesService,
-		sourcesService,
-		chatService,
-		services.GetAgentAsyncCopilotManager(),
-		profileService,
-		organizationService,
-	)
+	// Register all API routes
+	api.RegisterRoutes(app)
 
+	// Start server
 	address := fmt.Sprintf(":%s", cfg.Server.Port)
-	log.Printf("Attempting to start server on address: %s", address)
-	if err := srv.App.Listen(address); err != nil {
-		log.Fatalf("Failed to bind to %s: %v", address, err)
+	log.Printf("Starting server on %s", address)
+	if err := app.Listen(address); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
 	}
 }

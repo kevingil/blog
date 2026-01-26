@@ -4,7 +4,7 @@ package mocks
 import (
 	"context"
 
-	"backend/pkg/core/article"
+	"backend/pkg/types"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
@@ -15,38 +15,38 @@ type MockArticleStore struct {
 	mock.Mock
 }
 
-func (m *MockArticleStore) FindByID(ctx context.Context, id uuid.UUID) (*article.Article, error) {
+func (m *MockArticleStore) FindByID(ctx context.Context, id uuid.UUID) (*types.Article, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*article.Article), args.Error(1)
+	return args.Get(0).(*types.Article), args.Error(1)
 }
 
-func (m *MockArticleStore) FindBySlug(ctx context.Context, slug string) (*article.Article, error) {
+func (m *MockArticleStore) FindBySlug(ctx context.Context, slug string) (*types.Article, error) {
 	args := m.Called(ctx, slug)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*article.Article), args.Error(1)
+	return args.Get(0).(*types.Article), args.Error(1)
 }
 
-func (m *MockArticleStore) List(ctx context.Context, opts article.ListOptions) ([]article.Article, int64, error) {
+func (m *MockArticleStore) List(ctx context.Context, opts types.ArticleListOptions) ([]types.Article, int64, error) {
 	args := m.Called(ctx, opts)
-	return args.Get(0).([]article.Article), args.Get(1).(int64), args.Error(2)
+	return args.Get(0).([]types.Article), args.Get(1).(int64), args.Error(2)
 }
 
-func (m *MockArticleStore) Search(ctx context.Context, opts article.SearchOptions) ([]article.Article, int64, error) {
+func (m *MockArticleStore) Search(ctx context.Context, opts types.ArticleSearchOptions) ([]types.Article, int64, error) {
 	args := m.Called(ctx, opts)
-	return args.Get(0).([]article.Article), args.Get(1).(int64), args.Error(2)
+	return args.Get(0).([]types.Article), args.Get(1).(int64), args.Error(2)
 }
 
-func (m *MockArticleStore) SearchByEmbedding(ctx context.Context, embedding []float32, limit int) ([]article.Article, error) {
+func (m *MockArticleStore) SearchByEmbedding(ctx context.Context, embedding []float32, limit int) ([]types.Article, error) {
 	args := m.Called(ctx, embedding, limit)
-	return args.Get(0).([]article.Article), args.Error(1)
+	return args.Get(0).([]types.Article), args.Error(1)
 }
 
-func (m *MockArticleStore) Save(ctx context.Context, a *article.Article) error {
+func (m *MockArticleStore) Save(ctx context.Context, a *types.Article) error {
 	args := m.Called(ctx, a)
 	return args.Error(0)
 }
@@ -63,35 +63,35 @@ func (m *MockArticleStore) GetPopularTags(ctx context.Context, limit int) ([]int
 
 // Version management methods
 
-func (m *MockArticleStore) SaveDraft(ctx context.Context, a *article.Article) error {
+func (m *MockArticleStore) SaveDraft(ctx context.Context, a *types.Article) error {
 	args := m.Called(ctx, a)
 	return args.Error(0)
 }
 
-func (m *MockArticleStore) Publish(ctx context.Context, a *article.Article) error {
+func (m *MockArticleStore) Publish(ctx context.Context, a *types.Article) error {
 	args := m.Called(ctx, a)
 	return args.Error(0)
 }
 
-func (m *MockArticleStore) Unpublish(ctx context.Context, a *article.Article) error {
+func (m *MockArticleStore) Unpublish(ctx context.Context, a *types.Article) error {
 	args := m.Called(ctx, a)
 	return args.Error(0)
 }
 
-func (m *MockArticleStore) ListVersions(ctx context.Context, articleID uuid.UUID) ([]article.ArticleVersion, error) {
+func (m *MockArticleStore) ListVersions(ctx context.Context, articleID uuid.UUID) ([]types.ArticleVersion, error) {
 	args := m.Called(ctx, articleID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]article.ArticleVersion), args.Error(1)
+	return args.Get(0).([]types.ArticleVersion), args.Error(1)
 }
 
-func (m *MockArticleStore) GetVersion(ctx context.Context, versionID uuid.UUID) (*article.ArticleVersion, error) {
+func (m *MockArticleStore) GetVersion(ctx context.Context, versionID uuid.UUID) (*types.ArticleVersion, error) {
 	args := m.Called(ctx, versionID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*article.ArticleVersion), args.Error(1)
+	return args.Get(0).(*types.ArticleVersion), args.Error(1)
 }
 
 func (m *MockArticleStore) RevertToVersion(ctx context.Context, articleID, versionID uuid.UUID) error {

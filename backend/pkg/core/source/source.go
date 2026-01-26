@@ -3,30 +3,21 @@ package source
 
 import (
 	"context"
-	"time"
+
+	"backend/pkg/types"
 
 	"github.com/google/uuid"
 )
 
-// Source represents a source/citation for an article
-type Source struct {
-	ID         uuid.UUID
-	ArticleID  uuid.UUID
-	Title      string
-	Content    string
-	URL        string
-	SourceType string
-	Embedding  []float32
-	MetaData   map[string]interface{}
-	CreatedAt  time.Time
-}
+// Source is an alias to types.Source for backward compatibility
+type Source = types.Source
 
 // SourceStore defines the data access interface for article sources
 type SourceStore interface {
-	FindByID(ctx context.Context, id uuid.UUID) (*Source, error)
-	FindByArticleID(ctx context.Context, articleID uuid.UUID) ([]Source, error)
-	SearchSimilar(ctx context.Context, articleID uuid.UUID, embedding []float32, limit int) ([]Source, error)
-	Save(ctx context.Context, source *Source) error
-	Update(ctx context.Context, source *Source) error
+	FindByID(ctx context.Context, id uuid.UUID) (*types.Source, error)
+	FindByArticleID(ctx context.Context, articleID uuid.UUID) ([]types.Source, error)
+	SearchSimilar(ctx context.Context, articleID uuid.UUID, embedding []float32, limit int) ([]types.Source, error)
+	Save(ctx context.Context, source *types.Source) error
+	Update(ctx context.Context, source *types.Source) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }

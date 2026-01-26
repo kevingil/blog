@@ -72,7 +72,7 @@ func TestService_Create(t *testing.T) {
 			ModelName: "dall-e-3",
 			RequestID: "req-456",
 		}
-		mockStore.On("Save", ctx, mock.AnythingOfType("*image.ImageGeneration")).Return(nil).Once()
+		mockStore.On("Save", ctx, mock.AnythingOfType("*types.ImageGeneration")).Return(nil).Once()
 
 		result, err := svc.Create(ctx, req)
 

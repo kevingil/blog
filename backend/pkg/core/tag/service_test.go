@@ -122,7 +122,7 @@ func TestService_Create(t *testing.T) {
 	svc := tag.NewService(mockStore)
 
 	t.Run("creates tag successfully", func(t *testing.T) {
-		mockStore.On("Save", ctx, mock.AnythingOfType("*tag.Tag")).Return(nil).Once()
+		mockStore.On("Save", ctx, mock.AnythingOfType("*types.Tag")).Return(nil).Once()
 
 		result, err := svc.Create(ctx, "newtag")
 

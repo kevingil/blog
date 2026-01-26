@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"time"
 
-	"backend/pkg/core/article"
-
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/pgvector/pgvector-go"
@@ -98,86 +96,6 @@ func (a *Article) GetImageURL(forEditing bool) string {
 	return *a.PublishedImageURL
 }
 
-// ToCore converts the GORM model to the domain type
-func (m *Article) ToCore() *article.Article {
-	var sessionMemory map[string]interface{}
-	if m.SessionMemory != nil {
-		_ = json.Unmarshal(m.SessionMemory, &sessionMemory)
-	}
-
-	var draftEmbedding []float32
-	if m.DraftEmbedding.Slice() != nil {
-		draftEmbedding = m.DraftEmbedding.Slice()
-	}
-
-	var publishedEmbedding []float32
-	if m.PublishedEmbedding.Slice() != nil {
-		publishedEmbedding = m.PublishedEmbedding.Slice()
-	}
-
-	return &article.Article{
-		ID:                        m.ID,
-		Slug:                      m.Slug,
-		AuthorID:                  m.AuthorID,
-		TagIDs:                    m.TagIDs,
-		DraftTitle:                m.DraftTitle,
-		DraftContent:              m.DraftContent,
-		DraftImageURL:             m.DraftImageURL,
-		DraftEmbedding:            draftEmbedding,
-		PublishedTitle:            m.PublishedTitle,
-		PublishedContent:          m.PublishedContent,
-		PublishedImageURL:         m.PublishedImageURL,
-		PublishedEmbedding:        publishedEmbedding,
-		PublishedAt:               m.PublishedAt,
-		CurrentDraftVersionID:     m.CurrentDraftVersionID,
-		CurrentPublishedVersionID: m.CurrentPublishedVersionID,
-		ImagenRequestID:           m.ImagenRequestID,
-		SessionMemory:             sessionMemory,
-		CreatedAt:                 m.CreatedAt,
-		UpdatedAt:                 m.UpdatedAt,
-	}
-}
-
-// ArticleFromCore creates a GORM model from the domain type
-func ArticleFromCore(a *article.Article) *Article {
-	var sessionMemory datatypes.JSON
-	if a.SessionMemory != nil {
-		sessionMemory, _ = datatypes.NewJSONType(a.SessionMemory).MarshalJSON()
-	}
-
-	var draftEmbedding pgvector.Vector
-	if len(a.DraftEmbedding) > 0 {
-		draftEmbedding = pgvector.NewVector(a.DraftEmbedding)
-	}
-
-	var publishedEmbedding pgvector.Vector
-	if len(a.PublishedEmbedding) > 0 {
-		publishedEmbedding = pgvector.NewVector(a.PublishedEmbedding)
-	}
-
-	return &Article{
-		ID:                        a.ID,
-		Slug:                      a.Slug,
-		AuthorID:                  a.AuthorID,
-		TagIDs:                    a.TagIDs,
-		DraftTitle:                a.DraftTitle,
-		DraftContent:              a.DraftContent,
-		DraftImageURL:             a.DraftImageURL,
-		DraftEmbedding:            draftEmbedding,
-		PublishedTitle:            a.PublishedTitle,
-		PublishedContent:          a.PublishedContent,
-		PublishedImageURL:         a.PublishedImageURL,
-		PublishedEmbedding:        publishedEmbedding,
-		PublishedAt:               a.PublishedAt,
-		CurrentDraftVersionID:     a.CurrentDraftVersionID,
-		CurrentPublishedVersionID: a.CurrentPublishedVersionID,
-		ImagenRequestID:           a.ImagenRequestID,
-		SessionMemory:             sessionMemory,
-		CreatedAt:                 a.CreatedAt,
-		UpdatedAt:                 a.UpdatedAt,
-	}
-}
-
 // ArticleVersion is the GORM model for article version history
 type ArticleVersion struct {
 	ID            uuid.UUID       `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
@@ -194,46 +112,4 @@ type ArticleVersion struct {
 
 func (ArticleVersion) TableName() string {
 	return "article_version"
-}
-
-// ToCore converts the GORM model to the domain type
-func (m *ArticleVersion) ToCore() *article.ArticleVersion {
-	var embedding []float32
-	if m.Embedding.Slice() != nil {
-		embedding = m.Embedding.Slice()
-	}
-
-	return &article.ArticleVersion{
-		ID:            m.ID,
-		ArticleID:     m.ArticleID,
-		VersionNumber: m.VersionNumber,
-		Status:        m.Status,
-		Title:         m.Title,
-		Content:       m.Content,
-		ImageURL:      m.ImageURL,
-		Embedding:     embedding,
-		EditedBy:      m.EditedBy,
-		CreatedAt:     m.CreatedAt,
-	}
-}
-
-// ArticleVersionFromCore creates a GORM model from the domain type
-func ArticleVersionFromCore(v *article.ArticleVersion) *ArticleVersion {
-	var embedding pgvector.Vector
-	if len(v.Embedding) > 0 {
-		embedding = pgvector.NewVector(v.Embedding)
-	}
-
-	return &ArticleVersion{
-		ID:            v.ID,
-		ArticleID:     v.ArticleID,
-		VersionNumber: v.VersionNumber,
-		Status:        v.Status,
-		Title:         v.Title,
-		Content:       v.Content,
-		ImageURL:      v.ImageURL,
-		Embedding:     embedding,
-		EditedBy:      v.EditedBy,
-		CreatedAt:     v.CreatedAt,
-	}
 }

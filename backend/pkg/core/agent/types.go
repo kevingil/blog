@@ -83,6 +83,7 @@ type StreamResponse struct {
 // Stream event type constants
 const (
 	StreamTypeContentDelta      = "content_delta"
+	StreamTypeReasoningDelta    = "reasoning_delta"
 	StreamTypeText              = "text"
 	StreamTypeToolUse           = "tool_use"
 	StreamTypeToolResult        = "tool_result"

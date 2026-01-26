@@ -5,13 +5,13 @@ import (
 	"strings"
 
 	"backend/pkg/core"
-	"backend/pkg/core/tag"
 	"backend/pkg/database/models"
+	"backend/pkg/types"
 
 	"gorm.io/gorm"
 )
 
-// TagRepository implements tag.TagStore using GORM
+// TagRepository provides data access for tags
 type TagRepository struct {
 	db *gorm.DB
 }
@@ -21,8 +21,26 @@ func NewTagRepository(db *gorm.DB) *TagRepository {
 	return &TagRepository{db: db}
 }
 
+// tagModelToType converts a database model to types
+func tagModelToType(m *models.Tag) *types.Tag {
+	return &types.Tag{
+		ID:        m.ID,
+		Name:      m.Name,
+		CreatedAt: m.CreatedAt,
+	}
+}
+
+// tagTypeToModel converts a types type to database model
+func tagTypeToModel(t *types.Tag) *models.Tag {
+	return &models.Tag{
+		ID:        t.ID,
+		Name:      t.Name,
+		CreatedAt: t.CreatedAt,
+	}
+}
+
 // FindByID retrieves a tag by its ID
-func (r *TagRepository) FindByID(ctx context.Context, id int) (*tag.Tag, error) {
+func (r *TagRepository) FindByID(ctx context.Context, id int) (*types.Tag, error) {
 	var model models.Tag
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -30,11 +48,11 @@ func (r *TagRepository) FindByID(ctx context.Context, id int) (*tag.Tag, error) 
 		}
 		return nil, err
 	}
-	return model.ToCore(), nil
+	return tagModelToType(&model), nil
 }
 
 // FindByName retrieves a tag by its name (case-insensitive)
-func (r *TagRepository) FindByName(ctx context.Context, name string) (*tag.Tag, error) {
+func (r *TagRepository) FindByName(ctx context.Context, name string) (*types.Tag, error) {
 	var model models.Tag
 	if err := r.db.WithContext(ctx).Where("LOWER(name) = LOWER(?)", name).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -42,19 +60,19 @@ func (r *TagRepository) FindByName(ctx context.Context, name string) (*tag.Tag, 
 		}
 		return nil, err
 	}
-	return model.ToCore(), nil
+	return tagModelToType(&model), nil
 }
 
 // FindByIDs retrieves tags by their IDs
-func (r *TagRepository) FindByIDs(ctx context.Context, ids []int64) ([]tag.Tag, error) {
+func (r *TagRepository) FindByIDs(ctx context.Context, ids []int64) ([]types.Tag, error) {
 	var tagModels []models.Tag
 	if err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&tagModels).Error; err != nil {
 		return nil, err
 	}
 
-	tags := make([]tag.Tag, len(tagModels))
+	tags := make([]types.Tag, len(tagModels))
 	for i, m := range tagModels {
-		tags[i] = *m.ToCore()
+		tags[i] = *tagModelToType(&m)
 	}
 	return tags, nil
 }
@@ -89,29 +107,28 @@ func (r *TagRepository) EnsureExists(ctx context.Context, names []string) ([]int
 }
 
 // List retrieves all tags
-func (r *TagRepository) List(ctx context.Context) ([]tag.Tag, error) {
+func (r *TagRepository) List(ctx context.Context) ([]types.Tag, error) {
 	var tagModels []models.Tag
 	if err := r.db.WithContext(ctx).Order("name ASC").Find(&tagModels).Error; err != nil {
 		return nil, err
 	}
 
-	tags := make([]tag.Tag, len(tagModels))
+	tags := make([]types.Tag, len(tagModels))
 	for i, m := range tagModels {
-		tags[i] = *m.ToCore()
+		tags[i] = *tagModelToType(&m)
 	}
 	return tags, nil
 }
 
 // Save creates or updates a tag
-func (r *TagRepository) Save(ctx context.Context, t *tag.Tag) error {
-	model := models.TagFromCore(t)
-
-	if t.ID == 0 {
+func (r *TagRepository) Save(ctx context.Context, tag *types.Tag) error {
+	model := tagTypeToModel(tag)
+	if model.ID == 0 {
 		// Create new tag
 		if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
 			return err
 		}
-		t.ID = model.ID
+		tag.ID = model.ID
 		return nil
 	}
 

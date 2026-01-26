@@ -26,11 +26,12 @@ var (
 type AgentEventType string
 
 const (
-	AgentEventTypeError        AgentEventType = "error"
-	AgentEventTypeResponse     AgentEventType = "response"
-	AgentEventTypeTool         AgentEventType = "tool"
-	AgentEventTypeThinking     AgentEventType = "thinking"
-	AgentEventTypeContentDelta AgentEventType = "content_delta"
+	AgentEventTypeError          AgentEventType = "error"
+	AgentEventTypeResponse       AgentEventType = "response"
+	AgentEventTypeTool           AgentEventType = "tool"
+	AgentEventTypeThinking       AgentEventType = "thinking"
+	AgentEventTypeContentDelta   AgentEventType = "content_delta"
+	AgentEventTypeReasoningDelta AgentEventType = "reasoning_delta"
 )
 
 type AgentEvent struct {
@@ -49,6 +50,9 @@ type AgentEvent struct {
 
 	// When streaming content
 	ContentDelta string
+
+	// When streaming reasoning (extended thinking)
+	ReasoningDelta string
 }
 
 type Service interface {
@@ -502,8 +506,15 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 
 	switch event.Type {
 	case provider.EventThinkingDelta:
-		assistantMsg.AppendReasoningContent(event.Content)
-		return a.messages.Update(ctx, *assistantMsg)
+		assistantMsg.AppendReasoningContent(event.Thinking)
+		a.messages.Update(ctx, *assistantMsg)
+
+		// Emit reasoning delta event for real-time streaming
+		events <- AgentEvent{
+			Type:           AgentEventTypeReasoningDelta,
+			ReasoningDelta: event.Thinking,
+		}
+		return nil
 	case provider.EventContentDelta:
 		assistantMsg.AppendContent(event.Content)
 		a.messages.Update(ctx, *assistantMsg)

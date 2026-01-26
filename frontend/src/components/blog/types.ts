@@ -13,6 +13,22 @@ export interface AgentTurn {
   content: string;
   artifacts?: Artifact[];
   created_at: string;
+  // New: ordered sequence of steps for chain-of-thought display
+  steps?: TurnStep[];
+  // Streaming state
+  isStreaming?: boolean;
+  isReasoningStreaming?: boolean;
+}
+
+/**
+ * Individual step in a turn's chain of thought
+ */
+export interface TurnStep {
+  type: 'reasoning' | 'tool_group' | 'content';
+  thinking?: ThinkingBlock;
+  toolGroup?: ToolGroup;
+  content?: string;
+  isStreaming?: boolean;
 }
 
 /**
@@ -71,6 +87,7 @@ export type ArtifactStatus = 'pending' | 'accepted' | 'rejected';
 
 export type StreamEventType =
   | 'content_delta'
+  | 'reasoning_delta'
   | 'text'
   | 'tool_use'
   | 'tool_result'

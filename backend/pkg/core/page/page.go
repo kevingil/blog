@@ -3,36 +3,32 @@ package page
 
 import (
 	"context"
-	"time"
+
+	"backend/pkg/types"
 
 	"github.com/google/uuid"
 )
 
-// Page represents a static page in the blog
-type Page struct {
-	ID          uuid.UUID
-	Slug        string
-	Title       string
-	Content     string
-	Description string
-	ImageURL    string
-	MetaData    map[string]interface{}
-	IsPublished bool
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-}
+// Page is an alias to types.Page for backward compatibility
+type Page = types.Page
 
-// ListOptions represents options for listing pages
-type ListOptions struct {
-	Page    int
-	PerPage int
-}
+// ListOptions is an alias to types.PageListOptions for backward compatibility
+type ListOptions = types.PageListOptions
+
+// CreateRequest is an alias to types.PageCreateRequest for backward compatibility
+type CreateRequest = types.PageCreateRequest
+
+// UpdateRequest is an alias to types.PageUpdateRequest for backward compatibility
+type UpdateRequest = types.PageUpdateRequest
+
+// ListResult is an alias to types.PageListResult for backward compatibility
+type ListResult = types.PageListResult
 
 // PageStore defines the data access interface for pages
 type PageStore interface {
-	FindByID(ctx context.Context, id uuid.UUID) (*Page, error)
-	FindBySlug(ctx context.Context, slug string) (*Page, error)
-	List(ctx context.Context, opts ListOptions) ([]Page, int64, error)
-	Save(ctx context.Context, page *Page) error
+	FindByID(ctx context.Context, id uuid.UUID) (*types.Page, error)
+	FindBySlug(ctx context.Context, slug string) (*types.Page, error)
+	List(ctx context.Context, opts types.PageListOptions) ([]types.Page, int64, error)
+	Save(ctx context.Context, page *types.Page) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }

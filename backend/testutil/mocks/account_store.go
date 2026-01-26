@@ -4,7 +4,7 @@ package mocks
 import (
 	"context"
 
-	"backend/pkg/core/auth"
+	"backend/pkg/types"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
@@ -15,28 +15,28 @@ type MockAccountStore struct {
 	mock.Mock
 }
 
-func (m *MockAccountStore) FindByID(ctx context.Context, id uuid.UUID) (*auth.Account, error) {
+func (m *MockAccountStore) FindByID(ctx context.Context, id uuid.UUID) (*types.Account, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*auth.Account), args.Error(1)
+	return args.Get(0).(*types.Account), args.Error(1)
 }
 
-func (m *MockAccountStore) FindByEmail(ctx context.Context, email string) (*auth.Account, error) {
+func (m *MockAccountStore) FindByEmail(ctx context.Context, email string) (*types.Account, error) {
 	args := m.Called(ctx, email)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*auth.Account), args.Error(1)
+	return args.Get(0).(*types.Account), args.Error(1)
 }
 
-func (m *MockAccountStore) Save(ctx context.Context, account *auth.Account) error {
+func (m *MockAccountStore) Save(ctx context.Context, account *types.Account) error {
 	args := m.Called(ctx, account)
 	return args.Error(0)
 }
 
-func (m *MockAccountStore) Update(ctx context.Context, account *auth.Account) error {
+func (m *MockAccountStore) Update(ctx context.Context, account *types.Account) error {
 	args := m.Called(ctx, account)
 	return args.Error(0)
 }

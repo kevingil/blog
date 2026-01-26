@@ -3,35 +3,23 @@ package project
 
 import (
 	"context"
-	"time"
+
+	"backend/pkg/types"
 
 	"github.com/google/uuid"
 )
 
-// Project represents a portfolio project
-type Project struct {
-	ID          uuid.UUID
-	Title       string
-	Description string
-	Content     string
-	TagIDs      []int64
-	ImageURL    string
-	URL         string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-}
+// Project is an alias to types.Project for backward compatibility
+type Project = types.Project
 
-// ListOptions represents options for listing projects
-type ListOptions struct {
-	Page    int
-	PerPage int
-}
+// ListOptions is an alias to types.ProjectListOptions for backward compatibility
+type ListOptions = types.ProjectListOptions
 
 // ProjectStore defines the data access interface for projects
 type ProjectStore interface {
-	FindByID(ctx context.Context, id uuid.UUID) (*Project, error)
-	List(ctx context.Context, opts ListOptions) ([]Project, int64, error)
-	Save(ctx context.Context, project *Project) error
-	Update(ctx context.Context, project *Project) error
+	FindByID(ctx context.Context, id uuid.UUID) (*types.Project, error)
+	List(ctx context.Context, opts types.ProjectListOptions) ([]types.Project, int64, error)
+	Save(ctx context.Context, project *types.Project) error
+	Update(ctx context.Context, project *types.Project) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }

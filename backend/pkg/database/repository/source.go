@@ -2,18 +2,20 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"backend/pkg/core"
-	"backend/pkg/core/source"
 	"backend/pkg/database/models"
+	"backend/pkg/types"
 
 	"github.com/google/uuid"
 	"github.com/pgvector/pgvector-go"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
-// SourceRepository implements source.SourceStore using GORM
+// SourceRepository provides data access for article sources
 type SourceRepository struct {
 	db *gorm.DB
 }
@@ -23,8 +25,59 @@ func NewSourceRepository(db *gorm.DB) *SourceRepository {
 	return &SourceRepository{db: db}
 }
 
+// sourceModelToType converts a database model to types
+func sourceModelToType(m *models.Source) *types.Source {
+	var metaData map[string]interface{}
+	if m.MetaData != nil {
+		_ = json.Unmarshal(m.MetaData, &metaData)
+	}
+
+	var embedding []float32
+	if m.Embedding.Slice() != nil {
+		embedding = m.Embedding.Slice()
+	}
+
+	return &types.Source{
+		ID:         m.ID,
+		ArticleID:  m.ArticleID,
+		Title:      m.Title,
+		Content:    m.Content,
+		URL:        m.URL,
+		SourceType: m.SourceType,
+		Embedding:  embedding,
+		MetaData:   metaData,
+		CreatedAt:  m.CreatedAt,
+	}
+}
+
+// sourceTypeToModel converts a types type to database model
+func sourceTypeToModel(s *types.Source) *models.Source {
+	var metaData datatypes.JSON
+	if s.MetaData != nil {
+		data, _ := json.Marshal(s.MetaData)
+		metaData = datatypes.JSON(data)
+	}
+
+	var embedding pgvector.Vector
+	if len(s.Embedding) > 0 {
+		embedding = pgvector.NewVector(s.Embedding)
+	}
+
+	return &models.Source{
+		ID:         s.ID,
+		ArticleID:  s.ArticleID,
+		Title:      s.Title,
+		Content:    s.Content,
+		URL:        s.URL,
+		SourceType: s.SourceType,
+		Embedding:  embedding,
+		MetaData:   metaData,
+		CreatedAt:  s.CreatedAt,
+	}
+}
+
 // FindByID retrieves a source by its ID
-func (r *SourceRepository) FindByID(ctx context.Context, id uuid.UUID) (*source.Source, error) {
+func (r *SourceRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.Source, error) {
 	var model models.Source
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -32,26 +85,25 @@ func (r *SourceRepository) FindByID(ctx context.Context, id uuid.UUID) (*source.
 		}
 		return nil, err
 	}
-	return model.ToCore(), nil
+	return sourceModelToType(&model), nil
 }
 
 // FindByArticleID retrieves all sources for an article
-func (r *SourceRepository) FindByArticleID(ctx context.Context, articleID uuid.UUID) ([]source.Source, error) {
+func (r *SourceRepository) FindByArticleID(ctx context.Context, articleID uuid.UUID) ([]types.Source, error) {
 	var sourceModels []models.Source
 	if err := r.db.WithContext(ctx).Where("article_id = ?", articleID).Order("created_at DESC").Find(&sourceModels).Error; err != nil {
 		return nil, err
 	}
 
-	sources := make([]source.Source, len(sourceModels))
+	sources := make([]types.Source, len(sourceModels))
 	for i, m := range sourceModels {
-		sources[i] = *m.ToCore()
+		sources[i] = *sourceModelToType(&m)
 	}
-
 	return sources, nil
 }
 
 // SearchSimilar performs vector similarity search for sources within an article
-func (r *SourceRepository) SearchSimilar(ctx context.Context, articleID uuid.UUID, embedding []float32, limit int) ([]source.Source, error) {
+func (r *SourceRepository) SearchSimilar(ctx context.Context, articleID uuid.UUID, embedding []float32, limit int) ([]types.Source, error) {
 	var sourceModels []models.Source
 
 	embeddingVector := pgvector.NewVector(embedding)
@@ -66,29 +118,26 @@ func (r *SourceRepository) SearchSimilar(ctx context.Context, articleID uuid.UUI
 		return nil, err
 	}
 
-	sources := make([]source.Source, len(sourceModels))
+	sources := make([]types.Source, len(sourceModels))
 	for i, m := range sourceModels {
-		sources[i] = *m.ToCore()
+		sources[i] = *sourceModelToType(&m)
 	}
-
 	return sources, nil
 }
 
 // Save creates a new source
-func (r *SourceRepository) Save(ctx context.Context, s *source.Source) error {
-	model := models.SourceFromCore(s)
-
-	if s.ID == uuid.Nil {
-		s.ID = uuid.New()
-		model.ID = s.ID
+func (r *SourceRepository) Save(ctx context.Context, source *types.Source) error {
+	model := sourceTypeToModel(source)
+	if model.ID == uuid.Nil {
+		model.ID = uuid.New()
+		source.ID = model.ID
 	}
-
 	return r.db.WithContext(ctx).Create(model).Error
 }
 
 // Update updates an existing source
-func (r *SourceRepository) Update(ctx context.Context, s *source.Source) error {
-	model := models.SourceFromCore(s)
+func (r *SourceRepository) Update(ctx context.Context, source *types.Source) error {
+	model := sourceTypeToModel(source)
 	return r.db.WithContext(ctx).Save(model).Error
 }
 
