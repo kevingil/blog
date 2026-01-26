@@ -66,6 +66,7 @@ type AgentAsyncRequest struct {
 	cancel       context.CancelFunc
 	SessionID    string
 	iteration    int
+	reasoning    string // Accumulated reasoning content from reasoning models
 }
 
 // Global singleton for backward compatibility
@@ -400,6 +401,8 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 				Iteration:       event.Iteration,
 			}
 		case agent.AgentEventTypeReasoningDelta:
+			// Accumulate reasoning for persistence
+			asyncReq.reasoning += event.ReasoningDelta
 			asyncReq.ResponseChan <- StreamResponse{
 				RequestID:       asyncReq.ID,
 				Type:            StreamTypeReasoningDelta,
@@ -673,6 +676,17 @@ func (m *AgentAsyncCopilotManager) saveAssistantMessage(ctx context.Context, asy
 
 	msgMetadata := metadata.BuildMetaData().WithContext(msgContext)
 
+	// Include reasoning/thinking content if present
+	if asyncReq.reasoning != "" {
+		log.Printf("[Agent]    Has reasoning content: %d chars", len(asyncReq.reasoning))
+		msgMetadata.WithThinking(&metadata.ThinkingBlock{
+			Content: asyncReq.reasoning,
+			Visible: true,
+		})
+		// Reset reasoning for next turn
+		asyncReq.reasoning = ""
+	}
+
 	toolCalls := msg.ToolCalls()
 	if len(toolCalls) > 0 {
 		log.Printf("[Agent]    Has %d tool call(s): %v", len(toolCalls), toolCalls[0].Name)
@@ -699,7 +713,7 @@ func (m *AgentAsyncCopilotManager) saveAssistantMessage(ctx context.Context, asy
 		msgMetadata.WithToolExecution(toolExec)
 	}
 
-	savedMsg, err := m.chatService.SaveMessage(ctx, articleID, "assistant", content, msgMetadata)
+	savedMsg, err := m.chatService.SaveMessage(ctx, articleID, "assistant", content, msgMetadata.Build())
 	if err != nil {
 		log.Printf("[Agent] ❌ Failed to save assistant message to database: %v", err)
 	} else {

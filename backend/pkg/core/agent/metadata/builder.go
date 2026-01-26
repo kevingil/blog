@@ -166,3 +166,14 @@ func (m *MessageMetaData) WithAttachments(attachments []Attachment) *MessageMeta
 	return m
 }
 
+// WithThinking adds thinking/reasoning content to metadata
+func (m *MessageMetaData) WithThinking(thinking *ThinkingBlock) *MessageMetaData {
+	m.Thinking = thinking
+	return m
+}
+
+// Build returns the final metadata structure (for explicit termination of builder chain)
+func (m *MessageMetaData) Build() *MessageMetaData {
+	return m
+}
+
