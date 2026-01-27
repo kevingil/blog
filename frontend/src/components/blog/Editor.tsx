@@ -969,7 +969,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             type="button"
             onClick={() => setExpandedTable(
               <div className="w-full">
-                <table className="w-full text-sm border-collapse border" {...props}>
+                <table className="w-full text-base border-collapse border" {...props}>
                   {children}
                 </table>
               </div>
