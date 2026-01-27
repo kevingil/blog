@@ -21,6 +21,16 @@ clean:
 	@echo "Cleaning..."
 	@rm -f main
 
+# Generate Swagger documentation
+swagger:
+	@echo "Generating Swagger docs..."
+	@cd backend && swag init --parseDependency --parseInternal --generalInfo main.go
+
+# Generate frontend API client from OpenAPI spec
+generate-client: swagger
+	@echo "Generating frontend API client..."
+	@cd frontend && bun run generate-client
+
 # Live Reload
 watch:
 	@if command -v air > /dev/null; then \
@@ -38,4 +48,4 @@ watch:
             fi; \
         fi
 
-.PHONY: all build run test clean watch
+.PHONY: all build run test clean watch swagger generate-client
