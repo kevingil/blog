@@ -12,6 +12,18 @@ import (
 )
 
 // GenerateArticle handles POST /blog/generate
+// @Summary Generate article with AI
+// @Description Generate a new blog article using AI based on the provided prompt
+// @Tags articles
+// @Accept json
+// @Produce json
+// @Param request body object{prompt=string,title=string,publish=boolean} true "Generation request"
+// @Success 200 {object} response.SuccessResponse{data=dto.ArticleResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /blog/generate [post]
 func GenerateArticle(c *fiber.Ctx) error {
 	var req struct {
 		Prompt  string `json:"prompt"`
@@ -35,6 +47,19 @@ func GenerateArticle(c *fiber.Ctx) error {
 }
 
 // UpdateArticle handles POST /blog/articles/:slug/update
+// @Summary Update article draft
+// @Description Update the draft content of an existing article
+// @Tags articles
+// @Accept json
+// @Produce json
+// @Param slug path string true "Article slug"
+// @Param request body dto.UpdateArticleRequest true "Update request"
+// @Success 200 {object} response.SuccessResponse{data=dto.ArticleResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /blog/articles/{slug}/update [post]
 func UpdateArticle(c *fiber.Ctx) error {
 	slug := c.Params("slug")
 	if slug == "" {
@@ -63,6 +88,18 @@ func UpdateArticle(c *fiber.Ctx) error {
 }
 
 // CreateArticle handles POST /blog/articles
+// @Summary Create new article
+// @Description Create a new blog article
+// @Tags articles
+// @Accept json
+// @Produce json
+// @Param request body dto.CreateArticleRequest true "Create request"
+// @Success 201 {object} response.SuccessResponse{data=dto.ArticleResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /blog/articles [post]
 func CreateArticle(c *fiber.Ctx) error {
 	var req coreArticle.CreateRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -81,6 +118,18 @@ func CreateArticle(c *fiber.Ctx) error {
 }
 
 // UpdateArticleWithContext handles PUT /blog/:id/update
+// @Summary Update article with AI context
+// @Description Update article using AI-powered context-aware editing
+// @Tags articles
+// @Accept json
+// @Produce json
+// @Param id path string true "Article ID"
+// @Success 200 {object} response.SuccessResponse{data=dto.ArticleResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /blog/{id}/update [put]
 func UpdateArticleWithContext(c *fiber.Ctx) error {
 	articleIDStr := c.Params("id")
 	articleID, err := uuid.Parse(articleIDStr)
@@ -96,6 +145,20 @@ func UpdateArticleWithContext(c *fiber.Ctx) error {
 }
 
 // GetArticles handles GET /blog/articles
+// @Summary List articles
+// @Description Get a paginated list of articles with optional filtering
+// @Tags articles
+// @Accept json
+// @Produce json
+// @Param page query int false "Page number" default(1)
+// @Param articlesPerPage query int false "Articles per page" default(6)
+// @Param tag query string false "Filter by tag"
+// @Param status query string false "Filter by status (published/draft)" default(published)
+// @Param sortBy query string false "Sort field"
+// @Param sortOrder query string false "Sort order (asc/desc)"
+// @Success 200 {object} response.SuccessResponse{data=dto.ArticleListResponse}
+// @Failure 500 {object} response.SuccessResponse
+// @Router /blog/articles [get]
 func GetArticles(c *fiber.Ctx) error {
 	page := c.QueryInt("page", 1)
 	tag := c.Query("tag", "")
@@ -112,6 +175,21 @@ func GetArticles(c *fiber.Ctx) error {
 }
 
 // SearchArticles handles GET /blog/articles/search
+// @Summary Search articles
+// @Description Search articles by query string
+// @Tags articles
+// @Accept json
+// @Produce json
+// @Param query query string true "Search query"
+// @Param page query int false "Page number" default(1)
+// @Param tag query string false "Filter by tag"
+// @Param status query string false "Filter by status" default(published)
+// @Param sortBy query string false "Sort field"
+// @Param sortOrder query string false "Sort order"
+// @Success 200 {object} response.SuccessResponse{data=dto.ArticleListResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Router /blog/articles/search [get]
 func SearchArticles(c *fiber.Ctx) error {
 	query := c.Query("query")
 	if query == "" {
@@ -132,6 +210,14 @@ func SearchArticles(c *fiber.Ctx) error {
 }
 
 // GetPopularTags handles GET /blog/tags/popular
+// @Summary Get popular tags
+// @Description Get a list of most used tags
+// @Tags articles
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.SuccessResponse{data=object{tags=[]string}}
+// @Failure 500 {object} response.SuccessResponse
+// @Router /blog/tags/popular [get]
 func GetPopularTags(c *fiber.Ctx) error {
 	tags, err := coreArticle.GetPopularTags(c.Context())
 	if err != nil {
@@ -141,6 +227,17 @@ func GetPopularTags(c *fiber.Ctx) error {
 }
 
 // GetArticleData handles GET /blog/articles/:slug
+// @Summary Get article by slug
+// @Description Get a single article by its slug
+// @Tags articles
+// @Accept json
+// @Produce json
+// @Param slug path string true "Article slug"
+// @Success 200 {object} response.SuccessResponse{data=dto.ArticleResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Router /blog/articles/{slug} [get]
 func GetArticleData(c *fiber.Ctx) error {
 	slug := c.Params("slug")
 	if slug == "" {
@@ -155,6 +252,17 @@ func GetArticleData(c *fiber.Ctx) error {
 }
 
 // GetRecommendedArticles handles GET /blog/articles/:id/recommended
+// @Summary Get recommended articles
+// @Description Get articles recommended based on the current article
+// @Tags articles
+// @Accept json
+// @Produce json
+// @Param id path string true "Article ID"
+// @Success 200 {object} response.SuccessResponse{data=[]dto.ArticleResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Router /blog/articles/{id}/recommended [get]
 func GetRecommendedArticles(c *fiber.Ctx) error {
 	idStr := c.Params("id")
 	id, err := uuid.Parse(idStr)
@@ -170,6 +278,18 @@ func GetRecommendedArticles(c *fiber.Ctx) error {
 }
 
 // DeleteArticle handles DELETE /blog/articles/:id
+// @Summary Delete article
+// @Description Permanently delete an article
+// @Tags articles
+// @Accept json
+// @Produce json
+// @Param id path string true "Article ID"
+// @Success 200 {object} response.SuccessResponse{data=object{success=boolean}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /blog/articles/{id} [delete]
 func DeleteArticle(c *fiber.Ctx) error {
 	idStr := c.Params("id")
 	id, err := uuid.Parse(idStr)
@@ -184,6 +304,18 @@ func DeleteArticle(c *fiber.Ctx) error {
 }
 
 // PublishArticle handles POST /blog/articles/:slug/publish
+// @Summary Publish article
+// @Description Publish an article's draft to make it publicly visible
+// @Tags articles
+// @Accept json
+// @Produce json
+// @Param slug path string true "Article slug"
+// @Success 200 {object} response.SuccessResponse{data=dto.ArticleResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /blog/articles/{slug}/publish [post]
 func PublishArticle(c *fiber.Ctx) error {
 	slug := c.Params("slug")
 	if slug == "" {
@@ -203,6 +335,18 @@ func PublishArticle(c *fiber.Ctx) error {
 }
 
 // UnpublishArticle handles POST /blog/articles/:slug/unpublish
+// @Summary Unpublish article
+// @Description Unpublish an article, making it no longer publicly visible
+// @Tags articles
+// @Accept json
+// @Produce json
+// @Param slug path string true "Article slug"
+// @Success 200 {object} response.SuccessResponse{data=dto.ArticleResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /blog/articles/{slug}/unpublish [post]
 func UnpublishArticle(c *fiber.Ctx) error {
 	slug := c.Params("slug")
 	if slug == "" {
@@ -222,6 +366,18 @@ func UnpublishArticle(c *fiber.Ctx) error {
 }
 
 // ListVersions handles GET /blog/articles/:slug/versions
+// @Summary List article versions
+// @Description Get all versions of an article
+// @Tags articles
+// @Accept json
+// @Produce json
+// @Param slug path string true "Article slug"
+// @Success 200 {object} response.SuccessResponse{data=dto.ArticleVersionListResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /blog/articles/{slug}/versions [get]
 func ListVersions(c *fiber.Ctx) error {
 	slug := c.Params("slug")
 	if slug == "" {
@@ -241,6 +397,18 @@ func ListVersions(c *fiber.Ctx) error {
 }
 
 // GetVersion handles GET /blog/articles/versions/:versionId
+// @Summary Get article version
+// @Description Get a specific version of an article
+// @Tags articles
+// @Accept json
+// @Produce json
+// @Param versionId path string true "Version ID"
+// @Success 200 {object} response.SuccessResponse{data=dto.ArticleVersionResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /blog/articles/versions/{versionId} [get]
 func GetVersion(c *fiber.Ctx) error {
 	versionIDStr := c.Params("versionId")
 	versionID, err := uuid.Parse(versionIDStr)
@@ -256,6 +424,19 @@ func GetVersion(c *fiber.Ctx) error {
 }
 
 // RevertToVersion handles POST /blog/articles/:slug/revert/:versionId
+// @Summary Revert article to version
+// @Description Revert an article's draft to a previous version
+// @Tags articles
+// @Accept json
+// @Produce json
+// @Param slug path string true "Article slug"
+// @Param versionId path string true "Version ID to revert to"
+// @Success 200 {object} response.SuccessResponse{data=dto.ArticleResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /blog/articles/{slug}/revert/{versionId} [post]
 func RevertToVersion(c *fiber.Ctx) error {
 	slug := c.Params("slug")
 	if slug == "" {

@@ -13,7 +13,10 @@ import (
 	"backend/pkg/api/source"
 	"backend/pkg/api/storage"
 
+	_ "backend/docs" // Import generated swagger docs
+
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/swagger"
 )
 
 // RegisterRoutes registers all API routes on the app
@@ -43,5 +46,13 @@ func RegisterRoutes(app *fiber.App) {
 	// Base route
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"message": "Blog Agent API"})
+	})
+
+	// Swagger documentation
+	app.Get("/swagger/*", swagger.HandlerDefault)
+
+	// Raw OpenAPI spec for client generation
+	app.Get("/api/openapi.json", func(c *fiber.Ctx) error {
+		return c.SendFile("./docs/swagger.json")
 	})
 }
