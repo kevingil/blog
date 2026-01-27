@@ -200,7 +200,7 @@ interface ChainOfThoughtItemProps {
 
 export function ChainOfThoughtItem({ children, className }: ChainOfThoughtItemProps) {
   return (
-    <div className={cn("py-1 ml-1", className)}>
+    <div className={cn("py-2 ml-1", className)}>
       {children}
     </div>
   )
