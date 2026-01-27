@@ -932,6 +932,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const chatMessagesRef = useRef<HTMLDivElement>(null);
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
   const [clearingChat, setClearingChat] = useState(false);
+  const [expandedTable, setExpandedTable] = useState<React.ReactNode | null>(null);
   
   // Custom markdown components for chat with smaller text (14px)
   const chatMarkdownComponents = {
@@ -955,6 +956,40 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     },
     pre: function ChatPreComponent({ children }: any) {
       return <>{children}</>;
+    },
+    table: function ChatTableComponent({ children, ...props }: any) {
+      return (
+        <div className="relative my-2">
+          <div className="overflow-x-auto max-h-48 border rounded-md">
+            <table className="min-w-full text-sm" {...props}>
+              {children}
+            </table>
+          </div>
+          <button
+            type="button"
+            onClick={() => setExpandedTable(
+              <div className="w-full">
+                <table className="w-full text-sm border-collapse border" {...props}>
+                  {children}
+                </table>
+              </div>
+            )}
+            className="mt-1 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+          >
+            <ExternalLinkIcon className="w-3 h-3" />
+            Expand table
+          </button>
+        </div>
+      );
+    },
+    thead: function ChatTheadComponent({ children, ...props }: any) {
+      return <thead className="bg-muted/50 sticky top-0" {...props}>{children}</thead>;
+    },
+    th: function ChatThComponent({ children, ...props }: any) {
+      return <th className="px-2 py-1 text-left font-medium border-b" {...props}>{children}</th>;
+    },
+    td: function ChatTdComponent({ children, ...props }: any) {
+      return <td className="px-2 py-1 border-b" {...props}>{children}</td>;
     },
   };
   
@@ -3453,6 +3488,24 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               disabled={revertMutation.isPending}
             >
               {revertMutation.isPending ? 'Reverting...' : 'Revert to This Version'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Expanded Table Dialog */}
+      <Dialog open={!!expandedTable} onOpenChange={(open) => !open && setExpandedTable(null)}>
+        <DialogContent className="!w-[90vw] !max-w-[90vw] sm:!max-w-[90vw] max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Table View</DialogTitle>
+            <DialogDescription>Full table view</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto w-full">
+            {expandedTable}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExpandedTable(null)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
