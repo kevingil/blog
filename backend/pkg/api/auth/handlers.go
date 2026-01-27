@@ -11,6 +11,16 @@ import (
 )
 
 // Login handles POST /auth/login
+// @Summary User login
+// @Description Authenticate user and return JWT token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body dto.LoginRequest true "Login credentials"
+// @Success 200 {object} response.SuccessResponse{data=dto.LoginResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Router /auth/login [post]
 func Login(c *fiber.Ctx) error {
 	var req coreAuth.LoginRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -28,6 +38,16 @@ func Login(c *fiber.Ctx) error {
 }
 
 // RegisterHandler handles POST /auth/register
+// @Summary User registration
+// @Description Register a new user account
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body dto.RegisterRequest true "Registration details"
+// @Success 201 {object} response.SuccessResponse{data=object{message=string}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 409 {object} response.SuccessResponse
+// @Router /auth/register [post]
 func RegisterHandler(c *fiber.Ctx) error {
 	var req coreAuth.RegisterRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -46,6 +66,14 @@ func RegisterHandler(c *fiber.Ctx) error {
 }
 
 // Logout handles POST /auth/logout
+// @Summary User logout
+// @Description Logout current user session
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.SuccessResponse{data=object{message=string}}
+// @Security BearerAuth
+// @Router /auth/logout [post]
 func Logout(c *fiber.Ctx) error {
 	return response.Success(c, fiber.Map{
 		"message": "Logged out successfully",
@@ -53,6 +81,17 @@ func Logout(c *fiber.Ctx) error {
 }
 
 // UpdateAccount handles PUT /auth/account
+// @Summary Update account
+// @Description Update current user's account details
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body dto.UpdateAccountRequest true "Account update details"
+// @Success 200 {object} response.SuccessResponse{data=object{message=string}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /auth/account [put]
 func UpdateAccount(c *fiber.Ctx) error {
 	userID, err := middleware.GetUserID(c)
 	if err != nil {
@@ -74,6 +113,17 @@ func UpdateAccount(c *fiber.Ctx) error {
 }
 
 // UpdatePassword handles PUT /auth/password
+// @Summary Update password
+// @Description Update current user's password
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body dto.UpdatePasswordRequest true "Password update details"
+// @Success 200 {object} response.SuccessResponse{data=object{message=string}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /auth/password [put]
 func UpdatePassword(c *fiber.Ctx) error {
 	userID, err := middleware.GetUserID(c)
 	if err != nil {
@@ -95,6 +145,17 @@ func UpdatePassword(c *fiber.Ctx) error {
 }
 
 // DeleteAccount handles DELETE /auth/account
+// @Summary Delete account
+// @Description Permanently delete current user's account
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body object{password=string} true "Account deletion confirmation"
+// @Success 200 {object} response.SuccessResponse{data=object{message=string}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /auth/account [delete]
 func DeleteAccount(c *fiber.Ctx) error {
 	userID, err := middleware.GetUserID(c)
 	if err != nil {

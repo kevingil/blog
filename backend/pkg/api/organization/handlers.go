@@ -12,6 +12,14 @@ import (
 )
 
 // ListOrganizations handles GET /organizations
+// @Summary List organizations
+// @Description Get a list of all organizations
+// @Tags organizations
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.SuccessResponse{data=[]dto.OrganizationResponse}
+// @Failure 500 {object} response.SuccessResponse
+// @Router /organizations [get]
 func ListOrganizations(c *fiber.Ctx) error {
 	orgs, err := coreOrg.List(c.Context())
 	if err != nil {
@@ -21,6 +29,17 @@ func ListOrganizations(c *fiber.Ctx) error {
 }
 
 // GetOrganization handles GET /organizations/:id
+// @Summary Get organization
+// @Description Get an organization by ID
+// @Tags organizations
+// @Accept json
+// @Produce json
+// @Param id path string true "Organization ID"
+// @Success 200 {object} response.SuccessResponse{data=dto.OrganizationResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Router /organizations/{id} [get]
 func GetOrganization(c *fiber.Ctx) error {
 	idStr := c.Params("id")
 	id, err := uuid.Parse(idStr)
@@ -36,6 +55,18 @@ func GetOrganization(c *fiber.Ctx) error {
 }
 
 // CreateOrganization handles POST /organizations
+// @Summary Create organization
+// @Description Create a new organization
+// @Tags organizations
+// @Accept json
+// @Produce json
+// @Param request body dto.CreateOrganizationRequest true "Organization details"
+// @Success 201 {object} response.SuccessResponse{data=dto.OrganizationResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /organizations [post]
 func CreateOrganization(c *fiber.Ctx) error {
 	var req coreOrg.CreateRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -53,6 +84,19 @@ func CreateOrganization(c *fiber.Ctx) error {
 }
 
 // UpdateOrganization handles PUT /organizations/:id
+// @Summary Update organization
+// @Description Update an existing organization
+// @Tags organizations
+// @Accept json
+// @Produce json
+// @Param id path string true "Organization ID"
+// @Param request body dto.UpdateOrganizationRequest true "Organization update details"
+// @Success 200 {object} response.SuccessResponse{data=dto.OrganizationResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /organizations/{id} [put]
 func UpdateOrganization(c *fiber.Ctx) error {
 	idStr := c.Params("id")
 	id, err := uuid.Parse(idStr)
@@ -73,6 +117,18 @@ func UpdateOrganization(c *fiber.Ctx) error {
 }
 
 // DeleteOrganization handles DELETE /organizations/:id
+// @Summary Delete organization
+// @Description Delete an organization by ID
+// @Tags organizations
+// @Accept json
+// @Produce json
+// @Param id path string true "Organization ID"
+// @Success 200 {object} response.SuccessResponse{data=object{success=boolean}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /organizations/{id} [delete]
 func DeleteOrganization(c *fiber.Ctx) error {
 	idStr := c.Params("id")
 	id, err := uuid.Parse(idStr)
@@ -87,6 +143,19 @@ func DeleteOrganization(c *fiber.Ctx) error {
 }
 
 // JoinOrganization handles POST /organizations/:id/join
+// @Summary Join organization
+// @Description Join an organization as the current user
+// @Tags organizations
+// @Accept json
+// @Produce json
+// @Param id path string true "Organization ID"
+// @Success 200 {object} response.SuccessResponse{data=object{success=boolean}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /organizations/{id}/join [post]
 func JoinOrganization(c *fiber.Ctx) error {
 	userID, err := middleware.GetUserID(c)
 	if err != nil {
@@ -106,6 +175,16 @@ func JoinOrganization(c *fiber.Ctx) error {
 }
 
 // LeaveOrganization handles POST /organizations/leave
+// @Summary Leave organization
+// @Description Leave the current organization
+// @Tags organizations
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.SuccessResponse{data=object{success=boolean}}
+// @Failure 401 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /organizations/leave [post]
 func LeaveOrganization(c *fiber.Ctx) error {
 	userID, err := middleware.GetUserID(c)
 	if err != nil {

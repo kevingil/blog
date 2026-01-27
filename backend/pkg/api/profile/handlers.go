@@ -10,6 +10,14 @@ import (
 )
 
 // GetPublicProfile handles GET /profile/public
+// @Summary Get public profile
+// @Description Get the public profile information
+// @Tags profile
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Router /profile/public [get]
 func GetPublicProfile(c *fiber.Ctx) error {
 	profile, err := coreProfile.GetPublicProfile(c.Context())
 	if err != nil {
@@ -19,6 +27,16 @@ func GetPublicProfile(c *fiber.Ctx) error {
 }
 
 // GetMyProfile handles GET /profile
+// @Summary Get my profile
+// @Description Get the authenticated user's profile
+// @Tags profile
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /profile [get]
 func GetMyProfile(c *fiber.Ctx) error {
 	userID, err := middleware.GetUserID(c)
 	if err != nil {
@@ -33,6 +51,18 @@ func GetMyProfile(c *fiber.Ctx) error {
 }
 
 // UpdateProfile handles PUT /profile
+// @Summary Update profile
+// @Description Update the authenticated user's profile
+// @Tags profile
+// @Accept json
+// @Produce json
+// @Param request body object true "Profile update details"
+// @Success 200 {object} response.SuccessResponse
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /profile [put]
 func UpdateProfile(c *fiber.Ctx) error {
 	userID, err := middleware.GetUserID(c)
 	if err != nil {
@@ -52,6 +82,14 @@ func UpdateProfile(c *fiber.Ctx) error {
 }
 
 // GetSiteSettings handles GET /profile/settings
+// @Summary Get site settings
+// @Description Get the site settings
+// @Tags profile
+// @Accept json
+// @Produce json
+// @Success 200 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Router /profile/settings [get]
 func GetSiteSettings(c *fiber.Ctx) error {
 	settings, err := coreProfile.GetSiteSettings(c.Context())
 	if err != nil {
@@ -61,6 +99,19 @@ func GetSiteSettings(c *fiber.Ctx) error {
 }
 
 // UpdateSiteSettings handles PUT /profile/settings
+// @Summary Update site settings
+// @Description Update the site settings (admin only)
+// @Tags profile
+// @Accept json
+// @Produce json
+// @Param request body object true "Site settings update"
+// @Success 200 {object} response.SuccessResponse
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Failure 403 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /profile/settings [put]
 func UpdateSiteSettings(c *fiber.Ctx) error {
 	userID, err := middleware.GetUserID(c)
 	if err != nil {

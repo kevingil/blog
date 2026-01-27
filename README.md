@@ -130,3 +130,22 @@ Clean up binary from the last build:
 ```bash
 make clean
 ```
+
+### API Client Generation
+
+The frontend TypeScript client is auto-generated from the backend's OpenAPI spec using [@hey-api/openapi-ts](https://heyapi.dev/).
+
+Regenerate the client after API changes:
+```bash
+make generate-client
+```
+
+This runs `swag init` to generate Swagger docs from Go annotations, then generates typed TypeScript SDK classes in `frontend/src/client/`.
+
+**Usage:**
+```typescript
+import { Articles, Auth } from './client'
+
+const { data } = await Auth.postAuthLogin({ body: { email, password } })
+const articles = await Articles.getBlogArticles({ query: { page: 1 } })
+```
