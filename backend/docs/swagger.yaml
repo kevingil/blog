@@ -1,4 +1,196 @@
 basePath: /
+definitions:
+  dto.ArticleListResponse:
+    properties:
+      articles:
+        items:
+          $ref: '#/definitions/dto.ArticleResponse'
+        type: array
+      page:
+        type: integer
+      per_page:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  dto.ArticleResponse:
+    properties:
+      created_at:
+        description: Metadata
+        type: string
+      draft_content:
+        type: string
+      draft_image_url:
+        type: string
+      draft_title:
+        description: Draft content (for editing)
+        type: string
+      id:
+        type: string
+      published_at:
+        type: string
+      published_content:
+        type: string
+      published_image_url:
+        type: string
+      published_title:
+        description: Published content (for public viewing)
+        type: string
+      slug:
+        description: Common fields
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      updated_at:
+        type: string
+    type: object
+  dto.ArticleVersionListResponse:
+    properties:
+      total:
+        type: integer
+      versions:
+        items:
+          $ref: '#/definitions/dto.ArticleVersionResponse'
+        type: array
+    type: object
+  dto.ArticleVersionResponse:
+    properties:
+      article_id:
+        type: string
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      image_url:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      version_number:
+        type: integer
+    type: object
+  dto.CreateArticleRequest:
+    properties:
+      content:
+        type: string
+      image_url:
+        type: string
+      publish:
+        type: boolean
+      slug:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title:
+        maxLength: 200
+        minLength: 1
+        type: string
+    required:
+    - content
+    - title
+    type: object
+  dto.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        minLength: 6
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  dto.LoginResponse:
+    properties:
+      token:
+        type: string
+      user:
+        $ref: '#/definitions/dto.UserResponse'
+    type: object
+  dto.RegisterRequest:
+    properties:
+      email:
+        type: string
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+      password:
+        maxLength: 128
+        minLength: 8
+        type: string
+    required:
+    - email
+    - name
+    - password
+    type: object
+  dto.UpdateAccountRequest:
+    properties:
+      email:
+        type: string
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+    required:
+    - email
+    - name
+    type: object
+  dto.UpdateArticleRequest:
+    properties:
+      content:
+        type: string
+      image_url:
+        type: string
+      slug:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title:
+        maxLength: 200
+        minLength: 1
+        type: string
+    type: object
+  dto.UpdatePasswordRequest:
+    properties:
+      current_password:
+        type: string
+      new_password:
+        maxLength: 128
+        minLength: 8
+        type: string
+    required:
+    - current_password
+    - new_password
+    type: object
+  dto.UserResponse:
+    properties:
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      role:
+        type: string
+    type: object
+  response.SuccessResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+    type: object
 host: localhost:8080
 info:
   contact:
@@ -11,7 +203,864 @@ info:
   termsOfService: http://swagger.io/terms/
   title: Blog Agent API
   version: "1.0"
-paths: {}
+paths:
+  /auth/account:
+    delete:
+      consumes:
+      - application/json
+      description: Permanently delete current user's account
+      parameters:
+      - description: Account deletion confirmation
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            password:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  properties:
+                    message:
+                      type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete account
+      tags:
+      - auth
+    put:
+      consumes:
+      - application/json
+      description: Update current user's account details
+      parameters:
+      - description: Account update details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  properties:
+                    message:
+                      type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      security:
+      - BearerAuth: []
+      summary: Update account
+      tags:
+      - auth
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user and return JWT token
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.LoginResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      summary: User login
+      tags:
+      - auth
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Logout current user session
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  properties:
+                    message:
+                      type: string
+                  type: object
+              type: object
+      security:
+      - BearerAuth: []
+      summary: User logout
+      tags:
+      - auth
+  /auth/password:
+    put:
+      consumes:
+      - application/json
+      description: Update current user's password
+      parameters:
+      - description: Password update details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdatePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  properties:
+                    message:
+                      type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      security:
+      - BearerAuth: []
+      summary: Update password
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user account
+      parameters:
+      - description: Registration details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  properties:
+                    message:
+                      type: string
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      summary: User registration
+      tags:
+      - auth
+  /blog/{id}/update:
+    put:
+      consumes:
+      - application/json
+      description: Update article using AI-powered context-aware editing
+      parameters:
+      - description: Article ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      security:
+      - BearerAuth: []
+      summary: Update article with AI context
+      tags:
+      - articles
+  /blog/articles:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of articles with optional filtering
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 6
+        description: Articles per page
+        in: query
+        name: articlesPerPage
+        type: integer
+      - description: Filter by tag
+        in: query
+        name: tag
+        type: string
+      - default: published
+        description: Filter by status (published/draft)
+        in: query
+        name: status
+        type: string
+      - description: Sort field
+        in: query
+        name: sortBy
+        type: string
+      - description: Sort order (asc/desc)
+        in: query
+        name: sortOrder
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleListResponse'
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      summary: List articles
+      tags:
+      - articles
+    post:
+      consumes:
+      - application/json
+      description: Create a new blog article
+      parameters:
+      - description: Create request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateArticleRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      security:
+      - BearerAuth: []
+      summary: Create new article
+      tags:
+      - articles
+  /blog/articles/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Permanently delete an article
+      parameters:
+      - description: Article ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  properties:
+                    success:
+                      type: boolean
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete article
+      tags:
+      - articles
+  /blog/articles/{id}/recommended:
+    get:
+      consumes:
+      - application/json
+      description: Get articles recommended based on the current article
+      parameters:
+      - description: Article ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/dto.ArticleResponse'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      summary: Get recommended articles
+      tags:
+      - articles
+  /blog/articles/{slug}:
+    get:
+      consumes:
+      - application/json
+      description: Get a single article by its slug
+      parameters:
+      - description: Article slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      summary: Get article by slug
+      tags:
+      - articles
+  /blog/articles/{slug}/publish:
+    post:
+      consumes:
+      - application/json
+      description: Publish an article's draft to make it publicly visible
+      parameters:
+      - description: Article slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      security:
+      - BearerAuth: []
+      summary: Publish article
+      tags:
+      - articles
+  /blog/articles/{slug}/revert/{versionId}:
+    post:
+      consumes:
+      - application/json
+      description: Revert an article's draft to a previous version
+      parameters:
+      - description: Article slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      - description: Version ID to revert to
+        in: path
+        name: versionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      security:
+      - BearerAuth: []
+      summary: Revert article to version
+      tags:
+      - articles
+  /blog/articles/{slug}/unpublish:
+    post:
+      consumes:
+      - application/json
+      description: Unpublish an article, making it no longer publicly visible
+      parameters:
+      - description: Article slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      security:
+      - BearerAuth: []
+      summary: Unpublish article
+      tags:
+      - articles
+  /blog/articles/{slug}/update:
+    post:
+      consumes:
+      - application/json
+      description: Update the draft content of an existing article
+      parameters:
+      - description: Article slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateArticleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      security:
+      - BearerAuth: []
+      summary: Update article draft
+      tags:
+      - articles
+  /blog/articles/{slug}/versions:
+    get:
+      consumes:
+      - application/json
+      description: Get all versions of an article
+      parameters:
+      - description: Article slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleVersionListResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      security:
+      - BearerAuth: []
+      summary: List article versions
+      tags:
+      - articles
+  /blog/articles/search:
+    get:
+      consumes:
+      - application/json
+      description: Search articles by query string
+      parameters:
+      - description: Search query
+        in: query
+        name: query
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Filter by tag
+        in: query
+        name: tag
+        type: string
+      - default: published
+        description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Sort field
+        in: query
+        name: sortBy
+        type: string
+      - description: Sort order
+        in: query
+        name: sortOrder
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleListResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      summary: Search articles
+      tags:
+      - articles
+  /blog/articles/versions/{versionId}:
+    get:
+      consumes:
+      - application/json
+      description: Get a specific version of an article
+      parameters:
+      - description: Version ID
+        in: path
+        name: versionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleVersionResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      security:
+      - BearerAuth: []
+      summary: Get article version
+      tags:
+      - articles
+  /blog/generate:
+    post:
+      consumes:
+      - application/json
+      description: Generate a new blog article using AI based on the provided prompt
+      parameters:
+      - description: Generation request
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            prompt:
+              type: string
+            publish:
+              type: boolean
+            title:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      security:
+      - BearerAuth: []
+      summary: Generate article with AI
+      tags:
+      - articles
+  /blog/tags/popular:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of most used tags
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  properties:
+                    tags:
+                      items:
+                        type: string
+                      type: array
+                  type: object
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+      summary: Get popular tags
+      tags:
+      - articles
 securityDefinitions:
   BearerAuth:
     description: 'Enter token with Bearer prefix: Bearer <token>'
