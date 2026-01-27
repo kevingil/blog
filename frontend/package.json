@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "bun --bun eslint .",
     "preview": "vite preview",
-    "generate-routes": "bun run --bun tsr generate"
+    "generate-routes": "bun run --bun tsr generate",
+    "generate-client": "openapi-ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -92,6 +93,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^8.56.0",
+    "@hey-api/openapi-ts": "^0.90.10",
     "@tanstack/react-router-devtools": "^1.116.0",
     "@tanstack/router-plugin": "^1.116.1",
     "@types/node": "^22.14.1",
