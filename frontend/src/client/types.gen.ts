@@ -64,6 +64,46 @@ export type DtoCreateArticleRequest = {
     title: string;
 };
 
+export type DtoCreateOrganizationRequest = {
+    bio?: string;
+    email_public?: string;
+    logo_url?: string;
+    meta_description?: string;
+    name: string;
+    slug?: string;
+    social_links?: {
+        [key: string]: unknown;
+    };
+    website_url?: string;
+};
+
+export type DtoCreatePageRequest = {
+    content?: string;
+    is_published?: boolean;
+    slug: string;
+    title: string;
+};
+
+export type DtoCreateProjectRequest = {
+    content?: string;
+    description: string;
+    image_url?: string;
+    tags?: Array<string>;
+    title: string;
+    url?: string;
+};
+
+export type DtoCreateSourceRequest = {
+    article_id: string;
+    content?: string;
+    meta_data?: {
+        [key: string]: unknown;
+    };
+    source_type?: 'web' | 'pdf' | 'document' | 'note';
+    title: string;
+    url?: string;
+};
+
 export type DtoLoginRequest = {
     email: string;
     password: string;
@@ -74,10 +114,78 @@ export type DtoLoginResponse = {
     user?: DtoUserResponse;
 };
 
+export type DtoOrganizationResponse = {
+    bio?: string;
+    created_at?: string;
+    email_public?: string;
+    id?: string;
+    logo_url?: string;
+    meta_description?: string;
+    name?: string;
+    slug?: string;
+    social_links?: {
+        [key: string]: unknown;
+    };
+    updated_at?: string;
+    website_url?: string;
+};
+
+export type DtoPageListResponse = {
+    page?: number;
+    pages?: Array<DtoPageResponse>;
+    per_page?: number;
+    total?: number;
+    total_pages?: number;
+};
+
+export type DtoPageResponse = {
+    content?: string;
+    created_at?: string;
+    id?: string;
+    is_published?: boolean;
+    slug?: string;
+    title?: string;
+    updated_at?: string;
+};
+
+export type DtoProjectListResponse = {
+    page?: number;
+    per_page?: number;
+    projects?: Array<DtoProjectResponse>;
+    total?: number;
+    total_pages?: number;
+};
+
+export type DtoProjectResponse = {
+    content?: string;
+    created_at?: string;
+    description?: string;
+    id?: string;
+    image_url?: string;
+    tags?: Array<string>;
+    title?: string;
+    updated_at?: string;
+    url?: string;
+};
+
 export type DtoRegisterRequest = {
     email: string;
     name: string;
     password: string;
+};
+
+export type DtoSourceResponse = {
+    article_id?: string;
+    content?: string;
+    created_at?: string;
+    id?: string;
+    meta_data?: {
+        [key: string]: unknown;
+    };
+    source_type?: string;
+    title?: string;
+    updated_at?: string;
+    url?: string;
 };
 
 export type DtoUpdateAccountRequest = {
@@ -93,9 +201,48 @@ export type DtoUpdateArticleRequest = {
     title?: string;
 };
 
+export type DtoUpdateOrganizationRequest = {
+    bio?: string;
+    email_public?: string;
+    logo_url?: string;
+    meta_description?: string;
+    name?: string;
+    slug?: string;
+    social_links?: {
+        [key: string]: unknown;
+    };
+    website_url?: string;
+};
+
+export type DtoUpdatePageRequest = {
+    content?: string;
+    is_published?: boolean;
+    slug?: string;
+    title?: string;
+};
+
 export type DtoUpdatePasswordRequest = {
     current_password: string;
     new_password: string;
+};
+
+export type DtoUpdateProjectRequest = {
+    content?: string;
+    description?: string;
+    image_url?: string;
+    tags?: Array<string>;
+    title?: string;
+    url?: string;
+};
+
+export type DtoUpdateSourceRequest = {
+    content?: string;
+    meta_data?: {
+        [key: string]: unknown;
+    };
+    source_type?: 'web' | 'pdf' | 'document' | 'note';
+    title?: string;
+    url?: string;
 };
 
 export type DtoUserResponse = {
@@ -109,6 +256,265 @@ export type ResponseSuccessResponse = {
     data?: unknown;
     message?: string;
 };
+
+export type StorageCreateFolderRequest = {
+    path?: string;
+};
+
+export type StorageUpdateFolderRequest = {
+    newPath?: string;
+    oldPath?: string;
+};
+
+export type PostAgentData = {
+    /**
+     * Chat request
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path?: never;
+    query?: never;
+    url: '/agent';
+};
+
+export type PostAgentErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PostAgentError = PostAgentErrors[keyof PostAgentErrors];
+
+export type PostAgentResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            request_id?: string;
+            status?: string;
+        };
+    };
+};
+
+export type PostAgentResponse = PostAgentResponses[keyof PostAgentResponses];
+
+export type GetAgentArtifactsByArticleIdPendingData = {
+    body?: never;
+    path: {
+        /**
+         * Article ID
+         */
+        articleId: string;
+    };
+    query?: never;
+    url: '/agent/artifacts/{articleId}/pending';
+};
+
+export type GetAgentArtifactsByArticleIdPendingErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetAgentArtifactsByArticleIdPendingError = GetAgentArtifactsByArticleIdPendingErrors[keyof GetAgentArtifactsByArticleIdPendingErrors];
+
+export type GetAgentArtifactsByArticleIdPendingResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            artifacts?: Array<{
+                [key: string]: unknown;
+            }>;
+        };
+    };
+};
+
+export type GetAgentArtifactsByArticleIdPendingResponse = GetAgentArtifactsByArticleIdPendingResponses[keyof GetAgentArtifactsByArticleIdPendingResponses];
+
+export type PostAgentArtifactsByMessageIdAcceptData = {
+    /**
+     * Optional feedback
+     */
+    body?: {
+        feedback?: string;
+    };
+    path: {
+        /**
+         * Message ID
+         */
+        messageId: string;
+    };
+    query?: never;
+    url: '/agent/artifacts/{messageId}/accept';
+};
+
+export type PostAgentArtifactsByMessageIdAcceptErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PostAgentArtifactsByMessageIdAcceptError = PostAgentArtifactsByMessageIdAcceptErrors[keyof PostAgentArtifactsByMessageIdAcceptErrors];
+
+export type PostAgentArtifactsByMessageIdAcceptResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            success?: boolean;
+        };
+    };
+};
+
+export type PostAgentArtifactsByMessageIdAcceptResponse = PostAgentArtifactsByMessageIdAcceptResponses[keyof PostAgentArtifactsByMessageIdAcceptResponses];
+
+export type PostAgentArtifactsByMessageIdRejectData = {
+    /**
+     * Optional feedback
+     */
+    body?: {
+        feedback?: string;
+    };
+    path: {
+        /**
+         * Message ID
+         */
+        messageId: string;
+    };
+    query?: never;
+    url: '/agent/artifacts/{messageId}/reject';
+};
+
+export type PostAgentArtifactsByMessageIdRejectErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PostAgentArtifactsByMessageIdRejectError = PostAgentArtifactsByMessageIdRejectErrors[keyof PostAgentArtifactsByMessageIdRejectErrors];
+
+export type PostAgentArtifactsByMessageIdRejectResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            success?: boolean;
+        };
+    };
+};
+
+export type PostAgentArtifactsByMessageIdRejectResponse = PostAgentArtifactsByMessageIdRejectResponses[keyof PostAgentArtifactsByMessageIdRejectResponses];
+
+export type DeleteAgentConversationsByArticleIdData = {
+    body?: never;
+    path: {
+        /**
+         * Article ID
+         */
+        articleId: string;
+    };
+    query?: never;
+    url: '/agent/conversations/{articleId}';
+};
+
+export type DeleteAgentConversationsByArticleIdErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type DeleteAgentConversationsByArticleIdError = DeleteAgentConversationsByArticleIdErrors[keyof DeleteAgentConversationsByArticleIdErrors];
+
+export type DeleteAgentConversationsByArticleIdResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            success?: boolean;
+        };
+    };
+};
+
+export type DeleteAgentConversationsByArticleIdResponse = DeleteAgentConversationsByArticleIdResponses[keyof DeleteAgentConversationsByArticleIdResponses];
+
+export type GetAgentConversationsByArticleIdData = {
+    body?: never;
+    path: {
+        /**
+         * Article ID
+         */
+        articleId: string;
+    };
+    query?: {
+        /**
+         * Max messages to return
+         */
+        limit?: number;
+    };
+    url: '/agent/conversations/{articleId}';
+};
+
+export type GetAgentConversationsByArticleIdErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetAgentConversationsByArticleIdError = GetAgentConversationsByArticleIdErrors[keyof GetAgentConversationsByArticleIdErrors];
+
+export type GetAgentConversationsByArticleIdResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            article_id?: string;
+            messages?: Array<{
+                [key: string]: unknown;
+            }>;
+            total?: number;
+        };
+    };
+};
+
+export type GetAgentConversationsByArticleIdResponse = GetAgentConversationsByArticleIdResponses[keyof GetAgentConversationsByArticleIdResponses];
 
 export type DeleteAuthAccountData = {
     /**
@@ -935,3 +1341,1401 @@ export type PutBlogByIdUpdateResponses = {
 };
 
 export type PutBlogByIdUpdateResponse = PutBlogByIdUpdateResponses[keyof PutBlogByIdUpdateResponses];
+
+export type GetDashboardPagesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Page number
+         */
+        page?: number;
+        /**
+         * Items per page
+         */
+        perPage?: number;
+        /**
+         * Filter by published status
+         */
+        isPublished?: boolean;
+    };
+    url: '/dashboard/pages';
+};
+
+export type GetDashboardPagesErrors = {
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetDashboardPagesError = GetDashboardPagesErrors[keyof GetDashboardPagesErrors];
+
+export type GetDashboardPagesResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoPageListResponse;
+    };
+};
+
+export type GetDashboardPagesResponse = GetDashboardPagesResponses[keyof GetDashboardPagesResponses];
+
+export type PostDashboardPagesData = {
+    /**
+     * Page details
+     */
+    body: DtoCreatePageRequest;
+    path?: never;
+    query?: never;
+    url: '/dashboard/pages';
+};
+
+export type PostDashboardPagesErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PostDashboardPagesError = PostDashboardPagesErrors[keyof PostDashboardPagesErrors];
+
+export type PostDashboardPagesResponses = {
+    /**
+     * Created
+     */
+    201: ResponseSuccessResponse & {
+        data?: DtoPageResponse;
+    };
+};
+
+export type PostDashboardPagesResponse = PostDashboardPagesResponses[keyof PostDashboardPagesResponses];
+
+export type DeleteDashboardPagesByIdData = {
+    body?: never;
+    path: {
+        /**
+         * Page ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/dashboard/pages/{id}';
+};
+
+export type DeleteDashboardPagesByIdErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type DeleteDashboardPagesByIdError = DeleteDashboardPagesByIdErrors[keyof DeleteDashboardPagesByIdErrors];
+
+export type DeleteDashboardPagesByIdResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            success?: boolean;
+        };
+    };
+};
+
+export type DeleteDashboardPagesByIdResponse = DeleteDashboardPagesByIdResponses[keyof DeleteDashboardPagesByIdResponses];
+
+export type GetDashboardPagesByIdData = {
+    body?: never;
+    path: {
+        /**
+         * Page ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/dashboard/pages/{id}';
+};
+
+export type GetDashboardPagesByIdErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetDashboardPagesByIdError = GetDashboardPagesByIdErrors[keyof GetDashboardPagesByIdErrors];
+
+export type GetDashboardPagesByIdResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoPageResponse;
+    };
+};
+
+export type GetDashboardPagesByIdResponse = GetDashboardPagesByIdResponses[keyof GetDashboardPagesByIdResponses];
+
+export type PutDashboardPagesByIdData = {
+    /**
+     * Page update details
+     */
+    body: DtoUpdatePageRequest;
+    path: {
+        /**
+         * Page ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/dashboard/pages/{id}';
+};
+
+export type PutDashboardPagesByIdErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PutDashboardPagesByIdError = PutDashboardPagesByIdErrors[keyof PutDashboardPagesByIdErrors];
+
+export type PutDashboardPagesByIdResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoPageResponse;
+    };
+};
+
+export type PutDashboardPagesByIdResponse = PutDashboardPagesByIdResponses[keyof PutDashboardPagesByIdResponses];
+
+export type GetDashboardSourcesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Page number
+         */
+        page?: number;
+        /**
+         * Items per page
+         */
+        limit?: number;
+    };
+    url: '/dashboard/sources';
+};
+
+export type GetDashboardSourcesErrors = {
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetDashboardSourcesError = GetDashboardSourcesErrors[keyof GetDashboardSourcesErrors];
+
+export type GetDashboardSourcesResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse;
+};
+
+export type GetDashboardSourcesResponse = GetDashboardSourcesResponses[keyof GetDashboardSourcesResponses];
+
+export type GetOrganizationsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/organizations';
+};
+
+export type GetOrganizationsErrors = {
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetOrganizationsError = GetOrganizationsErrors[keyof GetOrganizationsErrors];
+
+export type GetOrganizationsResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: Array<DtoOrganizationResponse>;
+    };
+};
+
+export type GetOrganizationsResponse = GetOrganizationsResponses[keyof GetOrganizationsResponses];
+
+export type PostOrganizationsData = {
+    /**
+     * Organization details
+     */
+    body: DtoCreateOrganizationRequest;
+    path?: never;
+    query?: never;
+    url: '/organizations';
+};
+
+export type PostOrganizationsErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PostOrganizationsError = PostOrganizationsErrors[keyof PostOrganizationsErrors];
+
+export type PostOrganizationsResponses = {
+    /**
+     * Created
+     */
+    201: ResponseSuccessResponse & {
+        data?: DtoOrganizationResponse;
+    };
+};
+
+export type PostOrganizationsResponse = PostOrganizationsResponses[keyof PostOrganizationsResponses];
+
+export type PostOrganizationsLeaveData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/organizations/leave';
+};
+
+export type PostOrganizationsLeaveErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PostOrganizationsLeaveError = PostOrganizationsLeaveErrors[keyof PostOrganizationsLeaveErrors];
+
+export type PostOrganizationsLeaveResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            success?: boolean;
+        };
+    };
+};
+
+export type PostOrganizationsLeaveResponse = PostOrganizationsLeaveResponses[keyof PostOrganizationsLeaveResponses];
+
+export type DeleteOrganizationsByIdData = {
+    body?: never;
+    path: {
+        /**
+         * Organization ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/organizations/{id}';
+};
+
+export type DeleteOrganizationsByIdErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type DeleteOrganizationsByIdError = DeleteOrganizationsByIdErrors[keyof DeleteOrganizationsByIdErrors];
+
+export type DeleteOrganizationsByIdResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            success?: boolean;
+        };
+    };
+};
+
+export type DeleteOrganizationsByIdResponse = DeleteOrganizationsByIdResponses[keyof DeleteOrganizationsByIdResponses];
+
+export type GetOrganizationsByIdData = {
+    body?: never;
+    path: {
+        /**
+         * Organization ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/organizations/{id}';
+};
+
+export type GetOrganizationsByIdErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetOrganizationsByIdError = GetOrganizationsByIdErrors[keyof GetOrganizationsByIdErrors];
+
+export type GetOrganizationsByIdResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoOrganizationResponse;
+    };
+};
+
+export type GetOrganizationsByIdResponse = GetOrganizationsByIdResponses[keyof GetOrganizationsByIdResponses];
+
+export type PutOrganizationsByIdData = {
+    /**
+     * Organization update details
+     */
+    body: DtoUpdateOrganizationRequest;
+    path: {
+        /**
+         * Organization ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/organizations/{id}';
+};
+
+export type PutOrganizationsByIdErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PutOrganizationsByIdError = PutOrganizationsByIdErrors[keyof PutOrganizationsByIdErrors];
+
+export type PutOrganizationsByIdResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoOrganizationResponse;
+    };
+};
+
+export type PutOrganizationsByIdResponse = PutOrganizationsByIdResponses[keyof PutOrganizationsByIdResponses];
+
+export type PostOrganizationsByIdJoinData = {
+    body?: never;
+    path: {
+        /**
+         * Organization ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/organizations/{id}/join';
+};
+
+export type PostOrganizationsByIdJoinErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PostOrganizationsByIdJoinError = PostOrganizationsByIdJoinErrors[keyof PostOrganizationsByIdJoinErrors];
+
+export type PostOrganizationsByIdJoinResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            success?: boolean;
+        };
+    };
+};
+
+export type PostOrganizationsByIdJoinResponse = PostOrganizationsByIdJoinResponses[keyof PostOrganizationsByIdJoinResponses];
+
+export type GetPagesBySlugData = {
+    body?: never;
+    path: {
+        /**
+         * Page slug
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/pages/{slug}';
+};
+
+export type GetPagesBySlugErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetPagesBySlugError = GetPagesBySlugErrors[keyof GetPagesBySlugErrors];
+
+export type GetPagesBySlugResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoPageResponse;
+    };
+};
+
+export type GetPagesBySlugResponse = GetPagesBySlugResponses[keyof GetPagesBySlugResponses];
+
+export type GetProfileData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/profile';
+};
+
+export type GetProfileErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetProfileError = GetProfileErrors[keyof GetProfileErrors];
+
+export type GetProfileResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse;
+};
+
+export type GetProfileResponse = GetProfileResponses[keyof GetProfileResponses];
+
+export type PutProfileData = {
+    /**
+     * Profile update details
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path?: never;
+    query?: never;
+    url: '/profile';
+};
+
+export type PutProfileErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PutProfileError = PutProfileErrors[keyof PutProfileErrors];
+
+export type PutProfileResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse;
+};
+
+export type PutProfileResponse = PutProfileResponses[keyof PutProfileResponses];
+
+export type GetProfilePublicData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/profile/public';
+};
+
+export type GetProfilePublicErrors = {
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetProfilePublicError = GetProfilePublicErrors[keyof GetProfilePublicErrors];
+
+export type GetProfilePublicResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse;
+};
+
+export type GetProfilePublicResponse = GetProfilePublicResponses[keyof GetProfilePublicResponses];
+
+export type GetProfileSettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/profile/settings';
+};
+
+export type GetProfileSettingsErrors = {
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetProfileSettingsError = GetProfileSettingsErrors[keyof GetProfileSettingsErrors];
+
+export type GetProfileSettingsResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse;
+};
+
+export type GetProfileSettingsResponse = GetProfileSettingsResponses[keyof GetProfileSettingsResponses];
+
+export type PutProfileSettingsData = {
+    /**
+     * Site settings update
+     */
+    body: {
+        [key: string]: unknown;
+    };
+    path?: never;
+    query?: never;
+    url: '/profile/settings';
+};
+
+export type PutProfileSettingsErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+    /**
+     * Forbidden
+     */
+    403: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PutProfileSettingsError = PutProfileSettingsErrors[keyof PutProfileSettingsErrors];
+
+export type PutProfileSettingsResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse;
+};
+
+export type PutProfileSettingsResponse = PutProfileSettingsResponses[keyof PutProfileSettingsResponses];
+
+export type GetProjectsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Page number
+         */
+        page?: number;
+        /**
+         * Items per page
+         */
+        perPage?: number;
+    };
+    url: '/projects';
+};
+
+export type GetProjectsErrors = {
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetProjectsError = GetProjectsErrors[keyof GetProjectsErrors];
+
+export type GetProjectsResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoProjectListResponse;
+    };
+};
+
+export type GetProjectsResponse = GetProjectsResponses[keyof GetProjectsResponses];
+
+export type PostProjectsData = {
+    /**
+     * Project details
+     */
+    body: DtoCreateProjectRequest;
+    path?: never;
+    query?: never;
+    url: '/projects';
+};
+
+export type PostProjectsErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PostProjectsError = PostProjectsErrors[keyof PostProjectsErrors];
+
+export type PostProjectsResponses = {
+    /**
+     * Created
+     */
+    201: ResponseSuccessResponse & {
+        data?: DtoProjectResponse;
+    };
+};
+
+export type PostProjectsResponse = PostProjectsResponses[keyof PostProjectsResponses];
+
+export type DeleteProjectsByIdData = {
+    body?: never;
+    path: {
+        /**
+         * Project ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/projects/{id}';
+};
+
+export type DeleteProjectsByIdErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type DeleteProjectsByIdError = DeleteProjectsByIdErrors[keyof DeleteProjectsByIdErrors];
+
+export type DeleteProjectsByIdResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            success?: boolean;
+        };
+    };
+};
+
+export type DeleteProjectsByIdResponse = DeleteProjectsByIdResponses[keyof DeleteProjectsByIdResponses];
+
+export type GetProjectsByIdData = {
+    body?: never;
+    path: {
+        /**
+         * Project ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/projects/{id}';
+};
+
+export type GetProjectsByIdErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetProjectsByIdError = GetProjectsByIdErrors[keyof GetProjectsByIdErrors];
+
+export type GetProjectsByIdResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoProjectResponse;
+    };
+};
+
+export type GetProjectsByIdResponse = GetProjectsByIdResponses[keyof GetProjectsByIdResponses];
+
+export type PutProjectsByIdData = {
+    /**
+     * Project update details
+     */
+    body: DtoUpdateProjectRequest;
+    path: {
+        /**
+         * Project ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/projects/{id}';
+};
+
+export type PutProjectsByIdErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PutProjectsByIdError = PutProjectsByIdErrors[keyof PutProjectsByIdErrors];
+
+export type PutProjectsByIdResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoProjectResponse;
+    };
+};
+
+export type PutProjectsByIdResponse = PutProjectsByIdResponses[keyof PutProjectsByIdResponses];
+
+export type PostSourcesData = {
+    /**
+     * Source details
+     */
+    body: DtoCreateSourceRequest;
+    path?: never;
+    query?: never;
+    url: '/sources';
+};
+
+export type PostSourcesErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PostSourcesError = PostSourcesErrors[keyof PostSourcesErrors];
+
+export type PostSourcesResponses = {
+    /**
+     * Created
+     */
+    201: ResponseSuccessResponse & {
+        data?: DtoSourceResponse;
+    };
+};
+
+export type PostSourcesResponse = PostSourcesResponses[keyof PostSourcesResponses];
+
+export type GetSourcesArticleByArticleIdData = {
+    body?: never;
+    path: {
+        /**
+         * Article ID
+         */
+        articleId: string;
+    };
+    query?: never;
+    url: '/sources/article/{articleId}';
+};
+
+export type GetSourcesArticleByArticleIdErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetSourcesArticleByArticleIdError = GetSourcesArticleByArticleIdErrors[keyof GetSourcesArticleByArticleIdErrors];
+
+export type GetSourcesArticleByArticleIdResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            sources?: Array<DtoSourceResponse>;
+        };
+    };
+};
+
+export type GetSourcesArticleByArticleIdResponse = GetSourcesArticleByArticleIdResponses[keyof GetSourcesArticleByArticleIdResponses];
+
+export type GetSourcesArticleByArticleIdSearchData = {
+    body?: never;
+    path: {
+        /**
+         * Article ID
+         */
+        articleId: string;
+    };
+    query: {
+        /**
+         * Search query
+         */
+        q: string;
+        /**
+         * Max results
+         */
+        limit?: number;
+    };
+    url: '/sources/article/{articleId}/search';
+};
+
+export type GetSourcesArticleByArticleIdSearchErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetSourcesArticleByArticleIdSearchError = GetSourcesArticleByArticleIdSearchErrors[keyof GetSourcesArticleByArticleIdSearchErrors];
+
+export type GetSourcesArticleByArticleIdSearchResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            query?: string;
+            sources?: Array<DtoSourceResponse>;
+        };
+    };
+};
+
+export type GetSourcesArticleByArticleIdSearchResponse = GetSourcesArticleByArticleIdSearchResponses[keyof GetSourcesArticleByArticleIdSearchResponses];
+
+export type PostSourcesScrapeData = {
+    /**
+     * Scrape request
+     */
+    body: {
+        article_id?: string;
+        url?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/sources/scrape';
+};
+
+export type PostSourcesScrapeErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PostSourcesScrapeError = PostSourcesScrapeErrors[keyof PostSourcesScrapeErrors];
+
+export type PostSourcesScrapeResponses = {
+    /**
+     * Created
+     */
+    201: ResponseSuccessResponse & {
+        data?: DtoSourceResponse;
+    };
+};
+
+export type PostSourcesScrapeResponse = PostSourcesScrapeResponses[keyof PostSourcesScrapeResponses];
+
+export type DeleteSourcesBySourceIdData = {
+    body?: never;
+    path: {
+        /**
+         * Source ID
+         */
+        sourceId: string;
+    };
+    query?: never;
+    url: '/sources/{sourceId}';
+};
+
+export type DeleteSourcesBySourceIdErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type DeleteSourcesBySourceIdError = DeleteSourcesBySourceIdErrors[keyof DeleteSourcesBySourceIdErrors];
+
+export type DeleteSourcesBySourceIdResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            success?: boolean;
+        };
+    };
+};
+
+export type DeleteSourcesBySourceIdResponse = DeleteSourcesBySourceIdResponses[keyof DeleteSourcesBySourceIdResponses];
+
+export type GetSourcesBySourceIdData = {
+    body?: never;
+    path: {
+        /**
+         * Source ID
+         */
+        sourceId: string;
+    };
+    query?: never;
+    url: '/sources/{sourceId}';
+};
+
+export type GetSourcesBySourceIdErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetSourcesBySourceIdError = GetSourcesBySourceIdErrors[keyof GetSourcesBySourceIdErrors];
+
+export type GetSourcesBySourceIdResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoSourceResponse;
+    };
+};
+
+export type GetSourcesBySourceIdResponse = GetSourcesBySourceIdResponses[keyof GetSourcesBySourceIdResponses];
+
+export type PutSourcesBySourceIdData = {
+    /**
+     * Source update details
+     */
+    body: DtoUpdateSourceRequest;
+    path: {
+        /**
+         * Source ID
+         */
+        sourceId: string;
+    };
+    query?: never;
+    url: '/sources/{sourceId}';
+};
+
+export type PutSourcesBySourceIdErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PutSourcesBySourceIdError = PutSourcesBySourceIdErrors[keyof PutSourcesBySourceIdErrors];
+
+export type PutSourcesBySourceIdResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoSourceResponse;
+    };
+};
+
+export type PutSourcesBySourceIdResponse = PutSourcesBySourceIdResponses[keyof PutSourcesBySourceIdResponses];
+
+export type GetStorageFilesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * File prefix filter
+         */
+        prefix?: string;
+    };
+    url: '/storage/files';
+};
+
+export type GetStorageFilesErrors = {
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetStorageFilesError = GetStorageFilesErrors[keyof GetStorageFilesErrors];
+
+export type GetStorageFilesResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse;
+};
+
+export type GetStorageFilesResponse = GetStorageFilesResponses[keyof GetStorageFilesResponses];
+
+export type PostStorageFoldersData = {
+    /**
+     * Folder path
+     */
+    body: StorageCreateFolderRequest;
+    path?: never;
+    query?: never;
+    url: '/storage/folders';
+};
+
+export type PostStorageFoldersErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PostStorageFoldersError = PostStorageFoldersErrors[keyof PostStorageFoldersErrors];
+
+export type PostStorageFoldersResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            success?: boolean;
+        };
+    };
+};
+
+export type PostStorageFoldersResponse = PostStorageFoldersResponses[keyof PostStorageFoldersResponses];
+
+export type PutStorageFoldersData = {
+    /**
+     * Old and new folder paths
+     */
+    body: StorageUpdateFolderRequest;
+    path?: never;
+    query?: never;
+    url: '/storage/folders';
+};
+
+export type PutStorageFoldersErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PutStorageFoldersError = PutStorageFoldersErrors[keyof PutStorageFoldersErrors];
+
+export type PutStorageFoldersResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            success?: boolean;
+        };
+    };
+};
+
+export type PutStorageFoldersResponse = PutStorageFoldersResponses[keyof PutStorageFoldersResponses];
+
+export type PostStorageUploadData = {
+    body: {
+        /**
+         * File key/path
+         */
+        key: string;
+        /**
+         * File to upload
+         */
+        file: Blob | File;
+    };
+    path?: never;
+    query?: never;
+    url: '/storage/upload';
+};
+
+export type PostStorageUploadErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PostStorageUploadError = PostStorageUploadErrors[keyof PostStorageUploadErrors];
+
+export type PostStorageUploadResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            key?: string;
+            success?: boolean;
+            url?: string;
+        };
+    };
+};
+
+export type PostStorageUploadResponse = PostStorageUploadResponses[keyof PostStorageUploadResponses];
+
+export type DeleteStorageByKeyData = {
+    body?: never;
+    path: {
+        /**
+         * File key/path
+         */
+        key: string;
+    };
+    query?: never;
+    url: '/storage/{key}';
+};
+
+export type DeleteStorageByKeyErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type DeleteStorageByKeyError = DeleteStorageByKeyErrors[keyof DeleteStorageByKeyErrors];
+
+export type DeleteStorageByKeyResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            success?: boolean;
+        };
+    };
+};
+
+export type DeleteStorageByKeyResponse = DeleteStorageByKeyResponses[keyof DeleteStorageByKeyResponses];

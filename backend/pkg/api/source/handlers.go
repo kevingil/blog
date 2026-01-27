@@ -10,6 +10,17 @@ import (
 )
 
 // ListAllSources handles GET /dashboard/sources
+// @Summary List all sources
+// @Description Get a paginated list of all sources
+// @Tags sources
+// @Accept json
+// @Produce json
+// @Param page query int false "Page number" default(1)
+// @Param limit query int false "Items per page" default(20)
+// @Success 200 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /dashboard/sources [get]
 func ListAllSources(c *fiber.Ctx) error {
 	page := c.QueryInt("page", 1)
 	limit := c.QueryInt("limit", 20)
@@ -27,6 +38,18 @@ func ListAllSources(c *fiber.Ctx) error {
 }
 
 // CreateSource handles POST /sources
+// @Summary Create source
+// @Description Create a new article source
+// @Tags sources
+// @Accept json
+// @Produce json
+// @Param request body dto.CreateSourceRequest true "Source details"
+// @Success 201 {object} response.SuccessResponse{data=dto.SourceResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /sources [post]
 func CreateSource(c *fiber.Ctx) error {
 	var req coreSource.CreateRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -48,6 +71,18 @@ func CreateSource(c *fiber.Ctx) error {
 }
 
 // ScrapeAndCreateSource handles POST /sources/scrape
+// @Summary Scrape and create source
+// @Description Scrape a URL and create a source from it
+// @Tags sources
+// @Accept json
+// @Produce json
+// @Param request body object{article_id=string,url=string} true "Scrape request"
+// @Success 201 {object} response.SuccessResponse{data=dto.SourceResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /sources/scrape [post]
 func ScrapeAndCreateSource(c *fiber.Ctx) error {
 	var req struct {
 		ArticleID uuid.UUID `json:"article_id"`
@@ -73,6 +108,17 @@ func ScrapeAndCreateSource(c *fiber.Ctx) error {
 }
 
 // GetArticleSources handles GET /sources/article/:articleId
+// @Summary Get article sources
+// @Description Get all sources for an article
+// @Tags sources
+// @Accept json
+// @Produce json
+// @Param articleId path string true "Article ID"
+// @Success 200 {object} response.SuccessResponse{data=object{sources=[]dto.SourceResponse}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /sources/article/{articleId} [get]
 func GetArticleSources(c *fiber.Ctx) error {
 	articleIDStr := c.Params("articleId")
 	articleID, err := uuid.Parse(articleIDStr)
@@ -89,6 +135,18 @@ func GetArticleSources(c *fiber.Ctx) error {
 }
 
 // GetSource handles GET /sources/:sourceId
+// @Summary Get source
+// @Description Get a source by ID
+// @Tags sources
+// @Accept json
+// @Produce json
+// @Param sourceId path string true "Source ID"
+// @Success 200 {object} response.SuccessResponse{data=dto.SourceResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /sources/{sourceId} [get]
 func GetSource(c *fiber.Ctx) error {
 	sourceIDStr := c.Params("sourceId")
 	sourceID, err := uuid.Parse(sourceIDStr)
@@ -104,6 +162,19 @@ func GetSource(c *fiber.Ctx) error {
 }
 
 // UpdateSource handles PUT /sources/:sourceId
+// @Summary Update source
+// @Description Update an existing source
+// @Tags sources
+// @Accept json
+// @Produce json
+// @Param sourceId path string true "Source ID"
+// @Param request body dto.UpdateSourceRequest true "Source update details"
+// @Success 200 {object} response.SuccessResponse{data=dto.SourceResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /sources/{sourceId} [put]
 func UpdateSource(c *fiber.Ctx) error {
 	sourceIDStr := c.Params("sourceId")
 	sourceID, err := uuid.Parse(sourceIDStr)
@@ -124,6 +195,18 @@ func UpdateSource(c *fiber.Ctx) error {
 }
 
 // DeleteSource handles DELETE /sources/:sourceId
+// @Summary Delete source
+// @Description Delete a source by ID
+// @Tags sources
+// @Accept json
+// @Produce json
+// @Param sourceId path string true "Source ID"
+// @Success 200 {object} response.SuccessResponse{data=object{success=boolean}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /sources/{sourceId} [delete]
 func DeleteSource(c *fiber.Ctx) error {
 	sourceIDStr := c.Params("sourceId")
 	sourceID, err := uuid.Parse(sourceIDStr)
@@ -138,6 +221,19 @@ func DeleteSource(c *fiber.Ctx) error {
 }
 
 // SearchSimilarSources handles GET /sources/article/:articleId/search
+// @Summary Search similar sources
+// @Description Search for similar sources within an article using semantic search
+// @Tags sources
+// @Accept json
+// @Produce json
+// @Param articleId path string true "Article ID"
+// @Param q query string true "Search query"
+// @Param limit query int false "Max results" default(5)
+// @Success 200 {object} response.SuccessResponse{data=object{sources=[]dto.SourceResponse,query=string}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /sources/article/{articleId}/search [get]
 func SearchSimilarSources(c *fiber.Ctx) error {
 	articleIDStr := c.Params("articleId")
 	articleID, err := uuid.Parse(articleIDStr)

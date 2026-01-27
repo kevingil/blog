@@ -11,6 +11,16 @@ import (
 )
 
 // ListFiles handles GET /storage/files
+// @Summary List files
+// @Description Get a list of files in storage
+// @Tags storage
+// @Accept json
+// @Produce json
+// @Param prefix query string false "File prefix filter"
+// @Success 200 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /storage/files [get]
 func ListFiles(c *fiber.Ctx) error {
 	prefix := c.Query("prefix", "")
 
@@ -22,6 +32,19 @@ func ListFiles(c *fiber.Ctx) error {
 }
 
 // UploadFile handles POST /storage/upload
+// @Summary Upload file
+// @Description Upload a file to storage
+// @Tags storage
+// @Accept multipart/form-data
+// @Produce json
+// @Param key formData string true "File key/path"
+// @Param file formData file true "File to upload"
+// @Success 200 {object} response.SuccessResponse{data=object{success=boolean,url=string,key=string}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /storage/upload [post]
 func UploadFile(c *fiber.Ctx) error {
 	// Get the key from form data
 	key := c.FormValue("key")
@@ -63,6 +86,18 @@ func UploadFile(c *fiber.Ctx) error {
 }
 
 // DeleteFile handles DELETE /storage/:key
+// @Summary Delete file
+// @Description Delete a file from storage
+// @Tags storage
+// @Accept json
+// @Produce json
+// @Param key path string true "File key/path"
+// @Success 200 {object} response.SuccessResponse{data=object{success=boolean}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /storage/{key} [delete]
 func DeleteFile(c *fiber.Ctx) error {
 	key := c.Params("key")
 	if key == "" {
@@ -81,6 +116,18 @@ type CreateFolderRequest struct {
 }
 
 // CreateFolder handles POST /storage/folders
+// @Summary Create folder
+// @Description Create a new folder in storage
+// @Tags storage
+// @Accept json
+// @Produce json
+// @Param request body storage.CreateFolderRequest true "Folder path"
+// @Success 200 {object} response.SuccessResponse{data=object{success=boolean}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /storage/folders [post]
 func CreateFolder(c *fiber.Ctx) error {
 	var req CreateFolderRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -104,6 +151,18 @@ type UpdateFolderRequest struct {
 }
 
 // UpdateFolder handles PUT /storage/folders
+// @Summary Update folder
+// @Description Rename/move a folder in storage
+// @Tags storage
+// @Accept json
+// @Produce json
+// @Param request body storage.UpdateFolderRequest true "Old and new folder paths"
+// @Success 200 {object} response.SuccessResponse{data=object{success=boolean}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /storage/folders [put]
 func UpdateFolder(c *fiber.Ctx) error {
 	var req UpdateFolderRequest
 	if err := c.BodyParser(&req); err != nil {

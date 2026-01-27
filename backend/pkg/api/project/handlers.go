@@ -12,6 +12,16 @@ import (
 )
 
 // ListProjects handles GET /projects
+// @Summary List projects
+// @Description Get a paginated list of projects
+// @Tags projects
+// @Accept json
+// @Produce json
+// @Param page query int false "Page number" default(1)
+// @Param perPage query int false "Items per page" default(20)
+// @Success 200 {object} response.SuccessResponse{data=dto.ProjectListResponse}
+// @Failure 500 {object} response.SuccessResponse
+// @Router /projects [get]
 func ListProjects(c *fiber.Ctx) error {
 	page := c.QueryInt("page", 1)
 	perPage := c.QueryInt("perPage", 20)
@@ -30,6 +40,17 @@ func ListProjects(c *fiber.Ctx) error {
 }
 
 // GetProject handles GET /projects/:id
+// @Summary Get project
+// @Description Get a project by ID
+// @Tags projects
+// @Accept json
+// @Produce json
+// @Param id path string true "Project ID"
+// @Success 200 {object} response.SuccessResponse{data=dto.ProjectResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Router /projects/{id} [get]
 func GetProject(c *fiber.Ctx) error {
 	idStr := c.Params("id")
 	id, err := uuid.Parse(idStr)
@@ -46,6 +67,18 @@ func GetProject(c *fiber.Ctx) error {
 }
 
 // CreateProject handles POST /projects
+// @Summary Create project
+// @Description Create a new project
+// @Tags projects
+// @Accept json
+// @Produce json
+// @Param request body dto.CreateProjectRequest true "Project details"
+// @Success 201 {object} response.SuccessResponse{data=dto.ProjectResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /projects [post]
 func CreateProject(c *fiber.Ctx) error {
 	var req project.CreateRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -65,6 +98,19 @@ func CreateProject(c *fiber.Ctx) error {
 }
 
 // UpdateProject handles PUT /projects/:id
+// @Summary Update project
+// @Description Update an existing project
+// @Tags projects
+// @Accept json
+// @Produce json
+// @Param id path string true "Project ID"
+// @Param request body dto.UpdateProjectRequest true "Project update details"
+// @Success 200 {object} response.SuccessResponse{data=dto.ProjectResponse}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /projects/{id} [put]
 func UpdateProject(c *fiber.Ctx) error {
 	idStr := c.Params("id")
 	id, err := uuid.Parse(idStr)
@@ -86,6 +132,19 @@ func UpdateProject(c *fiber.Ctx) error {
 }
 
 // DeleteProject handles DELETE /projects/:id
+// @Summary Delete project
+// @Description Delete a project by ID
+// @Tags projects
+// @Accept json
+// @Produce json
+// @Param id path string true "Project ID"
+// @Success 200 {object} response.SuccessResponse{data=object{success=boolean}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 401 {object} response.SuccessResponse
+// @Failure 404 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /projects/{id} [delete]
 func DeleteProject(c *fiber.Ctx) error {
 	idStr := c.Params("id")
 	id, err := uuid.Parse(idStr)

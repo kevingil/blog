@@ -28,6 +28,17 @@ func getChatService() *chat.MessageService {
 }
 
 // AgentCopilot handles POST /agent
+// @Summary Submit agent request
+// @Description Submit a chat request to the AI agent for processing
+// @Tags agent
+// @Accept json
+// @Produce json
+// @Param request body object true "Chat request"
+// @Success 200 {object} response.SuccessResponse{data=object{request_id=string,status=string}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /agent [post]
 func AgentCopilot(c *fiber.Ctx) error {
 	var req coreAgent.ChatRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -79,6 +90,18 @@ func WebsocketHandler(con *websocketLib.Conn) {
 }
 
 // GetConversationHistory handles GET /agent/conversations/:articleId
+// @Summary Get conversation history
+// @Description Get the chat history for an article
+// @Tags agent
+// @Accept json
+// @Produce json
+// @Param articleId path string true "Article ID"
+// @Param limit query int false "Max messages to return" default(50)
+// @Success 200 {object} response.SuccessResponse{data=object{messages=[]object,article_id=string,total=int}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /agent/conversations/{articleId} [get]
 func GetConversationHistory(c *fiber.Ctx) error {
 	articleID := c.Params("articleId")
 	if articleID == "" {
@@ -116,6 +139,17 @@ func GetConversationHistory(c *fiber.Ctx) error {
 }
 
 // ClearConversationHistory handles DELETE /agent/conversations/:articleId
+// @Summary Clear conversation history
+// @Description Clear all chat messages for an article
+// @Tags agent
+// @Accept json
+// @Produce json
+// @Param articleId path string true "Article ID"
+// @Success 200 {object} response.SuccessResponse{data=object{success=boolean}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /agent/conversations/{articleId} [delete]
 func ClearConversationHistory(c *fiber.Ctx) error {
 	articleID := c.Params("articleId")
 	if articleID == "" {
@@ -141,6 +175,17 @@ func ClearConversationHistory(c *fiber.Ctx) error {
 }
 
 // GetPendingArtifacts handles GET /agent/artifacts/:articleId/pending
+// @Summary Get pending artifacts
+// @Description Get all pending artifacts for an article
+// @Tags agent
+// @Accept json
+// @Produce json
+// @Param articleId path string true "Article ID"
+// @Success 200 {object} response.SuccessResponse{data=object{artifacts=[]object}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /agent/artifacts/{articleId}/pending [get]
 func GetPendingArtifacts(c *fiber.Ctx) error {
 	articleIDStr := c.Params("articleId")
 	articleID, err := uuid.Parse(articleIDStr)
@@ -159,6 +204,18 @@ func GetPendingArtifacts(c *fiber.Ctx) error {
 }
 
 // AcceptArtifact handles POST /agent/artifacts/:messageId/accept
+// @Summary Accept artifact
+// @Description Accept a pending artifact
+// @Tags agent
+// @Accept json
+// @Produce json
+// @Param messageId path string true "Message ID"
+// @Param request body object{feedback=string} false "Optional feedback"
+// @Success 200 {object} response.SuccessResponse{data=object{success=boolean}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /agent/artifacts/{messageId}/accept [post]
 func AcceptArtifact(c *fiber.Ctx) error {
 	messageIDStr := c.Params("messageId")
 	messageID, err := uuid.Parse(messageIDStr)
@@ -179,6 +236,18 @@ func AcceptArtifact(c *fiber.Ctx) error {
 }
 
 // RejectArtifact handles POST /agent/artifacts/:messageId/reject
+// @Summary Reject artifact
+// @Description Reject a pending artifact
+// @Tags agent
+// @Accept json
+// @Produce json
+// @Param messageId path string true "Message ID"
+// @Param request body object{feedback=string} false "Optional feedback"
+// @Success 200 {object} response.SuccessResponse{data=object{success=boolean}}
+// @Failure 400 {object} response.SuccessResponse
+// @Failure 500 {object} response.SuccessResponse
+// @Security BearerAuth
+// @Router /agent/artifacts/{messageId}/reject [post]
 func RejectArtifact(c *fiber.Ctx) error {
 	messageIDStr := c.Params("messageId")
 	messageID, err := uuid.Parse(messageIDStr)
