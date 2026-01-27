@@ -933,6 +933,31 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
   const [clearingChat, setClearingChat] = useState(false);
   
+  // Custom markdown components for chat with smaller text (12px)
+  const chatMarkdownComponents = {
+    code: function ChatCodeComponent({ className, children, ...props }: any) {
+      const isInline =
+        !props.node?.position?.start.line ||
+        props.node?.position?.start.line === props.node?.position?.end.line;
+      if (isInline) {
+        return (
+          <code className="bg-muted rounded-sm px-1 font-mono text-xs" {...props}>
+            {children}
+          </code>
+        );
+      }
+      // Block code - render with smaller text
+      return (
+        <pre className="bg-muted rounded-md p-2 overflow-x-auto text-xs">
+          <code className={className} {...props}>{children}</code>
+        </pre>
+      );
+    },
+    pre: function ChatPreComponent({ children }: any) {
+      return <>{children}</>;
+    },
+  };
+  
   // (deprecated) pending edit/patch state removed in favor of inline diffs
   
   // Track processed tool messages to avoid re-applying old patches
@@ -2844,8 +2869,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       </div>
 
       {/* Chat side-panel */}
-      <div className="hidden xl:flex flex-col w-96 border rounded-md">
-        <div ref={chatMessagesRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="hidden xl:flex flex-col w-[26rem] border rounded-md">
+        <div ref={chatMessagesRef} className="flex-1 overflow-y-auto p-2 space-y-3">
           {chatMessages.map((m, i) => {
             // Helper function to render tool messages with unified UI
             const renderToolMessage = () => {
@@ -3169,8 +3194,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                           if (step.type === 'content' && step.content) {
                             return (
                               <ChainOfThoughtItem key={stepIdx}>
-                                <div className="prose prose-sm max-w-none dark:prose-invert">
-                                  <Markdown>{step.content}</Markdown>
+                                <div className="prose prose-xs max-w-none dark:prose-invert text-xs">
+                                  <Markdown components={chatMarkdownComponents}>{step.content}</Markdown>
                                 </div>
                               </ChainOfThoughtItem>
                             );
@@ -3182,8 +3207,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       
                       {/* Render content after steps if there's additional content */}
                       {m.content && !m.steps.some(s => s.type === 'content' && s.content === m.content) && (
-                        <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
-                          <Markdown>{m.content}</Markdown>
+                        <div className="prose prose-xs dark:prose-invert max-w-none text-xs">
+                          <Markdown components={chatMarkdownComponents}>{m.content}</Markdown>
                         </div>
                       )}
                     </div>
@@ -3225,8 +3250,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         durationMs={m.meta_data?.thinking?.duration_ms}
                         isLast={false}
                       />
-                      <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
-                        <Markdown>{m.content}</Markdown>
+                      <div className="prose prose-xs dark:prose-invert max-w-none text-xs">
+                        <Markdown components={chatMarkdownComponents}>{m.content}</Markdown>
                       </div>
                     </div>
                   );
@@ -3234,8 +3259,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 
                 return (
                   <div key={i} className="w-full">
-                    <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
-                      <Markdown>{m.content}</Markdown>
+                    <div className="prose prose-xs dark:prose-invert max-w-none text-xs">
+                      <Markdown components={chatMarkdownComponents}>{m.content}</Markdown>
                     </div>
                   </div>
                 );
@@ -3244,7 +3269,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 default: {
                   return (
                     <div key={i} className="w-full flex justify-end">
-                      <div className="max-w-xs whitespace-pre-wrap rounded-lg px-3 py-2 text-sm bg-indigo-500 text-white">
+                      <div className="max-w-xs whitespace-pre-wrap rounded-lg px-3 py-2 text-xs bg-indigo-500 text-white">
                         {m.content}
                       </div>
                     </div>
