@@ -177,7 +177,7 @@ export function ChainOfThoughtContent({ children, className }: ChainOfThoughtCon
 
   return (
     <div className={cn(
-      "ml-5 pl-3 border-l border-border/50 text-sm text-muted-foreground",
+      "pl-3 border-l border-border/50 text-sm text-muted-foreground",
       "animate-in fade-in-0 slide-in-from-top-1 duration-200",
       "max-h-48 overflow-y-auto",
       className
@@ -200,7 +200,7 @@ interface ChainOfThoughtItemProps {
 
 export function ChainOfThoughtItem({ children, className }: ChainOfThoughtItemProps) {
   return (
-    <div className={cn("py-1 ml-5", className)}>
+    <div className={cn("py-2 ml-1", className)}>
       {children}
     </div>
   )

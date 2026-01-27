@@ -463,7 +463,7 @@ function SubtleToolDisplay({ call }: { call: ToolCallRecord }) {
       </button>
       
       {isOpen && hasContent && (
-        <div className="ml-5 pl-3 border-l border-border/50 mt-1 max-h-48 overflow-y-auto">
+        <div className="pl-3 border-l border-border/50 mt-1 max-h-48 overflow-y-auto">
           <div className="py-1.5">
             {expandableContent}
           </div>
