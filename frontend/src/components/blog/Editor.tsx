@@ -1702,7 +1702,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
       let currentAssistantContent = '';
       let hasInitialContent = false;
-      let placeholderRemoved = false; // Track if the assistant placeholder was removed by a tool message
 
       ws.onmessage = (event) => {
         try {
@@ -1835,37 +1834,26 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               case 'text':
                 // Hide thinking state on first text chunk
                 setIsThinking(false);
-                // Handle assistant text responses as separate messages
+                // Handle assistant text responses - always update the message at assistantIndex
                 if (msg.content) {
-                  // If this is the first text block
                   if (!hasInitialContent) {
                     currentAssistantContent = msg.content;
                     hasInitialContent = true;
-                    
-                    // If placeholder was removed by a tool message, append to end
-                    // Otherwise update the placeholder in place
-                    if (placeholderRemoved) {
-                      setChatMessages((prev) => [
-                        ...prev,
-                        { role: 'assistant', content: currentAssistantContent } as ChatMessage
-                      ]);
-                    } else {
-                      setChatMessages((prev) => {
-                        const updated = [...prev];
-                        updated[assistantIndex] = { 
-                          role: 'assistant', 
-                          content: currentAssistantContent 
-                        } as ChatMessage;
-                        return updated;
-                      });
-                    }
                   } else {
-                    // For subsequent text blocks, add as new messages
-                    setChatMessages((prev) => [
-                      ...prev,
-                      { role: 'assistant', content: msg.content }
-                    ]);
+                    // Append subsequent text blocks
+                    currentAssistantContent += msg.content;
                   }
+                  
+                  setChatMessages((prev) => {
+                    const updated = [...prev];
+                    if (updated[assistantIndex]) {
+                      updated[assistantIndex] = { 
+                        ...updated[assistantIndex],
+                        content: currentAssistantContent 
+                      };
+                    }
+                    return updated;
+                  });
                 }
                 break;
                 
@@ -1913,30 +1901,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     }
                     return updated;
                   });
-                  
-                  // Also add legacy tool_context message for backward compatibility
-                  const toolContext: ChatMessage['tool_context'] = {
-                    tool_name: msg.tool_name,
-                    tool_id: msg.tool_id || '',
-                    status: 'running',
-                    input: msg.tool_input,
-                  };
-                  
-                  // Add tool-specific fields
-                  if (msg.tool_name === 'search_web_sources') {
-                    toolContext.search_query = msg.tool_input?.query || 'researching...';
-                  } else if (msg.tool_name === 'edit_text' || msg.tool_name === 'rewrite_document') {
-                    toolContext.reason = msg.tool_input?.reason || '';
-                  }
-                  
-                  setChatMessages((prev) => [
-                    ...prev,
-                    { 
-                      role: 'assistant', 
-                      content: '',
-                      tool_context: toolContext
-                    }
-                  ]);
                 }
                 break;
                 
@@ -1993,42 +1957,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         return updated;
                       });
                       
-                      // Update the matching tool_context message with completed status (legacy)
-                      setChatMessages((prev) => {
-                        const updated = [...prev];
-                        // Find last matching tool_use message that's still running
-                        for (let i = updated.length - 1; i >= 0; i--) {
-                          if (updated[i].tool_context?.tool_name === toolResult.tool_name 
-                              && (updated[i].tool_context?.status === 'running' || updated[i].tool_context?.status === 'starting')) {
-                            
-                            // Build updated tool context based on tool type
-                            const updatedContext: ChatMessage['tool_context'] = {
-                              ...updated[i].tool_context!,
-                              status: 'completed',
-                              output: toolResult,
-                            };
-                            
-                            // Add tool-specific fields
-                            if (toolResult.tool_name === 'search_web_sources') {
-                              updatedContext.search_results = toolResult.search_results || [];
-                              updatedContext.sources_created = toolResult.sources_created || [];
-                              updatedContext.total_found = toolResult.total_found || 0;
-                              updatedContext.sources_successful = toolResult.sources_successful || 0;
-                              updatedContext.message = toolResult.message;
-                            } else if (toolResult.tool_name === 'edit_text' || toolResult.tool_name === 'rewrite_document') {
-                              updatedContext.reason = toolResult.reason;
-                            }
-                            
-                            updated[i] = {
-                              ...updated[i],
-                              tool_context: updatedContext
-                            };
-                            break;
-                          }
-                        }
-                        return updated;
-                      });
-                      
                       // For edit tools, also apply the diff preview
                       if (toolResult.tool_name === 'edit_text' && isNewMessage) {
                         if (toolResult.edit_type === 'patch' && toolResult.patch) {
@@ -2043,21 +1971,26 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       }
                     }
                   } catch (error) {
-                    // Update tool context to error state
+                    console.error('[Editor] Failed to parse tool result:', error);
+                    // Update tool step to error state
                     setChatMessages((prev) => {
                       const updated = [...prev];
-                      for (let i = updated.length - 1; i >= 0; i--) {
-                        if (updated[i].tool_context?.status === 'running') {
-                          updated[i] = {
-                            ...updated[i],
-                            tool_context: {
-                              ...updated[i].tool_context!,
-                              status: 'error',
-                              message: 'Tool execution completed with warnings'
-                            }
-                          };
-                          break;
+                      if (updated[assistantIndex] && updated[assistantIndex].steps) {
+                        const steps = [...updated[assistantIndex].steps!];
+                        // Find and mark last running tool step as error
+                        for (let i = steps.length - 1; i >= 0; i--) {
+                          if (steps[i].type === 'tool_group' && steps[i].toolGroup?.status === 'running') {
+                            steps[i] = {
+                              ...steps[i],
+                              toolGroup: {
+                                ...steps[i].toolGroup!,
+                                status: 'error',
+                              },
+                            };
+                            break;
+                          }
                         }
+                        updated[assistantIndex] = { ...updated[assistantIndex], steps };
                       }
                       return updated;
                     });
@@ -2066,79 +1999,94 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 break;
 
               case 'full_message':
-                // Handle full message with complete meta_data for artifact tools
+                // Handle full message with complete meta_data - merge with streaming state
                 setIsThinking(false);
                 if (msg.full_message) {
-                  // Remove the empty assistant placeholder and add the full message
-                  // This ensures correct ordering: tool message comes before any follow-up text
-                  placeholderRemoved = true;
-                  
-                  // Build the chat message with tool_group conversion (same as loadConversations)
                   const fullMsg = msg.full_message;
-                  const chatMsg: ChatMessage = {
-                    id: fullMsg.id,
-                    role: fullMsg.role as 'assistant',
-                    content: fullMsg.content,
-                    meta_data: fullMsg.meta_data,
-                    created_at: fullMsg.created_at,
-                  };
-                  
-                  // Convert tool_execution to tool_group format for unified rendering
-                  if (fullMsg.meta_data?.tool_execution) {
-                    const toolExec = fullMsg.meta_data.tool_execution;
-                    const output = toolExec.output;
-                    const toolName = toolExec.tool_name;
-                    
-                    // Convert to tool_group format
-                    chatMsg.tool_group = {
-                      group_id: toolExec.tool_id || `group-${fullMsg.id}`,
-                      status: toolExec.success !== false ? 'completed' : 'error',
-                      calls: [{
-                        id: toolExec.tool_id || `call-${fullMsg.id}`,
-                        name: toolName,
-                        input: typeof toolExec.input === 'object' ? toolExec.input : {},
-                        status: toolExec.success !== false ? 'completed' : 'error',
-                        result: typeof output === 'object' ? output : undefined,
-                        error: toolExec.error,
-                        started_at: toolExec.executed_at || fullMsg.created_at,
-                        duration_ms: toolExec.duration_ms,
-                      }],
-                    };
-                    
-                    // Also set legacy tool_context for backward compatibility
-                    if (toolName === 'search_web_sources') {
-                      chatMsg.tool_context = {
-                        tool_name: 'search_web_sources',
-                        tool_id: toolExec.tool_id || '',
-                        status: 'completed',
-                        search_query: output?.query || '',
-                        search_results: output?.search_results || [],
-                        sources_created: output?.sources_created || [],
-                        total_found: output?.total_found || 0,
-                        sources_successful: output?.sources_successful || 0,
-                        message: output?.message
-                      };
-                    } else if (toolName === 'ask_question') {
-                      chatMsg.tool_context = {
-                        tool_name: 'ask_question',
-                        tool_id: toolExec.tool_id || '',
-                        status: 'completed',
-                        answer: output?.answer,
-                        citations: output?.citations || [],
-                      };
-                    }
-                  }
                   
                   setChatMessages((prev) => {
                     const updated = [...prev];
-                    // Remove the empty placeholder at assistantIndex if it exists and is empty
-                    if (updated[assistantIndex]?.content === '' && 
-                        !updated[assistantIndex]?.tool_context && 
-                        !updated[assistantIndex]?.meta_data) {
-                      updated.splice(assistantIndex, 1);
+                    if (updated[assistantIndex]) {
+                      const existingMsg = updated[assistantIndex];
+                      
+                      // Get steps: prefer existing streaming steps, fall back to meta_data.steps
+                      let finalSteps = existingMsg.steps || [];
+                      
+                      // If meta_data has steps and we don't have streaming steps, convert them
+                      if (fullMsg.meta_data?.steps && fullMsg.meta_data.steps.length > 0 && finalSteps.length === 0) {
+                        finalSteps = fullMsg.meta_data.steps.map((step: any) => {
+                          const turnStep: TurnStep = { type: step.type };
+                          if (step.type === 'reasoning' && step.reasoning) {
+                            turnStep.thinking = {
+                              content: step.reasoning.content || '',
+                              duration_ms: step.reasoning.duration_ms,
+                              visible: step.reasoning.visible ?? true,
+                            };
+                          } else if (step.type === 'tool' && step.tool) {
+                            turnStep.toolGroup = {
+                              group_id: step.tool.tool_id,
+                              status: step.tool.status === 'completed' ? 'completed' : 
+                                      step.tool.status === 'error' ? 'error' : 'running',
+                              calls: [{
+                                id: step.tool.tool_id,
+                                name: step.tool.tool_name,
+                                input: step.tool.input || {},
+                                status: step.tool.status === 'completed' ? 'completed' : 
+                                        step.tool.status === 'error' ? 'error' : 'running',
+                                result: step.tool.output,
+                                error: step.tool.error,
+                                started_at: step.tool.started_at || '',
+                                completed_at: step.tool.completed_at,
+                                duration_ms: step.tool.duration_ms,
+                              }],
+                            };
+                            turnStep.type = 'tool_group';
+                          } else if (step.type === 'content' && step.content) {
+                            turnStep.content = step.content;
+                          }
+                          return turnStep;
+                        });
+                      }
+                      
+                      // Clear streaming flags on all steps
+                      finalSteps = finalSteps.map(step => ({
+                        ...step,
+                        isStreaming: false,
+                      }));
+                      
+                      // Build tool_group from tool_execution if present
+                      let toolGroup = existingMsg.tool_group;
+                      if (fullMsg.meta_data?.tool_execution) {
+                        const toolExec = fullMsg.meta_data.tool_execution;
+                        const output = toolExec.output;
+                        toolGroup = {
+                          group_id: toolExec.tool_id || `group-${fullMsg.id}`,
+                          status: toolExec.success !== false ? 'completed' : 'error',
+                          calls: [{
+                            id: toolExec.tool_id || `call-${fullMsg.id}`,
+                            name: toolExec.tool_name,
+                            input: typeof toolExec.input === 'object' ? toolExec.input : {},
+                            status: toolExec.success !== false ? 'completed' : 'error',
+                            result: typeof output === 'object' ? output : undefined,
+                            error: toolExec.error,
+                            started_at: toolExec.executed_at || fullMsg.created_at,
+                            duration_ms: toolExec.duration_ms,
+                          }],
+                        };
+                      }
+                      
+                      // Merge full_message data with existing streaming state
+                      updated[assistantIndex] = {
+                        ...existingMsg,
+                        id: fullMsg.id,
+                        content: fullMsg.content || existingMsg.content,
+                        meta_data: fullMsg.meta_data,
+                        created_at: fullMsg.created_at,
+                        steps: finalSteps,
+                        tool_group: toolGroup,
+                        isReasoningStreaming: false,
+                      };
                     }
-                    // Add the full message with tool_group
-                    updated.push(chatMsg);
                     return updated;
                   });
                   
@@ -2158,6 +2106,26 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 
               case 'done':
                 setIsThinking(false); // Hide thinking state on completion
+                
+                // Clear all streaming flags on the current assistant message
+                setChatMessages((prev) => {
+                  const updated = [...prev];
+                  if (updated[assistantIndex]) {
+                    const msg = updated[assistantIndex];
+                    // Clear streaming flags on all steps
+                    const finalSteps = msg.steps?.map(step => ({
+                      ...step,
+                      isStreaming: false,
+                    }));
+                    updated[assistantIndex] = {
+                      ...msg,
+                      steps: finalSteps,
+                      isReasoningStreaming: false,
+                    };
+                  }
+                  return updated;
+                });
+                
                 ws.close();
                 
                 // After response is complete, check if we should show a document edit option
