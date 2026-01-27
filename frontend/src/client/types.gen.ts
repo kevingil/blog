@@ -3,3 +3,935 @@
 export type ClientOptions = {
     baseUrl: 'localhost:8080/' | (string & {});
 };
+
+export type DtoArticleListResponse = {
+    articles?: Array<DtoArticleResponse>;
+    page?: number;
+    per_page?: number;
+    total?: number;
+    total_pages?: number;
+};
+
+export type DtoArticleResponse = {
+    /**
+     * Metadata
+     */
+    created_at?: string;
+    draft_content?: string;
+    draft_image_url?: string;
+    /**
+     * Draft content (for editing)
+     */
+    draft_title?: string;
+    id?: string;
+    published_at?: string;
+    published_content?: string;
+    published_image_url?: string;
+    /**
+     * Published content (for public viewing)
+     */
+    published_title?: string;
+    /**
+     * Common fields
+     */
+    slug?: string;
+    tags?: Array<string>;
+    updated_at?: string;
+};
+
+export type DtoArticleVersionListResponse = {
+    total?: number;
+    versions?: Array<DtoArticleVersionResponse>;
+};
+
+export type DtoArticleVersionResponse = {
+    article_id?: string;
+    content?: string;
+    created_at?: string;
+    id?: string;
+    image_url?: string;
+    status?: string;
+    title?: string;
+    version_number?: number;
+};
+
+export type DtoCreateArticleRequest = {
+    content: string;
+    image_url?: string;
+    publish?: boolean;
+    slug?: string;
+    tags?: Array<string>;
+    title: string;
+};
+
+export type DtoLoginRequest = {
+    email: string;
+    password: string;
+};
+
+export type DtoLoginResponse = {
+    token?: string;
+    user?: DtoUserResponse;
+};
+
+export type DtoRegisterRequest = {
+    email: string;
+    name: string;
+    password: string;
+};
+
+export type DtoUpdateAccountRequest = {
+    email: string;
+    name: string;
+};
+
+export type DtoUpdateArticleRequest = {
+    content?: string;
+    image_url?: string;
+    slug?: string;
+    tags?: Array<string>;
+    title?: string;
+};
+
+export type DtoUpdatePasswordRequest = {
+    current_password: string;
+    new_password: string;
+};
+
+export type DtoUserResponse = {
+    email?: string;
+    id?: string;
+    name?: string;
+    role?: string;
+};
+
+export type ResponseSuccessResponse = {
+    data?: unknown;
+    message?: string;
+};
+
+export type DeleteAuthAccountData = {
+    /**
+     * Account deletion confirmation
+     */
+    body: {
+        password?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/auth/account';
+};
+
+export type DeleteAuthAccountErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+};
+
+export type DeleteAuthAccountError = DeleteAuthAccountErrors[keyof DeleteAuthAccountErrors];
+
+export type DeleteAuthAccountResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            message?: string;
+        };
+    };
+};
+
+export type DeleteAuthAccountResponse = DeleteAuthAccountResponses[keyof DeleteAuthAccountResponses];
+
+export type PutAuthAccountData = {
+    /**
+     * Account update details
+     */
+    body: DtoUpdateAccountRequest;
+    path?: never;
+    query?: never;
+    url: '/auth/account';
+};
+
+export type PutAuthAccountErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+};
+
+export type PutAuthAccountError = PutAuthAccountErrors[keyof PutAuthAccountErrors];
+
+export type PutAuthAccountResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            message?: string;
+        };
+    };
+};
+
+export type PutAuthAccountResponse = PutAuthAccountResponses[keyof PutAuthAccountResponses];
+
+export type PostAuthLoginData = {
+    /**
+     * Login credentials
+     */
+    body: DtoLoginRequest;
+    path?: never;
+    query?: never;
+    url: '/auth/login';
+};
+
+export type PostAuthLoginErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+};
+
+export type PostAuthLoginError = PostAuthLoginErrors[keyof PostAuthLoginErrors];
+
+export type PostAuthLoginResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoLoginResponse;
+    };
+};
+
+export type PostAuthLoginResponse = PostAuthLoginResponses[keyof PostAuthLoginResponses];
+
+export type PostAuthLogoutData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/auth/logout';
+};
+
+export type PostAuthLogoutResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            message?: string;
+        };
+    };
+};
+
+export type PostAuthLogoutResponse = PostAuthLogoutResponses[keyof PostAuthLogoutResponses];
+
+export type PutAuthPasswordData = {
+    /**
+     * Password update details
+     */
+    body: DtoUpdatePasswordRequest;
+    path?: never;
+    query?: never;
+    url: '/auth/password';
+};
+
+export type PutAuthPasswordErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+};
+
+export type PutAuthPasswordError = PutAuthPasswordErrors[keyof PutAuthPasswordErrors];
+
+export type PutAuthPasswordResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            message?: string;
+        };
+    };
+};
+
+export type PutAuthPasswordResponse = PutAuthPasswordResponses[keyof PutAuthPasswordResponses];
+
+export type PostAuthRegisterData = {
+    /**
+     * Registration details
+     */
+    body: DtoRegisterRequest;
+    path?: never;
+    query?: never;
+    url: '/auth/register';
+};
+
+export type PostAuthRegisterErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Conflict
+     */
+    409: ResponseSuccessResponse;
+};
+
+export type PostAuthRegisterError = PostAuthRegisterErrors[keyof PostAuthRegisterErrors];
+
+export type PostAuthRegisterResponses = {
+    /**
+     * Created
+     */
+    201: ResponseSuccessResponse & {
+        data?: {
+            message?: string;
+        };
+    };
+};
+
+export type PostAuthRegisterResponse = PostAuthRegisterResponses[keyof PostAuthRegisterResponses];
+
+export type GetBlogArticlesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Page number
+         */
+        page?: number;
+        /**
+         * Articles per page
+         */
+        articlesPerPage?: number;
+        /**
+         * Filter by tag
+         */
+        tag?: string;
+        /**
+         * Filter by status (published/draft)
+         */
+        status?: string;
+        /**
+         * Sort field
+         */
+        sortBy?: string;
+        /**
+         * Sort order (asc/desc)
+         */
+        sortOrder?: string;
+    };
+    url: '/blog/articles';
+};
+
+export type GetBlogArticlesErrors = {
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetBlogArticlesError = GetBlogArticlesErrors[keyof GetBlogArticlesErrors];
+
+export type GetBlogArticlesResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoArticleListResponse;
+    };
+};
+
+export type GetBlogArticlesResponse = GetBlogArticlesResponses[keyof GetBlogArticlesResponses];
+
+export type PostBlogArticlesData = {
+    /**
+     * Create request
+     */
+    body: DtoCreateArticleRequest;
+    path?: never;
+    query?: never;
+    url: '/blog/articles';
+};
+
+export type PostBlogArticlesErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PostBlogArticlesError = PostBlogArticlesErrors[keyof PostBlogArticlesErrors];
+
+export type PostBlogArticlesResponses = {
+    /**
+     * Created
+     */
+    201: ResponseSuccessResponse & {
+        data?: DtoArticleResponse;
+    };
+};
+
+export type PostBlogArticlesResponse = PostBlogArticlesResponses[keyof PostBlogArticlesResponses];
+
+export type GetBlogArticlesSearchData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Search query
+         */
+        query: string;
+        /**
+         * Page number
+         */
+        page?: number;
+        /**
+         * Filter by tag
+         */
+        tag?: string;
+        /**
+         * Filter by status
+         */
+        status?: string;
+        /**
+         * Sort field
+         */
+        sortBy?: string;
+        /**
+         * Sort order
+         */
+        sortOrder?: string;
+    };
+    url: '/blog/articles/search';
+};
+
+export type GetBlogArticlesSearchErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetBlogArticlesSearchError = GetBlogArticlesSearchErrors[keyof GetBlogArticlesSearchErrors];
+
+export type GetBlogArticlesSearchResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoArticleListResponse;
+    };
+};
+
+export type GetBlogArticlesSearchResponse = GetBlogArticlesSearchResponses[keyof GetBlogArticlesSearchResponses];
+
+export type GetBlogArticlesVersionsByVersionIdData = {
+    body?: never;
+    path: {
+        /**
+         * Version ID
+         */
+        versionId: string;
+    };
+    query?: never;
+    url: '/blog/articles/versions/{versionId}';
+};
+
+export type GetBlogArticlesVersionsByVersionIdErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetBlogArticlesVersionsByVersionIdError = GetBlogArticlesVersionsByVersionIdErrors[keyof GetBlogArticlesVersionsByVersionIdErrors];
+
+export type GetBlogArticlesVersionsByVersionIdResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoArticleVersionResponse;
+    };
+};
+
+export type GetBlogArticlesVersionsByVersionIdResponse = GetBlogArticlesVersionsByVersionIdResponses[keyof GetBlogArticlesVersionsByVersionIdResponses];
+
+export type DeleteBlogArticlesByIdData = {
+    body?: never;
+    path: {
+        /**
+         * Article ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/blog/articles/{id}';
+};
+
+export type DeleteBlogArticlesByIdErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type DeleteBlogArticlesByIdError = DeleteBlogArticlesByIdErrors[keyof DeleteBlogArticlesByIdErrors];
+
+export type DeleteBlogArticlesByIdResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            success?: boolean;
+        };
+    };
+};
+
+export type DeleteBlogArticlesByIdResponse = DeleteBlogArticlesByIdResponses[keyof DeleteBlogArticlesByIdResponses];
+
+export type GetBlogArticlesByIdRecommendedData = {
+    body?: never;
+    path: {
+        /**
+         * Article ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/blog/articles/{id}/recommended';
+};
+
+export type GetBlogArticlesByIdRecommendedErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetBlogArticlesByIdRecommendedError = GetBlogArticlesByIdRecommendedErrors[keyof GetBlogArticlesByIdRecommendedErrors];
+
+export type GetBlogArticlesByIdRecommendedResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: Array<DtoArticleResponse>;
+    };
+};
+
+export type GetBlogArticlesByIdRecommendedResponse = GetBlogArticlesByIdRecommendedResponses[keyof GetBlogArticlesByIdRecommendedResponses];
+
+export type GetBlogArticlesBySlugData = {
+    body?: never;
+    path: {
+        /**
+         * Article slug
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/blog/articles/{slug}';
+};
+
+export type GetBlogArticlesBySlugErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetBlogArticlesBySlugError = GetBlogArticlesBySlugErrors[keyof GetBlogArticlesBySlugErrors];
+
+export type GetBlogArticlesBySlugResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoArticleResponse;
+    };
+};
+
+export type GetBlogArticlesBySlugResponse = GetBlogArticlesBySlugResponses[keyof GetBlogArticlesBySlugResponses];
+
+export type PostBlogArticlesBySlugPublishData = {
+    body?: never;
+    path: {
+        /**
+         * Article slug
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/blog/articles/{slug}/publish';
+};
+
+export type PostBlogArticlesBySlugPublishErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PostBlogArticlesBySlugPublishError = PostBlogArticlesBySlugPublishErrors[keyof PostBlogArticlesBySlugPublishErrors];
+
+export type PostBlogArticlesBySlugPublishResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoArticleResponse;
+    };
+};
+
+export type PostBlogArticlesBySlugPublishResponse = PostBlogArticlesBySlugPublishResponses[keyof PostBlogArticlesBySlugPublishResponses];
+
+export type PostBlogArticlesBySlugRevertByVersionIdData = {
+    body?: never;
+    path: {
+        /**
+         * Article slug
+         */
+        slug: string;
+        /**
+         * Version ID to revert to
+         */
+        versionId: string;
+    };
+    query?: never;
+    url: '/blog/articles/{slug}/revert/{versionId}';
+};
+
+export type PostBlogArticlesBySlugRevertByVersionIdErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PostBlogArticlesBySlugRevertByVersionIdError = PostBlogArticlesBySlugRevertByVersionIdErrors[keyof PostBlogArticlesBySlugRevertByVersionIdErrors];
+
+export type PostBlogArticlesBySlugRevertByVersionIdResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoArticleResponse;
+    };
+};
+
+export type PostBlogArticlesBySlugRevertByVersionIdResponse = PostBlogArticlesBySlugRevertByVersionIdResponses[keyof PostBlogArticlesBySlugRevertByVersionIdResponses];
+
+export type PostBlogArticlesBySlugUnpublishData = {
+    body?: never;
+    path: {
+        /**
+         * Article slug
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/blog/articles/{slug}/unpublish';
+};
+
+export type PostBlogArticlesBySlugUnpublishErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PostBlogArticlesBySlugUnpublishError = PostBlogArticlesBySlugUnpublishErrors[keyof PostBlogArticlesBySlugUnpublishErrors];
+
+export type PostBlogArticlesBySlugUnpublishResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoArticleResponse;
+    };
+};
+
+export type PostBlogArticlesBySlugUnpublishResponse = PostBlogArticlesBySlugUnpublishResponses[keyof PostBlogArticlesBySlugUnpublishResponses];
+
+export type PostBlogArticlesBySlugUpdateData = {
+    /**
+     * Update request
+     */
+    body: DtoUpdateArticleRequest;
+    path: {
+        /**
+         * Article slug
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/blog/articles/{slug}/update';
+};
+
+export type PostBlogArticlesBySlugUpdateErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PostBlogArticlesBySlugUpdateError = PostBlogArticlesBySlugUpdateErrors[keyof PostBlogArticlesBySlugUpdateErrors];
+
+export type PostBlogArticlesBySlugUpdateResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoArticleResponse;
+    };
+};
+
+export type PostBlogArticlesBySlugUpdateResponse = PostBlogArticlesBySlugUpdateResponses[keyof PostBlogArticlesBySlugUpdateResponses];
+
+export type GetBlogArticlesBySlugVersionsData = {
+    body?: never;
+    path: {
+        /**
+         * Article slug
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/blog/articles/{slug}/versions';
+};
+
+export type GetBlogArticlesBySlugVersionsErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetBlogArticlesBySlugVersionsError = GetBlogArticlesBySlugVersionsErrors[keyof GetBlogArticlesBySlugVersionsErrors];
+
+export type GetBlogArticlesBySlugVersionsResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoArticleVersionListResponse;
+    };
+};
+
+export type GetBlogArticlesBySlugVersionsResponse = GetBlogArticlesBySlugVersionsResponses[keyof GetBlogArticlesBySlugVersionsResponses];
+
+export type PostBlogGenerateData = {
+    /**
+     * Generation request
+     */
+    body: {
+        prompt?: string;
+        publish?: boolean;
+        title?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/blog/generate';
+};
+
+export type PostBlogGenerateErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Unauthorized
+     */
+    401: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PostBlogGenerateError = PostBlogGenerateErrors[keyof PostBlogGenerateErrors];
+
+export type PostBlogGenerateResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoArticleResponse;
+    };
+};
+
+export type PostBlogGenerateResponse = PostBlogGenerateResponses[keyof PostBlogGenerateResponses];
+
+export type GetBlogTagsPopularData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/blog/tags/popular';
+};
+
+export type GetBlogTagsPopularErrors = {
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type GetBlogTagsPopularError = GetBlogTagsPopularErrors[keyof GetBlogTagsPopularErrors];
+
+export type GetBlogTagsPopularResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: {
+            tags?: Array<string>;
+        };
+    };
+};
+
+export type GetBlogTagsPopularResponse = GetBlogTagsPopularResponses[keyof GetBlogTagsPopularResponses];
+
+export type PutBlogByIdUpdateData = {
+    body?: never;
+    path: {
+        /**
+         * Article ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/blog/{id}/update';
+};
+
+export type PutBlogByIdUpdateErrors = {
+    /**
+     * Bad Request
+     */
+    400: ResponseSuccessResponse;
+    /**
+     * Not Found
+     */
+    404: ResponseSuccessResponse;
+    /**
+     * Internal Server Error
+     */
+    500: ResponseSuccessResponse;
+};
+
+export type PutBlogByIdUpdateError = PutBlogByIdUpdateErrors[keyof PutBlogByIdUpdateErrors];
+
+export type PutBlogByIdUpdateResponses = {
+    /**
+     * OK
+     */
+    200: ResponseSuccessResponse & {
+        data?: DtoArticleResponse;
+    };
+};
+
+export type PutBlogByIdUpdateResponse = PutBlogByIdUpdateResponses[keyof PutBlogByIdUpdateResponses];
