@@ -16,8 +16,9 @@ require (
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/lib/pq v1.10.9
 	github.com/mark3labs/mcp-go v0.36.0
-	github.com/openai/openai-go v1.6.0
+	github.com/openai/openai-go v1.12.0
 	github.com/pgvector/pgvector-go v0.3.0
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3
 	github.com/stretchr/testify v1.11.1
 	github.com/swaggo/swag v1.16.6

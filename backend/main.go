@@ -25,9 +25,14 @@ import (
 	coreAgent "backend/pkg/core/agent"
 	"backend/pkg/config"
 	"backend/pkg/core/chat"
+	"backend/pkg/core/worker"
 	"backend/pkg/database"
 	"fmt"
 	"log"
+	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/gofiber/fiber/v2"
 	_ "github.com/joho/godotenv/autoload"
@@ -48,6 +53,46 @@ func main() {
 	}
 	log.Printf("Initialized Agent Services")
 
+	// Initialize Worker Manager
+	workerLogger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	workerManager := worker.NewWorkerManager(workerLogger)
+
+	// Create and register workers
+	crawlWorker := worker.NewCrawlWorker(workerLogger, cfg.Worker.ExaAPIKey)
+	insightWorker := worker.NewInsightWorker(workerLogger, cfg.Worker.GroqAPIKey)
+	discoveryWorker := worker.NewDiscoveryWorker(workerLogger, cfg.Worker.ExaAPIKey)
+
+	workerManager.RegisterWorker(crawlWorker)
+	workerManager.RegisterWorker(insightWorker)
+	workerManager.RegisterWorker(discoveryWorker)
+
+	// NOTE: Cron scheduling is disabled for now - workers run manually only
+	// To enable scheduled runs, uncomment the following and set environment variables:
+	// WORKER_CRAWL_SCHEDULE, WORKER_INSIGHT_SCHEDULE, WORKER_DISCOVERY_SCHEDULE
+	// Schedule format: "seconds minutes hours day-of-month month day-of-week"
+	// Examples: "0 */15 * * * *" (every 15 mins), "0 0 */6 * * *" (every 6 hours)
+	//
+	// if cfg.Worker.CrawlSchedule != "" {
+	// 	if err := workerManager.ScheduleWorker("crawl", cfg.Worker.CrawlSchedule); err != nil {
+	// 		log.Printf("Warning: Failed to schedule crawl worker: %v", err)
+	// 	}
+	// }
+	// if cfg.Worker.InsightSchedule != "" {
+	// 	if err := workerManager.ScheduleWorker("insight", cfg.Worker.InsightSchedule); err != nil {
+	// 		log.Printf("Warning: Failed to schedule insight worker: %v", err)
+	// 	}
+	// }
+	// if cfg.Worker.DiscoverySchedule != "" {
+	// 	if err := workerManager.ScheduleWorker("discovery", cfg.Worker.DiscoverySchedule); err != nil {
+	// 		log.Printf("Warning: Failed to schedule discovery worker: %v", err)
+	// 	}
+	// }
+
+	// Start worker manager
+	workerManager.Start()
+	worker.SetGlobalManager(workerManager)
+	log.Printf("Initialized Worker Manager with %d workers", len(workerManager.GetRegisteredWorkers()))
+
 	// Create Fiber app and register routes
 	app := fiber.New(fiber.Config{
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
@@ -59,6 +104,19 @@ func main() {
 
 	// Register all API routes
 	api.RegisterRoutes(app)
+
+	// Handle graceful shutdown
+	go func() {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+		<-sigChan
+
+		log.Println("Shutting down...")
+		workerManager.Stop()
+		if err := app.Shutdown(); err != nil {
+			log.Printf("Error shutting down server: %v", err)
+		}
+	}()
 
 	// Start server
 	address := fmt.Sprintf(":%s", cfg.Server.Port)

@@ -6,11 +6,13 @@ import (
 	"backend/pkg/core"
 	coreAgent "backend/pkg/core/agent"
 	"backend/pkg/core/chat"
+	"backend/pkg/core/worker"
 	"backend/pkg/database"
 	"context"
 	"encoding/json"
 	"log"
 	"strconv"
+	"time"
 
 	websocketLib "github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
@@ -64,6 +66,10 @@ func WebsocketHandler(con *websocketLib.Conn) {
 	defer cancel()
 
 	agentManager := coreAgent.GetAgentAsyncCopilotManager()
+	
+	// Track worker status subscription
+	var workerStatusSubscribed bool
+	var workerStatusCancel context.CancelFunc
 
 	go func() {
 		defer cancel()
@@ -76,10 +82,38 @@ func WebsocketHandler(con *websocketLib.Conn) {
 				var msg struct {
 					RequestID string `json:"requestId"`
 					Action    string `json:"action"`
+					Channel   string `json:"channel"`
 				}
 				if err := json.Unmarshal(message, &msg); err != nil {
 					continue
 				}
+
+				// Handle channel subscriptions (e.g., worker-status)
+				if msg.Channel == agentws.ChannelWorkerStatus {
+					if msg.Action == "subscribe" && !workerStatusSubscribed {
+						workerStatusSubscribed = true
+						var wsCtx context.Context
+						wsCtx, workerStatusCancel = context.WithCancel(ctx)
+						go handleWorkerStatusStream(wsCtx, con)
+						
+						// Send acknowledgment
+						ack := map[string]interface{}{
+							"type":    "subscribed",
+							"channel": agentws.ChannelWorkerStatus,
+						}
+						if data, err := json.Marshal(ack); err == nil {
+							con.WriteMessage(websocketLib.TextMessage, data)
+						}
+					} else if msg.Action == "unsubscribe" && workerStatusSubscribed {
+						workerStatusSubscribed = false
+						if workerStatusCancel != nil {
+							workerStatusCancel()
+						}
+					}
+					continue
+				}
+
+				// Handle request-based subscriptions (agent streams)
 				if msg.Action == "subscribe" && msg.RequestID != "" {
 					agentws.HandleAgentStream(ctx, con, msg.RequestID, agentManager)
 				}
@@ -87,6 +121,73 @@ func WebsocketHandler(con *websocketLib.Conn) {
 		}
 	}()
 	<-ctx.Done()
+	
+	// Cleanup worker status subscription
+	if workerStatusCancel != nil {
+		workerStatusCancel()
+	}
+}
+
+// handleWorkerStatusStream streams worker status updates to a WebSocket connection
+func handleWorkerStatusStream(ctx context.Context, con *websocketLib.Conn) {
+	statusService := worker.GetStatusService()
+	subscriber := statusService.Subscribe()
+	defer statusService.Unsubscribe(subscriber)
+
+	// Send initial status of all workers
+	for name, status := range statusService.GetAllStatuses() {
+		msg := formatWorkerStatusMessage(name, &status)
+		if data, err := json.Marshal(msg); err == nil {
+			if err := con.WriteMessage(websocketLib.TextMessage, data); err != nil {
+				return
+			}
+		}
+	}
+
+	// Stream updates
+	for {
+		select {
+		case update, ok := <-subscriber:
+			if !ok {
+				return
+			}
+			msg := formatWorkerStatusMessage(update.WorkerName, &update.Status)
+			msg["timestamp"] = update.Timestamp
+			if data, err := json.Marshal(msg); err == nil {
+				if err := con.WriteMessage(websocketLib.TextMessage, data); err != nil {
+					return
+				}
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// formatWorkerStatusMessage formats a worker status for WebSocket transmission
+func formatWorkerStatusMessage(workerName string, status *worker.WorkerStatus) map[string]interface{} {
+	msg := map[string]interface{}{
+		"type":        "worker-status",
+		"worker_name": workerName,
+		"status": map[string]interface{}{
+			"name":        status.Name,
+			"state":       string(status.State),
+			"progress":    status.Progress,
+			"message":     status.Message,
+			"error":       status.Error,
+			"items_total": status.ItemsTotal,
+			"items_done":  status.ItemsDone,
+		},
+	}
+
+	if status.StartedAt != nil {
+		msg["status"].(map[string]interface{})["started_at"] = status.StartedAt.Format(time.RFC3339)
+	}
+	if status.CompletedAt != nil {
+		msg["status"].(map[string]interface{})["completed_at"] = status.CompletedAt.Format(time.RFC3339)
+	}
+
+	return msg
 }
 
 // GetConversationHistory handles GET /agent/conversations/:articleId

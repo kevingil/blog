@@ -17,18 +17,17 @@ type Client struct {
 	client *http.Client
 }
 
-// NewClient creates a new Exa client
-func NewClient() *Client {
-	apiKey := os.Getenv("EXA_API_KEY")
-	if apiKey == "" {
-		// This is not fatal - the tool will handle missing API key gracefully
-		return &Client{
-			client: &http.Client{Timeout: 30 * time.Second},
-		}
+// NewClient creates a new Exa client using environment variable
+func NewClient(apiKey ...string) *Client {
+	key := ""
+	if len(apiKey) > 0 && apiKey[0] != "" {
+		key = apiKey[0]
+	} else {
+		key = os.Getenv("EXA_API_KEY")
 	}
 
 	return &Client{
-		apiKey: apiKey,
+		apiKey: key,
 		client: &http.Client{Timeout: 30 * time.Second},
 	}
 }
@@ -270,4 +269,97 @@ func (c *Client) Answer(ctx context.Context, question string, includeText bool) 
 // AnswerWithDefaults gets an answer with sensible defaults
 func (c *Client) AnswerWithDefaults(ctx context.Context, question string) (*AnswerResponse, error) {
 	return c.Answer(ctx, question, true) // Include full text by default
+}
+
+// FindSimilarRequest represents the request payload for Exa findSimilar endpoint
+type FindSimilarRequest struct {
+	URL                 string   `json:"url"`
+	NumResults          int      `json:"numResults,omitempty"`
+	IncludeDomains      []string `json:"includeDomains,omitempty"`
+	ExcludeDomains      []string `json:"excludeDomains,omitempty"`
+	ExcludeSourceDomain bool     `json:"excludeSourceDomain,omitempty"`
+	Text                bool     `json:"text,omitempty"`
+	Highlights          bool     `json:"highlights,omitempty"`
+	Summary             bool     `json:"summary,omitempty"`
+}
+
+// FindSimilarOptions provides options for customizing findSimilar searches
+type FindSimilarOptions struct {
+	NumResults          int      `json:"numResults,omitempty"`
+	IncludeDomains      []string `json:"includeDomains,omitempty"`
+	ExcludeDomains      []string `json:"excludeDomains,omitempty"`
+	ExcludeSourceDomain bool     `json:"excludeSourceDomain,omitempty"`
+	IncludeText         bool     `json:"includeText,omitempty"`
+	IncludeHighlights   bool     `json:"includeHighlights,omitempty"`
+	IncludeSummary      bool     `json:"includeSummary,omitempty"`
+}
+
+// FindSimilar finds similar websites to the given URL using Exa's findSimilar endpoint
+func (c *Client) FindSimilar(ctx context.Context, url string, options *FindSimilarOptions) (*SearchResponse, error) {
+	if c.apiKey == "" {
+		return nil, fmt.Errorf("EXA_API_KEY environment variable not set")
+	}
+
+	if url == "" {
+		return nil, fmt.Errorf("URL cannot be empty")
+	}
+
+	// Set default options
+	if options == nil {
+		options = &FindSimilarOptions{}
+	}
+
+	// Set defaults
+	numResults := options.NumResults
+	if numResults == 0 {
+		numResults = 10
+	}
+
+	// Build request payload
+	reqPayload := FindSimilarRequest{
+		URL:                 url,
+		NumResults:          numResults,
+		IncludeDomains:      options.IncludeDomains,
+		ExcludeDomains:      options.ExcludeDomains,
+		ExcludeSourceDomain: options.ExcludeSourceDomain,
+		Text:                options.IncludeText,
+		Highlights:          options.IncludeHighlights,
+		Summary:             options.IncludeSummary,
+	}
+
+	// Marshal request to JSON
+	jsonData, err := json.Marshal(reqPayload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.exa.ai/findSimilar", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", c.apiKey)
+
+	// Make the request
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Exa findSimilar API returned status %d", resp.StatusCode)
+	}
+
+	// Parse response (uses same format as search)
+	var searchResp SearchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &searchResp, nil
 }
