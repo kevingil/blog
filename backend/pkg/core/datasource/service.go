@@ -47,6 +47,21 @@ func List(ctx context.Context, orgID uuid.UUID) ([]types.DataSourceResponse, err
 	return result, nil
 }
 
+// ListByUserID retrieves all data sources for a user (without organization)
+func ListByUserID(ctx context.Context, userID uuid.UUID) ([]types.DataSourceResponse, error) {
+	repo := getDataSourceRepo()
+	sources, err := repo.FindByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]types.DataSourceResponse, len(sources))
+	for i, ds := range sources {
+		result[i] = *toResponse(&ds)
+	}
+	return result, nil
+}
+
 // ListAll retrieves all data sources with pagination
 func ListAll(ctx context.Context, page, limit int) ([]types.DataSourceResponse, int64, error) {
 	repo := getDataSourceRepo()
@@ -72,8 +87,14 @@ func ListAll(ctx context.Context, page, limit int) ([]types.DataSourceResponse, 
 }
 
 // Create creates a new data source
-func Create(ctx context.Context, orgID *uuid.UUID, req types.DataSourceCreateRequest) (*types.DataSourceResponse, error) {
+// Either orgID or userID must be provided
+func Create(ctx context.Context, orgID *uuid.UUID, userID *uuid.UUID, req types.DataSourceCreateRequest) (*types.DataSourceResponse, error) {
 	repo := getDataSourceRepo()
+
+	// Validate that at least one owner is provided
+	if orgID == nil && userID == nil {
+		return nil, core.InvalidInputError("Either organization_id or user_id must be provided")
+	}
 
 	// Check if URL already exists
 	existing, err := repo.FindByURL(ctx, req.URL)
@@ -104,18 +125,20 @@ func Create(ctx context.Context, orgID *uuid.UUID, req types.DataSourceCreateReq
 	nextCrawlAt := calculateNextCrawlTime(crawlFrequency)
 
 	ds := &types.DataSource{
-		ID:             uuid.New(),
-		OrganizationID: orgID,
-		Name:           req.Name,
-		URL:            req.URL,
-		FeedURL:        req.FeedURL,
-		SourceType:     sourceType,
-		CrawlFrequency: crawlFrequency,
-		IsEnabled:      isEnabled,
-		IsDiscovered:   false,
-		CrawlStatus:    "pending",
-		ContentCount:   0,
-		NextCrawlAt:    &nextCrawlAt,
+		ID:              uuid.New(),
+		OrganizationID:  orgID,
+		UserID:          userID,
+		Name:            req.Name,
+		URL:             req.URL,
+		FeedURL:         req.FeedURL,
+		SourceType:      sourceType,
+		CrawlFrequency:  crawlFrequency,
+		IsEnabled:       isEnabled,
+		IsDiscovered:    false,
+		CrawlStatus:     "pending",
+		ContentCount:    0,
+		SubscriberCount: 1,
+		NextCrawlAt:     &nextCrawlAt,
 	}
 
 	if err := repo.Save(ctx, ds); err != nil {
@@ -239,8 +262,14 @@ func SetNextCrawlTime(ctx context.Context, id uuid.UUID, frequency string) error
 }
 
 // CreateDiscoveredSource creates a data source that was discovered automatically
-func CreateDiscoveredSource(ctx context.Context, orgID *uuid.UUID, discoveredFromID uuid.UUID, name, url string) (*types.DataSourceResponse, error) {
+// Either orgID or userID must be provided
+func CreateDiscoveredSource(ctx context.Context, orgID *uuid.UUID, userID *uuid.UUID, discoveredFromID uuid.UUID, name, url string) (*types.DataSourceResponse, error) {
 	repo := getDataSourceRepo()
+
+	// Validate that at least one owner is provided
+	if orgID == nil && userID == nil {
+		return nil, core.InvalidInputError("Either organization_id or user_id must be provided")
+	}
 
 	// Check if URL already exists
 	existing, err := repo.FindByURL(ctx, url)
@@ -256,6 +285,7 @@ func CreateDiscoveredSource(ctx context.Context, orgID *uuid.UUID, discoveredFro
 	ds := &types.DataSource{
 		ID:               uuid.New(),
 		OrganizationID:   orgID,
+		UserID:           userID,
 		Name:             name,
 		URL:              url,
 		SourceType:       "blog",
@@ -265,6 +295,7 @@ func CreateDiscoveredSource(ctx context.Context, orgID *uuid.UUID, discoveredFro
 		DiscoveredFromID: &discoveredFromID,
 		CrawlStatus:      "pending",
 		ContentCount:     0,
+		SubscriberCount:  1,
 		NextCrawlAt:      &nextCrawlAt,
 	}
 
@@ -295,6 +326,7 @@ func toResponse(ds *types.DataSource) *types.DataSourceResponse {
 	return &types.DataSourceResponse{
 		ID:               ds.ID,
 		OrganizationID:   ds.OrganizationID,
+		UserID:           ds.UserID,
 		Name:             ds.Name,
 		URL:              ds.URL,
 		FeedURL:          ds.FeedURL,
@@ -308,6 +340,7 @@ func toResponse(ds *types.DataSource) *types.DataSourceResponse {
 		CrawlStatus:      ds.CrawlStatus,
 		ErrorMessage:     ds.ErrorMessage,
 		ContentCount:     ds.ContentCount,
+		SubscriberCount:  ds.SubscriberCount,
 		MetaData:         ds.MetaData,
 		CreatedAt:        ds.CreatedAt,
 		UpdatedAt:        ds.UpdatedAt,
