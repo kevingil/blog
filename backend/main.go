@@ -58,8 +58,8 @@ func main() {
 	workerManager := worker.NewWorkerManager(workerLogger)
 
 	// Create and register workers
-	crawlWorker := worker.NewCrawlWorker(workerLogger)
-	insightWorker := worker.NewInsightWorker(workerLogger, cfg.Worker.OpenAIAPIKey)
+	crawlWorker := worker.NewCrawlWorker(workerLogger, cfg.Worker.ExaAPIKey)
+	insightWorker := worker.NewInsightWorker(workerLogger, cfg.Worker.GroqAPIKey)
 	discoveryWorker := worker.NewDiscoveryWorker(workerLogger, cfg.Worker.ExaAPIKey)
 
 	workerManager.RegisterWorker(crawlWorker)
