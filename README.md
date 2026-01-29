@@ -4,8 +4,6 @@ An agentic blog editor.
 
 ![frontend/public/screenshot-image.png](frontend/public/screenshot-image.png)
 
-![frontend/public/Xnip2025-06-29_15-58-49.jpg](frontend/public/Xnip2025-07-08_00-16-13.png)
-
 
 ![frontend/public/Xnip2025-06-29_15-58-49.jpg](frontend/public/Xnip2025-06-29_15-58-49.jpg)
 
@@ -29,73 +27,6 @@ Build for production:
 ```bash
 bun run build
 ```
-
-#### Frontend Architecture Notes
-
-**Authenticated API Requests**
-
-The frontend uses a centralized authentication utility for all API calls located at `/frontend/src/services/authenticatedFetch.ts`. This provides:
-
-- Automatic JWT token inclusion
-- Automatic token expiration handling
-- Consistent error handling across the app
-
-**Usage:**
-
-```typescript
-import { apiGet, apiPost, apiPut, apiDelete } from '@/services/authenticatedFetch';
-
-// GET request (authenticated)
-const data = await apiGet<ResponseType>('/endpoint');
-
-// POST request (authenticated)
-const result = await apiPost<ResponseType>('/endpoint', { data });
-
-// PUT request (authenticated)
-const updated = await apiPut<ResponseType>('/endpoint', { data });
-
-// DELETE request (authenticated)
-await apiDelete<ResponseType>('/endpoint');
-
-// Public endpoints (skip authentication)
-const publicData = await apiGet<ResponseType>('/public-endpoint', { skipAuth: true });
-```
-
-**Error Handling:**
-
-The utility automatically handles authentication errors:
-- Expired/invalid tokens are detected
-- Tokens are cleared from localStorage
-- Users are automatically redirected to login
-- Toast notifications inform users of session expiration
-
-**Example:**
-
-```typescript
-import { apiPost, isAuthError } from '@/services/authenticatedFetch';
-
-try {
-  const result = await apiPost<ChatResponse>('/agent', { messages });
-} catch (error) {
-  if (isAuthError(error)) {
-    // User will be redirected to login automatically
-    console.log('Session expired');
-  } else {
-    // Handle other errors
-    console.error('API error:', error);
-  }
-}
-```
-
-All services have been migrated to use this utility:
-- `artifacts.ts` - Artifact management
-- `conversations.ts` - Chat conversations
-- `blog.ts` - Blog articles
-- `sources.ts` - Article sources
-- `storage/index.ts` - File storage
-- `pages.ts` - Page management
-- `projects.ts` - Project management
-- `user.ts` - User data
 
 ### Backend Setup (Go)
 
@@ -148,4 +79,156 @@ import { Articles, Auth } from './client'
 
 const { data } = await Auth.postAuthLogin({ body: { email, password } })
 const articles = await Articles.getBlogArticles({ query: { page: 1 } })
+```
+
+### Quick Overview
+
+
+
+
+#### Insights crawler data pipeline
+
+
+#### Backend clean code architecture layers
+
+
+Dependencies point inward toward core:
+
+```mermaid
+flowchart TB
+    subgraph outer [External]
+        HTTP[HTTP/Fiber]
+        DB[PostgreSQL/GORM]
+        External[OpenAI/Exa/S3]
+    end
+    
+    subgraph layers [Internal Layers]
+        Handlers
+        Database[Database/Repository]
+        Integrations
+    end
+    
+    subgraph core [Core - Domain + Business Logic]
+        Types[Types]
+        Interfaces[Store Interfaces]
+        Services[Services]
+        Errors[Errors]
+    end
+    
+    HTTP --> Handlers
+    Handlers --> Services
+    Services --> Types
+    Services --> Interfaces
+    Database --> DB
+    Interfaces -.-> Database
+    Integrations --> External
+```
+
+
+
+#### Data Pipeline and Insights System
+
+
+```mermaid
+flowchart TB
+    subgraph userLayer [User Layer]
+        direction LR
+        UI_DS[Data Sources Settings]
+        UI_INS[Insights Page]
+        UI_EDIT[Article Editor]
+    end
+
+    subgraph apiLayer [API Layer]
+        direction LR
+        API_DS[/data-sources API/]
+        API_INS[/insights API/]
+        API_AGENT[/agent API/]
+    end
+
+    subgraph serviceLayer [Service Layer]
+        direction LR
+        SVC_DS[DataSourceService]
+        SVC_INS[InsightService]
+        SVC_CRAWL[CrawledContentService]
+    end
+
+    subgraph workerLayer [Background Workers]
+        direction TB
+        SCHED[Scheduler - Cron]
+        
+        subgraph workers [Worker Pool]
+            CW[CrawlWorker]
+            IW[InsightWorker]
+            DW[DiscoveryWorker]
+        end
+        
+        SCHED --> CW
+        SCHED --> IW
+        SCHED --> DW
+    end
+
+    subgraph externalServices [External Services]
+        direction LR
+        EXA[Exa Search API]
+        OPENAI[OpenAI Embeddings]
+        LLM[LLM Provider]
+    end
+
+    subgraph dataLayer [Database - PostgreSQL + pgvector]
+        direction TB
+        
+        subgraph tables [Tables]
+            T_DS[(data_source)]
+            T_CC[(crawled_content)]
+            T_IT[(insight_topic)]
+            T_INS[(insight)]
+            T_CTM[(content_topic_match)]
+        end
+        
+        subgraph vectors [Vector Indexes - IVFFlat]
+            V_CC[content_embedding_idx]
+            V_IT[topic_embedding_idx]
+            V_INS[insight_embedding_idx]
+        end
+        
+        T_CC --- V_CC
+        T_IT --- V_IT
+        T_INS --- V_INS
+    end
+
+    subgraph agentTools [Agent Tools]
+        direction LR
+        TOOL_INS[get_insights]
+        TOOL_SEARCH[search_crawled_content]
+        TOOL_SUM[summarize_sources]
+    end
+
+    UI_DS --> API_DS
+    UI_INS --> API_INS
+    UI_EDIT --> API_AGENT
+
+    API_DS --> SVC_DS
+    API_INS --> SVC_INS
+    API_AGENT --> agentTools
+
+    SVC_DS --> T_DS
+    SVC_INS --> T_INS
+    SVC_INS --> T_IT
+    SVC_CRAWL --> T_CC
+
+    CW -->|fetch content| T_DS
+    CW -->|store content| T_CC
+    CW -->|generate| OPENAI
+
+    IW -->|read content| T_CC
+    IW -->|match topics via embedding| T_IT
+    IW -->|generate summary| LLM
+    IW -->|store insight| T_INS
+
+    DW -->|find similar sites| EXA
+    DW -->|create discovered| T_DS
+
+    agentTools -->|semantic search| V_CC
+    agentTools -->|semantic search| V_INS
+    agentTools -->|topic matching| V_IT
 ```
