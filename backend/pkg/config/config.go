@@ -39,6 +39,7 @@ type Config struct {
 // WorkerConfig holds worker-related configuration
 type WorkerConfig struct {
 	OpenAIAPIKey string
+	GroqAPIKey   string
 	ExaAPIKey    string
 	// Cron schedules (empty string disables scheduled runs)
 	CrawlSchedule     string
@@ -94,6 +95,7 @@ func Load() (*Config, error) {
 		},
 		Worker: WorkerConfig{
 			OpenAIAPIKey:      os.Getenv("OPENAI_API_KEY"),
+			GroqAPIKey:        os.Getenv("GROQ_API_KEY"),
 			ExaAPIKey:         os.Getenv("EXA_API_KEY"),
 			CrawlSchedule:     getEnvOrDefault("WORKER_CRAWL_SCHEDULE", ""),     // e.g., "0 */15 * * * *"
 			InsightSchedule:   getEnvOrDefault("WORKER_INSIGHT_SCHEDULE", ""),   // e.g., "0 0 */6 * * *"
