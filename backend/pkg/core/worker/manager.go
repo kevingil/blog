@@ -2,11 +2,19 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/robfig/cron/v3"
+)
+
+// Error types for worker operations
+var (
+	ErrWorkerNotFound       = errors.New("worker not found")
+	ErrWorkerAlreadyRunning = errors.New("worker is already running")
+	ErrWorkerNotRunning     = errors.New("worker is not running")
 )
 
 // Worker interface defines the contract for background workers
@@ -24,6 +32,7 @@ type WorkerManager struct {
 	logger          *slog.Logger
 	isRunning       bool
 	shutdownTimeout time.Duration
+	statusService   *StatusService
 }
 
 // NewWorkerManager creates a new WorkerManager instance
@@ -38,6 +47,7 @@ func NewWorkerManager(logger *slog.Logger) *WorkerManager {
 		runningWorkers:  make(map[string]context.CancelFunc),
 		logger:          logger,
 		shutdownTimeout: 30 * time.Second,
+		statusService:   GetStatusService(),
 	}
 }
 
@@ -46,6 +56,7 @@ func (m *WorkerManager) RegisterWorker(worker Worker) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.workers[worker.Name()] = worker
+	m.statusService.RegisterWorker(worker.Name())
 	m.logger.Info("registered worker", "name", worker.Name())
 }
 
@@ -95,6 +106,7 @@ func (m *WorkerManager) runWorker(worker Worker) {
 	m.mu.Unlock()
 
 	m.logger.Info("starting worker", "name", name)
+	m.statusService.StartWorker(name)
 	startTime := time.Now()
 
 	defer func() {
@@ -108,6 +120,9 @@ func (m *WorkerManager) runWorker(worker Worker) {
 
 	if err := worker.Run(ctx); err != nil {
 		m.logger.Error("worker failed", "name", name, "error", err)
+		m.statusService.SetError(name, err.Error())
+	} else {
+		m.statusService.CompleteWorker(name, "Completed successfully")
 	}
 }
 
@@ -115,15 +130,45 @@ func (m *WorkerManager) runWorker(worker Worker) {
 func (m *WorkerManager) RunWorkerNow(workerName string) error {
 	m.mu.RLock()
 	worker, exists := m.workers[workerName]
+	_, isRunning := m.runningWorkers[workerName]
 	m.mu.RUnlock()
 
 	if !exists {
 		m.logger.Error("worker not found", "name", workerName)
-		return nil
+		return ErrWorkerNotFound
+	}
+
+	if isRunning {
+		m.logger.Warn("worker already running", "name", workerName)
+		return ErrWorkerAlreadyRunning
 	}
 
 	go m.runWorker(worker)
 	return nil
+}
+
+// StopWorker stops a running worker
+func (m *WorkerManager) StopWorker(workerName string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cancel, running := m.runningWorkers[workerName]
+	if !running {
+		return ErrWorkerNotRunning
+	}
+
+	m.logger.Info("stopping worker", "name", workerName)
+	cancel()
+	m.statusService.SetError(workerName, "Stopped by user")
+	return nil
+}
+
+// IsWorkerRunning checks if a specific worker is currently running
+func (m *WorkerManager) IsWorkerRunning(workerName string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	_, running := m.runningWorkers[workerName]
+	return running
 }
 
 // Start starts the cron scheduler
@@ -199,4 +244,17 @@ func (m *WorkerManager) GetRegisteredWorkers() []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+// Global worker manager instance for API access
+var globalManager *WorkerManager
+
+// SetGlobalManager sets the global worker manager instance
+func SetGlobalManager(m *WorkerManager) {
+	globalManager = m
+}
+
+// GetManager returns the global worker manager instance
+func GetManager() *WorkerManager {
+	return globalManager
 }
