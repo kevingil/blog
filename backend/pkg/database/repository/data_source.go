@@ -34,6 +34,7 @@ func dataSourceModelToType(m *models.DataSource) *types.DataSource {
 	return &types.DataSource{
 		ID:               m.ID,
 		OrganizationID:   m.OrganizationID,
+		UserID:           m.UserID,
 		Name:             m.Name,
 		URL:              m.URL,
 		FeedURL:          m.FeedURL,
@@ -47,6 +48,7 @@ func dataSourceModelToType(m *models.DataSource) *types.DataSource {
 		CrawlStatus:      m.CrawlStatus,
 		ErrorMessage:     m.ErrorMessage,
 		ContentCount:     m.ContentCount,
+		SubscriberCount:  m.SubscriberCount,
 		MetaData:         metaData,
 		CreatedAt:        m.CreatedAt,
 		UpdatedAt:        m.UpdatedAt,
@@ -64,6 +66,7 @@ func dataSourceTypeToModel(s *types.DataSource) *models.DataSource {
 	return &models.DataSource{
 		ID:               s.ID,
 		OrganizationID:   s.OrganizationID,
+		UserID:           s.UserID,
 		Name:             s.Name,
 		URL:              s.URL,
 		FeedURL:          s.FeedURL,
@@ -77,6 +80,7 @@ func dataSourceTypeToModel(s *types.DataSource) *models.DataSource {
 		CrawlStatus:      s.CrawlStatus,
 		ErrorMessage:     s.ErrorMessage,
 		ContentCount:     s.ContentCount,
+		SubscriberCount:  s.SubscriberCount,
 		MetaData:         metaData,
 		CreatedAt:        s.CreatedAt,
 		UpdatedAt:        s.UpdatedAt,
@@ -99,6 +103,20 @@ func (r *DataSourceRepository) FindByID(ctx context.Context, id uuid.UUID) (*typ
 func (r *DataSourceRepository) FindByOrganizationID(ctx context.Context, orgID uuid.UUID) ([]types.DataSource, error) {
 	var dataSourceModels []models.DataSource
 	if err := r.db.WithContext(ctx).Where("organization_id = ?", orgID).Order("created_at DESC").Find(&dataSourceModels).Error; err != nil {
+		return nil, err
+	}
+
+	sources := make([]types.DataSource, len(dataSourceModels))
+	for i, m := range dataSourceModels {
+		sources[i] = *dataSourceModelToType(&m)
+	}
+	return sources, nil
+}
+
+// FindByUserID retrieves all data sources for a user (without organization)
+func (r *DataSourceRepository) FindByUserID(ctx context.Context, userID uuid.UUID) ([]types.DataSource, error) {
+	var dataSourceModels []models.DataSource
+	if err := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("created_at DESC").Find(&dataSourceModels).Error; err != nil {
 		return nil, err
 	}
 

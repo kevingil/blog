@@ -10,6 +10,7 @@ import (
 type DataSource struct {
 	ID               uuid.UUID
 	OrganizationID   *uuid.UUID
+	UserID           *uuid.UUID
 	Name             string
 	URL              string
 	FeedURL          *string
@@ -23,6 +24,7 @@ type DataSource struct {
 	CrawlStatus      string
 	ErrorMessage     *string
 	ContentCount     int
+	SubscriberCount  int
 	MetaData         map[string]interface{}
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
@@ -52,6 +54,7 @@ type DataSourceUpdateRequest struct {
 type DataSourceResponse struct {
 	ID               uuid.UUID              `json:"id"`
 	OrganizationID   *uuid.UUID             `json:"organization_id,omitempty"`
+	UserID           *uuid.UUID             `json:"user_id,omitempty"`
 	Name             string                 `json:"name"`
 	URL              string                 `json:"url"`
 	FeedURL          *string                `json:"feed_url,omitempty"`
@@ -65,6 +68,7 @@ type DataSourceResponse struct {
 	CrawlStatus      string                 `json:"crawl_status"`
 	ErrorMessage     *string                `json:"error_message,omitempty"`
 	ContentCount     int                    `json:"content_count"`
+	SubscriberCount  int                    `json:"subscriber_count"`
 	MetaData         map[string]interface{} `json:"meta_data,omitempty"`
 	CreatedAt        time.Time              `json:"created_at"`
 	UpdatedAt        time.Time              `json:"updated_at"`

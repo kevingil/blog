@@ -13,6 +13,7 @@ import (
 type DataSource struct {
 	ID               uuid.UUID      `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
 	OrganizationID   *uuid.UUID     `json:"organization_id" gorm:"type:uuid;index"`
+	UserID           *uuid.UUID     `json:"user_id" gorm:"type:uuid;index"`
 	Name             string         `json:"name" gorm:"type:varchar(255);not null"`
 	URL              string         `json:"url" gorm:"type:text;not null"`
 	FeedURL          *string        `json:"feed_url" gorm:"type:text"`
@@ -26,6 +27,7 @@ type DataSource struct {
 	CrawlStatus      string         `json:"crawl_status" gorm:"type:varchar(50);default:pending"`
 	ErrorMessage     *string        `json:"error_message" gorm:"type:text"`
 	ContentCount     int            `json:"content_count" gorm:"default:0"`
+	SubscriberCount  int            `json:"subscriber_count" gorm:"default:1"`
 	MetaData         datatypes.JSON `json:"meta_data" gorm:"type:jsonb;default:'{}'"`
 	CreatedAt        time.Time      `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt        time.Time      `json:"updated_at" gorm:"autoUpdateTime"`
@@ -121,4 +123,23 @@ type Insight struct {
 
 func (Insight) TableName() string {
 	return "insight"
+}
+
+// UserInsightStatus is the GORM model for per-user insight tracking
+type UserInsightStatus struct {
+	ID              uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:uuid_generate_v4()"`
+	UserID          uuid.UUID  `json:"user_id" gorm:"type:uuid;not null;index"`
+	InsightID       uuid.UUID  `json:"insight_id" gorm:"type:uuid;not null;index"`
+	IsRead          bool       `json:"is_read" gorm:"default:false"`
+	IsPinned        bool       `json:"is_pinned" gorm:"default:false"`
+	IsUsedInArticle bool       `json:"is_used_in_article" gorm:"default:false"`
+	ReadAt          *time.Time `json:"read_at"`
+	CreatedAt       time.Time  `json:"created_at" gorm:"autoCreateTime"`
+
+	// Relationships
+	Insight *Insight `json:"insight" gorm:"foreignKey:InsightID"`
+}
+
+func (UserInsightStatus) TableName() string {
+	return "user_insight_status"
 }
