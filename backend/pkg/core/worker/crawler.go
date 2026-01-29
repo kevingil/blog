@@ -47,14 +47,16 @@ func NewCrawlWorker(logger *slog.Logger) *CrawlWorker {
 
 // Name returns the worker name
 func (w *CrawlWorker) Name() string {
-	return "crawl_worker"
+	return "crawl"
 }
 
 // Run executes the crawl worker
 func (w *CrawlWorker) Run(ctx context.Context) error {
 	w.logger.Info("starting crawl worker run")
+	statusService := GetStatusService()
 
 	// Get data sources due for crawling
+	statusService.UpdateStatus(w.Name(), StateRunning, 0, "Fetching sources to crawl...")
 	sources, err := datasource.GetDueToCrawl(ctx, w.batchSize)
 	if err != nil {
 		return fmt.Errorf("failed to get sources due for crawling: %w", err)
@@ -62,16 +64,20 @@ func (w *CrawlWorker) Run(ctx context.Context) error {
 
 	if len(sources) == 0 {
 		w.logger.Info("no data sources due for crawling")
+		statusService.UpdateStatus(w.Name(), StateRunning, 100, "No sources due for crawling")
 		return nil
 	}
 
 	w.logger.Info("found data sources to crawl", "count", len(sources))
+	statusService.SetProgress(w.Name(), 0, len(sources), fmt.Sprintf("Found %d sources to crawl", len(sources)))
 
-	for _, source := range sources {
+	for i, source := range sources {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
+			statusService.SetProgress(w.Name(), i, len(sources), fmt.Sprintf("Crawling: %s", source.Name))
+			
 			if err := w.crawlSource(ctx, &source); err != nil {
 				w.logger.Error("failed to crawl source", "id", source.ID, "url", source.URL, "error", err)
 				errMsg := err.Error()
@@ -83,6 +89,7 @@ func (w *CrawlWorker) Run(ctx context.Context) error {
 		}
 	}
 
+	statusService.SetProgress(w.Name(), len(sources), len(sources), fmt.Sprintf("Completed crawling %d sources", len(sources)))
 	return nil
 }
 

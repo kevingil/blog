@@ -43,19 +43,22 @@ func NewDiscoveryWorker(logger *slog.Logger, exaAPIKey string) *DiscoveryWorker 
 
 // Name returns the worker name
 func (w *DiscoveryWorker) Name() string {
-	return "discovery_worker"
+	return "discovery"
 }
 
 // Run executes the discovery worker
 func (w *DiscoveryWorker) Run(ctx context.Context) error {
 	w.logger.Info("starting discovery worker run")
+	statusService := GetStatusService()
 
 	if w.exaClient == nil {
 		w.logger.Warn("Exa client not configured, skipping discovery")
+		statusService.UpdateStatus(w.Name(), StateRunning, 100, "Exa not configured, skipping")
 		return nil
 	}
 
 	// Get active data sources (not discovered ones, as they're already derived)
+	statusService.UpdateStatus(w.Name(), StateRunning, 0, "Fetching data sources...")
 	repo := repository.NewDataSourceRepository(database.DB())
 	sources, _, err := repo.List(ctx, 0, 100)
 	if err != nil {
@@ -72,6 +75,7 @@ func (w *DiscoveryWorker) Run(ctx context.Context) error {
 
 	if len(activeManualSources) == 0 {
 		w.logger.Info("no active manual data sources found")
+		statusService.UpdateStatus(w.Name(), StateRunning, 100, "No manual sources to discover from")
 		return nil
 	}
 
@@ -81,13 +85,16 @@ func (w *DiscoveryWorker) Run(ctx context.Context) error {
 	}
 
 	w.logger.Info("discovering similar websites", "source_count", len(activeManualSources))
+	statusService.SetProgress(w.Name(), 0, len(activeManualSources), fmt.Sprintf("Processing %d sources", len(activeManualSources)))
 
 	totalDiscovered := 0
-	for _, source := range activeManualSources {
+	for i, source := range activeManualSources {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
+			statusService.SetProgress(w.Name(), i, len(activeManualSources), fmt.Sprintf("Finding similar sites for: %s", source.Name))
+			
 			discovered, err := w.discoverSimilarSites(ctx, &source)
 			if err != nil {
 				w.logger.Error("failed to discover similar sites", "source_id", source.ID, "error", err)
@@ -98,6 +105,7 @@ func (w *DiscoveryWorker) Run(ctx context.Context) error {
 	}
 
 	w.logger.Info("discovery worker completed", "total_discovered", totalDiscovered)
+	statusService.SetProgress(w.Name(), len(activeManualSources), len(activeManualSources), fmt.Sprintf("Discovered %d new sites", totalDiscovered))
 	return nil
 }
 
