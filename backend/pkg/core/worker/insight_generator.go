@@ -13,7 +13,8 @@ import (
 	"backend/pkg/types"
 
 	"github.com/google/uuid"
-	"github.com/sashabaranov/go-openai"
+	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/option"
 )
 
 // InsightWorker generates insights from crawled content
@@ -32,7 +33,8 @@ func NewInsightWorker(logger *slog.Logger, openaiAPIKey string) *InsightWorker {
 
 	var client *openai.Client
 	if openaiAPIKey != "" {
-		client = openai.NewClient(openaiAPIKey)
+		c := openai.NewClient(option.WithAPIKey(openaiAPIKey))
+		client = &c
 	}
 
 	return &InsightWorker{
@@ -235,22 +237,16 @@ Please analyze the following articles and generate an insight:
 
 %s`, topic.Name, stringValue(topic.Description), contentSummary)
 
-	resp, err := w.openaiClient.CreateChatCompletion(
+	resp, err := w.openaiClient.Chat.Completions.New(
 		ctx,
-		openai.ChatCompletionRequest{
-			Model: openai.GPT4oMini,
-			Messages: []openai.ChatCompletionMessage{
-				{
-					Role:    openai.ChatMessageRoleSystem,
-					Content: systemPrompt,
-				},
-				{
-					Role:    openai.ChatMessageRoleUser,
-					Content: userPrompt,
-				},
+		openai.ChatCompletionNewParams{
+			Model: openai.ChatModelGPT4oMini,
+			Messages: []openai.ChatCompletionMessageParamUnion{
+				openai.SystemMessage(systemPrompt),
+				openai.UserMessage(userPrompt),
 			},
-			MaxTokens:   2000,
-			Temperature: 0.7,
+			MaxCompletionTokens: openai.Int(2000),
+			Temperature:         openai.Float(0.7),
 		},
 	)
 

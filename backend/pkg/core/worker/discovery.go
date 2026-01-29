@@ -147,7 +147,8 @@ func (w *DiscoveryWorker) discoverSimilarSites(ctx context.Context, source *type
 			name = extractDomainName(normalizedURL)
 		}
 
-		_, err := datasource.CreateDiscoveredSource(ctx, source.OrganizationID, source.ID, name, normalizedURL)
+		// Pass both orgID and userID from the source
+		_, err := datasource.CreateDiscoveredSource(ctx, source.OrganizationID, source.UserID, source.ID, name, normalizedURL)
 		if err != nil {
 			// Skip if already exists
 			if strings.Contains(err.Error(), "already exists") {
