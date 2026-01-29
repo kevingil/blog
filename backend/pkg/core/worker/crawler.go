@@ -16,6 +16,7 @@ import (
 	"backend/pkg/core/ml"
 	"backend/pkg/database"
 	"backend/pkg/database/repository"
+	"backend/pkg/integrations/exa"
 	"backend/pkg/types"
 
 	"github.com/PuerkitoBio/goquery"
@@ -26,19 +27,26 @@ import (
 // CrawlWorker crawls data sources and stores content
 type CrawlWorker struct {
 	logger           *slog.Logger
+	exaClient        *exa.Client
 	batchSize        int
 	topicThreshold   float64
 	embeddingService *ml.EmbeddingService
 }
 
 // NewCrawlWorker creates a new CrawlWorker instance
-func NewCrawlWorker(logger *slog.Logger) *CrawlWorker {
+func NewCrawlWorker(logger *slog.Logger, exaAPIKey string) *CrawlWorker {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
+	var exaClient *exa.Client
+	if exaAPIKey != "" {
+		exaClient = exa.NewClient(exaAPIKey)
+	}
+
 	return &CrawlWorker{
 		logger:           logger,
+		exaClient:        exaClient,
 		batchSize:        10,
 		topicThreshold:   0.6,
 		embeddingService: ml.NewEmbeddingService(),
@@ -54,6 +62,12 @@ func (w *CrawlWorker) Name() string {
 func (w *CrawlWorker) Run(ctx context.Context) error {
 	w.logger.Info("starting crawl worker run")
 	statusService := GetStatusService()
+
+	if w.exaClient == nil || !w.exaClient.IsConfigured() {
+		w.logger.Warn("Exa client not configured, skipping crawl")
+		statusService.UpdateStatus(w.Name(), StateRunning, 100, "Exa not configured, skipping")
+		return nil
+	}
 
 	// Get data sources due for crawling
 	statusService.UpdateStatus(w.Name(), StateRunning, 0, "Fetching sources to crawl...")
@@ -158,8 +172,127 @@ type crawledItem struct {
 	PublishedAt *time.Time
 }
 
-// crawlWebsite crawls a website and extracts content
+// crawlWebsite crawls a website and extracts content using Exa
 func (w *CrawlWorker) crawlWebsite(ctx context.Context, source *types.DataSource) ([]crawledItem, error) {
+	// First, check if this is a PDF by doing a quick HEAD request
+	isPDF, err := w.checkIfPDF(source.URL)
+	if err == nil && isPDF {
+		// Fall back to HTTP fetch for PDFs since Exa doesn't handle them
+		return w.crawlPDF(ctx, source.URL)
+	}
+
+	// Extract domain from source URL for Exa search
+	domain := extractDomainForExa(source.URL)
+	if domain == "" {
+		return nil, fmt.Errorf("failed to extract domain from URL: %s", source.URL)
+	}
+
+	// Use Exa to search for content from this domain
+	// Search for recent content from the specific domain
+	searchQuery := fmt.Sprintf("site:%s", domain)
+	
+	results, err := w.exaClient.Search(ctx, searchQuery, &exa.SearchOptions{
+		NumResults:     20, // Get up to 20 articles per crawl
+		IncludeDomains: []string{domain},
+		IncludeText:    true,
+		IncludeSummary: true,
+	})
+	if err != nil {
+		w.logger.Warn("Exa search failed, falling back to HTTP crawl", "error", err)
+		return w.crawlWebsiteFallback(ctx, source)
+	}
+
+	if len(results.Results) == 0 {
+		w.logger.Info("no results from Exa, trying fallback", "source_id", source.ID)
+		return w.crawlWebsiteFallback(ctx, source)
+	}
+
+	// Convert Exa results to crawledItems
+	var items []crawledItem
+	for _, result := range results.Results {
+		// Skip if no text content
+		if result.Text == "" {
+			continue
+		}
+
+		// Parse published date if available
+		var publishedAt *time.Time
+		if result.PublishedDate != "" {
+			// Exa returns dates in ISO format
+			if t, err := time.Parse("2006-01-02", result.PublishedDate); err == nil {
+				publishedAt = &t
+			} else if t, err := time.Parse(time.RFC3339, result.PublishedDate); err == nil {
+				publishedAt = &t
+			}
+		}
+
+		items = append(items, crawledItem{
+			URL:         result.URL,
+			Title:       result.Title,
+			Content:     result.Text,
+			Author:      result.Author,
+			PublishedAt: publishedAt,
+		})
+	}
+
+	return items, nil
+}
+
+// crawlPDF handles PDF crawling via HTTP fetch
+func (w *CrawlWorker) crawlPDF(ctx context.Context, pdfURL string) ([]crawledItem, error) {
+	resp, err := w.fetchURL(pdfURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch PDF: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read PDF response: %w", err)
+	}
+
+	title, content, err := w.extractTextFromPDF(bodyData)
+	if err != nil {
+		return nil, err
+	}
+	
+	return []crawledItem{{
+		URL:     pdfURL,
+		Title:   title,
+		Content: content,
+	}}, nil
+}
+
+// checkIfPDF does a HEAD request to check if URL is a PDF
+func (w *CrawlWorker) checkIfPDF(targetURL string) (bool, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest("HEAD", targetURL, nil)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; BlogAgent/1.0)")
+	
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	
+	contentType := resp.Header.Get("Content-Type")
+	return strings.Contains(contentType, "application/pdf"), nil
+}
+
+// extractDomainForExa extracts the domain from a URL for Exa search
+func extractDomainForExa(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	return parsed.Host
+}
+
+// crawlWebsiteFallback uses traditional HTTP crawling when Exa fails
+func (w *CrawlWorker) crawlWebsiteFallback(ctx context.Context, source *types.DataSource) ([]crawledItem, error) {
 	// Fetch the main page
 	resp, err := w.fetchURL(source.URL)
 	if err != nil {
