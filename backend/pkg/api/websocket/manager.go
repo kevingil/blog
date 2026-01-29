@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
+
+	"backend/pkg/core/worker"
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/google/uuid"
@@ -25,16 +28,129 @@ func DefaultConfig() Config {
 
 // Manager manages WebSocket connections and streaming
 type Manager struct {
-	connections map[string]*Connection
-	mu          sync.RWMutex
-	config      Config
+	connections      map[string]*Connection
+	channelSubscribers map[string]map[string]bool // channel -> connectionID -> subscribed
+	mu               sync.RWMutex
+	config           Config
+	stopWorkerStatus chan struct{}
 }
 
 // NewManager creates a new WebSocket manager
 func NewManager(config Config) *Manager {
 	return &Manager{
-		connections: make(map[string]*Connection),
-		config:      config,
+		connections:      make(map[string]*Connection),
+		channelSubscribers: make(map[string]map[string]bool),
+		config:           config,
+		stopWorkerStatus: make(chan struct{}),
+	}
+}
+
+// StartWorkerStatusBroadcast starts listening to worker status updates and broadcasting them
+func (m *Manager) StartWorkerStatusBroadcast() {
+	statusService := worker.GetStatusService()
+	subscriber := statusService.Subscribe()
+
+	go func() {
+		defer statusService.Unsubscribe(subscriber)
+
+		for {
+			select {
+			case update, ok := <-subscriber:
+				if !ok {
+					return
+				}
+				m.broadcastWorkerStatus(update)
+			case <-m.stopWorkerStatus:
+				return
+			}
+		}
+	}()
+}
+
+// StopWorkerStatusBroadcast stops the worker status broadcast
+func (m *Manager) StopWorkerStatusBroadcast() {
+	close(m.stopWorkerStatus)
+}
+
+// broadcastWorkerStatus broadcasts a worker status update to all subscribed connections
+func (m *Manager) broadcastWorkerStatus(update worker.StatusUpdate) {
+	// Format timestamps
+	var startedAt, completedAt *string
+	if update.Status.StartedAt != nil {
+		s := update.Status.StartedAt.Format(time.RFC3339)
+		startedAt = &s
+	}
+	if update.Status.CompletedAt != nil {
+		s := update.Status.CompletedAt.Format(time.RFC3339)
+		completedAt = &s
+	}
+
+	msg := WorkerStatusMessage{
+		Type:       "worker-status",
+		WorkerName: update.WorkerName,
+		Status: WorkerStatusData{
+			Name:        update.Status.Name,
+			State:       string(update.Status.State),
+			Progress:    update.Status.Progress,
+			Message:     update.Status.Message,
+			StartedAt:   startedAt,
+			CompletedAt: completedAt,
+			Error:       update.Status.Error,
+			ItemsTotal:  update.Status.ItemsTotal,
+			ItemsDone:   update.Status.ItemsDone,
+		},
+		Timestamp: update.Timestamp,
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("[WebSocket] Failed to marshal worker status: %v", err)
+		return
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	subscribers, exists := m.channelSubscribers[ChannelWorkerStatus]
+	if !exists {
+		return
+	}
+
+	for connID := range subscribers {
+		if conn, ok := m.connections[connID]; ok {
+			conn.Send(data)
+		}
+	}
+}
+
+// subscribeToChannel subscribes a connection to a channel
+func (m *Manager) subscribeToChannel(connID, channel string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, exists := m.channelSubscribers[channel]; !exists {
+		m.channelSubscribers[channel] = make(map[string]bool)
+	}
+	m.channelSubscribers[channel][connID] = true
+}
+
+// unsubscribeFromChannel unsubscribes a connection from a channel
+func (m *Manager) unsubscribeFromChannel(connID, channel string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if subs, exists := m.channelSubscribers[channel]; exists {
+		delete(subs, connID)
+	}
+}
+
+// unsubscribeFromAllChannels unsubscribes a connection from all channels
+func (m *Manager) unsubscribeFromAllChannels(connID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, subs := range m.channelSubscribers {
+		delete(subs, connID)
 	}
 }
 
@@ -59,6 +175,7 @@ func (m *Manager) HandleConnection(conn *websocket.Conn) {
 	m.readPump(connection)
 
 	// Cleanup on disconnect
+	m.unsubscribeFromAllChannels(connectionID)
 	m.mu.Lock()
 	delete(m.connections, connectionID)
 	m.mu.Unlock()
@@ -81,6 +198,25 @@ func (m *Manager) readPump(conn *Connection) {
 				continue
 			}
 
+			// Handle channel-based subscriptions (e.g., worker-status)
+			if msg.Channel != "" {
+				if msg.Action == "subscribe" {
+					m.subscribeToChannel(conn.ID, msg.Channel)
+					// Send acknowledgment
+					ack := map[string]interface{}{
+						"type":    "subscribed",
+						"channel": msg.Channel,
+					}
+					if data, err := json.Marshal(ack); err == nil {
+						conn.Send(data)
+					}
+				} else if msg.Action == "unsubscribe" {
+					m.unsubscribeFromChannel(conn.ID, msg.Channel)
+				}
+				continue
+			}
+
+			// Handle request-based subscriptions (existing behavior)
 			if msg.Action == "subscribe" && msg.RequestID != "" {
 				conn.SubscribeToRequest(msg.RequestID)
 			} else if msg.Action == "unsubscribe" && msg.RequestID != "" {
