@@ -18,40 +18,47 @@ import (
 
 // ListInsights handles GET /insights
 // @Summary List insights
-// @Description Get a list of all insights for the authenticated user's organization
+// @Description Get a list of all insights with user-specific read/pinned status
 // @Tags insights
 // @Accept json
 // @Produce json
 // @Param page query int false "Page number" default(1)
 // @Param limit query int false "Items per page" default(20)
 // @Param topic_id query string false "Filter by topic ID"
-// @Success 200 {object} response.SuccessResponse{data=object{insights=[]types.InsightResponse,total=int64}}
+// @Success 200 {object} response.SuccessResponse{data=object{insights=[]types.InsightWithUserStatus,total=int64}}
 // @Failure 500 {object} response.SuccessResponse
 // @Security BearerAuth
 // @Router /insights [get]
 func ListInsights(c *fiber.Ctx) error {
-	orgID := middleware.GetOrgID(c)
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
 
 	page := c.QueryInt("page", 1)
 	limit := c.QueryInt("limit", 20)
 	topicIDStr := c.Query("topic_id")
 
-	var insights []types.InsightResponse
-	var total int64
-	var err error
-
+	// For topic filtering, use legacy function then merge with user status
 	if topicIDStr != "" {
 		topicID, parseErr := uuid.Parse(topicIDStr)
 		if parseErr != nil {
 			return response.Error(c, core.InvalidInputError("Invalid topic ID"))
 		}
-		insights, total, err = coreInsight.ListInsightsByTopic(c.Context(), topicID, page, limit)
-	} else if orgID != nil {
-		insights, total, err = coreInsight.ListInsights(c.Context(), *orgID, page, limit)
-	} else {
-		insights, total, err = coreInsight.ListAllInsights(c.Context(), page, limit)
+		insights, total, err := coreInsight.ListInsightsByTopic(c.Context(), topicID, page, limit)
+		if err != nil {
+			return response.Error(c, err)
+		}
+		return response.Success(c, fiber.Map{
+			"insights": insights,
+			"total":    total,
+			"page":     page,
+			"limit":    limit,
+		})
 	}
 
+	// Get insights with user-specific status
+	insights, total, err := coreInsight.ListInsightsWithUserStatus(c.Context(), userID, page, limit)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -93,7 +100,7 @@ func GetInsight(c *fiber.Ctx) error {
 
 // MarkInsightAsRead handles POST /insights/:id/read
 // @Summary Mark insight as read
-// @Description Mark an insight as read
+// @Description Mark an insight as read for the current user
 // @Tags insights
 // @Accept json
 // @Produce json
@@ -105,13 +112,18 @@ func GetInsight(c *fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /insights/{id}/read [post]
 func MarkInsightAsRead(c *fiber.Ctx) error {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
 	idStr := c.Params("id")
-	id, err := uuid.Parse(idStr)
+	insightID, err := uuid.Parse(idStr)
 	if err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid insight ID"))
 	}
 
-	if err := coreInsight.MarkInsightAsRead(c.Context(), id); err != nil {
+	if err := coreInsight.MarkInsightAsReadForUser(c.Context(), userID, insightID); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Success(c, fiber.Map{"success": true})
@@ -119,28 +131,34 @@ func MarkInsightAsRead(c *fiber.Ctx) error {
 
 // ToggleInsightPinned handles POST /insights/:id/pin
 // @Summary Toggle insight pinned status
-// @Description Toggle the pinned status of an insight
+// @Description Toggle the pinned status of an insight for the current user
 // @Tags insights
 // @Accept json
 // @Produce json
 // @Param id path string true "Insight ID"
-// @Success 200 {object} response.SuccessResponse{data=object{success=boolean}}
+// @Success 200 {object} response.SuccessResponse{data=object{success=boolean,is_pinned=boolean}}
 // @Failure 400 {object} response.SuccessResponse
 // @Failure 404 {object} response.SuccessResponse
 // @Failure 500 {object} response.SuccessResponse
 // @Security BearerAuth
 // @Router /insights/{id}/pin [post]
 func ToggleInsightPinned(c *fiber.Ctx) error {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		return response.Error(c, err)
+	}
+
 	idStr := c.Params("id")
-	id, err := uuid.Parse(idStr)
+	insightID, err := uuid.Parse(idStr)
 	if err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid insight ID"))
 	}
 
-	if err := coreInsight.ToggleInsightPinned(c.Context(), id); err != nil {
+	isPinned, err := coreInsight.ToggleInsightPinnedForUser(c.Context(), userID, insightID)
+	if err != nil {
 		return response.Error(c, err)
 	}
-	return response.Success(c, fiber.Map{"success": true})
+	return response.Success(c, fiber.Map{"success": true, "is_pinned": isPinned})
 }
 
 // SearchInsights handles GET /insights/search
@@ -187,7 +205,7 @@ func SearchInsights(c *fiber.Ctx) error {
 
 // GetUnreadCount handles GET /insights/unread-count
 // @Summary Get unread insight count
-// @Description Get the count of unread insights
+// @Description Get the count of unread insights for the current user
 // @Tags insights
 // @Accept json
 // @Produce json
@@ -196,17 +214,12 @@ func SearchInsights(c *fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /insights/unread-count [get]
 func GetUnreadCount(c *fiber.Ctx) error {
-	orgID := middleware.GetOrgID(c)
-
-	var count int64
-	var err error
-
-	if orgID != nil {
-		count, err = coreInsight.CountUnreadInsights(c.Context(), *orgID)
-	} else {
-		count, err = coreInsight.CountAllUnreadInsights(c.Context())
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		return response.Error(c, err)
 	}
 
+	count, err := coreInsight.CountUnreadInsightsForUser(c.Context(), userID)
 	if err != nil {
 		return response.Error(c, err)
 	}

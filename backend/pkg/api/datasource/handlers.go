@@ -14,7 +14,7 @@ import (
 
 // ListDataSources handles GET /data-sources
 // @Summary List data sources
-// @Description Get a list of all data sources for the authenticated user's organization
+// @Description Get a list of all data sources for the authenticated user (or their organization)
 // @Tags data-sources
 // @Accept json
 // @Produce json
@@ -27,6 +27,7 @@ import (
 func ListDataSources(c *fiber.Ctx) error {
 	orgID := middleware.GetOrgID(c)
 
+	// If user has an organization, get org data sources
 	if orgID != nil {
 		sources, err := coreDS.List(c.Context(), *orgID)
 		if err != nil {
@@ -35,21 +36,17 @@ func ListDataSources(c *fiber.Ctx) error {
 		return response.Success(c, sources)
 	}
 
-	// If no org, return all with pagination
-	page := c.QueryInt("page", 1)
-	limit := c.QueryInt("limit", 20)
-
-	sources, total, err := coreDS.ListAll(c.Context(), page, limit)
+	// If no org, get user-specific data sources
+	userID, err := middleware.GetUserID(c)
 	if err != nil {
 		return response.Error(c, err)
 	}
 
-	return response.Success(c, fiber.Map{
-		"data_sources": sources,
-		"total":        total,
-		"page":         page,
-		"limit":        limit,
-	})
+	sources, err := coreDS.ListByUserID(c.Context(), userID)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	return response.Success(c, sources)
 }
 
 // GetDataSource handles GET /data-sources/:id
@@ -103,7 +100,17 @@ func CreateDataSource(c *fiber.Ctx) error {
 
 	orgID := middleware.GetOrgID(c)
 
-	ds, err := coreDS.Create(c.Context(), orgID, req)
+	// If user has no organization, use their user ID
+	var userID *uuid.UUID
+	if orgID == nil {
+		uid, err := middleware.GetUserID(c)
+		if err != nil {
+			return response.Error(c, err)
+		}
+		userID = &uid
+	}
+
+	ds, err := coreDS.Create(c.Context(), orgID, userID, req)
 	if err != nil {
 		return response.Error(c, err)
 	}
