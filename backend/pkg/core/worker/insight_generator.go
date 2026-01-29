@@ -47,19 +47,22 @@ func NewInsightWorker(logger *slog.Logger, openaiAPIKey string) *InsightWorker {
 
 // Name returns the worker name
 func (w *InsightWorker) Name() string {
-	return "insight_worker"
+	return "insight"
 }
 
 // Run executes the insight worker
 func (w *InsightWorker) Run(ctx context.Context) error {
 	w.logger.Info("starting insight worker run")
+	statusService := GetStatusService()
 
 	if w.openaiClient == nil {
 		w.logger.Warn("OpenAI client not configured, skipping insight generation")
+		statusService.UpdateStatus(w.Name(), StateRunning, 100, "OpenAI not configured, skipping")
 		return nil
 	}
 
 	// Get all topics
+	statusService.UpdateStatus(w.Name(), StateRunning, 0, "Fetching topics...")
 	topicRepo := repository.NewInsightTopicRepository(database.DB())
 	topics, err := topicRepo.FindAll(ctx)
 	if err != nil {
@@ -68,22 +71,27 @@ func (w *InsightWorker) Run(ctx context.Context) error {
 
 	if len(topics) == 0 {
 		w.logger.Info("no topics found, skipping insight generation")
+		statusService.UpdateStatus(w.Name(), StateRunning, 100, "No topics found")
 		return nil
 	}
 
 	w.logger.Info("processing topics for insights", "count", len(topics))
+	statusService.SetProgress(w.Name(), 0, len(topics), fmt.Sprintf("Found %d topics to process", len(topics)))
 
-	for _, topic := range topics {
+	for i, topic := range topics {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
+			statusService.SetProgress(w.Name(), i, len(topics), fmt.Sprintf("Generating insight for: %s", topic.Name))
+			
 			if err := w.generateInsightForTopic(ctx, &topic); err != nil {
 				w.logger.Error("failed to generate insight for topic", "topic_id", topic.ID, "topic_name", topic.Name, "error", err)
 			}
 		}
 	}
 
+	statusService.SetProgress(w.Name(), len(topics), len(topics), fmt.Sprintf("Completed processing %d topics", len(topics)))
 	return nil
 }
 
