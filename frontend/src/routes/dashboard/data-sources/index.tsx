@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
@@ -14,6 +14,11 @@ import {
   AlertCircle,
   ExternalLink,
   FileText,
+  Play,
+  Square,
+  Sparkles,
+  Search,
+  Zap,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Progress } from '@/components/ui/progress';
 import {
   Select,
   SelectContent,
@@ -59,10 +65,166 @@ import {
   type CreateDataSourceRequest,
   type UpdateDataSourceRequest,
 } from '@/services/dataSources';
+import {
+  getWorkersStatus,
+  runWorker,
+  stopWorker,
+  getWorkerDisplayName,
+  getWorkerDescription,
+  type WorkerStatus,
+  type WorkerState,
+} from '@/services/workers';
+import { VITE_WS_URL } from '@/services/constants';
 
 export const Route = createFileRoute('/dashboard/data-sources/')({
   component: DataSourcesPage,
 });
+
+// Worker icon mapping
+const WorkerIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+  crawl: RefreshCw,
+  insight: Sparkles,
+  discovery: Search,
+};
+
+// Worker status colors
+const getStateColor = (state: WorkerState): string => {
+  switch (state) {
+    case 'running': return 'text-blue-500';
+    case 'completed': return 'text-green-500';
+    case 'failed': return 'text-destructive';
+    default: return 'text-muted-foreground';
+  }
+};
+
+const getStateBgColor = (state: WorkerState): string => {
+  switch (state) {
+    case 'running': return 'bg-blue-500/10';
+    case 'completed': return 'bg-green-500/10';
+    case 'failed': return 'bg-destructive/10';
+    default: return 'bg-muted';
+  }
+};
+
+// Worker Controls Component
+interface WorkerControlsProps {
+  workerStatuses: Record<string, WorkerStatus>;
+  onRunWorker: (name: string) => void;
+  onStopWorker: (name: string) => void;
+  runningMutation: string | null;
+}
+
+function WorkerControls({ workerStatuses, onRunWorker, onStopWorker, runningMutation }: WorkerControlsProps) {
+  const workers = ['crawl', 'insight', 'discovery'];
+
+  return (
+    <Card className="mb-6">
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <Zap className="w-5 h-5 text-primary" />
+          <CardTitle className="text-base">Worker Controls</CardTitle>
+        </div>
+        <CardDescription>
+          Run data processing workers manually or view their status.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {workers.map((workerName) => {
+            const status = workerStatuses[workerName];
+            const IconComponent = WorkerIcons[workerName] || RefreshCw;
+            const isRunning = status?.state === 'running';
+            const isMutating = runningMutation === workerName;
+
+            return (
+              <div
+                key={workerName}
+                className={`p-4 rounded-lg border ${getStateBgColor(status?.state || 'idle')}`}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <IconComponent className={`w-4 h-4 ${isRunning ? 'animate-spin' : ''} ${getStateColor(status?.state || 'idle')}`} />
+                    <span className="font-medium text-sm">{getWorkerDisplayName(workerName)}</span>
+                  </div>
+                  {isRunning ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onStopWorker(workerName)}
+                      disabled={isMutating}
+                      className="h-7 px-2"
+                    >
+                      {isMutating ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <>
+                          <Square className="w-3 h-3 mr-1" />
+                          Stop
+                        </>
+                      )}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onRunWorker(workerName)}
+                      disabled={isMutating}
+                      className="h-7 px-2"
+                    >
+                      {isMutating ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <>
+                          <Play className="w-3 h-3 mr-1" />
+                          Run
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+
+                <p className="text-xs text-muted-foreground mb-2">
+                  {getWorkerDescription(workerName)}
+                </p>
+
+                {status && (
+                  <div className="space-y-2">
+                    {isRunning && (
+                      <>
+                        <Progress value={status.progress} className="h-1.5" />
+                        <p className="text-xs text-muted-foreground">
+                          {status.message || 'Processing...'}
+                          {status.items_total > 0 && (
+                            <span className="ml-1">
+                              ({status.items_done}/{status.items_total})
+                            </span>
+                          )}
+                        </p>
+                      </>
+                    )}
+
+                    {status.state === 'completed' && status.completed_at && (
+                      <p className="text-xs text-muted-foreground">
+                        Completed: {new Date(status.completed_at).toLocaleString()}
+                      </p>
+                    )}
+
+                    {status.state === 'failed' && status.error && (
+                      <p className="text-xs text-destructive flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        {status.error}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 function DataSourcesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -74,6 +236,9 @@ function DataSourcesPage() {
     crawl_frequency: 'daily',
     is_enabled: true,
   });
+  const [workerStatuses, setWorkerStatuses] = useState<Record<string, WorkerStatus>>({});
+  const [runningMutation, setRunningMutation] = useState<string | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const { toast } = useToast();
   const { setPageTitle } = useAdminDashboard();
   const queryClient = useQueryClient();
@@ -81,6 +246,118 @@ function DataSourcesPage() {
   useEffect(() => {
     setPageTitle("Data Sources");
   }, [setPageTitle]);
+
+  // Fetch initial worker statuses
+  useEffect(() => {
+    getWorkersStatus().then((response) => {
+      const statuses: Record<string, WorkerStatus> = {};
+      response.workers.forEach((w) => {
+        statuses[w.name] = w;
+      });
+      setWorkerStatuses(statuses);
+    }).catch(console.error);
+  }, []);
+
+  // WebSocket connection for live updates
+  useEffect(() => {
+    const wsUrl = VITE_WS_URL || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/websocket`;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      // Subscribe to worker status channel
+      ws.send(JSON.stringify({
+        action: 'subscribe',
+        channel: 'worker-status',
+      }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'worker-status') {
+          setWorkerStatuses((prev) => ({
+            ...prev,
+            [data.worker_name]: data.status,
+          }));
+
+          // Show toast for state changes
+          if (data.status.state === 'completed') {
+            toast({
+              title: `${getWorkerDisplayName(data.worker_name)} Completed`,
+              description: data.status.message || 'Worker completed successfully',
+            });
+            // Refresh data sources after crawl completes
+            if (data.worker_name === 'crawl') {
+              queryClient.invalidateQueries({ queryKey: ['data-sources'] });
+            }
+          } else if (data.status.state === 'failed') {
+            toast({
+              title: `${getWorkerDisplayName(data.worker_name)} Failed`,
+              description: data.status.error || 'Worker failed',
+              variant: 'destructive',
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse WebSocket message:', e);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    return () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          action: 'unsubscribe',
+          channel: 'worker-status',
+        }));
+      }
+      ws.close();
+    };
+  }, [toast, queryClient]);
+
+  // Worker control handlers
+  const handleRunWorker = useCallback(async (name: string) => {
+    setRunningMutation(name);
+    try {
+      await runWorker(name);
+      toast({
+        title: 'Worker Started',
+        description: `${getWorkerDisplayName(name)} is now running`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to Start Worker',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setRunningMutation(null);
+    }
+  }, [toast]);
+
+  const handleStopWorker = useCallback(async (name: string) => {
+    setRunningMutation(name);
+    try {
+      await stopWorker(name);
+      toast({
+        title: 'Worker Stopped',
+        description: `${getWorkerDisplayName(name)} has been stopped`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Failed to Stop Worker',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setRunningMutation(null);
+    }
+  }, [toast]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['data-sources'],
@@ -206,6 +483,14 @@ function DataSourcesPage() {
 
   return (
     <section className="flex-1 p-0 md:p-4 overflow-auto">
+      {/* Worker Controls */}
+      <WorkerControls
+        workerStatuses={workerStatuses}
+        onRunWorker={handleRunWorker}
+        onStopWorker={handleStopWorker}
+        runningMutation={runningMutation}
+      />
+
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>

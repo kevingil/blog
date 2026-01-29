@@ -1,5 +1,6 @@
 export const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 export const VITE_PUBLIC_S3_URL_PREFIX = import.meta.env.VITE_PUBLIC_S3_URL_PREFIX;
+export const VITE_WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/websocket';
 
 export const siteMetadata = {
     title: "Kevin Gil",
