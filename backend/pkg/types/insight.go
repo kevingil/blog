@@ -124,3 +124,30 @@ type InsightSearchRequest struct {
 	Limit    int        `json:"limit" validate:"omitempty,min=1,max=50"`
 	IsUnread *bool      `json:"is_unread"`
 }
+
+// UserInsightStatus represents a user's interaction status with an insight
+type UserInsightStatus struct {
+	ID              uuid.UUID
+	UserID          uuid.UUID
+	InsightID       uuid.UUID
+	IsRead          bool
+	IsPinned        bool
+	IsUsedInArticle bool
+	ReadAt          *time.Time
+	CreatedAt       time.Time
+}
+
+// UserInsightStatusResponse is the response for user insight status
+type UserInsightStatusResponse struct {
+	InsightID       uuid.UUID  `json:"insight_id"`
+	IsRead          bool       `json:"is_read"`
+	IsPinned        bool       `json:"is_pinned"`
+	IsUsedInArticle bool       `json:"is_used_in_article"`
+	ReadAt          *time.Time `json:"read_at,omitempty"`
+}
+
+// InsightWithUserStatus combines an insight with user-specific status
+type InsightWithUserStatus struct {
+	InsightResponse
+	UserStatus *UserInsightStatusResponse `json:"user_status,omitempty"`
+}

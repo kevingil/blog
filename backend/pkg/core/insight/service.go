@@ -34,6 +34,11 @@ func getContentTopicMatchRepo() *repository.ContentTopicMatchRepository {
 	return repository.NewContentTopicMatchRepository(database.DB())
 }
 
+// getUserInsightStatusRepo returns a user insight status repository instance
+func getUserInsightStatusRepo() *repository.UserInsightStatusRepository {
+	return repository.NewUserInsightStatusRepository(database.DB())
+}
+
 // getEmbeddingService returns an embedding service instance
 func getEmbeddingService() *ml.EmbeddingService {
 	return ml.NewEmbeddingService()
@@ -290,10 +295,141 @@ func CreateInsight(ctx context.Context, orgID *uuid.UUID, topicID *uuid.UUID, ti
 	return toInsightResponse(insight), nil
 }
 
-// MarkInsightAsRead marks an insight as read
+// MarkInsightAsRead marks an insight as read (legacy - uses global flag)
 func MarkInsightAsRead(ctx context.Context, id uuid.UUID) error {
 	repo := getInsightRepo()
 	return repo.MarkAsRead(ctx, id)
+}
+
+// MarkInsightAsReadForUser marks an insight as read for a specific user
+func MarkInsightAsReadForUser(ctx context.Context, userID, insightID uuid.UUID) error {
+	repo := getUserInsightStatusRepo()
+	return repo.MarkAsRead(ctx, userID, insightID)
+}
+
+// ToggleInsightPinnedForUser toggles the pinned status of an insight for a user
+func ToggleInsightPinnedForUser(ctx context.Context, userID, insightID uuid.UUID) (bool, error) {
+	repo := getUserInsightStatusRepo()
+	return repo.TogglePinned(ctx, userID, insightID)
+}
+
+// MarkInsightAsUsedInArticleForUser marks an insight as used in an article for a user
+func MarkInsightAsUsedInArticleForUser(ctx context.Context, userID, insightID uuid.UUID) error {
+	repo := getUserInsightStatusRepo()
+	return repo.MarkAsUsedInArticle(ctx, userID, insightID)
+}
+
+// GetUserInsightStatus retrieves the user's status for an insight
+func GetUserInsightStatus(ctx context.Context, userID, insightID uuid.UUID) (*types.UserInsightStatus, error) {
+	repo := getUserInsightStatusRepo()
+	return repo.FindByUserAndInsight(ctx, userID, insightID)
+}
+
+// GetInsightWithUserStatus retrieves an insight with the user's status
+func GetInsightWithUserStatus(ctx context.Context, userID, insightID uuid.UUID) (*types.InsightWithUserStatus, error) {
+	insightRepo := getInsightRepo()
+	statusRepo := getUserInsightStatusRepo()
+
+	insight, err := insightRepo.FindByID(ctx, insightID)
+	if err != nil {
+		return nil, err
+	}
+
+	status, err := statusRepo.FindByUserAndInsight(ctx, userID, insightID)
+	if err != nil {
+		return nil, err
+	}
+
+	insightResp := toInsightResponse(insight)
+	result := &types.InsightWithUserStatus{
+		InsightResponse: *insightResp,
+	}
+
+	if status != nil {
+		result.UserStatus = &types.UserInsightStatusResponse{
+			InsightID:       status.InsightID,
+			IsRead:          status.IsRead,
+			IsPinned:        status.IsPinned,
+			IsUsedInArticle: status.IsUsedInArticle,
+			ReadAt:          status.ReadAt,
+		}
+	}
+
+	return result, nil
+}
+
+// ListInsightsWithUserStatus retrieves insights with user-specific status
+func ListInsightsWithUserStatus(ctx context.Context, userID uuid.UUID, page, limit int) ([]types.InsightWithUserStatus, int64, error) {
+	insightRepo := getInsightRepo()
+	statusRepo := getUserInsightStatusRepo()
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+
+	// Get all insights (global)
+	insights, total, err := insightRepo.List(ctx, offset, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Get user status for all insights
+	insightIDs := make([]uuid.UUID, len(insights))
+	for i, ins := range insights {
+		insightIDs[i] = ins.ID
+	}
+
+	statusMap, err := statusRepo.GetStatusMapForInsights(ctx, userID, insightIDs)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Combine insights with user status
+	result := make([]types.InsightWithUserStatus, len(insights))
+	for i, ins := range insights {
+		insightResp := toInsightResponse(&ins)
+		result[i] = types.InsightWithUserStatus{
+			InsightResponse: *insightResp,
+		}
+		if status, ok := statusMap[ins.ID]; ok {
+			result[i].UserStatus = &types.UserInsightStatusResponse{
+				InsightID:       status.InsightID,
+				IsRead:          status.IsRead,
+				IsPinned:        status.IsPinned,
+				IsUsedInArticle: status.IsUsedInArticle,
+				ReadAt:          status.ReadAt,
+			}
+		}
+	}
+
+	return result, total, nil
+}
+
+// CountUnreadInsightsForUser counts unread insights for a user
+func CountUnreadInsightsForUser(ctx context.Context, userID uuid.UUID) (int64, error) {
+	insightRepo := getInsightRepo()
+	statusRepo := getUserInsightStatusRepo()
+
+	// Get total insight count
+	_, totalInsights, err := insightRepo.List(ctx, 0, 1)
+	if err != nil {
+		return 0, err
+	}
+
+	// Get read count for user
+	readCount, err := statusRepo.CountUnreadByUserID(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+
+	// Unread = total - read statuses with is_read=true
+	// Note: this is approximate - we count insights that don't have a read status
+	// A more accurate count would require a LEFT JOIN query
+	return totalInsights - readCount, nil
 }
 
 // ToggleInsightPinned toggles the pinned status of an insight
