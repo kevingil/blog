@@ -8,38 +8,46 @@ import (
 	"time"
 
 	"backend/pkg/core/insight"
+	"backend/pkg/core/ml/llm/message"
+	"backend/pkg/core/ml/llm/models"
+	"backend/pkg/core/ml/llm/provider"
 	"backend/pkg/database"
 	"backend/pkg/database/repository"
 	"backend/pkg/types"
 
 	"github.com/google/uuid"
-	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/option"
 )
 
 // InsightWorker generates insights from crawled content
 type InsightWorker struct {
 	logger           *slog.Logger
-	openaiClient     *openai.Client
+	llmProvider      provider.Provider
 	minContentCount  int
 	maxContentPerGen int
 }
 
 // NewInsightWorker creates a new InsightWorker instance
-func NewInsightWorker(logger *slog.Logger, openaiAPIKey string) *InsightWorker {
+func NewInsightWorker(logger *slog.Logger, groqAPIKey string) *InsightWorker {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
-	var client *openai.Client
-	if openaiAPIKey != "" {
-		c := openai.NewClient(option.WithAPIKey(openaiAPIKey))
-		client = &c
+	var llmProvider provider.Provider
+	if groqAPIKey != "" {
+		p, err := provider.NewProvider(
+			models.ProviderGROQ,
+			provider.WithAPIKey(groqAPIKey),
+			provider.WithModel(models.GroqModels[models.GptOss120b]),
+			provider.WithMaxTokens(2000),
+		)
+		if err == nil {
+			llmProvider = p
+		}
 	}
 
 	return &InsightWorker{
 		logger:           logger,
-		openaiClient:     client,
+		llmProvider:      llmProvider,
 		minContentCount:  3,  // Minimum content items to generate an insight
 		maxContentPerGen: 10, // Maximum content items per insight
 	}
@@ -55,9 +63,9 @@ func (w *InsightWorker) Run(ctx context.Context) error {
 	w.logger.Info("starting insight worker run")
 	statusService := GetStatusService()
 
-	if w.openaiClient == nil {
-		w.logger.Warn("OpenAI client not configured, skipping insight generation")
-		statusService.UpdateStatus(w.Name(), StateRunning, 100, "OpenAI not configured, skipping")
+	if w.llmProvider == nil {
+		w.logger.Warn("LLM provider not configured, skipping insight generation")
+		statusService.UpdateStatus(w.Name(), StateRunning, 100, "LLM not configured, skipping")
 		return nil
 	}
 
@@ -219,7 +227,7 @@ type insightLLMResponse struct {
 	KeyPoints []string
 }
 
-// generateInsightWithLLM generates insight content using OpenAI
+// generateInsightWithLLM generates insight content using Groq LLM
 func (w *InsightWorker) generateInsightWithLLM(ctx context.Context, topic *types.InsightTopic, contentSummary string) (*insightLLMResponse, error) {
 	systemPrompt := `You are an expert content analyst and writer. Your task is to analyze multiple articles on a specific topic and generate a comprehensive insight summary.
 
@@ -245,29 +253,29 @@ Please analyze the following articles and generate an insight:
 
 %s`, topic.Name, stringValue(topic.Description), contentSummary)
 
-	resp, err := w.openaiClient.Chat.Completions.New(
-		ctx,
-		openai.ChatCompletionNewParams{
-			Model: openai.ChatModelGPT4oMini,
-			Messages: []openai.ChatCompletionMessageParamUnion{
-				openai.SystemMessage(systemPrompt),
-				openai.UserMessage(userPrompt),
-			},
-			MaxCompletionTokens: openai.Int(2000),
-			Temperature:         openai.Float(0.7),
+	// Build messages for the provider
+	messages := []message.Message{
+		{
+			Role:  message.System,
+			Parts: []message.ContentPart{message.TextContent{Text: systemPrompt}},
 		},
-	)
-
-	if err != nil {
-		return nil, fmt.Errorf("OpenAI API error: %w", err)
+		{
+			Role:  message.User,
+			Parts: []message.ContentPart{message.TextContent{Text: userPrompt}},
+		},
 	}
 
-	if len(resp.Choices) == 0 {
-		return nil, fmt.Errorf("no response from OpenAI")
+	resp, err := w.llmProvider.SendMessages(ctx, messages, nil)
+	if err != nil {
+		return nil, fmt.Errorf("LLM API error: %w", err)
+	}
+
+	if resp.Content == "" {
+		return nil, fmt.Errorf("no response from LLM")
 	}
 
 	// Parse the response
-	return w.parseInsightResponse(resp.Choices[0].Message.Content)
+	return w.parseInsightResponse(resp.Content)
 }
 
 // parseInsightResponse parses the LLM response into structured data
