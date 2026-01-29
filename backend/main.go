@@ -66,22 +66,27 @@ func main() {
 	workerManager.RegisterWorker(insightWorker)
 	workerManager.RegisterWorker(discoveryWorker)
 
-	// Schedule workers if configured
-	if cfg.Worker.CrawlSchedule != "" {
-		if err := workerManager.ScheduleWorker("crawl", cfg.Worker.CrawlSchedule); err != nil {
-			log.Printf("Warning: Failed to schedule crawl worker: %v", err)
-		}
-	}
-	if cfg.Worker.InsightSchedule != "" {
-		if err := workerManager.ScheduleWorker("insight", cfg.Worker.InsightSchedule); err != nil {
-			log.Printf("Warning: Failed to schedule insight worker: %v", err)
-		}
-	}
-	if cfg.Worker.DiscoverySchedule != "" {
-		if err := workerManager.ScheduleWorker("discovery", cfg.Worker.DiscoverySchedule); err != nil {
-			log.Printf("Warning: Failed to schedule discovery worker: %v", err)
-		}
-	}
+	// NOTE: Cron scheduling is disabled for now - workers run manually only
+	// To enable scheduled runs, uncomment the following and set environment variables:
+	// WORKER_CRAWL_SCHEDULE, WORKER_INSIGHT_SCHEDULE, WORKER_DISCOVERY_SCHEDULE
+	// Schedule format: "seconds minutes hours day-of-month month day-of-week"
+	// Examples: "0 */15 * * * *" (every 15 mins), "0 0 */6 * * *" (every 6 hours)
+	//
+	// if cfg.Worker.CrawlSchedule != "" {
+	// 	if err := workerManager.ScheduleWorker("crawl", cfg.Worker.CrawlSchedule); err != nil {
+	// 		log.Printf("Warning: Failed to schedule crawl worker: %v", err)
+	// 	}
+	// }
+	// if cfg.Worker.InsightSchedule != "" {
+	// 	if err := workerManager.ScheduleWorker("insight", cfg.Worker.InsightSchedule); err != nil {
+	// 		log.Printf("Warning: Failed to schedule insight worker: %v", err)
+	// 	}
+	// }
+	// if cfg.Worker.DiscoverySchedule != "" {
+	// 	if err := workerManager.ScheduleWorker("discovery", cfg.Worker.DiscoverySchedule); err != nil {
+	// 		log.Printf("Warning: Failed to schedule discovery worker: %v", err)
+	// 	}
+	// }
 
 	// Start worker manager
 	workerManager.Start()
