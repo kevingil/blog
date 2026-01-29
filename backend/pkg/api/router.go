@@ -5,6 +5,8 @@ import (
 	"backend/pkg/api/agent"
 	"backend/pkg/api/article"
 	"backend/pkg/api/auth"
+	"backend/pkg/api/datasource"
+	"backend/pkg/api/insight"
 	"backend/pkg/api/middleware"
 	"backend/pkg/api/organization"
 	"backend/pkg/api/page"
@@ -37,6 +39,8 @@ func RegisterRoutes(app *fiber.App) {
 	auth.Register(app)
 	agent.Register(app)
 	storage.Register(app)
+	datasource.Register(app)
+	insight.Register(app)
 
 	// Health check
 	app.Get("/health", func(c *fiber.Ctx) error {
