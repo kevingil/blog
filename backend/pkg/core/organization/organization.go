@@ -30,3 +30,9 @@ type OrganizationStore interface {
 	Update(ctx context.Context, org *types.Organization) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }
+
+// AccountStore defines the data access interface for accounts (used for join/leave organization)
+type AccountStore interface {
+	FindByID(ctx context.Context, id uuid.UUID) (*types.Account, error)
+	Update(ctx context.Context, account *types.Account) error
+}

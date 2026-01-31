@@ -7,27 +7,28 @@ import (
 	"strings"
 
 	"backend/pkg/core"
-	"backend/pkg/database"
-	"backend/pkg/database/repository"
 	"backend/pkg/types"
 
 	"github.com/google/uuid"
 )
 
-// getRepo returns an organization repository instance
-func getRepo() *repository.OrganizationRepository {
-	return repository.NewOrganizationRepository(database.DB())
+// Service provides business logic for organizations
+type Service struct {
+	orgStore     OrganizationStore
+	accountStore AccountStore
 }
 
-// getAccountRepo returns an account repository instance
-func getAccountRepo() *repository.AccountRepository {
-	return repository.NewAccountRepository(database.DB())
+// NewService creates a new organization service with the provided stores
+func NewService(orgStore OrganizationStore, accountStore AccountStore) *Service {
+	return &Service{
+		orgStore:     orgStore,
+		accountStore: accountStore,
+	}
 }
 
 // GetByID retrieves an organization by its ID
-func GetByID(ctx context.Context, id uuid.UUID) (*OrganizationResponse, error) {
-	repo := getRepo()
-	org, err := repo.FindByID(ctx, id)
+func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*OrganizationResponse, error) {
+	org, err := s.orgStore.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -35,9 +36,8 @@ func GetByID(ctx context.Context, id uuid.UUID) (*OrganizationResponse, error) {
 }
 
 // GetBySlug retrieves an organization by its slug
-func GetBySlug(ctx context.Context, slug string) (*OrganizationResponse, error) {
-	repo := getRepo()
-	org, err := repo.FindBySlug(ctx, slug)
+func (s *Service) GetBySlug(ctx context.Context, slug string) (*OrganizationResponse, error) {
+	org, err := s.orgStore.FindBySlug(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
@@ -45,9 +45,8 @@ func GetBySlug(ctx context.Context, slug string) (*OrganizationResponse, error) 
 }
 
 // List retrieves all organizations
-func List(ctx context.Context) ([]OrganizationResponse, error) {
-	repo := getRepo()
-	orgs, err := repo.List(ctx)
+func (s *Service) List(ctx context.Context) ([]OrganizationResponse, error) {
+	orgs, err := s.orgStore.List(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -60,9 +59,7 @@ func List(ctx context.Context) ([]OrganizationResponse, error) {
 }
 
 // Create creates a new organization
-func Create(ctx context.Context, req CreateRequest) (*OrganizationResponse, error) {
-	repo := getRepo()
-
+func (s *Service) Create(ctx context.Context, req CreateRequest) (*OrganizationResponse, error) {
 	// Generate slug if not provided
 	slug := req.Slug
 	if slug == "" {
@@ -70,7 +67,7 @@ func Create(ctx context.Context, req CreateRequest) (*OrganizationResponse, erro
 	}
 
 	// Check if slug already exists
-	existing, err := repo.FindBySlug(ctx, slug)
+	existing, err := s.orgStore.FindBySlug(ctx, slug)
 	if err != nil && err != core.ErrNotFound {
 		return nil, err
 	}
@@ -99,7 +96,7 @@ func Create(ctx context.Context, req CreateRequest) (*OrganizationResponse, erro
 		MetaDescription: req.MetaDescription,
 	}
 
-	if err := repo.Save(ctx, org); err != nil {
+	if err := s.orgStore.Save(ctx, org); err != nil {
 		return nil, err
 	}
 
@@ -107,17 +104,15 @@ func Create(ctx context.Context, req CreateRequest) (*OrganizationResponse, erro
 }
 
 // Update updates an existing organization
-func Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (*OrganizationResponse, error) {
-	repo := getRepo()
-
-	org, err := repo.FindByID(ctx, id)
+func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (*OrganizationResponse, error) {
+	org, err := s.orgStore.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
 	// Check if new slug is unique
 	if req.Slug != nil && *req.Slug != org.Slug {
-		existing, err := repo.FindBySlug(ctx, *req.Slug)
+		existing, err := s.orgStore.FindBySlug(ctx, *req.Slug)
 		if err != nil && err != core.ErrNotFound {
 			return nil, err
 		}
@@ -154,7 +149,7 @@ func Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (*Organization
 		org.MetaDescription = req.MetaDescription
 	}
 
-	if err := repo.Update(ctx, org); err != nil {
+	if err := s.orgStore.Update(ctx, org); err != nil {
 		return nil, err
 	}
 
@@ -162,43 +157,37 @@ func Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (*Organization
 }
 
 // Delete removes an organization by its ID
-func Delete(ctx context.Context, id uuid.UUID) error {
-	repo := getRepo()
-	return repo.Delete(ctx, id)
+func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
+	return s.orgStore.Delete(ctx, id)
 }
 
 // JoinOrganization sets the organization for a user account
-func JoinOrganization(ctx context.Context, accountID, orgID uuid.UUID) error {
-	orgRepo := getRepo()
-	accountRepo := getAccountRepo()
-
+func (s *Service) JoinOrganization(ctx context.Context, accountID, orgID uuid.UUID) error {
 	// Verify organization exists
-	_, err := orgRepo.FindByID(ctx, orgID)
+	_, err := s.orgStore.FindByID(ctx, orgID)
 	if err != nil {
 		return err
 	}
 
 	// Get and update account
-	account, err := accountRepo.FindByID(ctx, accountID)
+	account, err := s.accountStore.FindByID(ctx, accountID)
 	if err != nil {
 		return err
 	}
 
 	account.OrganizationID = &orgID
-	return accountRepo.Update(ctx, account)
+	return s.accountStore.Update(ctx, account)
 }
 
 // LeaveOrganization clears the organization for a user account
-func LeaveOrganization(ctx context.Context, accountID uuid.UUID) error {
-	accountRepo := getAccountRepo()
-
-	account, err := accountRepo.FindByID(ctx, accountID)
+func (s *Service) LeaveOrganization(ctx context.Context, accountID uuid.UUID) error {
+	account, err := s.accountStore.FindByID(ctx, accountID)
 	if err != nil {
 		return err
 	}
 
 	account.OrganizationID = nil
-	return accountRepo.Update(ctx, account)
+	return s.accountStore.Update(ctx, account)
 }
 
 // Helper functions
@@ -242,4 +231,3 @@ func stringValue(s *string) string {
 	}
 	return *s
 }
-
