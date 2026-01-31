@@ -41,3 +41,14 @@ type ProfileStore interface {
 	GetPublicProfile(ctx context.Context) (*types.PublicProfile, error)
 	IsUserAdmin(ctx context.Context, userID uuid.UUID) (bool, error)
 }
+
+// AccountStore defines the data access interface for account operations
+type AccountStore interface {
+	FindByID(ctx context.Context, id uuid.UUID) (*types.Account, error)
+	Update(ctx context.Context, account *types.Account) error
+}
+
+// OrganizationStore defines the data access interface for organization operations
+type OrganizationStore interface {
+	FindByID(ctx context.Context, id uuid.UUID) (*types.Organization, error)
+}

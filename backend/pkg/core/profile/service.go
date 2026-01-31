@@ -5,30 +5,37 @@ import (
 	"encoding/json"
 
 	"backend/pkg/core"
-	"backend/pkg/database"
-	"backend/pkg/database/models"
-	"backend/pkg/database/repository"
 	"backend/pkg/types"
 
 	"github.com/google/uuid"
-	"gorm.io/datatypes"
-	"gorm.io/gorm"
 )
 
-// getSettingsRepo returns a site settings repository instance
-func getSettingsRepo() *repository.SiteSettingsRepository {
-	return repository.NewSiteSettingsRepository(database.DB())
+// Service provides business logic for profile operations
+type Service struct {
+	profileStore      ProfileStore
+	siteSettingsStore SiteSettingsStore
+	accountStore      AccountStore
+	organizationStore OrganizationStore
 }
 
-// getProfileRepo returns a profile repository instance
-func getProfileRepo() *repository.ProfileRepository {
-	return repository.NewProfileRepository(database.DB())
+// NewService creates a new profile service with the provided stores
+func NewService(
+	profileStore ProfileStore,
+	siteSettingsStore SiteSettingsStore,
+	accountStore AccountStore,
+	organizationStore OrganizationStore,
+) *Service {
+	return &Service{
+		profileStore:      profileStore,
+		siteSettingsStore: siteSettingsStore,
+		accountStore:      accountStore,
+		organizationStore: organizationStore,
+	}
 }
 
 // GetPublicProfile retrieves the public profile based on site settings
-func GetPublicProfile(ctx context.Context) (*PublicProfileResponse, error) {
-	repo := getProfileRepo()
-	pub, err := repo.GetPublicProfile(ctx)
+func (s *Service) GetPublicProfile(ctx context.Context) (*PublicProfileResponse, error) {
+	pub, err := s.profileStore.GetPublicProfile(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -52,18 +59,13 @@ func GetPublicProfile(ctx context.Context) (*PublicProfileResponse, error) {
 }
 
 // GetUserProfile returns the profile for a specific user
-func GetUserProfile(ctx context.Context, accountID uuid.UUID) (*UserProfile, error) {
-	db := database.DB()
-
-	var account models.Account
-	if err := db.WithContext(ctx).First(&account, "id = ?", accountID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, core.ErrNotFound
-		}
+func (s *Service) GetUserProfile(ctx context.Context, accountID uuid.UUID) (*UserProfile, error) {
+	account, err := s.accountStore.FindByID(ctx, accountID)
+	if err != nil {
 		return nil, err
 	}
 
-	socialLinks := parseSocialLinks(account.SocialLinks)
+	socialLinks := parseSocialLinksFromMap(account.SocialLinks)
 
 	return &UserProfile{
 		ID:              account.ID,
@@ -78,54 +80,42 @@ func GetUserProfile(ctx context.Context, accountID uuid.UUID) (*UserProfile, err
 }
 
 // UpdateUserProfile updates the profile fields for a user
-func UpdateUserProfile(ctx context.Context, accountID uuid.UUID, req ProfileUpdateRequest) (*UserProfile, error) {
-	db := database.DB()
-
-	var account models.Account
-	if err := db.WithContext(ctx).First(&account, "id = ?", accountID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, core.ErrNotFound
-		}
+func (s *Service) UpdateUserProfile(ctx context.Context, accountID uuid.UUID, req ProfileUpdateRequest) (*UserProfile, error) {
+	account, err := s.accountStore.FindByID(ctx, accountID)
+	if err != nil {
 		return nil, err
 	}
 
-	updates := make(map[string]interface{})
-
+	// Apply updates
 	if req.Name != nil {
-		updates["name"] = *req.Name
+		account.Name = *req.Name
 	}
 	if req.Bio != nil {
-		updates["bio"] = *req.Bio
+		account.Bio = req.Bio
 	}
 	if req.ProfileImage != nil {
-		updates["profile_image"] = *req.ProfileImage
+		account.ProfileImage = req.ProfileImage
 	}
 	if req.EmailPublic != nil {
-		updates["email_public"] = *req.EmailPublic
+		account.EmailPublic = req.EmailPublic
 	}
 	if req.MetaDescription != nil {
-		updates["meta_description"] = *req.MetaDescription
+		account.MetaDescription = req.MetaDescription
 	}
 	if req.SocialLinks != nil {
-		socialLinksJSON, err := json.Marshal(*req.SocialLinks)
-		if err != nil {
-			return nil, err
+		// Convert map[string]string to map[string]interface{}
+		socialLinksInterface := make(map[string]interface{})
+		for k, v := range *req.SocialLinks {
+			socialLinksInterface[k] = v
 		}
-		updates["social_links"] = datatypes.JSON(socialLinksJSON)
+		account.SocialLinks = socialLinksInterface
 	}
 
-	if len(updates) > 0 {
-		if err := db.WithContext(ctx).Model(&account).Updates(updates).Error; err != nil {
-			return nil, err
-		}
-	}
-
-	// Reload the account
-	if err := db.WithContext(ctx).First(&account, "id = ?", accountID).Error; err != nil {
+	if err := s.accountStore.Update(ctx, account); err != nil {
 		return nil, err
 	}
 
-	socialLinks := parseSocialLinks(account.SocialLinks)
+	socialLinks := parseSocialLinksFromMap(account.SocialLinks)
 
 	return &UserProfile{
 		ID:              account.ID,
@@ -140,10 +130,8 @@ func UpdateUserProfile(ctx context.Context, accountID uuid.UUID, req ProfileUpda
 }
 
 // GetSiteSettings returns the current site settings
-func GetSiteSettings(ctx context.Context) (*SiteSettingsResponse, error) {
-	repo := getSettingsRepo()
-
-	settings, err := repo.Get(ctx)
+func (s *Service) GetSiteSettings(ctx context.Context) (*SiteSettingsResponse, error) {
+	settings, err := s.siteSettingsStore.Get(ctx)
 	if err != nil {
 		if err == core.ErrNotFound {
 			// Return defaults
@@ -162,11 +150,8 @@ func GetSiteSettings(ctx context.Context) (*SiteSettingsResponse, error) {
 }
 
 // UpdateSiteSettings updates the site settings
-func UpdateSiteSettings(ctx context.Context, req SiteSettingsUpdateRequest) (*SiteSettingsResponse, error) {
-	db := database.DB()
-	repo := getSettingsRepo()
-
-	settings, err := repo.Get(ctx)
+func (s *Service) UpdateSiteSettings(ctx context.Context, req SiteSettingsUpdateRequest) (*SiteSettingsResponse, error) {
+	settings, err := s.siteSettingsStore.Get(ctx)
 	if err != nil {
 		if err == core.ErrNotFound {
 			// Create default settings
@@ -183,25 +168,29 @@ func UpdateSiteSettings(ctx context.Context, req SiteSettingsUpdateRequest) (*Si
 		settings.PublicProfileType = *req.PublicProfileType
 	}
 	if req.PublicUserID != nil {
-		// Verify user exists
-		var count int64
-		db.WithContext(ctx).Model(&models.Account{}).Where("id = ?", req.PublicUserID).Count(&count)
-		if count == 0 {
-			return nil, core.ErrNotFound
+		// Verify user exists using account store
+		_, err := s.accountStore.FindByID(ctx, *req.PublicUserID)
+		if err != nil {
+			if err == core.ErrNotFound {
+				return nil, core.ErrNotFound
+			}
+			return nil, err
 		}
 		settings.PublicUserID = req.PublicUserID
 	}
 	if req.PublicOrganizationID != nil {
-		// Verify organization exists
-		var count int64
-		db.WithContext(ctx).Model(&models.Organization{}).Where("id = ?", req.PublicOrganizationID).Count(&count)
-		if count == 0 {
-			return nil, core.ErrNotFound
+		// Verify organization exists using organization store
+		_, err := s.organizationStore.FindByID(ctx, *req.PublicOrganizationID)
+		if err != nil {
+			if err == core.ErrNotFound {
+				return nil, core.ErrNotFound
+			}
+			return nil, err
 		}
 		settings.PublicOrganizationID = req.PublicOrganizationID
 	}
 
-	if err := repo.Save(ctx, settings); err != nil {
+	if err := s.siteSettingsStore.Save(ctx, settings); err != nil {
 		return nil, err
 	}
 
@@ -213,9 +202,8 @@ func UpdateSiteSettings(ctx context.Context, req SiteSettingsUpdateRequest) (*Si
 }
 
 // IsUserAdmin checks if a user has admin role
-func IsUserAdmin(ctx context.Context, userID uuid.UUID) (bool, error) {
-	repo := getProfileRepo()
-	return repo.IsUserAdmin(ctx, userID)
+func (s *Service) IsUserAdmin(ctx context.Context, userID uuid.UUID) (bool, error) {
+	return s.profileStore.IsUserAdmin(ctx, userID)
 }
 
 // Helper functions
@@ -227,11 +215,12 @@ func stringValue(s *string) string {
 	return *s
 }
 
-func parseSocialLinks(data datatypes.JSON) map[string]string {
+func parseSocialLinksFromMap(data map[string]interface{}) map[string]string {
 	result := make(map[string]string)
-	if data != nil {
-		_ = json.Unmarshal(data, &result)
+	for k, v := range data {
+		if str, ok := v.(string); ok {
+			result[k] = str
+		}
 	}
 	return result
 }
-
