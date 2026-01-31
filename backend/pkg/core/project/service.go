@@ -3,15 +3,12 @@ package project
 import (
 	"context"
 	"math"
-	"strings"
 
 	"backend/pkg/core"
-	"backend/pkg/database"
-	"backend/pkg/database/models"
+	"backend/pkg/types"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
-	"gorm.io/gorm"
 )
 
 // CreateRequest represents a request to create a project
@@ -49,35 +46,36 @@ type ProjectDetail struct {
 	Tags    []string `json:"tags"`
 }
 
-// GetByID retrieves a project by its ID
-func GetByID(ctx context.Context, id uuid.UUID) (*Project, error) {
-	db := database.DB()
-	var model models.Project
-	if err := db.WithContext(ctx).First(&model, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, core.ErrNotFound
-		}
-		return nil, err
+// Service provides business logic for projects
+type Service struct {
+	projectStore ProjectStore
+	tagStore     TagStore
+}
+
+// NewService creates a new project service with the provided stores
+func NewService(projectStore ProjectStore, tagStore TagStore) *Service {
+	return &Service{
+		projectStore: projectStore,
+		tagStore:     tagStore,
 	}
-	return modelToProject(&model), nil
+}
+
+// GetByID retrieves a project by its ID
+func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Project, error) {
+	return s.projectStore.FindByID(ctx, id)
 }
 
 // GetDetail retrieves a project with resolved tag names
-func GetDetail(ctx context.Context, id uuid.UUID) (*ProjectDetail, error) {
-	db := database.DB()
-
-	var model models.Project
-	if err := db.WithContext(ctx).First(&model, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, core.ErrNotFound
-		}
+func (s *Service) GetDetail(ctx context.Context, id uuid.UUID) (*ProjectDetail, error) {
+	project, err := s.projectStore.FindByID(ctx, id)
+	if err != nil {
 		return nil, err
 	}
 
 	var tagNames []string
-	if len(model.TagIDs) > 0 {
-		var tags []models.Tag
-		if err := db.WithContext(ctx).Where("id IN ?", []int64(model.TagIDs)).Find(&tags).Error; err == nil {
+	if len(project.TagIDs) > 0 {
+		tags, err := s.tagStore.FindByIDs(ctx, project.TagIDs)
+		if err == nil {
 			for _, t := range tags {
 				tagNames = append(tagNames, t.Name)
 			}
@@ -85,15 +83,13 @@ func GetDetail(ctx context.Context, id uuid.UUID) (*ProjectDetail, error) {
 	}
 
 	return &ProjectDetail{
-		Project: *modelToProject(&model),
+		Project: *project,
 		Tags:    tagNames,
 	}, nil
 }
 
 // List retrieves projects with pagination
-func List(ctx context.Context, pageNum, perPage int) (*ListResult, error) {
-	db := database.DB()
-
+func (s *Service) List(ctx context.Context, pageNum, perPage int) (*ListResult, error) {
 	if perPage <= 0 {
 		perPage = 20
 	}
@@ -101,20 +97,14 @@ func List(ctx context.Context, pageNum, perPage int) (*ListResult, error) {
 		pageNum = 1
 	}
 
-	var total int64
-	if err := db.WithContext(ctx).Model(&models.Project{}).Count(&total).Error; err != nil {
-		return nil, err
+	opts := types.ProjectListOptions{
+		Page:    pageNum,
+		PerPage: perPage,
 	}
 
-	var projectModels []models.Project
-	offset := (pageNum - 1) * perPage
-	if err := db.WithContext(ctx).Order("created_at DESC").Offset(offset).Limit(perPage).Find(&projectModels).Error; err != nil {
+	projects, total, err := s.projectStore.List(ctx, opts)
+	if err != nil {
 		return nil, err
-	}
-
-	projects := make([]Project, len(projectModels))
-	for i, m := range projectModels {
-		projects[i] = *modelToProject(&m)
 	}
 
 	totalPages := int(math.Ceil(float64(total) / float64(perPage)))
@@ -129,20 +119,18 @@ func List(ctx context.Context, pageNum, perPage int) (*ListResult, error) {
 }
 
 // Create creates a new project
-func Create(ctx context.Context, req CreateRequest) (*Project, error) {
-	db := database.DB()
-
+func (s *Service) Create(ctx context.Context, req CreateRequest) (*Project, error) {
 	if req.Title == "" || req.Description == "" {
 		return nil, core.ErrValidation
 	}
 
 	// Handle tags
-	tagIDs, err := ensureTagsExist(ctx, db, req.Tags)
+	tagIDs, err := s.tagStore.EnsureExists(ctx, req.Tags)
 	if err != nil {
 		return nil, err
 	}
 
-	model := &models.Project{
+	project := &types.Project{
 		ID:          uuid.New(),
 		Title:       req.Title,
 		Description: req.Description,
@@ -152,109 +140,52 @@ func Create(ctx context.Context, req CreateRequest) (*Project, error) {
 		URL:         req.URL,
 	}
 
-	if err := db.WithContext(ctx).Create(model).Error; err != nil {
+	if err := s.projectStore.Save(ctx, project); err != nil {
 		return nil, err
 	}
 
-	return modelToProject(model), nil
+	return project, nil
 }
 
 // Update updates an existing project
-func Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (*Project, error) {
-	db := database.DB()
-
-	var model models.Project
-	if err := db.WithContext(ctx).First(&model, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, core.ErrNotFound
-		}
+func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (*Project, error) {
+	project, err := s.projectStore.FindByID(ctx, id)
+	if err != nil {
 		return nil, err
 	}
 
 	// Apply updates
 	if req.Title != nil {
-		model.Title = *req.Title
+		project.Title = *req.Title
 	}
 	if req.Description != nil {
-		model.Description = *req.Description
+		project.Description = *req.Description
 	}
 	if req.Content != nil {
-		model.Content = *req.Content
+		project.Content = *req.Content
 	}
 	if req.Tags != nil {
-		tagIDs, err := ensureTagsExist(ctx, db, *req.Tags)
+		tagIDs, err := s.tagStore.EnsureExists(ctx, *req.Tags)
 		if err != nil {
 			return nil, err
 		}
-		model.TagIDs = pq.Int64Array(tagIDs)
+		project.TagIDs = pq.Int64Array(tagIDs)
 	}
 	if req.ImageURL != nil {
-		model.ImageURL = *req.ImageURL
+		project.ImageURL = *req.ImageURL
 	}
 	if req.URL != nil {
-		model.URL = *req.URL
+		project.URL = *req.URL
 	}
 
-	if err := db.WithContext(ctx).Save(&model).Error; err != nil {
+	if err := s.projectStore.Update(ctx, project); err != nil {
 		return nil, err
 	}
 
-	return modelToProject(&model), nil
+	return project, nil
 }
 
 // Delete removes a project by its ID
-func Delete(ctx context.Context, id uuid.UUID) error {
-	db := database.DB()
-	result := db.WithContext(ctx).Delete(&models.Project{}, id)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return core.ErrNotFound
-	}
-	return nil
+func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
+	return s.projectStore.Delete(ctx, id)
 }
-
-// modelToProject converts a GORM model to a domain Project
-func modelToProject(m *models.Project) *Project {
-	return &Project{
-		ID:          m.ID,
-		Title:       m.Title,
-		Description: m.Description,
-		Content:     m.Content,
-		TagIDs:      m.TagIDs,
-		ImageURL:    m.ImageURL,
-		URL:         m.URL,
-		CreatedAt:   m.CreatedAt,
-		UpdatedAt:   m.UpdatedAt,
-	}
-}
-
-// ensureTagsExist creates tags if they don't exist and returns their IDs
-func ensureTagsExist(ctx context.Context, db *gorm.DB, names []string) ([]int64, error) {
-	tagIDs := make([]int64, 0, len(names))
-
-	for _, name := range names {
-		name = strings.TrimSpace(name)
-		if name == "" {
-			continue
-		}
-
-		var existingTag models.Tag
-		err := db.WithContext(ctx).Where("LOWER(name) = LOWER(?)", name).First(&existingTag).Error
-		if err == gorm.ErrRecordNotFound {
-			newTag := &models.Tag{Name: name}
-			if err := db.WithContext(ctx).Create(newTag).Error; err != nil {
-				return nil, err
-			}
-			tagIDs = append(tagIDs, int64(newTag.ID))
-		} else if err != nil {
-			return nil, err
-		} else {
-			tagIDs = append(tagIDs, int64(existingTag.ID))
-		}
-	}
-
-	return tagIDs, nil
-}
-

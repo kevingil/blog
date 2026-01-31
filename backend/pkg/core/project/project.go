@@ -23,3 +23,9 @@ type ProjectStore interface {
 	Update(ctx context.Context, project *types.Project) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }
+
+// TagStore defines the data access interface for tags
+type TagStore interface {
+	FindByIDs(ctx context.Context, ids []int64) ([]types.Tag, error)
+	EnsureExists(ctx context.Context, names []string) ([]int64, error)
+}

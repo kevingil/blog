@@ -6,10 +6,20 @@ import (
 	"backend/pkg/api/validation"
 	"backend/pkg/core"
 	"backend/pkg/core/project"
+	"backend/pkg/database"
+	"backend/pkg/database/repository"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
+
+// getService creates a project service with repository injection
+func getService() *project.Service {
+	db := database.DB()
+	projectRepo := repository.NewProjectRepository(db)
+	tagRepo := repository.NewTagRepository(db)
+	return project.NewService(projectRepo, tagRepo)
+}
 
 // ListProjects handles GET /projects
 // @Summary List projects
@@ -26,7 +36,8 @@ func ListProjects(c *fiber.Ctx) error {
 	page := c.QueryInt("page", 1)
 	perPage := c.QueryInt("perPage", 20)
 
-	result, err := project.List(c.Context(), page, perPage)
+	svc := getService()
+	result, err := svc.List(c.Context(), page, perPage)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -58,7 +69,8 @@ func GetProject(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid project ID"))
 	}
 
-	detail, err := project.GetDetail(c.Context(), id)
+	svc := getService()
+	detail, err := svc.GetDetail(c.Context(), id)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -89,7 +101,8 @@ func CreateProject(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	result, err := project.Create(c.Context(), req)
+	svc := getService()
+	result, err := svc.Create(c.Context(), req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -123,7 +136,8 @@ func UpdateProject(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
 
-	result, err := project.Update(c.Context(), id, req)
+	svc := getService()
+	result, err := svc.Update(c.Context(), id, req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -158,7 +172,8 @@ func DeleteProject(c *fiber.Ctx) error {
 		return response.Error(c, core.UnauthorizedError("Not authenticated"))
 	}
 
-	if err := project.Delete(c.Context(), id); err != nil {
+	svc := getService()
+	if err := svc.Delete(c.Context(), id); err != nil {
 		return response.Error(c, err)
 	}
 
