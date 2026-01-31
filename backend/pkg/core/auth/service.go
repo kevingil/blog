@@ -6,8 +6,6 @@ import (
 
 	"backend/pkg/config"
 	"backend/pkg/core"
-	"backend/pkg/database"
-	"backend/pkg/database/repository"
 	"backend/pkg/types"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -30,9 +28,16 @@ type UpdateAccountRequest = types.UpdateAccountRequest
 // UpdatePasswordRequest represents a request to change password
 type UpdatePasswordRequest = types.UpdatePasswordRequest
 
-// getRepo returns an account repository instance
-func getRepo() *repository.AccountRepository {
-	return repository.NewAccountRepository(database.DB())
+// Service provides business logic for authentication
+type Service struct {
+	accountStore AccountStore
+}
+
+// NewService creates a new auth service with the provided store
+func NewService(accountStore AccountStore) *Service {
+	return &Service{
+		accountStore: accountStore,
+	}
 }
 
 // getSecretKey returns the JWT secret key from config
@@ -41,10 +46,8 @@ func getSecretKey() []byte {
 }
 
 // Login authenticates a user and returns a JWT token
-func Login(ctx context.Context, req LoginRequest) (*LoginResponse, error) {
-	repo := getRepo()
-
-	account, err := repo.FindByEmail(ctx, req.Email)
+func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResponse, error) {
+	account, err := s.accountStore.FindByEmail(ctx, req.Email)
 	if err != nil {
 		return nil, core.ErrUnauthorized
 	}
@@ -75,11 +78,9 @@ func Login(ctx context.Context, req LoginRequest) (*LoginResponse, error) {
 }
 
 // Register creates a new user account
-func Register(ctx context.Context, req RegisterRequest) error {
-	repo := getRepo()
-
+func (s *Service) Register(ctx context.Context, req RegisterRequest) error {
 	// Check if email already exists
-	existing, err := repo.FindByEmail(ctx, req.Email)
+	existing, err := s.accountStore.FindByEmail(ctx, req.Email)
 	if err != nil && err != core.ErrNotFound {
 		return err
 	}
@@ -100,7 +101,73 @@ func Register(ctx context.Context, req RegisterRequest) error {
 		Role:         "user",
 	}
 
-	return repo.Save(ctx, account)
+	return s.accountStore.Save(ctx, account)
+}
+
+// UpdateAccount updates account information
+func (s *Service) UpdateAccount(ctx context.Context, accountID uuid.UUID, req UpdateAccountRequest) error {
+	account, err := s.accountStore.FindByID(ctx, accountID)
+	if err != nil {
+		return err
+	}
+
+	// Check if email is already taken by another account
+	if req.Email != account.Email {
+		existing, err := s.accountStore.FindByEmail(ctx, req.Email)
+		if err != nil && err != core.ErrNotFound {
+			return err
+		}
+		if existing != nil && existing.ID != accountID {
+			return core.ErrAlreadyExists
+		}
+	}
+
+	account.Name = req.Name
+	account.Email = req.Email
+
+	return s.accountStore.Update(ctx, account)
+}
+
+// UpdatePassword changes the user's password
+func (s *Service) UpdatePassword(ctx context.Context, accountID uuid.UUID, req UpdatePasswordRequest) error {
+	account, err := s.accountStore.FindByID(ctx, accountID)
+	if err != nil {
+		return err
+	}
+
+	// Verify current password
+	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(req.CurrentPassword)); err != nil {
+		return core.ErrUnauthorized
+	}
+
+	// Hash new password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	account.PasswordHash = string(hashedPassword)
+	return s.accountStore.Update(ctx, account)
+}
+
+// DeleteAccount removes a user account after verifying password
+func (s *Service) DeleteAccount(ctx context.Context, accountID uuid.UUID, password string) error {
+	account, err := s.accountStore.FindByID(ctx, accountID)
+	if err != nil {
+		return err
+	}
+
+	// Verify password
+	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(password)); err != nil {
+		return core.ErrUnauthorized
+	}
+
+	return s.accountStore.Delete(ctx, accountID)
+}
+
+// GetAccount retrieves an account by ID
+func (s *Service) GetAccount(ctx context.Context, accountID uuid.UUID) (*types.Account, error) {
+	return s.accountStore.FindByID(ctx, accountID)
 }
 
 // ValidateToken validates a JWT token and returns the parsed token
@@ -134,79 +201,6 @@ func GetUserIDFromToken(token *jwt.Token) (uuid.UUID, error) {
 	return uuid.Parse(sub)
 }
 
-// UpdateAccount updates account information
-func UpdateAccount(ctx context.Context, accountID uuid.UUID, req UpdateAccountRequest) error {
-	repo := getRepo()
-
-	account, err := repo.FindByID(ctx, accountID)
-	if err != nil {
-		return err
-	}
-
-	// Check if email is already taken by another account
-	if req.Email != account.Email {
-		existing, err := repo.FindByEmail(ctx, req.Email)
-		if err != nil && err != core.ErrNotFound {
-			return err
-		}
-		if existing != nil && existing.ID != accountID {
-			return core.ErrAlreadyExists
-		}
-	}
-
-	account.Name = req.Name
-	account.Email = req.Email
-
-	return repo.Update(ctx, account)
-}
-
-// UpdatePassword changes the user's password
-func UpdatePassword(ctx context.Context, accountID uuid.UUID, req UpdatePasswordRequest) error {
-	repo := getRepo()
-
-	account, err := repo.FindByID(ctx, accountID)
-	if err != nil {
-		return err
-	}
-
-	// Verify current password
-	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(req.CurrentPassword)); err != nil {
-		return core.ErrUnauthorized
-	}
-
-	// Hash new password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
-
-	account.PasswordHash = string(hashedPassword)
-	return repo.Update(ctx, account)
-}
-
-// DeleteAccount removes a user account after verifying password
-func DeleteAccount(ctx context.Context, accountID uuid.UUID, password string) error {
-	repo := getRepo()
-
-	account, err := repo.FindByID(ctx, accountID)
-	if err != nil {
-		return err
-	}
-
-	// Verify password
-	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(password)); err != nil {
-		return core.ErrUnauthorized
-	}
-
-	return repo.Delete(ctx, accountID)
-}
-
-// GetAccount retrieves an account by ID
-func GetAccount(ctx context.Context, accountID uuid.UUID) (*types.Account, error) {
-	repo := getRepo()
-	return repo.FindByID(ctx, accountID)
-}
-
 // HashPassword hashes a password using bcrypt
 func HashPassword(password string) (string, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -221,4 +215,3 @@ func ComparePasswords(plainTextPassword, hashedPassword string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(plainTextPassword))
 	return err == nil
 }
-
