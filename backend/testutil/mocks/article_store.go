@@ -61,6 +61,11 @@ func (m *MockArticleStore) GetPopularTags(ctx context.Context, limit int) ([]int
 	return args.Get(0).([]int64), args.Error(1)
 }
 
+func (m *MockArticleStore) SlugExists(ctx context.Context, slug string, excludeID *uuid.UUID) (bool, error) {
+	args := m.Called(ctx, slug, excludeID)
+	return args.Bool(0), args.Error(1)
+}
+
 // Version management methods
 
 func (m *MockArticleStore) SaveDraft(ctx context.Context, a *types.Article) error {

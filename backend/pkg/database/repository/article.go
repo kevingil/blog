@@ -290,6 +290,19 @@ func (r *ArticleRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// SlugExists checks if a slug already exists, optionally excluding a specific article ID
+func (r *ArticleRepository) SlugExists(ctx context.Context, slug string, excludeID *uuid.UUID) (bool, error) {
+	var count int64
+	query := r.db.WithContext(ctx).Model(&models.Article{}).Where("slug = ?", slug)
+	if excludeID != nil {
+		query = query.Where("id != ?", *excludeID)
+	}
+	if err := query.Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 // GetPopularTags returns the most frequently used tag IDs
 func (r *ArticleRepository) GetPopularTags(ctx context.Context, limit int) ([]int64, error) {
 	var results []struct {
