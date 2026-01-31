@@ -33,6 +33,9 @@ type ArticleStore interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetPopularTags(ctx context.Context, limit int) ([]int64, error)
 
+	// Slug uniqueness check
+	SlugExists(ctx context.Context, slug string, excludeID *uuid.UUID) (bool, error)
+
 	// Version management operations
 	SaveDraft(ctx context.Context, article *types.Article) error
 	Publish(ctx context.Context, article *types.Article) error
@@ -40,4 +43,20 @@ type ArticleStore interface {
 	ListVersions(ctx context.Context, articleID uuid.UUID) ([]types.ArticleVersion, error)
 	GetVersion(ctx context.Context, versionID uuid.UUID) (*types.ArticleVersion, error)
 	RevertToVersion(ctx context.Context, articleID, versionID uuid.UUID) error
+}
+
+// AccountStore defines the data access interface for accounts (used for author lookup)
+type AccountStore interface {
+	FindByID(ctx context.Context, id uuid.UUID) (*types.Account, error)
+}
+
+// TagStore defines the data access interface for tags
+type TagStore interface {
+	FindByID(ctx context.Context, id int) (*types.Tag, error)
+	FindByName(ctx context.Context, name string) (*types.Tag, error)
+	FindByIDs(ctx context.Context, ids []int64) ([]types.Tag, error)
+	EnsureExists(ctx context.Context, names []string) ([]int64, error)
+	List(ctx context.Context) ([]types.Tag, error)
+	Save(ctx context.Context, tag *types.Tag) error
+	Delete(ctx context.Context, id int) error
 }
