@@ -12,13 +12,11 @@ import (
 
 	"backend/pkg/core"
 	"backend/pkg/core/ml"
-	"backend/pkg/database"
-	"backend/pkg/database/models"
+	"backend/pkg/types"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/google/uuid"
 	"github.com/ledongthuc/pdf"
-	"gorm.io/gorm"
 )
 
 // CreateRequest represents a request to create a source
@@ -45,13 +43,6 @@ type ScrapedContent struct {
 	URL     string `json:"url"`
 }
 
-// SourceWithArticle includes article metadata with the source
-type SourceWithArticle struct {
-	models.Source
-	ArticleTitle string `json:"article_title"`
-	ArticleSlug  string `json:"article_slug"`
-}
-
 // ListResponse represents a paginated list of sources
 type ListResponse struct {
 	Sources    []SourceWithArticle `json:"sources"`
@@ -59,44 +50,34 @@ type ListResponse struct {
 	Page       int                 `json:"page"`
 }
 
-// getEmbeddingService returns an embedding service instance
-func getEmbeddingService() *ml.EmbeddingService {
-	return ml.NewEmbeddingService()
+// Service provides business logic for sources
+type Service struct {
+	sourceStore      SourceStore
+	articleStore     ArticleStore
+	embeddingService EmbeddingService
+}
+
+// NewService creates a new source service with the provided stores
+func NewService(sourceStore SourceStore, articleStore ArticleStore) *Service {
+	return &Service{
+		sourceStore:      sourceStore,
+		articleStore:     articleStore,
+		embeddingService: ml.NewEmbeddingService(),
+	}
 }
 
 // GetByID retrieves a source by its ID
-func GetByID(ctx context.Context, id uuid.UUID) (*models.Source, error) {
-	db := database.DB()
-	var source models.Source
-
-	if err := db.WithContext(ctx).First(&source, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, core.ErrNotFound
-		}
-		return nil, err
-	}
-
-	return &source, nil
+func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*types.Source, error) {
+	return s.sourceStore.FindByID(ctx, id)
 }
 
 // GetByArticleID retrieves all sources for an article
-func GetByArticleID(ctx context.Context, articleID uuid.UUID) ([]*models.Source, error) {
-	db := database.DB()
-	var sources []*models.Source
-
-	if err := db.WithContext(ctx).Where("article_id = ?", articleID).
-		Order("created_at DESC").
-		Find(&sources).Error; err != nil {
-		return nil, err
-	}
-
-	return sources, nil
+func (s *Service) GetByArticleID(ctx context.Context, articleID uuid.UUID) ([]types.Source, error) {
+	return s.sourceStore.FindByArticleID(ctx, articleID)
 }
 
 // List retrieves all sources with pagination and article metadata
-func List(ctx context.Context, page, limit int) (*ListResponse, error) {
-	db := database.DB()
-
+func (s *Service) List(ctx context.Context, page, limit int) (*ListResponse, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -104,27 +85,17 @@ func List(ctx context.Context, page, limit int) (*ListResponse, error) {
 		limit = 20
 	}
 
-	offset := (page - 1) * limit
+	opts := SourceListOptions{
+		Page:    page,
+		PerPage: limit,
+	}
 
-	var total int64
-	if err := db.WithContext(ctx).Model(&models.Source{}).Count(&total).Error; err != nil {
+	sources, total, err := s.sourceStore.List(ctx, opts)
+	if err != nil {
 		return nil, err
 	}
 
 	totalPages := int((total + int64(limit) - 1) / int64(limit))
-
-	var sources []SourceWithArticle
-	err := db.WithContext(ctx).Table("article_source").
-		Select("article_source.*, article.draft_title as article_title, article.slug as article_slug").
-		Joins("LEFT JOIN article ON article.id = article_source.article_id").
-		Order("article_source.created_at DESC").
-		Offset(offset).
-		Limit(limit).
-		Scan(&sources).Error
-
-	if err != nil {
-		return nil, err
-	}
 
 	return &ListResponse{
 		Sources:    sources,
@@ -134,21 +105,15 @@ func List(ctx context.Context, page, limit int) (*ListResponse, error) {
 }
 
 // Create creates a new source with embedding generation
-func Create(ctx context.Context, req CreateRequest) (*models.Source, error) {
-	db := database.DB()
-	embeddingService := getEmbeddingService()
-
+func (s *Service) Create(ctx context.Context, req CreateRequest) (*types.Source, error) {
 	// Validate that the article exists
-	var article models.Article
-	if err := db.WithContext(ctx).First(&article, req.ArticleID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, core.ErrNotFound
-		}
+	_, err := s.articleStore.FindByID(ctx, req.ArticleID)
+	if err != nil {
 		return nil, err
 	}
 
 	// Generate embedding for the content
-	embedding, err := embeddingService.GenerateEmbedding(ctx, req.Content)
+	embedding, err := s.embeddingService.GenerateEmbedding(ctx, req.Content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)
 	}
@@ -163,16 +128,18 @@ func Create(ctx context.Context, req CreateRequest) (*models.Source, error) {
 		}
 	}
 
-	source := &models.Source{
+	source := &types.Source{
+		ID:         uuid.New(),
 		ArticleID:  req.ArticleID,
 		Title:      req.Title,
 		Content:    req.Content,
 		URL:        req.URL,
 		SourceType: sourceType,
-		Embedding:  embedding,
+		Embedding:  embedding.Slice(),
+		CreatedAt:  time.Now(),
 	}
 
-	if err := db.WithContext(ctx).Create(source).Error; err != nil {
+	if err := s.sourceStore.Save(ctx, source); err != nil {
 		return nil, err
 	}
 
@@ -180,7 +147,7 @@ func Create(ctx context.Context, req CreateRequest) (*models.Source, error) {
 }
 
 // ScrapeAndCreate scrapes content from a URL and creates a source
-func ScrapeAndCreate(ctx context.Context, articleID uuid.UUID, targetURL string) (*models.Source, error) {
+func (s *Service) ScrapeAndCreate(ctx context.Context, articleID uuid.UUID, targetURL string) (*types.Source, error) {
 	// Scrape the content
 	scraped, err := scrapeURL(targetURL)
 	if err != nil {
@@ -202,19 +169,13 @@ func ScrapeAndCreate(ctx context.Context, articleID uuid.UUID, targetURL string)
 		SourceType: sourceType,
 	}
 
-	return Create(ctx, req)
+	return s.Create(ctx, req)
 }
 
 // Update updates an existing source
-func Update(ctx context.Context, sourceID uuid.UUID, req UpdateRequest) (*models.Source, error) {
-	db := database.DB()
-	embeddingService := getEmbeddingService()
-
-	var source models.Source
-	if err := db.WithContext(ctx).First(&source, sourceID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, core.ErrNotFound
-		}
+func (s *Service) Update(ctx context.Context, sourceID uuid.UUID, req UpdateRequest) (*types.Source, error) {
+	source, err := s.sourceStore.FindByID(ctx, sourceID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -235,56 +196,33 @@ func Update(ctx context.Context, sourceID uuid.UUID, req UpdateRequest) (*models
 	}
 
 	if needsEmbeddingUpdate {
-		embedding, err := embeddingService.GenerateEmbedding(ctx, source.Content)
+		embedding, err := s.embeddingService.GenerateEmbedding(ctx, source.Content)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate embedding: %w", err)
 		}
-		source.Embedding = embedding
+		source.Embedding = embedding.Slice()
 	}
 
-	if err := db.WithContext(ctx).Save(&source).Error; err != nil {
+	if err := s.sourceStore.Update(ctx, source); err != nil {
 		return nil, err
 	}
 
-	return &source, nil
+	return source, nil
 }
 
 // Delete removes a source by its ID
-func Delete(ctx context.Context, id uuid.UUID) error {
-	db := database.DB()
-
-	result := db.WithContext(ctx).Delete(&models.Source{}, id)
-	if result.Error != nil {
-		return result.Error
-	}
-
-	if result.RowsAffected == 0 {
-		return core.ErrNotFound
-	}
-
-	return nil
+func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
+	return s.sourceStore.Delete(ctx, id)
 }
 
 // SearchSimilar finds sources similar to the given query using vector similarity
-func SearchSimilar(ctx context.Context, articleID uuid.UUID, query string, limit int) ([]*models.Source, error) {
-	embeddingService := getEmbeddingService()
-
-	queryEmbedding, err := embeddingService.GenerateEmbedding(ctx, query)
+func (s *Service) SearchSimilar(ctx context.Context, articleID uuid.UUID, query string, limit int) ([]types.Source, error) {
+	queryEmbedding, err := s.embeddingService.GenerateEmbedding(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate query embedding: %w", err)
 	}
 
-	db := database.DB()
-	var sources []*models.Source
-
-	err = db.WithContext(ctx).Raw(`
-		SELECT * FROM article_source 
-		WHERE article_id = ? AND embedding IS NOT NULL
-		ORDER BY embedding <-> ? 
-		LIMIT ?`,
-		articleID, queryEmbedding, limit).
-		Scan(&sources).Error
-
+	sources, err := s.sourceStore.SearchSimilar(ctx, articleID, queryEmbedding.Slice(), limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search similar sources: %w", err)
 	}
@@ -418,7 +356,7 @@ func extractTextFromPDF(pdfData []byte) (string, string, error) {
 
 	content := strings.TrimSpace(textContent.String())
 	if content == "" {
-		return "", "", fmt.Errorf("no text content found in PDF")
+		return "", "", core.InvalidInputError("no text content found in PDF")
 	}
 
 	if title == "" {
@@ -472,4 +410,3 @@ func extractMainContent(doc *goquery.Document) string {
 
 	return result
 }
-

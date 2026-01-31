@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"backend/pkg/core"
+	"backend/pkg/core/source"
 	"backend/pkg/database/models"
 	"backend/pkg/types"
 
@@ -100,6 +101,54 @@ func (r *SourceRepository) FindByArticleID(ctx context.Context, articleID uuid.U
 		sources[i] = *sourceModelToType(&m)
 	}
 	return sources, nil
+}
+
+// sourceWithArticleRow represents the joined query result
+type sourceWithArticleRow struct {
+	models.Source
+	ArticleTitle string `gorm:"column:article_title"`
+	ArticleSlug  string `gorm:"column:article_slug"`
+}
+
+// List retrieves all sources with pagination and article metadata
+func (r *SourceRepository) List(ctx context.Context, opts source.SourceListOptions) ([]source.SourceWithArticle, int64, error) {
+	if opts.Page < 1 {
+		opts.Page = 1
+	}
+	if opts.PerPage < 1 || opts.PerPage > 100 {
+		opts.PerPage = 20
+	}
+
+	offset := (opts.Page - 1) * opts.PerPage
+
+	var total int64
+	if err := r.db.WithContext(ctx).Model(&models.Source{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var rows []sourceWithArticleRow
+	err := r.db.WithContext(ctx).Table("article_source").
+		Select("article_source.*, article.draft_title as article_title, article.slug as article_slug").
+		Joins("LEFT JOIN article ON article.id = article_source.article_id").
+		Order("article_source.created_at DESC").
+		Offset(offset).
+		Limit(opts.PerPage).
+		Scan(&rows).Error
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	results := make([]source.SourceWithArticle, len(rows))
+	for i, row := range rows {
+		results[i] = source.SourceWithArticle{
+			Source:       *sourceModelToType(&row.Source),
+			ArticleTitle: row.ArticleTitle,
+			ArticleSlug:  row.ArticleSlug,
+		}
+	}
+
+	return results, total, nil
 }
 
 // SearchSimilar performs vector similarity search for sources within an article

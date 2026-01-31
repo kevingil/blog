@@ -4,6 +4,7 @@ package mocks
 import (
 	"context"
 
+	"backend/pkg/core/source"
 	"backend/pkg/types"
 
 	"github.com/google/uuid"
@@ -46,4 +47,9 @@ func (m *MockSourceStore) Update(ctx context.Context, s *types.Source) error {
 func (m *MockSourceStore) Delete(ctx context.Context, id uuid.UUID) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
+}
+
+func (m *MockSourceStore) List(ctx context.Context, opts source.SourceListOptions) ([]source.SourceWithArticle, int64, error) {
+	args := m.Called(ctx, opts)
+	return args.Get(0).([]source.SourceWithArticle), args.Get(1).(int64), args.Error(2)
 }
