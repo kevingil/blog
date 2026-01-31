@@ -5,34 +5,35 @@ import (
 	"math"
 
 	"backend/pkg/core"
-	"backend/pkg/database"
-	"backend/pkg/database/repository"
 	"backend/pkg/types"
 
 	"github.com/google/uuid"
 )
 
-// getRepo returns a page repository instance
-func getRepo() *repository.PageRepository {
-	return repository.NewPageRepository(database.DB())
+// Service provides business logic for pages
+type Service struct {
+	pageStore PageStore
+}
+
+// NewService creates a new page service with the provided store
+func NewService(pageStore PageStore) *Service {
+	return &Service{
+		pageStore: pageStore,
+	}
 }
 
 // GetByID retrieves a page by its ID
-func GetByID(ctx context.Context, id uuid.UUID) (*types.Page, error) {
-	repo := getRepo()
-	return repo.FindByID(ctx, id)
+func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*types.Page, error) {
+	return s.pageStore.FindByID(ctx, id)
 }
 
 // GetBySlug retrieves a page by its slug
-func GetBySlug(ctx context.Context, slug string) (*types.Page, error) {
-	repo := getRepo()
-	return repo.FindBySlug(ctx, slug)
+func (s *Service) GetBySlug(ctx context.Context, slug string) (*types.Page, error) {
+	return s.pageStore.FindBySlug(ctx, slug)
 }
 
 // List retrieves pages with pagination and optional filters
-func List(ctx context.Context, pageNum, perPage int, isPublished *bool) (*ListResult, error) {
-	repo := getRepo()
-
+func (s *Service) List(ctx context.Context, pageNum, perPage int, isPublished *bool) (*ListResult, error) {
 	// Apply defaults
 	if perPage <= 0 {
 		perPage = 20
@@ -47,7 +48,7 @@ func List(ctx context.Context, pageNum, perPage int, isPublished *bool) (*ListRe
 		IsPublished: isPublished,
 	}
 
-	pages, total, err := repo.List(ctx, opts)
+	pages, total, err := s.pageStore.List(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -64,11 +65,9 @@ func List(ctx context.Context, pageNum, perPage int, isPublished *bool) (*ListRe
 }
 
 // Create creates a new page
-func Create(ctx context.Context, req CreateRequest) (*types.Page, error) {
-	repo := getRepo()
-
+func (s *Service) Create(ctx context.Context, req CreateRequest) (*types.Page, error) {
 	// Check if slug already exists
-	existing, err := repo.FindBySlug(ctx, req.Slug)
+	existing, err := s.pageStore.FindBySlug(ctx, req.Slug)
 	if err != nil && err != core.ErrNotFound {
 		return nil, err
 	}
@@ -87,7 +86,7 @@ func Create(ctx context.Context, req CreateRequest) (*types.Page, error) {
 		IsPublished: req.IsPublished,
 	}
 
-	if err := repo.Save(ctx, page); err != nil {
+	if err := s.pageStore.Save(ctx, page); err != nil {
 		return nil, err
 	}
 
@@ -95,10 +94,8 @@ func Create(ctx context.Context, req CreateRequest) (*types.Page, error) {
 }
 
 // Update updates an existing page
-func Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (*types.Page, error) {
-	repo := getRepo()
-
-	page, err := repo.FindByID(ctx, id)
+func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (*types.Page, error) {
+	page, err := s.pageStore.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +120,7 @@ func Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (*types.Page, 
 		page.IsPublished = *req.IsPublished
 	}
 
-	if err := repo.Save(ctx, page); err != nil {
+	if err := s.pageStore.Save(ctx, page); err != nil {
 		return nil, err
 	}
 
@@ -131,8 +128,6 @@ func Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (*types.Page, 
 }
 
 // Delete removes a page by its ID
-func Delete(ctx context.Context, id uuid.UUID) error {
-	repo := getRepo()
-	return repo.Delete(ctx, id)
+func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
+	return s.pageStore.Delete(ctx, id)
 }
-
