@@ -6,10 +6,21 @@ import (
 	"backend/pkg/api/validation"
 	"backend/pkg/core"
 	coreArticle "backend/pkg/core/article"
+	"backend/pkg/database"
+	"backend/pkg/database/repository"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
+
+// getService creates an article service with repository injection
+func getService() *coreArticle.Service {
+	db := database.DB()
+	articleRepo := repository.NewArticleRepository(db)
+	accountRepo := repository.NewAccountRepository(db)
+	tagRepo := repository.NewTagRepository(db)
+	return coreArticle.NewService(articleRepo, accountRepo, tagRepo)
+}
 
 // GenerateArticle handles POST /blog/generate
 // @Summary Generate article with AI
@@ -39,7 +50,8 @@ func GenerateArticle(c *fiber.Ctx) error {
 		return response.Error(c, core.UnauthorizedError("User not authenticated"))
 	}
 
-	article, err := coreArticle.GenerateArticle(c.Context(), req.Prompt, req.Title, userID, req.Publish)
+	svc := getService()
+	article, err := svc.GenerateArticle(c.Context(), req.Prompt, req.Title, userID, req.Publish)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -66,7 +78,8 @@ func UpdateArticle(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Article slug is required"))
 	}
 
-	articleID, err := coreArticle.GetIDBySlug(c.Context(), slug)
+	svc := getService()
+	articleID, err := svc.GetIDBySlug(c.Context(), slug)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -80,7 +93,7 @@ func UpdateArticle(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	article, err := coreArticle.Update(c.Context(), articleID, req)
+	article, err := svc.Update(c.Context(), articleID, req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -110,7 +123,8 @@ func CreateArticle(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	article, err := coreArticle.Create(c.Context(), req)
+	svc := getService()
+	article, err := svc.Create(c.Context(), req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -137,7 +151,8 @@ func UpdateArticleWithContext(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid article ID"))
 	}
 
-	article, err := coreArticle.UpdateWithContext(c.Context(), articleID)
+	svc := getService()
+	article, err := svc.UpdateWithContext(c.Context(), articleID)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -167,7 +182,8 @@ func GetArticles(c *fiber.Ctx) error {
 	sortBy := c.Query("sortBy", "")
 	sortOrder := c.Query("sortOrder", "")
 
-	articles, err := coreArticle.List(c.Context(), page, tag, status, articlesPerPage, sortBy, sortOrder)
+	svc := getService()
+	articles, err := svc.List(c.Context(), page, tag, status, articlesPerPage, sortBy, sortOrder)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -202,7 +218,8 @@ func SearchArticles(c *fiber.Ctx) error {
 	sortBy := c.Query("sortBy", "")
 	sortOrder := c.Query("sortOrder", "")
 
-	articles, err := coreArticle.Search(c.Context(), query, page, tag, status, sortBy, sortOrder)
+	svc := getService()
+	articles, err := svc.Search(c.Context(), query, page, tag, status, sortBy, sortOrder)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -219,7 +236,8 @@ func SearchArticles(c *fiber.Ctx) error {
 // @Failure 500 {object} response.SuccessResponse
 // @Router /blog/tags/popular [get]
 func GetPopularTags(c *fiber.Ctx) error {
-	tags, err := coreArticle.GetPopularTags(c.Context())
+	svc := getService()
+	tags, err := svc.GetPopularTags(c.Context())
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -244,7 +262,8 @@ func GetArticleData(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Slug is required"))
 	}
 
-	data, err := coreArticle.GetBySlug(c.Context(), slug)
+	svc := getService()
+	data, err := svc.GetBySlug(c.Context(), slug)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -270,7 +289,8 @@ func GetRecommendedArticles(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid article ID"))
 	}
 
-	articles, err := coreArticle.GetRecommended(c.Context(), id)
+	svc := getService()
+	articles, err := svc.GetRecommended(c.Context(), id)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -297,7 +317,8 @@ func DeleteArticle(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid article ID"))
 	}
 
-	if err := coreArticle.Delete(c.Context(), id); err != nil {
+	svc := getService()
+	if err := svc.Delete(c.Context(), id); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Success(c, fiber.Map{"success": true})
@@ -322,12 +343,13 @@ func PublishArticle(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Article slug is required"))
 	}
 
-	articleID, err := coreArticle.GetIDBySlug(c.Context(), slug)
+	svc := getService()
+	articleID, err := svc.GetIDBySlug(c.Context(), slug)
 	if err != nil {
 		return response.Error(c, err)
 	}
 
-	article, err := coreArticle.Publish(c.Context(), articleID)
+	article, err := svc.Publish(c.Context(), articleID)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -353,12 +375,13 @@ func UnpublishArticle(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Article slug is required"))
 	}
 
-	articleID, err := coreArticle.GetIDBySlug(c.Context(), slug)
+	svc := getService()
+	articleID, err := svc.GetIDBySlug(c.Context(), slug)
 	if err != nil {
 		return response.Error(c, err)
 	}
 
-	article, err := coreArticle.Unpublish(c.Context(), articleID)
+	article, err := svc.Unpublish(c.Context(), articleID)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -384,12 +407,13 @@ func ListVersions(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Article slug is required"))
 	}
 
-	articleID, err := coreArticle.GetIDBySlug(c.Context(), slug)
+	svc := getService()
+	articleID, err := svc.GetIDBySlug(c.Context(), slug)
 	if err != nil {
 		return response.Error(c, err)
 	}
 
-	versions, err := coreArticle.ListVersions(c.Context(), articleID)
+	versions, err := svc.ListVersions(c.Context(), articleID)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -416,7 +440,8 @@ func GetVersion(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid version ID"))
 	}
 
-	version, err := coreArticle.GetVersion(c.Context(), versionID)
+	svc := getService()
+	version, err := svc.GetVersion(c.Context(), versionID)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -443,7 +468,8 @@ func RevertToVersion(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Article slug is required"))
 	}
 
-	articleID, err := coreArticle.GetIDBySlug(c.Context(), slug)
+	svc := getService()
+	articleID, err := svc.GetIDBySlug(c.Context(), slug)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -454,7 +480,7 @@ func RevertToVersion(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid version ID"))
 	}
 
-	article, err := coreArticle.RevertToVersion(c.Context(), articleID, versionID)
+	article, err := svc.RevertToVersion(c.Context(), articleID, versionID)
 	if err != nil {
 		return response.Error(c, err)
 	}
