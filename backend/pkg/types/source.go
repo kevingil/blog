@@ -18,3 +18,16 @@ type Source struct {
 	MetaData   map[string]interface{}
 	CreatedAt  time.Time
 }
+
+// SourceListOptions represents options for listing sources
+type SourceListOptions struct {
+	Page    int
+	PerPage int
+}
+
+// SourceWithArticle includes article metadata with the source
+type SourceWithArticle struct {
+	Source       Source
+	ArticleTitle string
+	ArticleSlug  string
+}
