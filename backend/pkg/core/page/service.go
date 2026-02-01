@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"backend/pkg/core"
+	"backend/pkg/database/repository"
 	"backend/pkg/types"
 
 	"github.com/google/uuid"
@@ -12,24 +13,24 @@ import (
 
 // Service provides business logic for pages
 type Service struct {
-	pageStore PageStore
+	repo repository.PageRepository
 }
 
 // NewService creates a new page service with the provided store
-func NewService(pageStore PageStore) *Service {
+func NewService(repo repository.PageRepository) *Service {
 	return &Service{
-		pageStore: pageStore,
+		repo: repo,
 	}
 }
 
 // GetByID retrieves a page by its ID
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*types.Page, error) {
-	return s.pageStore.FindByID(ctx, id)
+	return s.repo.FindByID(ctx, id)
 }
 
 // GetBySlug retrieves a page by its slug
 func (s *Service) GetBySlug(ctx context.Context, slug string) (*types.Page, error) {
-	return s.pageStore.FindBySlug(ctx, slug)
+	return s.repo.FindBySlug(ctx, slug)
 }
 
 // List retrieves pages with pagination and optional filters
@@ -48,7 +49,7 @@ func (s *Service) List(ctx context.Context, pageNum, perPage int, isPublished *b
 		IsPublished: isPublished,
 	}
 
-	pages, total, err := s.pageStore.List(ctx, opts)
+	pages, total, err := s.repo.List(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +68,7 @@ func (s *Service) List(ctx context.Context, pageNum, perPage int, isPublished *b
 // Create creates a new page
 func (s *Service) Create(ctx context.Context, req CreateRequest) (*types.Page, error) {
 	// Check if slug already exists
-	existing, err := s.pageStore.FindBySlug(ctx, req.Slug)
+	existing, err := s.repo.FindBySlug(ctx, req.Slug)
 	if err != nil && err != core.ErrNotFound {
 		return nil, err
 	}
@@ -86,7 +87,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*types.Page, e
 		IsPublished: req.IsPublished,
 	}
 
-	if err := s.pageStore.Save(ctx, page); err != nil {
+	if err := s.repo.Save(ctx, page); err != nil {
 		return nil, err
 	}
 
@@ -95,7 +96,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*types.Page, e
 
 // Update updates an existing page
 func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (*types.Page, error) {
-	page, err := s.pageStore.FindByID(ctx, id)
+	page, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +121,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (
 		page.IsPublished = *req.IsPublished
 	}
 
-	if err := s.pageStore.Save(ctx, page); err != nil {
+	if err := s.repo.Save(ctx, page); err != nil {
 		return nil, err
 	}
 
@@ -129,5 +130,5 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (
 
 // Delete removes a page by its ID
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
-	return s.pageStore.Delete(ctx, id)
+	return s.repo.Delete(ctx, id)
 }

@@ -14,7 +14,7 @@ import (
 
 func TestService_GetByID(t *testing.T) {
 	ctx := context.Background()
-	mockStore := new(mocks.MockTagStore)
+	mockStore := new(mocks.MockTagRepository)
 	svc := tag.NewService(mockStore)
 
 	t.Run("returns tag when found", func(t *testing.T) {
@@ -41,7 +41,7 @@ func TestService_GetByID(t *testing.T) {
 
 func TestService_GetByName(t *testing.T) {
 	ctx := context.Background()
-	mockStore := new(mocks.MockTagStore)
+	mockStore := new(mocks.MockTagRepository)
 	svc := tag.NewService(mockStore)
 
 	t.Run("returns tag when found", func(t *testing.T) {
@@ -58,7 +58,7 @@ func TestService_GetByName(t *testing.T) {
 
 func TestService_GetByIDs(t *testing.T) {
 	ctx := context.Background()
-	mockStore := new(mocks.MockTagStore)
+	mockStore := new(mocks.MockTagRepository)
 	svc := tag.NewService(mockStore)
 
 	t.Run("returns tags for IDs", func(t *testing.T) {
@@ -80,7 +80,7 @@ func TestService_GetByIDs(t *testing.T) {
 
 func TestService_EnsureExists(t *testing.T) {
 	ctx := context.Background()
-	mockStore := new(mocks.MockTagStore)
+	mockStore := new(mocks.MockTagRepository)
 	svc := tag.NewService(mockStore)
 
 	t.Run("creates tags if they don't exist", func(t *testing.T) {
@@ -98,7 +98,7 @@ func TestService_EnsureExists(t *testing.T) {
 
 func TestService_List(t *testing.T) {
 	ctx := context.Background()
-	mockStore := new(mocks.MockTagStore)
+	mockStore := new(mocks.MockTagRepository)
 	svc := tag.NewService(mockStore)
 
 	t.Run("returns all tags", func(t *testing.T) {
@@ -118,7 +118,7 @@ func TestService_List(t *testing.T) {
 
 func TestService_Create(t *testing.T) {
 	ctx := context.Background()
-	mockStore := new(mocks.MockTagStore)
+	mockStore := new(mocks.MockTagRepository)
 	svc := tag.NewService(mockStore)
 
 	t.Run("creates tag successfully", func(t *testing.T) {
@@ -135,7 +135,7 @@ func TestService_Create(t *testing.T) {
 
 func TestService_Delete(t *testing.T) {
 	ctx := context.Background()
-	mockStore := new(mocks.MockTagStore)
+	mockStore := new(mocks.MockTagRepository)
 	svc := tag.NewService(mockStore)
 
 	t.Run("deletes tag successfully", func(t *testing.T) {
@@ -150,7 +150,7 @@ func TestService_Delete(t *testing.T) {
 
 func TestService_ResolveTagNames(t *testing.T) {
 	ctx := context.Background()
-	mockStore := new(mocks.MockTagStore)
+	mockStore := new(mocks.MockTagRepository)
 	svc := tag.NewService(mockStore)
 
 	t.Run("resolves tag IDs to names", func(t *testing.T) {

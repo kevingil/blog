@@ -1,13 +1,9 @@
-// Package profile provides profile and site settings domain types and store interfaces
+// Package profile provides profile and site settings domain types
 package profile
 
 import (
-	"context"
-
 	"backend/pkg/api/dto"
 	"backend/pkg/types"
-
-	"github.com/google/uuid"
 )
 
 // SiteSettings is an alias to types.SiteSettings for backward compatibility
@@ -33,26 +29,3 @@ type SiteSettingsUpdateRequest = dto.SiteSettingsUpdateRequest
 
 // UserProfileResponse is an alias to dto.UserProfileResponse for backward compatibility
 type UserProfileResponse = dto.UserProfileResponse
-
-// SiteSettingsStore defines the data access interface for site settings
-type SiteSettingsStore interface {
-	Get(ctx context.Context) (*types.SiteSettings, error)
-	Save(ctx context.Context, settings *types.SiteSettings) error
-}
-
-// ProfileStore defines the data access interface for profile operations
-type ProfileStore interface {
-	GetPublicProfile(ctx context.Context) (*types.PublicProfile, error)
-	IsUserAdmin(ctx context.Context, userID uuid.UUID) (bool, error)
-}
-
-// AccountStore defines the data access interface for account operations
-type AccountStore interface {
-	FindByID(ctx context.Context, id uuid.UUID) (*types.Account, error)
-	Update(ctx context.Context, account *types.Account) error
-}
-
-// OrganizationStore defines the data access interface for organization operations
-type OrganizationStore interface {
-	FindByID(ctx context.Context, id uuid.UUID) (*types.Organization, error)
-}

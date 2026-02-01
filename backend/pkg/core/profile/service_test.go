@@ -18,10 +18,10 @@ func TestService_GetPublicProfile(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns public profile successfully", func(t *testing.T) {
-		mockProfileStore := new(mocks.MockProfileStore)
-		mockSiteSettingsStore := new(mocks.MockSiteSettingsStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockOrgStore := new(mocks.MockOrganizationStore)
+		mockProfileStore := new(mocks.MockProfileRepository)
+		mockSiteSettingsStore := new(mocks.MockSiteSettingsRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
 		svc := profile.NewService(mockProfileStore, mockSiteSettingsStore, mockAccountStore, mockOrgStore)
 
 		bio := "Test bio"
@@ -61,10 +61,10 @@ func TestService_GetUserProfile(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns user profile successfully", func(t *testing.T) {
-		mockProfileStore := new(mocks.MockProfileStore)
-		mockSiteSettingsStore := new(mocks.MockSiteSettingsStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockOrgStore := new(mocks.MockOrganizationStore)
+		mockProfileStore := new(mocks.MockProfileRepository)
+		mockSiteSettingsStore := new(mocks.MockSiteSettingsRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
 		svc := profile.NewService(mockProfileStore, mockSiteSettingsStore, mockAccountStore, mockOrgStore)
 
 		accountID := uuid.New()
@@ -102,10 +102,10 @@ func TestService_GetUserProfile(t *testing.T) {
 	})
 
 	t.Run("returns error when user not found", func(t *testing.T) {
-		mockProfileStore := new(mocks.MockProfileStore)
-		mockSiteSettingsStore := new(mocks.MockSiteSettingsStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockOrgStore := new(mocks.MockOrganizationStore)
+		mockProfileStore := new(mocks.MockProfileRepository)
+		mockSiteSettingsStore := new(mocks.MockSiteSettingsRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
 		svc := profile.NewService(mockProfileStore, mockSiteSettingsStore, mockAccountStore, mockOrgStore)
 
 		accountID := uuid.New()
@@ -123,10 +123,10 @@ func TestService_UpdateUserProfile(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("updates user profile successfully", func(t *testing.T) {
-		mockProfileStore := new(mocks.MockProfileStore)
-		mockSiteSettingsStore := new(mocks.MockSiteSettingsStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockOrgStore := new(mocks.MockOrganizationStore)
+		mockProfileStore := new(mocks.MockProfileRepository)
+		mockSiteSettingsStore := new(mocks.MockSiteSettingsRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
 		svc := profile.NewService(mockProfileStore, mockSiteSettingsStore, mockAccountStore, mockOrgStore)
 
 		accountID := uuid.New()
@@ -183,10 +183,10 @@ func TestService_GetSiteSettings(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns site settings successfully", func(t *testing.T) {
-		mockProfileStore := new(mocks.MockProfileStore)
-		mockSiteSettingsStore := new(mocks.MockSiteSettingsStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockOrgStore := new(mocks.MockOrganizationStore)
+		mockProfileStore := new(mocks.MockProfileRepository)
+		mockSiteSettingsStore := new(mocks.MockSiteSettingsRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
 		svc := profile.NewService(mockProfileStore, mockSiteSettingsStore, mockAccountStore, mockOrgStore)
 
 		userID := uuid.New()
@@ -211,10 +211,10 @@ func TestService_GetSiteSettings(t *testing.T) {
 	})
 
 	t.Run("returns defaults when not found", func(t *testing.T) {
-		mockProfileStore := new(mocks.MockProfileStore)
-		mockSiteSettingsStore := new(mocks.MockSiteSettingsStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockOrgStore := new(mocks.MockOrganizationStore)
+		mockProfileStore := new(mocks.MockProfileRepository)
+		mockSiteSettingsStore := new(mocks.MockSiteSettingsRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
 		svc := profile.NewService(mockProfileStore, mockSiteSettingsStore, mockAccountStore, mockOrgStore)
 
 		mockSiteSettingsStore.On("Get", ctx).Return(nil, core.ErrNotFound).Once()
@@ -234,10 +234,10 @@ func TestService_UpdateSiteSettings(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("updates site settings successfully", func(t *testing.T) {
-		mockProfileStore := new(mocks.MockProfileStore)
-		mockSiteSettingsStore := new(mocks.MockSiteSettingsStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockOrgStore := new(mocks.MockOrganizationStore)
+		mockProfileStore := new(mocks.MockProfileRepository)
+		mockSiteSettingsStore := new(mocks.MockSiteSettingsRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
 		svc := profile.NewService(mockProfileStore, mockSiteSettingsStore, mockAccountStore, mockOrgStore)
 
 		userID := uuid.New()
@@ -281,10 +281,10 @@ func TestService_UpdateSiteSettings(t *testing.T) {
 	})
 
 	t.Run("creates settings when not found", func(t *testing.T) {
-		mockProfileStore := new(mocks.MockProfileStore)
-		mockSiteSettingsStore := new(mocks.MockSiteSettingsStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockOrgStore := new(mocks.MockOrganizationStore)
+		mockProfileStore := new(mocks.MockProfileRepository)
+		mockSiteSettingsStore := new(mocks.MockSiteSettingsRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
 		svc := profile.NewService(mockProfileStore, mockSiteSettingsStore, mockAccountStore, mockOrgStore)
 
 		newProfileType := "user"
@@ -311,10 +311,10 @@ func TestService_IsUserAdmin(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns true for admin user", func(t *testing.T) {
-		mockProfileStore := new(mocks.MockProfileStore)
-		mockSiteSettingsStore := new(mocks.MockSiteSettingsStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockOrgStore := new(mocks.MockOrganizationStore)
+		mockProfileStore := new(mocks.MockProfileRepository)
+		mockSiteSettingsStore := new(mocks.MockSiteSettingsRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
 		svc := profile.NewService(mockProfileStore, mockSiteSettingsStore, mockAccountStore, mockOrgStore)
 
 		userID := uuid.New()
@@ -328,10 +328,10 @@ func TestService_IsUserAdmin(t *testing.T) {
 	})
 
 	t.Run("returns false for non-admin user", func(t *testing.T) {
-		mockProfileStore := new(mocks.MockProfileStore)
-		mockSiteSettingsStore := new(mocks.MockSiteSettingsStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockOrgStore := new(mocks.MockOrganizationStore)
+		mockProfileStore := new(mocks.MockProfileRepository)
+		mockSiteSettingsStore := new(mocks.MockSiteSettingsRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
 		svc := profile.NewService(mockProfileStore, mockSiteSettingsStore, mockAccountStore, mockOrgStore)
 
 		userID := uuid.New()

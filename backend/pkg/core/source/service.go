@@ -12,6 +12,7 @@ import (
 
 	"backend/pkg/core"
 	"backend/pkg/core/ml"
+	"backend/pkg/database/repository"
 	"backend/pkg/types"
 
 	"github.com/PuerkitoBio/goquery"
@@ -52,28 +53,28 @@ type ListResponse struct {
 
 // Service provides business logic for sources
 type Service struct {
-	sourceStore      SourceStore
-	articleStore     ArticleStore
+	sourceRepo       repository.SourceRepository
+	articleRepo      repository.ArticleRepository
 	embeddingService EmbeddingService
 }
 
-// NewService creates a new source service with the provided stores
-func NewService(sourceStore SourceStore, articleStore ArticleStore) *Service {
+// NewService creates a new source service with the provided repositories
+func NewService(sourceRepo repository.SourceRepository, articleRepo repository.ArticleRepository) *Service {
 	return &Service{
-		sourceStore:      sourceStore,
-		articleStore:     articleStore,
+		sourceRepo:       sourceRepo,
+		articleRepo:      articleRepo,
 		embeddingService: ml.NewEmbeddingService(),
 	}
 }
 
 // GetByID retrieves a source by its ID
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*types.Source, error) {
-	return s.sourceStore.FindByID(ctx, id)
+	return s.sourceRepo.FindByID(ctx, id)
 }
 
 // GetByArticleID retrieves all sources for an article
 func (s *Service) GetByArticleID(ctx context.Context, articleID uuid.UUID) ([]types.Source, error) {
-	return s.sourceStore.FindByArticleID(ctx, articleID)
+	return s.sourceRepo.FindByArticleID(ctx, articleID)
 }
 
 // List retrieves all sources with pagination and article metadata
@@ -90,7 +91,7 @@ func (s *Service) List(ctx context.Context, page, limit int) (*ListResponse, err
 		PerPage: limit,
 	}
 
-	sources, total, err := s.sourceStore.List(ctx, opts)
+	sources, total, err := s.sourceRepo.List(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +108,7 @@ func (s *Service) List(ctx context.Context, page, limit int) (*ListResponse, err
 // Create creates a new source with embedding generation
 func (s *Service) Create(ctx context.Context, req CreateRequest) (*types.Source, error) {
 	// Validate that the article exists
-	_, err := s.articleStore.FindByID(ctx, req.ArticleID)
+	_, err := s.articleRepo.FindByID(ctx, req.ArticleID)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +140,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*types.Source,
 		CreatedAt:  time.Now(),
 	}
 
-	if err := s.sourceStore.Save(ctx, source); err != nil {
+	if err := s.sourceRepo.Save(ctx, source); err != nil {
 		return nil, err
 	}
 
@@ -174,7 +175,7 @@ func (s *Service) ScrapeAndCreate(ctx context.Context, articleID uuid.UUID, targ
 
 // Update updates an existing source
 func (s *Service) Update(ctx context.Context, sourceID uuid.UUID, req UpdateRequest) (*types.Source, error) {
-	source, err := s.sourceStore.FindByID(ctx, sourceID)
+	source, err := s.sourceRepo.FindByID(ctx, sourceID)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +204,7 @@ func (s *Service) Update(ctx context.Context, sourceID uuid.UUID, req UpdateRequ
 		source.Embedding = embedding.Slice()
 	}
 
-	if err := s.sourceStore.Update(ctx, source); err != nil {
+	if err := s.sourceRepo.Update(ctx, source); err != nil {
 		return nil, err
 	}
 
@@ -212,7 +213,7 @@ func (s *Service) Update(ctx context.Context, sourceID uuid.UUID, req UpdateRequ
 
 // Delete removes a source by its ID
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
-	return s.sourceStore.Delete(ctx, id)
+	return s.sourceRepo.Delete(ctx, id)
 }
 
 // SearchSimilar finds sources similar to the given query using vector similarity
@@ -222,7 +223,7 @@ func (s *Service) SearchSimilar(ctx context.Context, articleID uuid.UUID, query 
 		return nil, fmt.Errorf("failed to generate query embedding: %w", err)
 	}
 
-	sources, err := s.sourceStore.SearchSimilar(ctx, articleID, queryEmbedding.Slice(), limit)
+	sources, err := s.sourceRepo.SearchSimilar(ctx, articleID, queryEmbedding.Slice(), limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search similar sources: %w", err)
 	}

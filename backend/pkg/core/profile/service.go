@@ -6,6 +6,7 @@ import (
 
 	"backend/pkg/api/dto"
 	"backend/pkg/core"
+	"backend/pkg/database/repository"
 	"backend/pkg/types"
 
 	"github.com/google/uuid"
@@ -13,30 +14,30 @@ import (
 
 // Service provides business logic for profile operations
 type Service struct {
-	profileStore      ProfileStore
-	siteSettingsStore SiteSettingsStore
-	accountStore      AccountStore
-	organizationStore OrganizationStore
+	profileRepo      repository.ProfileRepository
+	siteSettingsRepo repository.SiteSettingsRepository
+	accountRepo      repository.AccountRepository
+	organizationRepo repository.OrganizationRepository
 }
 
-// NewService creates a new profile service with the provided stores
+// NewService creates a new profile service with the provided repositories
 func NewService(
-	profileStore ProfileStore,
-	siteSettingsStore SiteSettingsStore,
-	accountStore AccountStore,
-	organizationStore OrganizationStore,
+	profileRepo repository.ProfileRepository,
+	siteSettingsRepo repository.SiteSettingsRepository,
+	accountRepo repository.AccountRepository,
+	organizationRepo repository.OrganizationRepository,
 ) *Service {
 	return &Service{
-		profileStore:      profileStore,
-		siteSettingsStore: siteSettingsStore,
-		accountStore:      accountStore,
-		organizationStore: organizationStore,
+		profileRepo:      profileRepo,
+		siteSettingsRepo: siteSettingsRepo,
+		accountRepo:      accountRepo,
+		organizationRepo: organizationRepo,
 	}
 }
 
 // GetPublicProfile retrieves the public profile based on site settings
 func (s *Service) GetPublicProfile(ctx context.Context) (*dto.PublicProfileResponse, error) {
-	pub, err := s.profileStore.GetPublicProfile(ctx)
+	pub, err := s.profileRepo.GetPublicProfile(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +62,7 @@ func (s *Service) GetPublicProfile(ctx context.Context) (*dto.PublicProfileRespo
 
 // GetUserProfile returns the profile for a specific user
 func (s *Service) GetUserProfile(ctx context.Context, accountID uuid.UUID) (*dto.UserProfileResponse, error) {
-	account, err := s.accountStore.FindByID(ctx, accountID)
+	account, err := s.accountRepo.FindByID(ctx, accountID)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +83,7 @@ func (s *Service) GetUserProfile(ctx context.Context, accountID uuid.UUID) (*dto
 
 // UpdateUserProfile updates the profile fields for a user
 func (s *Service) UpdateUserProfile(ctx context.Context, accountID uuid.UUID, req dto.ProfileUpdateRequest) (*dto.UserProfileResponse, error) {
-	account, err := s.accountStore.FindByID(ctx, accountID)
+	account, err := s.accountRepo.FindByID(ctx, accountID)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +113,7 @@ func (s *Service) UpdateUserProfile(ctx context.Context, accountID uuid.UUID, re
 		account.SocialLinks = socialLinksInterface
 	}
 
-	if err := s.accountStore.Update(ctx, account); err != nil {
+	if err := s.accountRepo.Update(ctx, account); err != nil {
 		return nil, err
 	}
 
@@ -132,7 +133,7 @@ func (s *Service) UpdateUserProfile(ctx context.Context, accountID uuid.UUID, re
 
 // GetSiteSettings returns the current site settings
 func (s *Service) GetSiteSettings(ctx context.Context) (*dto.SiteSettingsResponse, error) {
-	settings, err := s.siteSettingsStore.Get(ctx)
+	settings, err := s.siteSettingsRepo.Get(ctx)
 	if err != nil {
 		if err == core.ErrNotFound {
 			// Return defaults
@@ -152,7 +153,7 @@ func (s *Service) GetSiteSettings(ctx context.Context) (*dto.SiteSettingsRespons
 
 // UpdateSiteSettings updates the site settings
 func (s *Service) UpdateSiteSettings(ctx context.Context, req dto.SiteSettingsUpdateRequest) (*dto.SiteSettingsResponse, error) {
-	settings, err := s.siteSettingsStore.Get(ctx)
+	settings, err := s.siteSettingsRepo.Get(ctx)
 	if err != nil {
 		if err == core.ErrNotFound {
 			// Create default settings
@@ -169,8 +170,8 @@ func (s *Service) UpdateSiteSettings(ctx context.Context, req dto.SiteSettingsUp
 		settings.PublicProfileType = *req.PublicProfileType
 	}
 	if req.PublicUserID != nil {
-		// Verify user exists using account store
-		_, err := s.accountStore.FindByID(ctx, *req.PublicUserID)
+		// Verify user exists using account repo
+		_, err := s.accountRepo.FindByID(ctx, *req.PublicUserID)
 		if err != nil {
 			if err == core.ErrNotFound {
 				return nil, core.ErrNotFound
@@ -180,8 +181,8 @@ func (s *Service) UpdateSiteSettings(ctx context.Context, req dto.SiteSettingsUp
 		settings.PublicUserID = req.PublicUserID
 	}
 	if req.PublicOrganizationID != nil {
-		// Verify organization exists using organization store
-		_, err := s.organizationStore.FindByID(ctx, *req.PublicOrganizationID)
+		// Verify organization exists using organization repo
+		_, err := s.organizationRepo.FindByID(ctx, *req.PublicOrganizationID)
 		if err != nil {
 			if err == core.ErrNotFound {
 				return nil, core.ErrNotFound
@@ -191,7 +192,7 @@ func (s *Service) UpdateSiteSettings(ctx context.Context, req dto.SiteSettingsUp
 		settings.PublicOrganizationID = req.PublicOrganizationID
 	}
 
-	if err := s.siteSettingsStore.Save(ctx, settings); err != nil {
+	if err := s.siteSettingsRepo.Save(ctx, settings); err != nil {
 		return nil, err
 	}
 
@@ -204,7 +205,7 @@ func (s *Service) UpdateSiteSettings(ctx context.Context, req dto.SiteSettingsUp
 
 // IsUserAdmin checks if a user has admin role
 func (s *Service) IsUserAdmin(ctx context.Context, userID uuid.UUID) (bool, error) {
-	return s.profileStore.IsUserAdmin(ctx, userID)
+	return s.profileRepo.IsUserAdmin(ctx, userID)
 }
 
 // Helper functions

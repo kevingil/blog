@@ -20,8 +20,8 @@ func TestService_GetByID(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns project when found", func(t *testing.T) {
-		mockProjectStore := new(mocks.MockProjectStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockProjectStore := new(mocks.MockProjectRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := project.NewService(mockProjectStore, mockTagStore)
 
 		projectID := uuid.New()
@@ -49,8 +49,8 @@ func TestService_GetByID(t *testing.T) {
 	})
 
 	t.Run("returns error when project not found", func(t *testing.T) {
-		mockProjectStore := new(mocks.MockProjectStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockProjectStore := new(mocks.MockProjectRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := project.NewService(mockProjectStore, mockTagStore)
 
 		projectID := uuid.New()
@@ -68,8 +68,8 @@ func TestService_GetDetail(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns project with resolved tag names", func(t *testing.T) {
-		mockProjectStore := new(mocks.MockProjectStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockProjectStore := new(mocks.MockProjectRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := project.NewService(mockProjectStore, mockTagStore)
 
 		projectID := uuid.New()
@@ -105,8 +105,8 @@ func TestService_GetDetail(t *testing.T) {
 	})
 
 	t.Run("returns error when project not found", func(t *testing.T) {
-		mockProjectStore := new(mocks.MockProjectStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockProjectStore := new(mocks.MockProjectRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := project.NewService(mockProjectStore, mockTagStore)
 
 		projectID := uuid.New()
@@ -120,8 +120,8 @@ func TestService_GetDetail(t *testing.T) {
 	})
 
 	t.Run("returns project with empty tags when no tags exist", func(t *testing.T) {
-		mockProjectStore := new(mocks.MockProjectStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockProjectStore := new(mocks.MockProjectRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := project.NewService(mockProjectStore, mockTagStore)
 
 		projectID := uuid.New()
@@ -149,8 +149,8 @@ func TestService_List(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns paginated projects", func(t *testing.T) {
-		mockProjectStore := new(mocks.MockProjectStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockProjectStore := new(mocks.MockProjectRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := project.NewService(mockProjectStore, mockTagStore)
 
 		projects := []types.Project{
@@ -189,8 +189,8 @@ func TestService_List(t *testing.T) {
 	})
 
 	t.Run("uses default pagination when invalid values provided", func(t *testing.T) {
-		mockProjectStore := new(mocks.MockProjectStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockProjectStore := new(mocks.MockProjectRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := project.NewService(mockProjectStore, mockTagStore)
 
 		opts := types.ProjectListOptions{
@@ -209,8 +209,8 @@ func TestService_List(t *testing.T) {
 	})
 
 	t.Run("calculates total pages correctly", func(t *testing.T) {
-		mockProjectStore := new(mocks.MockProjectStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockProjectStore := new(mocks.MockProjectRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := project.NewService(mockProjectStore, mockTagStore)
 
 		opts := types.ProjectListOptions{
@@ -231,8 +231,8 @@ func TestService_Create(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("creates project successfully", func(t *testing.T) {
-		mockProjectStore := new(mocks.MockProjectStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockProjectStore := new(mocks.MockProjectRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := project.NewService(mockProjectStore, mockTagStore)
 
 		req := project.CreateRequest{
@@ -261,8 +261,8 @@ func TestService_Create(t *testing.T) {
 	})
 
 	t.Run("creates project without tags", func(t *testing.T) {
-		mockProjectStore := new(mocks.MockProjectStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockProjectStore := new(mocks.MockProjectRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := project.NewService(mockProjectStore, mockTagStore)
 
 		req := project.CreateRequest{
@@ -284,8 +284,8 @@ func TestService_Create(t *testing.T) {
 	})
 
 	t.Run("returns validation error when title is empty", func(t *testing.T) {
-		mockProjectStore := new(mocks.MockProjectStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockProjectStore := new(mocks.MockProjectRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := project.NewService(mockProjectStore, mockTagStore)
 
 		req := project.CreateRequest{
@@ -300,8 +300,8 @@ func TestService_Create(t *testing.T) {
 	})
 
 	t.Run("returns validation error when description is empty", func(t *testing.T) {
-		mockProjectStore := new(mocks.MockProjectStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockProjectStore := new(mocks.MockProjectRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := project.NewService(mockProjectStore, mockTagStore)
 
 		req := project.CreateRequest{
@@ -320,8 +320,8 @@ func TestService_Update(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("updates project successfully", func(t *testing.T) {
-		mockProjectStore := new(mocks.MockProjectStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockProjectStore := new(mocks.MockProjectRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := project.NewService(mockProjectStore, mockTagStore)
 
 		projectID := uuid.New()
@@ -369,8 +369,8 @@ func TestService_Update(t *testing.T) {
 	})
 
 	t.Run("updates only provided fields", func(t *testing.T) {
-		mockProjectStore := new(mocks.MockProjectStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockProjectStore := new(mocks.MockProjectRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := project.NewService(mockProjectStore, mockTagStore)
 
 		projectID := uuid.New()
@@ -402,8 +402,8 @@ func TestService_Update(t *testing.T) {
 	})
 
 	t.Run("returns error when project not found", func(t *testing.T) {
-		mockProjectStore := new(mocks.MockProjectStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockProjectStore := new(mocks.MockProjectRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := project.NewService(mockProjectStore, mockTagStore)
 
 		projectID := uuid.New()
@@ -426,8 +426,8 @@ func TestService_Delete(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("deletes project successfully", func(t *testing.T) {
-		mockProjectStore := new(mocks.MockProjectStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockProjectStore := new(mocks.MockProjectRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := project.NewService(mockProjectStore, mockTagStore)
 
 		projectID := uuid.New()
@@ -440,8 +440,8 @@ func TestService_Delete(t *testing.T) {
 	})
 
 	t.Run("returns error when project not found", func(t *testing.T) {
-		mockProjectStore := new(mocks.MockProjectStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockProjectStore := new(mocks.MockProjectRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := project.NewService(mockProjectStore, mockTagStore)
 
 		projectID := uuid.New()

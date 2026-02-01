@@ -1,31 +1,10 @@
-// Package project provides the Project domain type and store interface
+// Package project provides the Project domain type
 package project
 
-import (
-	"context"
-
-	"backend/pkg/types"
-
-	"github.com/google/uuid"
-)
+import "backend/pkg/types"
 
 // Project is an alias to types.Project for backward compatibility
 type Project = types.Project
 
 // ListOptions is an alias to types.ProjectListOptions for backward compatibility
 type ListOptions = types.ProjectListOptions
-
-// ProjectStore defines the data access interface for projects
-type ProjectStore interface {
-	FindByID(ctx context.Context, id uuid.UUID) (*types.Project, error)
-	List(ctx context.Context, opts types.ProjectListOptions) ([]types.Project, int64, error)
-	Save(ctx context.Context, project *types.Project) error
-	Update(ctx context.Context, project *types.Project) error
-	Delete(ctx context.Context, id uuid.UUID) error
-}
-
-// TagStore defines the data access interface for tags
-type TagStore interface {
-	FindByIDs(ctx context.Context, ids []int64) ([]types.Tag, error)
-	EnsureExists(ctx context.Context, names []string) ([]int64, error)
-}

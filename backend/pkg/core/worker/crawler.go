@@ -459,7 +459,7 @@ func (w *CrawlWorker) crawlArticle(ctx context.Context, articleURL string) (*cra
 }
 
 // processContent processes a single content item (embed and match to topics)
-func (w *CrawlWorker) processContent(ctx context.Context, repo *repository.CrawledContentRepository, source *types.DataSource, item *crawledItem) error {
+func (w *CrawlWorker) processContent(ctx context.Context, repo repository.CrawledContentRepository, source *types.DataSource, item *crawledItem) error {
 	// Check if content already exists
 	existing, err := repo.FindByURL(ctx, source.ID, item.URL)
 	if err == nil && existing != nil {

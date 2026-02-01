@@ -18,7 +18,7 @@ func TestService_GetByID(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns source when found", func(t *testing.T) {
-		mockSourceStore := new(mocks.MockSourceStore)
+		mockSourceStore := new(mocks.MockSourceRepository)
 		svc := source.NewService(mockSourceStore, nil)
 
 		sourceID := uuid.New()
@@ -46,7 +46,7 @@ func TestService_GetByID(t *testing.T) {
 	})
 
 	t.Run("returns error when source not found", func(t *testing.T) {
-		mockSourceStore := new(mocks.MockSourceStore)
+		mockSourceStore := new(mocks.MockSourceRepository)
 		svc := source.NewService(mockSourceStore, nil)
 
 		sourceID := uuid.New()
@@ -64,7 +64,7 @@ func TestService_GetByArticleID(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns sources for article", func(t *testing.T) {
-		mockSourceStore := new(mocks.MockSourceStore)
+		mockSourceStore := new(mocks.MockSourceRepository)
 		svc := source.NewService(mockSourceStore, nil)
 
 		articleID := uuid.New()
@@ -101,7 +101,7 @@ func TestService_GetByArticleID(t *testing.T) {
 	})
 
 	t.Run("returns empty slice when no sources found", func(t *testing.T) {
-		mockSourceStore := new(mocks.MockSourceStore)
+		mockSourceStore := new(mocks.MockSourceRepository)
 		svc := source.NewService(mockSourceStore, nil)
 
 		articleID := uuid.New()
@@ -119,7 +119,7 @@ func TestService_List(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns paginated sources with article metadata", func(t *testing.T) {
-		mockSourceStore := new(mocks.MockSourceStore)
+		mockSourceStore := new(mocks.MockSourceRepository)
 		svc := source.NewService(mockSourceStore, nil)
 
 		articleID := uuid.New()
@@ -169,7 +169,7 @@ func TestService_List(t *testing.T) {
 	})
 
 	t.Run("normalizes invalid page and limit values", func(t *testing.T) {
-		mockSourceStore := new(mocks.MockSourceStore)
+		mockSourceStore := new(mocks.MockSourceRepository)
 		svc := source.NewService(mockSourceStore, nil)
 
 		// Pass invalid values (page=0, limit=0)
@@ -188,7 +188,7 @@ func TestService_List(t *testing.T) {
 	})
 
 	t.Run("caps limit at 100", func(t *testing.T) {
-		mockSourceStore := new(mocks.MockSourceStore)
+		mockSourceStore := new(mocks.MockSourceRepository)
 		svc := source.NewService(mockSourceStore, nil)
 
 		// Pass limit > 100
@@ -206,7 +206,7 @@ func TestService_List(t *testing.T) {
 	})
 
 	t.Run("calculates total pages correctly", func(t *testing.T) {
-		mockSourceStore := new(mocks.MockSourceStore)
+		mockSourceStore := new(mocks.MockSourceRepository)
 		svc := source.NewService(mockSourceStore, nil)
 
 		expectedOpts := source.SourceListOptions{
@@ -228,7 +228,7 @@ func TestService_Delete(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("deletes source successfully", func(t *testing.T) {
-		mockSourceStore := new(mocks.MockSourceStore)
+		mockSourceStore := new(mocks.MockSourceRepository)
 		svc := source.NewService(mockSourceStore, nil)
 
 		sourceID := uuid.New()
@@ -241,7 +241,7 @@ func TestService_Delete(t *testing.T) {
 	})
 
 	t.Run("returns error when source not found", func(t *testing.T) {
-		mockSourceStore := new(mocks.MockSourceStore)
+		mockSourceStore := new(mocks.MockSourceRepository)
 		svc := source.NewService(mockSourceStore, nil)
 
 		sourceID := uuid.New()

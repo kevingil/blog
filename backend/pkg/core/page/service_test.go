@@ -19,7 +19,7 @@ func TestService_GetByID(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns page when found", func(t *testing.T) {
-		mockStore := new(mocks.MockPageStore)
+		mockStore := new(mocks.MockPageRepository)
 		svc := page.NewService(mockStore)
 
 		pageID := uuid.New()
@@ -46,7 +46,7 @@ func TestService_GetByID(t *testing.T) {
 	})
 
 	t.Run("returns error when page not found", func(t *testing.T) {
-		mockStore := new(mocks.MockPageStore)
+		mockStore := new(mocks.MockPageRepository)
 		svc := page.NewService(mockStore)
 
 		pageID := uuid.New()
@@ -64,7 +64,7 @@ func TestService_GetBySlug(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns page when found", func(t *testing.T) {
-		mockStore := new(mocks.MockPageStore)
+		mockStore := new(mocks.MockPageRepository)
 		svc := page.NewService(mockStore)
 
 		testPage := &types.Page{
@@ -90,7 +90,7 @@ func TestService_GetBySlug(t *testing.T) {
 	})
 
 	t.Run("returns error when slug not found", func(t *testing.T) {
-		mockStore := new(mocks.MockPageStore)
+		mockStore := new(mocks.MockPageRepository)
 		svc := page.NewService(mockStore)
 
 		mockStore.On("FindBySlug", ctx, "nonexistent").Return(nil, core.ErrNotFound).Once()
@@ -107,7 +107,7 @@ func TestService_List(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns pages with pagination", func(t *testing.T) {
-		mockStore := new(mocks.MockPageStore)
+		mockStore := new(mocks.MockPageRepository)
 		svc := page.NewService(mockStore)
 
 		testPages := []types.Page{
@@ -151,7 +151,7 @@ func TestService_List(t *testing.T) {
 	})
 
 	t.Run("applies default pagination values", func(t *testing.T) {
-		mockStore := new(mocks.MockPageStore)
+		mockStore := new(mocks.MockPageRepository)
 		svc := page.NewService(mockStore)
 
 		expectedOpts := types.PageListOptions{
@@ -171,7 +171,7 @@ func TestService_List(t *testing.T) {
 	})
 
 	t.Run("filters by published status", func(t *testing.T) {
-		mockStore := new(mocks.MockPageStore)
+		mockStore := new(mocks.MockPageRepository)
 		svc := page.NewService(mockStore)
 
 		isPublished := true
@@ -194,7 +194,7 @@ func TestService_Create(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("creates page successfully", func(t *testing.T) {
-		mockStore := new(mocks.MockPageStore)
+		mockStore := new(mocks.MockPageRepository)
 		svc := page.NewService(mockStore)
 
 		req := page.CreateRequest{
@@ -221,7 +221,7 @@ func TestService_Create(t *testing.T) {
 	})
 
 	t.Run("returns error when slug already exists", func(t *testing.T) {
-		mockStore := new(mocks.MockPageStore)
+		mockStore := new(mocks.MockPageRepository)
 		svc := page.NewService(mockStore)
 
 		req := page.CreateRequest{
@@ -248,7 +248,7 @@ func TestService_Update(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("updates page successfully", func(t *testing.T) {
-		mockStore := new(mocks.MockPageStore)
+		mockStore := new(mocks.MockPageRepository)
 		svc := page.NewService(mockStore)
 
 		pageID := uuid.New()
@@ -286,7 +286,7 @@ func TestService_Update(t *testing.T) {
 	})
 
 	t.Run("updates only provided fields", func(t *testing.T) {
-		mockStore := new(mocks.MockPageStore)
+		mockStore := new(mocks.MockPageRepository)
 		svc := page.NewService(mockStore)
 
 		pageID := uuid.New()
@@ -320,7 +320,7 @@ func TestService_Update(t *testing.T) {
 	})
 
 	t.Run("returns error when page not found", func(t *testing.T) {
-		mockStore := new(mocks.MockPageStore)
+		mockStore := new(mocks.MockPageRepository)
 		svc := page.NewService(mockStore)
 
 		pageID := uuid.New()
@@ -343,7 +343,7 @@ func TestService_Delete(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("deletes page successfully", func(t *testing.T) {
-		mockStore := new(mocks.MockPageStore)
+		mockStore := new(mocks.MockPageRepository)
 		svc := page.NewService(mockStore)
 
 		pageID := uuid.New()
@@ -356,7 +356,7 @@ func TestService_Delete(t *testing.T) {
 	})
 
 	t.Run("returns error when page not found", func(t *testing.T) {
-		mockStore := new(mocks.MockPageStore)
+		mockStore := new(mocks.MockPageRepository)
 		svc := page.NewService(mockStore)
 
 		pageID := uuid.New()

@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"backend/pkg/core"
+	"backend/pkg/database/repository"
 	"backend/pkg/types"
 
 	"github.com/google/uuid"
@@ -48,33 +49,33 @@ type ProjectDetail struct {
 
 // Service provides business logic for projects
 type Service struct {
-	projectStore ProjectStore
-	tagStore     TagStore
+	projectRepo repository.ProjectRepository
+	tagRepo     repository.TagRepository
 }
 
 // NewService creates a new project service with the provided stores
-func NewService(projectStore ProjectStore, tagStore TagStore) *Service {
+func NewService(projectRepo repository.ProjectRepository, tagRepo repository.TagRepository) *Service {
 	return &Service{
-		projectStore: projectStore,
-		tagStore:     tagStore,
+		projectRepo: projectRepo,
+		tagRepo:     tagRepo,
 	}
 }
 
 // GetByID retrieves a project by its ID
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Project, error) {
-	return s.projectStore.FindByID(ctx, id)
+	return s.projectRepo.FindByID(ctx, id)
 }
 
 // GetDetail retrieves a project with resolved tag names
 func (s *Service) GetDetail(ctx context.Context, id uuid.UUID) (*ProjectDetail, error) {
-	project, err := s.projectStore.FindByID(ctx, id)
+	project, err := s.projectRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
 	var tagNames []string
 	if len(project.TagIDs) > 0 {
-		tags, err := s.tagStore.FindByIDs(ctx, project.TagIDs)
+		tags, err := s.tagRepo.FindByIDs(ctx, project.TagIDs)
 		if err == nil {
 			for _, t := range tags {
 				tagNames = append(tagNames, t.Name)
@@ -102,7 +103,7 @@ func (s *Service) List(ctx context.Context, pageNum, perPage int) (*ListResult, 
 		PerPage: perPage,
 	}
 
-	projects, total, err := s.projectStore.List(ctx, opts)
+	projects, total, err := s.projectRepo.List(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +126,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*Project, erro
 	}
 
 	// Handle tags
-	tagIDs, err := s.tagStore.EnsureExists(ctx, req.Tags)
+	tagIDs, err := s.tagRepo.EnsureExists(ctx, req.Tags)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +141,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*Project, erro
 		URL:         req.URL,
 	}
 
-	if err := s.projectStore.Save(ctx, project); err != nil {
+	if err := s.projectRepo.Save(ctx, project); err != nil {
 		return nil, err
 	}
 
@@ -149,7 +150,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*Project, erro
 
 // Update updates an existing project
 func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (*Project, error) {
-	project, err := s.projectStore.FindByID(ctx, id)
+	project, err := s.projectRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +166,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (
 		project.Content = *req.Content
 	}
 	if req.Tags != nil {
-		tagIDs, err := s.tagStore.EnsureExists(ctx, *req.Tags)
+		tagIDs, err := s.tagRepo.EnsureExists(ctx, *req.Tags)
 		if err != nil {
 			return nil, err
 		}
@@ -178,7 +179,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (
 		project.URL = *req.URL
 	}
 
-	if err := s.projectStore.Update(ctx, project); err != nil {
+	if err := s.projectRepo.Update(ctx, project); err != nil {
 		return nil, err
 	}
 
@@ -187,5 +188,5 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateRequest) (
 
 // Delete removes a project by its ID
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
-	return s.projectStore.Delete(ctx, id)
+	return s.projectRepo.Delete(ctx, id)
 }
