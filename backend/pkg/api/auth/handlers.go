@@ -175,10 +175,13 @@ func DeleteAccount(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		Password string `json:"password"`
+		Password string `json:"password" validate:"required"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
+	}
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
 	}
 
 	svc := getService()

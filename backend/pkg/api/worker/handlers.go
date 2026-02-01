@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"backend/pkg/api/dto"
 	"backend/pkg/api/response"
 	"backend/pkg/core"
 	coreWorker "backend/pkg/core/worker"
@@ -8,33 +9,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// WorkerStatusResponse represents the response for worker status
-type WorkerStatusResponse struct {
-	Name        string  `json:"name"`
-	State       string  `json:"state"`
-	Progress    int     `json:"progress"`
-	Message     string  `json:"message"`
-	StartedAt   *string `json:"started_at,omitempty"`
-	CompletedAt *string `json:"completed_at,omitempty"`
-	Error       string  `json:"error,omitempty"`
-	ItemsTotal  int     `json:"items_total"`
-	ItemsDone   int     `json:"items_done"`
-}
-
-// AllWorkersStatusResponse represents the response for all workers
-type AllWorkersStatusResponse struct {
-	Workers   []WorkerStatusResponse `json:"workers"`
-	IsRunning bool                   `json:"is_running"`
-}
-
-// formatTime formats a time pointer to ISO string or nil
-func formatTime(t *string) *string {
-	return t
-}
-
 // toStatusResponse converts WorkerStatus to response format
-func toStatusResponse(status *coreWorker.WorkerStatus) WorkerStatusResponse {
-	resp := WorkerStatusResponse{
+func toStatusResponse(status *coreWorker.WorkerStatus) dto.WorkerStatusResponse {
+	resp := dto.WorkerStatusResponse{
 		Name:       status.Name,
 		State:      string(status.State),
 		Progress:   status.Progress,
@@ -62,7 +39,7 @@ func toStatusResponse(status *coreWorker.WorkerStatus) WorkerStatusResponse {
 // @Tags workers
 // @Accept json
 // @Produce json
-// @Success 200 {object} response.SuccessResponse{data=AllWorkersStatusResponse}
+// @Success 200 {object} response.SuccessResponse{data=dto.AllWorkersStatusResponse}
 // @Security BearerAuth
 // @Router /workers/status [get]
 func GetAllWorkerStatus(c *fiber.Ctx) error {
@@ -74,12 +51,12 @@ func GetAllWorkerStatus(c *fiber.Ctx) error {
 	statusService := coreWorker.GetStatusService()
 	statuses := statusService.GetAllStatuses()
 
-	workers := make([]WorkerStatusResponse, 0, len(statuses))
+	workers := make([]dto.WorkerStatusResponse, 0, len(statuses))
 	for _, status := range statuses {
 		workers = append(workers, toStatusResponse(&status))
 	}
 
-	return response.Success(c, AllWorkersStatusResponse{
+	return response.Success(c, dto.AllWorkersStatusResponse{
 		Workers:   workers,
 		IsRunning: manager.IsRunning(),
 	})
@@ -92,7 +69,7 @@ func GetAllWorkerStatus(c *fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Param name path string true "Worker name"
-// @Success 200 {object} response.SuccessResponse{data=WorkerStatusResponse}
+// @Success 200 {object} response.SuccessResponse{data=dto.WorkerStatusResponse}
 // @Failure 404 {object} response.ErrorResponse
 // @Security BearerAuth
 // @Router /workers/{name}/status [get]

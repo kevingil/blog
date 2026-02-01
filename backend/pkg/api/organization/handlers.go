@@ -121,6 +121,9 @@ func UpdateOrganization(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
+	}
 
 	svc := getService()
 	org, err := svc.Update(c.Context(), id, req)

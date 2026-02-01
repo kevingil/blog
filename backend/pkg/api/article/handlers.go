@@ -37,12 +37,15 @@ func getService() *coreArticle.Service {
 // @Router /blog/generate [post]
 func GenerateArticle(c *fiber.Ctx) error {
 	var req struct {
-		Prompt  string `json:"prompt"`
+		Prompt  string `json:"prompt" validate:"required"`
 		Title   string `json:"title"`
 		Publish bool   `json:"publish"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
+	}
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
 	}
 
 	userID, err := middleware.GetUserID(c)

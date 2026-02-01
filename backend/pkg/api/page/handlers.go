@@ -159,6 +159,9 @@ func UpdatePage(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
+	}
 
 	svc := getService()
 	page, err := svc.Update(c.Context(), id, req)

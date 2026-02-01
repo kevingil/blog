@@ -2,6 +2,7 @@ package source
 
 import (
 	"backend/pkg/api/response"
+	"backend/pkg/api/validation"
 	"backend/pkg/core"
 	coreSource "backend/pkg/core/source"
 	"backend/pkg/database"
@@ -67,12 +68,8 @@ func CreateSource(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
-
-	if req.ArticleID == uuid.Nil {
-		return response.Error(c, core.InvalidInputError("Article ID is required"))
-	}
-	if req.Content == "" {
-		return response.Error(c, core.InvalidInputError("Content is required"))
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
 	}
 
 	source, err := svc.Create(c.Context(), req)
@@ -98,19 +95,15 @@ func CreateSource(c *fiber.Ctx) error {
 func ScrapeAndCreateSource(c *fiber.Ctx) error {
 	svc := getService()
 	var req struct {
-		ArticleID uuid.UUID `json:"article_id"`
-		URL       string    `json:"url"`
+		ArticleID uuid.UUID `json:"article_id" validate:"required"`
+		URL       string    `json:"url" validate:"required,url"`
 	}
 
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
-
-	if req.ArticleID == uuid.Nil {
-		return response.Error(c, core.InvalidInputError("Article ID is required"))
-	}
-	if req.URL == "" {
-		return response.Error(c, core.InvalidInputError("URL is required"))
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
 	}
 
 	source, err := svc.ScrapeAndCreate(c.Context(), req.ArticleID, req.URL)
@@ -201,6 +194,9 @@ func UpdateSource(c *fiber.Ctx) error {
 	var req coreSource.UpdateRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
+	}
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
 	}
 
 	source, err := svc.Update(c.Context(), sourceID, req)

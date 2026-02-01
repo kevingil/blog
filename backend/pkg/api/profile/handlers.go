@@ -1,8 +1,10 @@
 package profile
 
 import (
+	"backend/pkg/api/dto"
 	"backend/pkg/api/middleware"
 	"backend/pkg/api/response"
+	"backend/pkg/api/validation"
 	"backend/pkg/core"
 	coreProfile "backend/pkg/core/profile"
 	"backend/pkg/database"
@@ -84,9 +86,12 @@ func UpdateProfile(c *fiber.Ctx) error {
 		return response.Error(c, core.UnauthorizedError("Not authenticated"))
 	}
 
-	var req coreProfile.ProfileUpdateRequest
+	var req dto.ProfileUpdateRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
+	}
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
 	}
 
 	svc := getService()
@@ -146,9 +151,12 @@ func UpdateSiteSettings(c *fiber.Ctx) error {
 		return response.Error(c, core.ForbiddenError("Only admins can update site settings"))
 	}
 
-	var req coreProfile.SiteSettingsUpdateRequest
+	var req dto.SiteSettingsUpdateRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
+	}
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
 	}
 
 	settings, err := svc.UpdateSiteSettings(c.Context(), req)
