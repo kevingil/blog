@@ -20,8 +20,8 @@ func TestService_GetByID(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns data source when found", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		dsID := uuid.New()
@@ -53,8 +53,8 @@ func TestService_GetByID(t *testing.T) {
 	})
 
 	t.Run("returns error when not found", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		dsID := uuid.New()
@@ -72,8 +72,8 @@ func TestService_List(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns data sources for organization", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		orgID := uuid.New()
@@ -112,8 +112,8 @@ func TestService_List(t *testing.T) {
 	})
 
 	t.Run("returns empty list when no sources found", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		orgID := uuid.New()
@@ -131,8 +131,8 @@ func TestService_ListByUserID(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns data sources for user", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		userID := uuid.New()
@@ -164,8 +164,8 @@ func TestService_ListAll(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns paginated data sources", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		testSources := []types.DataSource{
@@ -197,8 +197,8 @@ func TestService_ListAll(t *testing.T) {
 	})
 
 	t.Run("handles default pagination values", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		// page < 1 becomes 1, limit < 1 becomes 20
@@ -213,8 +213,8 @@ func TestService_ListAll(t *testing.T) {
 	})
 
 	t.Run("caps limit at 100", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		// limit > 100 becomes 20
@@ -231,8 +231,8 @@ func TestService_Create(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("creates data source successfully with organization", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		orgID := uuid.New()
@@ -259,8 +259,8 @@ func TestService_Create(t *testing.T) {
 	})
 
 	t.Run("creates data source successfully with user", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		userID := uuid.New()
@@ -284,8 +284,8 @@ func TestService_Create(t *testing.T) {
 	})
 
 	t.Run("returns error when URL already exists", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		orgID := uuid.New()
@@ -308,8 +308,8 @@ func TestService_Create(t *testing.T) {
 	})
 
 	t.Run("returns error when neither orgID nor userID provided", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		req := dto.DataSourceCreateRequest{
@@ -330,8 +330,8 @@ func TestService_Update(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("updates data source successfully", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		dsID := uuid.New()
@@ -368,8 +368,8 @@ func TestService_Update(t *testing.T) {
 	})
 
 	t.Run("returns error when not found", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		dsID := uuid.New()
@@ -385,8 +385,8 @@ func TestService_Update(t *testing.T) {
 	})
 
 	t.Run("returns error when new URL already exists", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		dsID := uuid.New()
@@ -417,8 +417,8 @@ func TestService_Update(t *testing.T) {
 	})
 
 	t.Run("allows updating to same URL", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		dsID := uuid.New()
@@ -451,8 +451,8 @@ func TestService_Delete(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("deletes data source successfully", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		dsID := uuid.New()
@@ -465,8 +465,8 @@ func TestService_Delete(t *testing.T) {
 	})
 
 	t.Run("returns error when not found", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		dsID := uuid.New()
@@ -483,8 +483,8 @@ func TestService_GetContent(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns paginated content for data source", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		dsID := uuid.New()
@@ -523,8 +523,8 @@ func TestService_GetContent(t *testing.T) {
 	})
 
 	t.Run("handles default pagination values", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		dsID := uuid.New()
@@ -545,8 +545,8 @@ func TestService_GetDueToCrawl(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns data sources due for crawling", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		dueSources := []types.DataSource{
@@ -582,8 +582,8 @@ func TestService_TriggerCrawl(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("triggers crawl successfully", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		dsID := uuid.New()
@@ -604,8 +604,8 @@ func TestService_TriggerCrawl(t *testing.T) {
 	})
 
 	t.Run("returns error when not found", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		dsID := uuid.New()
@@ -622,8 +622,8 @@ func TestService_UpdateCrawlStatus(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("updates crawl status successfully", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		dsID := uuid.New()
@@ -636,8 +636,8 @@ func TestService_UpdateCrawlStatus(t *testing.T) {
 	})
 
 	t.Run("updates crawl status with error message", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		dsID := uuid.New()
@@ -655,8 +655,8 @@ func TestService_SetNextCrawlTime(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("sets next crawl time successfully", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		dsID := uuid.New()
@@ -673,8 +673,8 @@ func TestService_CreateDiscoveredSource(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("creates discovered source successfully with organization", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		orgID := uuid.New()
@@ -695,8 +695,8 @@ func TestService_CreateDiscoveredSource(t *testing.T) {
 	})
 
 	t.Run("creates discovered source successfully with user", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		userID := uuid.New()
@@ -714,8 +714,8 @@ func TestService_CreateDiscoveredSource(t *testing.T) {
 	})
 
 	t.Run("returns error when URL already exists", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		orgID := uuid.New()
@@ -735,8 +735,8 @@ func TestService_CreateDiscoveredSource(t *testing.T) {
 	})
 
 	t.Run("returns error when neither orgID nor userID provided", func(t *testing.T) {
-		mockDSStore := new(mocks.MockDataSourceStore)
-		mockContentStore := new(mocks.MockCrawledContentStore)
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockContentStore := new(mocks.MockCrawledContentRepository)
 		svc := datasource.NewService(mockDSStore, mockContentStore)
 
 		discoveredFromID := uuid.New()

@@ -19,8 +19,8 @@ func TestService_GetByID(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns organization when found", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		orgID := uuid.New()
@@ -47,8 +47,8 @@ func TestService_GetByID(t *testing.T) {
 	})
 
 	t.Run("returns error when organization not found", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		orgID := uuid.New()
@@ -66,8 +66,8 @@ func TestService_GetBySlug(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns organization when found", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		orgID := uuid.New()
@@ -91,8 +91,8 @@ func TestService_GetBySlug(t *testing.T) {
 	})
 
 	t.Run("returns error when slug not found", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		mockOrgStore.On("FindBySlug", ctx, "nonexistent").Return(nil, core.ErrNotFound).Once()
@@ -109,8 +109,8 @@ func TestService_List(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns list of organizations", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		orgs := []types.Organization{
@@ -146,8 +146,8 @@ func TestService_Create(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("creates organization successfully", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		bio := "A test organization"
@@ -171,8 +171,8 @@ func TestService_Create(t *testing.T) {
 	})
 
 	t.Run("creates organization with custom slug", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		req := organization.CreateRequest{
@@ -192,8 +192,8 @@ func TestService_Create(t *testing.T) {
 	})
 
 	t.Run("returns error when slug already exists", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		req := organization.CreateRequest{
@@ -220,8 +220,8 @@ func TestService_Update(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("updates organization successfully", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		orgID := uuid.New()
@@ -250,8 +250,8 @@ func TestService_Update(t *testing.T) {
 	})
 
 	t.Run("updates organization with new slug", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		orgID := uuid.New()
@@ -281,8 +281,8 @@ func TestService_Update(t *testing.T) {
 	})
 
 	t.Run("returns error when organization not found", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		orgID := uuid.New()
@@ -301,8 +301,8 @@ func TestService_Update(t *testing.T) {
 	})
 
 	t.Run("returns error when new slug already exists", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		orgID := uuid.New()
@@ -340,8 +340,8 @@ func TestService_Delete(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("deletes organization successfully", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		orgID := uuid.New()
@@ -354,8 +354,8 @@ func TestService_Delete(t *testing.T) {
 	})
 
 	t.Run("returns error when organization not found", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		orgID := uuid.New()
@@ -372,8 +372,8 @@ func TestService_JoinOrganization(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("joins organization successfully", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		accountID := uuid.New()
@@ -403,8 +403,8 @@ func TestService_JoinOrganization(t *testing.T) {
 	})
 
 	t.Run("returns error when organization not found", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		accountID := uuid.New()
@@ -419,8 +419,8 @@ func TestService_JoinOrganization(t *testing.T) {
 	})
 
 	t.Run("returns error when account not found", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		accountID := uuid.New()
@@ -447,8 +447,8 @@ func TestService_LeaveOrganization(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("leaves organization successfully", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		accountID := uuid.New()
@@ -470,8 +470,8 @@ func TestService_LeaveOrganization(t *testing.T) {
 	})
 
 	t.Run("returns error when account not found", func(t *testing.T) {
-		mockOrgStore := new(mocks.MockOrganizationStore)
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockOrgStore := new(mocks.MockOrganizationRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := organization.NewService(mockOrgStore, mockAccountStore)
 
 		accountID := uuid.New()

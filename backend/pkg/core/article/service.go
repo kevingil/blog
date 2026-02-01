@@ -13,6 +13,7 @@ import (
 	"backend/pkg/core/agent"
 	"backend/pkg/core/ml"
 	"backend/pkg/database/models"
+	"backend/pkg/database/repository"
 	"backend/pkg/types"
 
 	"github.com/google/uuid"
@@ -107,25 +108,25 @@ const ITEMS_PER_PAGE = 6
 
 // Service provides business logic for articles
 type Service struct {
-	articleStore   ArticleStore
-	accountStore   AccountStore
-	tagStore       TagStore
-	embeddingStore *ml.EmbeddingService
+	articleRepo      repository.ArticleRepository
+	accountRepo      repository.AccountRepository
+	tagRepo          repository.TagRepository
+	embeddingService *ml.EmbeddingService
 }
 
-// NewService creates a new article service with the provided stores
-func NewService(articleStore ArticleStore, accountStore AccountStore, tagStore TagStore) *Service {
+// NewService creates a new article service with the provided repositories
+func NewService(articleRepo repository.ArticleRepository, accountRepo repository.AccountRepository, tagRepo repository.TagRepository) *Service {
 	return &Service{
-		articleStore:   articleStore,
-		accountStore:   accountStore,
-		tagStore:       tagStore,
-		embeddingStore: ml.NewEmbeddingService(),
+		articleRepo:      articleRepo,
+		accountRepo:      accountRepo,
+		tagRepo:          tagRepo,
+		embeddingService: ml.NewEmbeddingService(),
 	}
 }
 
 // GetByID retrieves an article by its ID with metadata
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*ArticleListItem, error) {
-	article, err := s.articleStore.FindByID(ctx, id)
+	article, err := s.articleRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +135,7 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*ArticleListItem, 
 
 // GetBySlug retrieves an article by its slug with metadata
 func (s *Service) GetBySlug(ctx context.Context, slug string) (*ArticleData, error) {
-	article, err := s.articleStore.FindBySlug(ctx, slug)
+	article, err := s.articleRepo.FindBySlug(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +159,7 @@ func (s *Service) GetBySlug(ctx context.Context, slug string) (*ArticleData, err
 
 // GetIDBySlug retrieves an article ID by its slug
 func (s *Service) GetIDBySlug(ctx context.Context, slug string) (uuid.UUID, error) {
-	article, err := s.articleStore.FindBySlug(ctx, slug)
+	article, err := s.articleRepo.FindBySlug(ctx, slug)
 	if err != nil {
 		return uuid.UUID{}, err
 	}
@@ -185,7 +186,7 @@ func (s *Service) List(ctx context.Context, page int, tagName string, status str
 	// Get tag ID if filtering by tag
 	var tagID *int
 	if tagName != "" {
-		tag, err := s.tagStore.FindByName(ctx, tagName)
+		tag, err := s.tagRepo.FindByName(ctx, tagName)
 		if err == nil {
 			tagID = &tag.ID
 		}
@@ -198,7 +199,7 @@ func (s *Service) List(ctx context.Context, page int, tagName string, status str
 		TagID:         tagID,
 	}
 
-	articles, totalCount, err := s.articleStore.List(ctx, opts)
+	articles, totalCount, err := s.articleRepo.List(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +241,7 @@ func (s *Service) Search(ctx context.Context, query string, page int, tagName st
 		PublishedOnly: publishedOnly && status != "all",
 	}
 
-	articles, totalCount, err := s.articleStore.Search(ctx, opts)
+	articles, totalCount, err := s.articleRepo.Search(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -265,12 +266,12 @@ func (s *Service) Search(ctx context.Context, query string, page int, tagName st
 
 // GetPopularTags returns popular tag names
 func (s *Service) GetPopularTags(ctx context.Context) ([]string, error) {
-	tagIDs, err := s.articleStore.GetPopularTags(ctx, 10)
+	tagIDs, err := s.articleRepo.GetPopularTags(ctx, 10)
 	if err != nil {
 		return nil, err
 	}
 
-	tags, err := s.tagStore.FindByIDs(ctx, tagIDs)
+	tags, err := s.tagRepo.FindByIDs(ctx, tagIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +291,7 @@ func (s *Service) GetRecommended(ctx context.Context, currentArticleID uuid.UUID
 		PublishedOnly: true,
 	}
 
-	articles, _, err := s.articleStore.List(ctx, opts)
+	articles, _, err := s.articleRepo.List(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -305,7 +306,7 @@ func (s *Service) GetRecommended(ctx context.Context, currentArticleID uuid.UUID
 		}
 
 		var authorName *string
-		account, err := s.accountStore.FindByID(ctx, article.AuthorID)
+		account, err := s.accountRepo.FindByID(ctx, article.AuthorID)
 		if err == nil {
 			authorName = &account.Name
 		}
@@ -385,7 +386,7 @@ func (s *Service) GenerateArticle(ctx context.Context, prompt string, title stri
 		newArticle.PublishedAt = &now
 	}
 
-	if err := s.articleStore.Save(ctx, newArticle); err != nil {
+	if err := s.articleRepo.Save(ctx, newArticle); err != nil {
 		return nil, err
 	}
 
@@ -394,7 +395,7 @@ func (s *Service) GenerateArticle(ctx context.Context, prompt string, title stri
 
 // Create creates a new article
 func (s *Service) Create(ctx context.Context, req CreateRequest) (*ArticleListItem, error) {
-	tagIDs, err := s.tagStore.EnsureExists(ctx, req.Tags)
+	tagIDs, err := s.tagRepo.EnsureExists(ctx, req.Tags)
 	if err != nil {
 		return nil, err
 	}
@@ -424,7 +425,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*ArticleListIt
 		article.PublishedAt = &now
 	}
 
-	if err := s.articleStore.Save(ctx, article); err != nil {
+	if err := s.articleRepo.Save(ctx, article); err != nil {
 		return nil, err
 	}
 
@@ -433,14 +434,14 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*ArticleListIt
 
 // Update updates an existing article
 func (s *Service) Update(ctx context.Context, articleID uuid.UUID, req UpdateRequest) (*ArticleListItem, error) {
-	article, err := s.articleStore.FindByID(ctx, articleID)
+	article, err := s.articleRepo.FindByID(ctx, articleID)
 	if err != nil {
 		return nil, err
 	}
 
 	oldTitle := article.DraftTitle
 
-	tagIDs, err := s.tagStore.EnsureExists(ctx, req.Tags)
+	tagIDs, err := s.tagRepo.EnsureExists(ctx, req.Tags)
 	if err != nil {
 		return nil, err
 	}
@@ -469,7 +470,7 @@ func (s *Service) Update(ctx context.Context, articleID uuid.UUID, req UpdateReq
 		article.PublishedAt = &t
 	}
 
-	if err := s.articleStore.Save(ctx, article); err != nil {
+	if err := s.articleRepo.Save(ctx, article); err != nil {
 		return nil, err
 	}
 
@@ -488,7 +489,7 @@ func (s *Service) Update(ctx context.Context, articleID uuid.UUID, req UpdateReq
 func (s *Service) UpdateWithContext(ctx context.Context, articleID uuid.UUID) (*models.Article, error) {
 	writerAgent := agent.NewWriterAgent()
 
-	article, err := s.articleStore.FindByID(ctx, articleID)
+	article, err := s.articleRepo.FindByID(ctx, articleID)
 	if err != nil {
 		return nil, err
 	}
@@ -502,7 +503,7 @@ func (s *Service) UpdateWithContext(ctx context.Context, articleID uuid.UUID) (*
 	article.DraftContent = updatedContent
 	article.UpdatedAt = time.Now()
 
-	if err := s.articleStore.Save(ctx, article); err != nil {
+	if err := s.articleRepo.Save(ctx, article); err != nil {
 		return nil, err
 	}
 
@@ -511,17 +512,17 @@ func (s *Service) UpdateWithContext(ctx context.Context, articleID uuid.UUID) (*
 
 // Delete removes an article by its ID
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
-	return s.articleStore.Delete(ctx, id)
+	return s.articleRepo.Delete(ctx, id)
 }
 
 // Publish publishes the current draft
 func (s *Service) Publish(ctx context.Context, articleID uuid.UUID) (*ArticleListItem, error) {
-	article, err := s.articleStore.FindByID(ctx, articleID)
+	article, err := s.articleRepo.FindByID(ctx, articleID)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := s.articleStore.Publish(ctx, article); err != nil {
+	if err := s.articleRepo.Publish(ctx, article); err != nil {
 		return nil, fmt.Errorf("failed to publish article: %w", err)
 	}
 
@@ -530,7 +531,7 @@ func (s *Service) Publish(ctx context.Context, articleID uuid.UUID) (*ArticleLis
 
 // Unpublish removes published status
 func (s *Service) Unpublish(ctx context.Context, articleID uuid.UUID) (*ArticleListItem, error) {
-	article, err := s.articleStore.FindByID(ctx, articleID)
+	article, err := s.articleRepo.FindByID(ctx, articleID)
 	if err != nil {
 		return nil, err
 	}
@@ -539,7 +540,7 @@ func (s *Service) Unpublish(ctx context.Context, articleID uuid.UUID) (*ArticleL
 		return nil, core.ErrValidation
 	}
 
-	if err := s.articleStore.Unpublish(ctx, article); err != nil {
+	if err := s.articleRepo.Unpublish(ctx, article); err != nil {
 		return nil, fmt.Errorf("failed to unpublish article: %w", err)
 	}
 
@@ -549,12 +550,12 @@ func (s *Service) Unpublish(ctx context.Context, articleID uuid.UUID) (*ArticleL
 // ListVersions returns all versions for an article
 func (s *Service) ListVersions(ctx context.Context, articleID uuid.UUID) (*ArticleVersionListResponse, error) {
 	// Verify article exists
-	_, err := s.articleStore.FindByID(ctx, articleID)
+	_, err := s.articleRepo.FindByID(ctx, articleID)
 	if err != nil {
 		return nil, err
 	}
 
-	versions, err := s.articleStore.ListVersions(ctx, articleID)
+	versions, err := s.articleRepo.ListVersions(ctx, articleID)
 	if err != nil {
 		return nil, err
 	}
@@ -582,7 +583,7 @@ func (s *Service) ListVersions(ctx context.Context, articleID uuid.UUID) (*Artic
 
 // GetVersion retrieves a specific version
 func (s *Service) GetVersion(ctx context.Context, versionID uuid.UUID) (*ArticleVersionResponse, error) {
-	version, err := s.articleStore.GetVersion(ctx, versionID)
+	version, err := s.articleRepo.GetVersion(ctx, versionID)
 	if err != nil {
 		return nil, err
 	}
@@ -602,12 +603,12 @@ func (s *Service) GetVersion(ctx context.Context, versionID uuid.UUID) (*Article
 // RevertToVersion creates a new draft from a historical version
 func (s *Service) RevertToVersion(ctx context.Context, articleID, versionID uuid.UUID) (*ArticleListItem, error) {
 	// Verify article exists
-	_, err := s.articleStore.FindByID(ctx, articleID)
+	_, err := s.articleRepo.FindByID(ctx, articleID)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := s.articleStore.RevertToVersion(ctx, articleID, versionID); err != nil {
+	if err := s.articleRepo.RevertToVersion(ctx, articleID, versionID); err != nil {
 		return nil, err
 	}
 
@@ -617,7 +618,7 @@ func (s *Service) RevertToVersion(ctx context.Context, articleID, versionID uuid
 // Helper methods
 
 func (s *Service) getAuthorData(ctx context.Context, authorID uuid.UUID) (AuthorData, error) {
-	account, err := s.accountStore.FindByID(ctx, authorID)
+	account, err := s.accountRepo.FindByID(ctx, authorID)
 	if err != nil {
 		return AuthorData{
 			ID:   authorID,
@@ -636,7 +637,7 @@ func (s *Service) getTagsData(ctx context.Context, articleID uuid.UUID, tagIDs [
 		return []TagData{}, nil
 	}
 
-	tags, err := s.tagStore.FindByIDs(ctx, tagIDs)
+	tags, err := s.tagRepo.FindByIDs(ctx, tagIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -675,7 +676,7 @@ func (s *Service) generateUniqueSlug(ctx context.Context, title string, excludeA
 	baseSlug := generateSlug(title)
 	slug := baseSlug
 
-	exists, err := s.articleStore.SlugExists(ctx, slug, excludeArticleID)
+	exists, err := s.articleRepo.SlugExists(ctx, slug, excludeArticleID)
 	if err != nil {
 		return "", err
 	}
@@ -689,19 +690,19 @@ func (s *Service) generateUniqueSlug(ctx context.Context, title string, excludeA
 }
 
 func (s *Service) regenerateArticleEmbedding(ctx context.Context, articleID uuid.UUID, content string) error {
-	embeddingVector, err := s.embeddingStore.GenerateEmbedding(ctx, content)
+	embeddingVector, err := s.embeddingService.GenerateEmbedding(ctx, content)
 	if err != nil {
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
-	article, err := s.articleStore.FindByID(ctx, articleID)
+	article, err := s.articleRepo.FindByID(ctx, articleID)
 	if err != nil {
 		return err
 	}
 
 	// Convert pgvector.Vector to []float32
 	article.DraftEmbedding = embeddingVector.Slice()
-	return s.articleStore.Save(ctx, article)
+	return s.articleRepo.Save(ctx, article)
 }
 
 // typeToModel converts types.Article to models.Article

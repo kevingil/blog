@@ -34,7 +34,7 @@ func TestService_Login(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns token and user data on successful login", func(t *testing.T) {
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := auth.NewService(mockAccountStore)
 
 		accountID := uuid.New()
@@ -65,7 +65,7 @@ func TestService_Login(t *testing.T) {
 	})
 
 	t.Run("returns error when email not found", func(t *testing.T) {
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := auth.NewService(mockAccountStore)
 
 		mockAccountStore.On("FindByEmail", ctx, "nonexistent@example.com").Return(nil, core.ErrNotFound).Once()
@@ -81,7 +81,7 @@ func TestService_Login(t *testing.T) {
 	})
 
 	t.Run("returns error when password is incorrect", func(t *testing.T) {
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := auth.NewService(mockAccountStore)
 
 		accountID := uuid.New()
@@ -111,7 +111,7 @@ func TestService_Register(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("creates new account successfully", func(t *testing.T) {
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := auth.NewService(mockAccountStore)
 
 		mockAccountStore.On("FindByEmail", ctx, "newuser@example.com").Return(nil, core.ErrNotFound).Once()
@@ -135,7 +135,7 @@ func TestService_Register(t *testing.T) {
 	})
 
 	t.Run("returns error when email already exists", func(t *testing.T) {
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := auth.NewService(mockAccountStore)
 
 		existingAccount := &types.Account{
@@ -160,7 +160,7 @@ func TestService_GetAccount(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns account when found", func(t *testing.T) {
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := auth.NewService(mockAccountStore)
 
 		accountID := uuid.New()
@@ -184,7 +184,7 @@ func TestService_GetAccount(t *testing.T) {
 	})
 
 	t.Run("returns error when account not found", func(t *testing.T) {
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := auth.NewService(mockAccountStore)
 
 		accountID := uuid.New()
@@ -202,7 +202,7 @@ func TestService_UpdateAccount(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("updates account successfully", func(t *testing.T) {
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := auth.NewService(mockAccountStore)
 
 		accountID := uuid.New()
@@ -231,7 +231,7 @@ func TestService_UpdateAccount(t *testing.T) {
 	})
 
 	t.Run("updates account with new email when not taken", func(t *testing.T) {
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := auth.NewService(mockAccountStore)
 
 		accountID := uuid.New()
@@ -259,7 +259,7 @@ func TestService_UpdateAccount(t *testing.T) {
 	})
 
 	t.Run("returns error when new email is taken by another account", func(t *testing.T) {
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := auth.NewService(mockAccountStore)
 
 		accountID := uuid.New()
@@ -292,7 +292,7 @@ func TestService_UpdatePassword(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("updates password successfully", func(t *testing.T) {
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := auth.NewService(mockAccountStore)
 
 		accountID := uuid.New()
@@ -325,7 +325,7 @@ func TestService_UpdatePassword(t *testing.T) {
 	})
 
 	t.Run("returns error when current password is wrong", func(t *testing.T) {
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := auth.NewService(mockAccountStore)
 
 		accountID := uuid.New()
@@ -350,7 +350,7 @@ func TestService_UpdatePassword(t *testing.T) {
 	})
 
 	t.Run("returns error when account not found", func(t *testing.T) {
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := auth.NewService(mockAccountStore)
 
 		accountID := uuid.New()
@@ -370,7 +370,7 @@ func TestService_DeleteAccount(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("deletes account successfully", func(t *testing.T) {
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := auth.NewService(mockAccountStore)
 
 		accountID := uuid.New()
@@ -393,7 +393,7 @@ func TestService_DeleteAccount(t *testing.T) {
 	})
 
 	t.Run("returns error when password is wrong", func(t *testing.T) {
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := auth.NewService(mockAccountStore)
 
 		accountID := uuid.New()
@@ -415,7 +415,7 @@ func TestService_DeleteAccount(t *testing.T) {
 	})
 
 	t.Run("returns error when account not found", func(t *testing.T) {
-		mockAccountStore := new(mocks.MockAccountStore)
+		mockAccountStore := new(mocks.MockAccountRepository)
 		svc := auth.NewService(mockAccountStore)
 
 		accountID := uuid.New()

@@ -7,36 +7,43 @@ import (
 	"time"
 
 	"backend/pkg/api/dto"
+	"backend/pkg/database/repository"
 	"backend/pkg/types"
 
 	"github.com/google/uuid"
+	"github.com/pgvector/pgvector-go"
 )
+
+// EmbeddingGenerator defines the interface for generating embeddings
+type EmbeddingGenerator interface {
+	GenerateEmbedding(ctx context.Context, text string) (pgvector.Vector, error)
+}
 
 // Service provides business logic for insights
 type Service struct {
-	insightStore      InsightStore
-	topicStore        InsightTopicStore
-	userStatusStore   UserInsightStatusStore
-	contentStore      InsightCrawledContentStore
-	matchStore        ContentTopicMatchStore
-	embeddingService  EmbeddingGenerator
+	insightRepo      repository.InsightRepository
+	topicRepo        repository.InsightTopicRepository
+	userStatusRepo   repository.UserInsightStatusRepository
+	contentRepo      repository.CrawledContentRepository
+	topicMatchRepo   repository.ContentTopicMatchRepository
+	embeddingService EmbeddingGenerator
 }
 
-// NewService creates a new insight service with the provided stores
+// NewService creates a new insight service with the provided repositories
 func NewService(
-	insightStore InsightStore,
-	topicStore InsightTopicStore,
-	userStatusStore UserInsightStatusStore,
-	contentStore InsightCrawledContentStore,
-	matchStore ContentTopicMatchStore,
+	insightRepo repository.InsightRepository,
+	topicRepo repository.InsightTopicRepository,
+	userStatusRepo repository.UserInsightStatusRepository,
+	contentRepo repository.CrawledContentRepository,
+	topicMatchRepo repository.ContentTopicMatchRepository,
 	embeddingService EmbeddingGenerator,
 ) *Service {
 	return &Service{
-		insightStore:     insightStore,
-		topicStore:       topicStore,
-		userStatusStore:  userStatusStore,
-		contentStore:     contentStore,
-		matchStore:       matchStore,
+		insightRepo:      insightRepo,
+		topicRepo:        topicRepo,
+		userStatusRepo:   userStatusRepo,
+		contentRepo:      contentRepo,
+		topicMatchRepo:   topicMatchRepo,
 		embeddingService: embeddingService,
 	}
 }
@@ -47,7 +54,7 @@ func NewService(
 
 // GetInsightByID retrieves an insight by its ID
 func (s *Service) GetInsightByID(ctx context.Context, id uuid.UUID) (*dto.InsightResponse, error) {
-	insight, err := s.insightStore.FindByID(ctx, id)
+	insight, err := s.insightRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +63,7 @@ func (s *Service) GetInsightByID(ctx context.Context, id uuid.UUID) (*dto.Insigh
 
 // GetInsightWithSources retrieves an insight with its source content
 func (s *Service) GetInsightWithSources(ctx context.Context, id uuid.UUID) (*dto.InsightWithSources, error) {
-	insight, err := s.insightStore.FindByID(ctx, id)
+	insight, err := s.insightRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +71,7 @@ func (s *Service) GetInsightWithSources(ctx context.Context, id uuid.UUID) (*dto
 	// Get source contents
 	var sourceContents []dto.CrawledContentResponse
 	if len(insight.SourceContentIDs) > 0 {
-		contents, err := s.contentStore.FindByIDs(ctx, insight.SourceContentIDs)
+		contents, err := s.contentRepo.FindByIDs(ctx, insight.SourceContentIDs)
 		if err != nil {
 			return nil, err
 		}
@@ -88,7 +95,7 @@ func (s *Service) GetInsightWithSources(ctx context.Context, id uuid.UUID) (*dto
 	// Get topic if present
 	var topicResponse *dto.InsightTopicResponse
 	if insight.TopicID != nil {
-		topic, err := s.topicStore.FindByID(ctx, *insight.TopicID)
+		topic, err := s.topicRepo.FindByID(ctx, *insight.TopicID)
 		if err == nil {
 			topicResponse = toTopicResponse(topic)
 		}
@@ -125,7 +132,7 @@ func (s *Service) ListInsights(ctx context.Context, orgID uuid.UUID, page, limit
 	}
 	offset := (page - 1) * limit
 
-	insights, total, err := s.insightStore.FindByOrganizationID(ctx, orgID, offset, limit)
+	insights, total, err := s.insightRepo.FindByOrganizationID(ctx, orgID, offset, limit)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -147,7 +154,7 @@ func (s *Service) ListAllInsights(ctx context.Context, page, limit int) ([]dto.I
 	}
 	offset := (page - 1) * limit
 
-	insights, total, err := s.insightStore.List(ctx, offset, limit)
+	insights, total, err := s.insightRepo.List(ctx, offset, limit)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -169,7 +176,7 @@ func (s *Service) ListInsightsByTopic(ctx context.Context, topicID uuid.UUID, pa
 	}
 	offset := (page - 1) * limit
 
-	insights, total, err := s.insightStore.FindByTopicID(ctx, topicID, offset, limit)
+	insights, total, err := s.insightRepo.FindByTopicID(ctx, topicID, offset, limit)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -183,7 +190,7 @@ func (s *Service) ListInsightsByTopic(ctx context.Context, topicID uuid.UUID, pa
 
 // ListUnreadInsights retrieves unread insights for an organization
 func (s *Service) ListUnreadInsights(ctx context.Context, orgID uuid.UUID, limit int) ([]dto.InsightResponse, error) {
-	insights, err := s.insightStore.FindUnread(ctx, orgID, limit)
+	insights, err := s.insightRepo.FindUnread(ctx, orgID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +215,7 @@ func (s *Service) SearchInsights(ctx context.Context, req dto.InsightSearchReque
 		limit = 10
 	}
 
-	insights, err := s.insightStore.SearchSimilar(ctx, embedding.Slice(), limit)
+	insights, err := s.insightRepo.SearchSimilar(ctx, embedding.Slice(), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +239,7 @@ func (s *Service) SearchInsightsByOrg(ctx context.Context, orgID uuid.UUID, quer
 		limit = 10
 	}
 
-	insights, err := s.insightStore.SearchSimilarByOrg(ctx, orgID, embedding.Slice(), limit)
+	insights, err := s.insightRepo.SearchSimilarByOrg(ctx, orgID, embedding.Slice(), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -271,13 +278,13 @@ func (s *Service) CreateInsight(ctx context.Context, orgID *uuid.UUID, topicID *
 		IsUsedInArticle:  false,
 	}
 
-	if err := s.insightStore.Save(ctx, insight); err != nil {
+	if err := s.insightRepo.Save(ctx, insight); err != nil {
 		return nil, err
 	}
 
 	// Update topic's last insight time
 	if topicID != nil {
-		_ = s.topicStore.UpdateLastInsightAt(ctx, *topicID, time.Now())
+		_ = s.topicRepo.UpdateLastInsightAt(ctx, *topicID, time.Now())
 	}
 
 	return toInsightResponse(insight), nil
@@ -285,37 +292,37 @@ func (s *Service) CreateInsight(ctx context.Context, orgID *uuid.UUID, topicID *
 
 // MarkInsightAsRead marks an insight as read (legacy - uses global flag)
 func (s *Service) MarkInsightAsRead(ctx context.Context, id uuid.UUID) error {
-	return s.insightStore.MarkAsRead(ctx, id)
+	return s.insightRepo.MarkAsRead(ctx, id)
 }
 
 // MarkInsightAsReadForUser marks an insight as read for a specific user
 func (s *Service) MarkInsightAsReadForUser(ctx context.Context, userID, insightID uuid.UUID) error {
-	return s.userStatusStore.MarkAsRead(ctx, userID, insightID)
+	return s.userStatusRepo.MarkAsRead(ctx, userID, insightID)
 }
 
 // ToggleInsightPinnedForUser toggles the pinned status of an insight for a user
 func (s *Service) ToggleInsightPinnedForUser(ctx context.Context, userID, insightID uuid.UUID) (bool, error) {
-	return s.userStatusStore.TogglePinned(ctx, userID, insightID)
+	return s.userStatusRepo.TogglePinned(ctx, userID, insightID)
 }
 
 // MarkInsightAsUsedInArticleForUser marks an insight as used in an article for a user
 func (s *Service) MarkInsightAsUsedInArticleForUser(ctx context.Context, userID, insightID uuid.UUID) error {
-	return s.userStatusStore.MarkAsUsedInArticle(ctx, userID, insightID)
+	return s.userStatusRepo.MarkAsUsedInArticle(ctx, userID, insightID)
 }
 
 // GetUserInsightStatus retrieves the user's status for an insight
 func (s *Service) GetUserInsightStatus(ctx context.Context, userID, insightID uuid.UUID) (*types.UserInsightStatus, error) {
-	return s.userStatusStore.FindByUserAndInsight(ctx, userID, insightID)
+	return s.userStatusRepo.FindByUserAndInsight(ctx, userID, insightID)
 }
 
 // GetInsightWithUserStatus retrieves an insight with the user's status
 func (s *Service) GetInsightWithUserStatus(ctx context.Context, userID, insightID uuid.UUID) (*dto.InsightWithUserStatus, error) {
-	insight, err := s.insightStore.FindByID(ctx, insightID)
+	insight, err := s.insightRepo.FindByID(ctx, insightID)
 	if err != nil {
 		return nil, err
 	}
 
-	status, err := s.userStatusStore.FindByUserAndInsight(ctx, userID, insightID)
+	status, err := s.userStatusRepo.FindByUserAndInsight(ctx, userID, insightID)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +356,7 @@ func (s *Service) ListInsightsWithUserStatus(ctx context.Context, userID uuid.UU
 	offset := (page - 1) * limit
 
 	// Get all insights (global)
-	insights, total, err := s.insightStore.List(ctx, offset, limit)
+	insights, total, err := s.insightRepo.List(ctx, offset, limit)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -360,7 +367,7 @@ func (s *Service) ListInsightsWithUserStatus(ctx context.Context, userID uuid.UU
 		insightIDs[i] = ins.ID
 	}
 
-	statusMap, err := s.userStatusStore.GetStatusMapForInsights(ctx, userID, insightIDs)
+	statusMap, err := s.userStatusRepo.GetStatusMapForInsights(ctx, userID, insightIDs)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -389,13 +396,13 @@ func (s *Service) ListInsightsWithUserStatus(ctx context.Context, userID uuid.UU
 // CountUnreadInsightsForUser counts unread insights for a user
 func (s *Service) CountUnreadInsightsForUser(ctx context.Context, userID uuid.UUID) (int64, error) {
 	// Get total insight count
-	_, totalInsights, err := s.insightStore.List(ctx, 0, 1)
+	_, totalInsights, err := s.insightRepo.List(ctx, 0, 1)
 	if err != nil {
 		return 0, err
 	}
 
 	// Get read count for user
-	readCount, err := s.userStatusStore.CountUnreadByUserID(ctx, userID)
+	readCount, err := s.userStatusRepo.CountUnreadByUserID(ctx, userID)
 	if err != nil {
 		return 0, err
 	}
@@ -408,27 +415,27 @@ func (s *Service) CountUnreadInsightsForUser(ctx context.Context, userID uuid.UU
 
 // ToggleInsightPinned toggles the pinned status of an insight
 func (s *Service) ToggleInsightPinned(ctx context.Context, id uuid.UUID) error {
-	return s.insightStore.TogglePinned(ctx, id)
+	return s.insightRepo.TogglePinned(ctx, id)
 }
 
 // MarkInsightAsUsedInArticle marks an insight as used in an article
 func (s *Service) MarkInsightAsUsedInArticle(ctx context.Context, id uuid.UUID) error {
-	return s.insightStore.MarkAsUsedInArticle(ctx, id)
+	return s.insightRepo.MarkAsUsedInArticle(ctx, id)
 }
 
 // DeleteInsight removes an insight by its ID
 func (s *Service) DeleteInsight(ctx context.Context, id uuid.UUID) error {
-	return s.insightStore.Delete(ctx, id)
+	return s.insightRepo.Delete(ctx, id)
 }
 
 // CountUnreadInsights counts unread insights for an organization
 func (s *Service) CountUnreadInsights(ctx context.Context, orgID uuid.UUID) (int64, error) {
-	return s.insightStore.CountUnread(ctx, orgID)
+	return s.insightRepo.CountUnread(ctx, orgID)
 }
 
 // CountAllUnreadInsights returns the total count of unread insights (no org filter)
 func (s *Service) CountAllUnreadInsights(ctx context.Context) (int64, error) {
-	return s.insightStore.CountAllUnread(ctx)
+	return s.insightRepo.CountAllUnread(ctx)
 }
 
 // =============================================================================
@@ -437,7 +444,7 @@ func (s *Service) CountAllUnreadInsights(ctx context.Context) (int64, error) {
 
 // GetTopicByID retrieves a topic by its ID
 func (s *Service) GetTopicByID(ctx context.Context, id uuid.UUID) (*dto.InsightTopicResponse, error) {
-	topic, err := s.topicStore.FindByID(ctx, id)
+	topic, err := s.topicRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -446,7 +453,7 @@ func (s *Service) GetTopicByID(ctx context.Context, id uuid.UUID) (*dto.InsightT
 
 // ListTopics retrieves all topics for an organization
 func (s *Service) ListTopics(ctx context.Context, orgID uuid.UUID) ([]dto.InsightTopicResponse, error) {
-	topics, err := s.topicStore.FindByOrganizationID(ctx, orgID)
+	topics, err := s.topicRepo.FindByOrganizationID(ctx, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -460,7 +467,7 @@ func (s *Service) ListTopics(ctx context.Context, orgID uuid.UUID) ([]dto.Insigh
 
 // ListAllTopics retrieves all topics
 func (s *Service) ListAllTopics(ctx context.Context) ([]dto.InsightTopicResponse, error) {
-	topics, err := s.topicStore.FindAll(ctx)
+	topics, err := s.topicRepo.FindAll(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -494,7 +501,7 @@ func (s *Service) CreateTopic(ctx context.Context, orgID *uuid.UUID, req dto.Ins
 		Icon:            req.Icon,
 	}
 
-	if err := s.topicStore.Save(ctx, topic); err != nil {
+	if err := s.topicRepo.Save(ctx, topic); err != nil {
 		return nil, err
 	}
 
@@ -503,7 +510,7 @@ func (s *Service) CreateTopic(ctx context.Context, orgID *uuid.UUID, req dto.Ins
 
 // UpdateTopic updates an existing topic
 func (s *Service) UpdateTopic(ctx context.Context, id uuid.UUID, req dto.InsightTopicUpdateRequest) (*dto.InsightTopicResponse, error) {
-	topic, err := s.topicStore.FindByID(ctx, id)
+	topic, err := s.topicRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -538,7 +545,7 @@ func (s *Service) UpdateTopic(ctx context.Context, id uuid.UUID, req dto.Insight
 		topic.Embedding = embedding.Slice()
 	}
 
-	if err := s.topicStore.Update(ctx, topic); err != nil {
+	if err := s.topicRepo.Update(ctx, topic); err != nil {
 		return nil, err
 	}
 
@@ -547,13 +554,13 @@ func (s *Service) UpdateTopic(ctx context.Context, id uuid.UUID, req dto.Insight
 
 // DeleteTopic removes a topic by its ID
 func (s *Service) DeleteTopic(ctx context.Context, id uuid.UUID) error {
-	return s.topicStore.Delete(ctx, id)
+	return s.topicRepo.Delete(ctx, id)
 }
 
 // MatchContentToTopics finds matching topics for content based on embedding similarity
 func (s *Service) MatchContentToTopics(ctx context.Context, contentID uuid.UUID, embedding []float32, threshold float64) ([]types.ContentTopicMatch, error) {
 	// Find similar topics
-	topics, scores, err := s.topicStore.SearchSimilar(ctx, embedding, 10, threshold)
+	topics, scores, err := s.topicRepo.SearchSimilar(ctx, embedding, 10, threshold)
 	if err != nil {
 		return nil, err
 	}
@@ -575,14 +582,14 @@ func (s *Service) MatchContentToTopics(ctx context.Context, contentID uuid.UUID,
 	}
 
 	// Save matches
-	if err := s.matchStore.SaveBatch(ctx, matches); err != nil {
+	if err := s.topicMatchRepo.SaveBatch(ctx, matches); err != nil {
 		return nil, err
 	}
 
 	// Update topic content counts
 	for _, topic := range topics {
-		count, _ := s.matchStore.CountByTopicID(ctx, topic.ID)
-		_ = s.topicStore.UpdateContentCount(ctx, topic.ID, int(count))
+		count, _ := s.topicMatchRepo.CountByTopicID(ctx, topic.ID)
+		_ = s.topicRepo.UpdateContentCount(ctx, topic.ID, int(count))
 	}
 
 	return matches, nil
@@ -604,7 +611,7 @@ func (s *Service) SearchCrawledContent(ctx context.Context, query string, limit 
 		limit = 10
 	}
 
-	contents, err := s.contentStore.SearchSimilar(ctx, embedding.Slice(), limit)
+	contents, err := s.contentRepo.SearchSimilar(ctx, embedding.Slice(), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -639,7 +646,7 @@ func (s *Service) SearchCrawledContentByOrg(ctx context.Context, orgID uuid.UUID
 		limit = 10
 	}
 
-	contents, err := s.contentStore.SearchSimilarByOrg(ctx, orgID, embedding.Slice(), limit)
+	contents, err := s.contentRepo.SearchSimilarByOrg(ctx, orgID, embedding.Slice(), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -664,7 +671,7 @@ func (s *Service) SearchCrawledContentByOrg(ctx context.Context, orgID uuid.UUID
 
 // GetRecentCrawledContent retrieves recent crawled content for an organization
 func (s *Service) GetRecentCrawledContent(ctx context.Context, orgID uuid.UUID, limit int) ([]dto.CrawledContentResponse, error) {
-	contents, err := s.contentStore.FindRecentByOrg(ctx, orgID, limit)
+	contents, err := s.contentRepo.FindRecentByOrg(ctx, orgID, limit)
 	if err != nil {
 		return nil, err
 	}

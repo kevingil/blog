@@ -20,18 +20,18 @@ import (
 // Helper function to create a new service with all mocks
 func newTestService() (
 	*insight.Service,
-	*mocks.MockInsightStore,
-	*mocks.MockInsightTopicStore,
-	*mocks.MockUserInsightStatusStore,
-	*mocks.MockInsightCrawledContentStore,
-	*mocks.MockContentTopicMatchStore,
+	*mocks.MockInsightRepository,
+	*mocks.MockInsightTopicRepository,
+	*mocks.MockUserInsightStatusRepository,
+	*mocks.MockCrawledContentRepository,
+	*mocks.MockContentTopicMatchRepository,
 	*mocks.MockEmbeddingGenerator,
 ) {
-	mockInsightStore := new(mocks.MockInsightStore)
-	mockTopicStore := new(mocks.MockInsightTopicStore)
-	mockUserStatusStore := new(mocks.MockUserInsightStatusStore)
-	mockContentStore := new(mocks.MockInsightCrawledContentStore)
-	mockMatchStore := new(mocks.MockContentTopicMatchStore)
+	mockInsightStore := new(mocks.MockInsightRepository)
+	mockTopicStore := new(mocks.MockInsightTopicRepository)
+	mockUserStatusStore := new(mocks.MockUserInsightStatusRepository)
+	mockContentStore := new(mocks.MockCrawledContentRepository)
+	mockMatchStore := new(mocks.MockContentTopicMatchRepository)
 	mockEmbeddingGen := new(mocks.MockEmbeddingGenerator)
 
 	svc := insight.NewService(

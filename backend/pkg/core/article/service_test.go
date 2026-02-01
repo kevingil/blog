@@ -19,9 +19,9 @@ func TestService_GetByID(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns article with metadata when found", func(t *testing.T) {
-		mockArticleStore := new(mocks.MockArticleStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockArticleStore := new(mocks.MockArticleRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := article.NewService(mockArticleStore, mockAccountStore, mockTagStore)
 
 		articleID := uuid.New()
@@ -62,9 +62,9 @@ func TestService_GetByID(t *testing.T) {
 	})
 
 	t.Run("returns error when article not found", func(t *testing.T) {
-		mockArticleStore := new(mocks.MockArticleStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockArticleStore := new(mocks.MockArticleRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := article.NewService(mockArticleStore, mockAccountStore, mockTagStore)
 
 		articleID := uuid.New()
@@ -82,9 +82,9 @@ func TestService_GetBySlug(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns article data when found", func(t *testing.T) {
-		mockArticleStore := new(mocks.MockArticleStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockArticleStore := new(mocks.MockArticleRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := article.NewService(mockArticleStore, mockAccountStore, mockTagStore)
 
 		authorID := uuid.New()
@@ -120,9 +120,9 @@ func TestService_GetBySlug(t *testing.T) {
 	})
 
 	t.Run("returns error when slug not found", func(t *testing.T) {
-		mockArticleStore := new(mocks.MockArticleStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockArticleStore := new(mocks.MockArticleRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := article.NewService(mockArticleStore, mockAccountStore, mockTagStore)
 
 		mockArticleStore.On("FindBySlug", ctx, "nonexistent").Return(nil, core.ErrNotFound).Once()
@@ -139,9 +139,9 @@ func TestService_Create(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("creates article successfully", func(t *testing.T) {
-		mockArticleStore := new(mocks.MockArticleStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockArticleStore := new(mocks.MockArticleRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := article.NewService(mockArticleStore, mockAccountStore, mockTagStore)
 
 		authorID := uuid.New()
@@ -180,9 +180,9 @@ func TestService_Create(t *testing.T) {
 	})
 
 	t.Run("creates article with unique slug when slug exists", func(t *testing.T) {
-		mockArticleStore := new(mocks.MockArticleStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockArticleStore := new(mocks.MockArticleRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := article.NewService(mockArticleStore, mockAccountStore, mockTagStore)
 
 		authorID := uuid.New()
@@ -226,9 +226,9 @@ func TestService_Delete(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("deletes article successfully", func(t *testing.T) {
-		mockArticleStore := new(mocks.MockArticleStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockArticleStore := new(mocks.MockArticleRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := article.NewService(mockArticleStore, mockAccountStore, mockTagStore)
 
 		articleID := uuid.New()
@@ -241,9 +241,9 @@ func TestService_Delete(t *testing.T) {
 	})
 
 	t.Run("returns error when article not found", func(t *testing.T) {
-		mockArticleStore := new(mocks.MockArticleStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockArticleStore := new(mocks.MockArticleRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := article.NewService(mockArticleStore, mockAccountStore, mockTagStore)
 
 		articleID := uuid.New()
@@ -260,9 +260,9 @@ func TestService_Publish(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("publishes article successfully", func(t *testing.T) {
-		mockArticleStore := new(mocks.MockArticleStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockArticleStore := new(mocks.MockArticleRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := article.NewService(mockArticleStore, mockAccountStore, mockTagStore)
 
 		articleID := uuid.New()
@@ -297,9 +297,9 @@ func TestService_Unpublish(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("unpublishes article successfully", func(t *testing.T) {
-		mockArticleStore := new(mocks.MockArticleStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockArticleStore := new(mocks.MockArticleRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := article.NewService(mockArticleStore, mockAccountStore, mockTagStore)
 
 		articleID := uuid.New()
@@ -334,9 +334,9 @@ func TestService_Unpublish(t *testing.T) {
 	})
 
 	t.Run("returns error when article is not published", func(t *testing.T) {
-		mockArticleStore := new(mocks.MockArticleStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockArticleStore := new(mocks.MockArticleRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := article.NewService(mockArticleStore, mockAccountStore, mockTagStore)
 
 		articleID := uuid.New()
@@ -360,9 +360,9 @@ func TestService_GetPopularTags(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns popular tag names", func(t *testing.T) {
-		mockArticleStore := new(mocks.MockArticleStore)
-		mockAccountStore := new(mocks.MockAccountStore)
-		mockTagStore := new(mocks.MockTagStore)
+		mockArticleStore := new(mocks.MockArticleRepository)
+		mockAccountStore := new(mocks.MockAccountRepository)
+		mockTagStore := new(mocks.MockTagRepository)
 		svc := article.NewService(mockArticleStore, mockAccountStore, mockTagStore)
 
 		mockArticleStore.On("GetPopularTags", ctx, 10).Return([]int64{1, 2, 3}, nil).Once()

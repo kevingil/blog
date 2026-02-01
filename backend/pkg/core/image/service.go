@@ -4,17 +4,19 @@ import (
 	"context"
 	"time"
 
+	"backend/pkg/database/repository"
+
 	"github.com/google/uuid"
 )
 
 // Service provides business logic for image generations
 type Service struct {
-	store ImageStore
+	repo repository.ImageRepository
 }
 
 // NewService creates a new image service
-func NewService(store ImageStore) *Service {
-	return &Service{store: store}
+func NewService(repo repository.ImageRepository) *Service {
+	return &Service{repo: repo}
 }
 
 // CreateRequest represents a request to create an image generation
@@ -28,12 +30,12 @@ type CreateRequest struct {
 
 // GetByID retrieves an image generation by its ID
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*ImageGeneration, error) {
-	return s.store.FindByID(ctx, id)
+	return s.repo.FindByID(ctx, id)
 }
 
 // GetByRequestID retrieves an image generation by its request ID
 func (s *Service) GetByRequestID(ctx context.Context, requestID string) (*ImageGeneration, error) {
-	return s.store.FindByRequestID(ctx, requestID)
+	return s.repo.FindByRequestID(ctx, requestID)
 }
 
 // Create creates a new image generation record
@@ -48,7 +50,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*ImageGenerati
 		MetaData:  req.MetaData,
 	}
 
-	if err := s.store.Save(ctx, img); err != nil {
+	if err := s.repo.Save(ctx, img); err != nil {
 		return nil, err
 	}
 
@@ -57,7 +59,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*ImageGenerati
 
 // MarkCompleted marks an image generation as completed
 func (s *Service) MarkCompleted(ctx context.Context, id uuid.UUID, outputURL string, fileIndexID *uuid.UUID) error {
-	img, err := s.store.FindByID(ctx, id)
+	img, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -68,12 +70,12 @@ func (s *Service) MarkCompleted(ctx context.Context, id uuid.UUID, outputURL str
 	img.FileIndexID = fileIndexID
 	img.CompletedAt = &now
 
-	return s.store.Update(ctx, img)
+	return s.repo.Update(ctx, img)
 }
 
 // MarkFailed marks an image generation as failed
 func (s *Service) MarkFailed(ctx context.Context, id uuid.UUID, errorMessage string) error {
-	img, err := s.store.FindByID(ctx, id)
+	img, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -83,12 +85,12 @@ func (s *Service) MarkFailed(ctx context.Context, id uuid.UUID, errorMessage str
 	img.ErrorMessage = errorMessage
 	img.CompletedAt = &now
 
-	return s.store.Update(ctx, img)
+	return s.repo.Update(ctx, img)
 }
 
 // GetStatus returns the status of an image generation
 func (s *Service) GetStatus(ctx context.Context, id uuid.UUID) (string, error) {
-	img, err := s.store.FindByID(ctx, id)
+	img, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return "", err
 	}
