@@ -87,7 +87,7 @@ const articles = await Articles.getBlogArticles({ query: { page: 1 } })
 #### Backend clean code architecture layers
 
 
-Dependencies point inward toward core.:
+Dependencies point inward toward core.
 
 ```mermaid
 flowchart TB
