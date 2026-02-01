@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"backend/pkg/api/dto"
 	"backend/pkg/core"
 	"backend/pkg/types"
 
@@ -34,7 +35,7 @@ func NewService(
 }
 
 // GetPublicProfile retrieves the public profile based on site settings
-func (s *Service) GetPublicProfile(ctx context.Context) (*PublicProfileResponse, error) {
+func (s *Service) GetPublicProfile(ctx context.Context) (*dto.PublicProfileResponse, error) {
 	pub, err := s.profileStore.GetPublicProfile(ctx)
 	if err != nil {
 		return nil, err
@@ -46,7 +47,7 @@ func (s *Service) GetPublicProfile(ctx context.Context) (*PublicProfileResponse,
 		json.Unmarshal(data, &socialLinks)
 	}
 
-	return &PublicProfileResponse{
+	return &dto.PublicProfileResponse{
 		Type:            pub.Type,
 		Name:            pub.Name,
 		Bio:             stringValue(pub.Bio),
@@ -59,7 +60,7 @@ func (s *Service) GetPublicProfile(ctx context.Context) (*PublicProfileResponse,
 }
 
 // GetUserProfile returns the profile for a specific user
-func (s *Service) GetUserProfile(ctx context.Context, accountID uuid.UUID) (*UserProfile, error) {
+func (s *Service) GetUserProfile(ctx context.Context, accountID uuid.UUID) (*dto.UserProfileResponse, error) {
 	account, err := s.accountStore.FindByID(ctx, accountID)
 	if err != nil {
 		return nil, err
@@ -67,7 +68,7 @@ func (s *Service) GetUserProfile(ctx context.Context, accountID uuid.UUID) (*Use
 
 	socialLinks := parseSocialLinksFromMap(account.SocialLinks)
 
-	return &UserProfile{
+	return &dto.UserProfileResponse{
 		ID:              account.ID,
 		Name:            account.Name,
 		Bio:             stringValue(account.Bio),
@@ -80,7 +81,7 @@ func (s *Service) GetUserProfile(ctx context.Context, accountID uuid.UUID) (*Use
 }
 
 // UpdateUserProfile updates the profile fields for a user
-func (s *Service) UpdateUserProfile(ctx context.Context, accountID uuid.UUID, req ProfileUpdateRequest) (*UserProfile, error) {
+func (s *Service) UpdateUserProfile(ctx context.Context, accountID uuid.UUID, req dto.ProfileUpdateRequest) (*dto.UserProfileResponse, error) {
 	account, err := s.accountStore.FindByID(ctx, accountID)
 	if err != nil {
 		return nil, err
@@ -117,7 +118,7 @@ func (s *Service) UpdateUserProfile(ctx context.Context, accountID uuid.UUID, re
 
 	socialLinks := parseSocialLinksFromMap(account.SocialLinks)
 
-	return &UserProfile{
+	return &dto.UserProfileResponse{
 		ID:              account.ID,
 		Name:            account.Name,
 		Bio:             stringValue(account.Bio),
@@ -130,19 +131,19 @@ func (s *Service) UpdateUserProfile(ctx context.Context, accountID uuid.UUID, re
 }
 
 // GetSiteSettings returns the current site settings
-func (s *Service) GetSiteSettings(ctx context.Context) (*SiteSettingsResponse, error) {
+func (s *Service) GetSiteSettings(ctx context.Context) (*dto.SiteSettingsResponse, error) {
 	settings, err := s.siteSettingsStore.Get(ctx)
 	if err != nil {
 		if err == core.ErrNotFound {
 			// Return defaults
-			return &SiteSettingsResponse{
+			return &dto.SiteSettingsResponse{
 				PublicProfileType: "user",
 			}, nil
 		}
 		return nil, err
 	}
 
-	return &SiteSettingsResponse{
+	return &dto.SiteSettingsResponse{
 		PublicProfileType:    settings.PublicProfileType,
 		PublicUserID:         settings.PublicUserID,
 		PublicOrganizationID: settings.PublicOrganizationID,
@@ -150,7 +151,7 @@ func (s *Service) GetSiteSettings(ctx context.Context) (*SiteSettingsResponse, e
 }
 
 // UpdateSiteSettings updates the site settings
-func (s *Service) UpdateSiteSettings(ctx context.Context, req SiteSettingsUpdateRequest) (*SiteSettingsResponse, error) {
+func (s *Service) UpdateSiteSettings(ctx context.Context, req dto.SiteSettingsUpdateRequest) (*dto.SiteSettingsResponse, error) {
 	settings, err := s.siteSettingsStore.Get(ctx)
 	if err != nil {
 		if err == core.ErrNotFound {
@@ -194,7 +195,7 @@ func (s *Service) UpdateSiteSettings(ctx context.Context, req SiteSettingsUpdate
 		return nil, err
 	}
 
-	return &SiteSettingsResponse{
+	return &dto.SiteSettingsResponse{
 		PublicProfileType:    settings.PublicProfileType,
 		PublicUserID:         settings.PublicUserID,
 		PublicOrganizationID: settings.PublicOrganizationID,
