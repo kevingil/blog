@@ -4,6 +4,7 @@ package profile
 import (
 	"context"
 
+	"backend/pkg/api/dto"
 	"backend/pkg/types"
 
 	"github.com/google/uuid"
@@ -18,17 +19,20 @@ type PublicProfile = types.PublicProfile
 // UserProfile is an alias to types.UserProfile for backward compatibility
 type UserProfile = types.UserProfile
 
-// ProfileUpdateRequest is an alias to types.ProfileUpdateRequest for backward compatibility
-type ProfileUpdateRequest = types.ProfileUpdateRequest
+// ProfileUpdateRequest is an alias to dto.ProfileUpdateRequest for backward compatibility
+type ProfileUpdateRequest = dto.ProfileUpdateRequest
 
-// PublicProfileResponse is an alias to types.PublicProfileResponse for backward compatibility
-type PublicProfileResponse = types.PublicProfileResponse
+// PublicProfileResponse is an alias to dto.PublicProfileResponse for backward compatibility
+type PublicProfileResponse = dto.PublicProfileResponse
 
-// SiteSettingsResponse is an alias to types.SiteSettingsResponse for backward compatibility
-type SiteSettingsResponse = types.SiteSettingsResponse
+// SiteSettingsResponse is an alias to dto.SiteSettingsResponse for backward compatibility
+type SiteSettingsResponse = dto.SiteSettingsResponse
 
-// SiteSettingsUpdateRequest is an alias to types.SiteSettingsUpdateRequest for backward compatibility
-type SiteSettingsUpdateRequest = types.SiteSettingsUpdateRequest
+// SiteSettingsUpdateRequest is an alias to dto.SiteSettingsUpdateRequest for backward compatibility
+type SiteSettingsUpdateRequest = dto.SiteSettingsUpdateRequest
+
+// UserProfileResponse is an alias to dto.UserProfileResponse for backward compatibility
+type UserProfileResponse = dto.UserProfileResponse
 
 // SiteSettingsStore defines the data access interface for site settings
 type SiteSettingsStore interface {

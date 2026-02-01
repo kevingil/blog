@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"backend/pkg/api/dto"
 	"backend/pkg/core"
 	"backend/pkg/core/profile"
 	"backend/pkg/types"
@@ -151,7 +152,7 @@ func TestService_UpdateUserProfile(t *testing.T) {
 		newEmailPublic := "updated@example.com"
 		newMetaDesc := "Updated meta"
 		newSocialLinks := map[string]string{"twitter": "updated", "github": "newaccount"}
-		updateReq := types.ProfileUpdateRequest{
+		updateReq := dto.ProfileUpdateRequest{
 			Name:            &newName,
 			Bio:             &newBio,
 			ProfileImage:    &newProfileImage,
@@ -247,7 +248,7 @@ func TestService_UpdateSiteSettings(t *testing.T) {
 		}
 
 		newProfileType := "organization"
-		updateReq := types.SiteSettingsUpdateRequest{
+		updateReq := dto.SiteSettingsUpdateRequest{
 			PublicProfileType:    &newProfileType,
 			PublicUserID:         &userID,
 			PublicOrganizationID: &orgID,
@@ -287,7 +288,7 @@ func TestService_UpdateSiteSettings(t *testing.T) {
 		svc := profile.NewService(mockProfileStore, mockSiteSettingsStore, mockAccountStore, mockOrgStore)
 
 		newProfileType := "user"
-		updateReq := types.SiteSettingsUpdateRequest{
+		updateReq := dto.SiteSettingsUpdateRequest{
 			PublicProfileType: &newProfileType,
 		}
 
