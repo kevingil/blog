@@ -2,6 +2,7 @@ package agent
 
 import (
 	"backend/pkg/api/response"
+	"backend/pkg/api/validation"
 	agentws "backend/pkg/api/websocket"
 	"backend/pkg/core"
 	coreAgent "backend/pkg/core/agent"
@@ -45,6 +46,9 @@ func AgentCopilot(c *fiber.Ctx) error {
 	var req coreAgent.ChatRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
+	}
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
 	}
 
 	manager := coreAgent.GetAgentAsyncCopilotManager()
@@ -327,7 +331,12 @@ func AcceptArtifact(c *fiber.Ctx) error {
 	var req struct {
 		Feedback string `json:"feedback"`
 	}
-	_ = c.BodyParser(&req)
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, core.InvalidInputError("Invalid request body"))
+	}
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
+	}
 
 	if err := getChatService().AcceptArtifact(c.Context(), messageID, req.Feedback); err != nil {
 		return response.Error(c, err)
@@ -359,7 +368,12 @@ func RejectArtifact(c *fiber.Ctx) error {
 	var req struct {
 		Feedback string `json:"feedback"`
 	}
-	_ = c.BodyParser(&req)
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, core.InvalidInputError("Invalid request body"))
+	}
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
+	}
 
 	if err := getChatService().RejectArtifact(c.Context(), messageID, req.Feedback); err != nil {
 		return response.Error(c, err)

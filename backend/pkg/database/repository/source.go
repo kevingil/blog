@@ -15,14 +15,25 @@ import (
 	"gorm.io/gorm"
 )
 
-// SourceRepository provides data access for article sources
-type SourceRepository struct {
+// SourceRepository defines the interface for source data access
+type SourceRepository interface {
+	FindByID(ctx context.Context, id uuid.UUID) (*types.Source, error)
+	FindByArticleID(ctx context.Context, articleID uuid.UUID) ([]types.Source, error)
+	List(ctx context.Context, opts types.SourceListOptions) ([]types.SourceWithArticle, int64, error)
+	SearchSimilar(ctx context.Context, articleID uuid.UUID, embedding []float32, limit int) ([]types.Source, error)
+	Save(ctx context.Context, source *types.Source) error
+	Update(ctx context.Context, source *types.Source) error
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+// sourceRepository provides data access for article sources
+type sourceRepository struct {
 	db *gorm.DB
 }
 
 // NewSourceRepository creates a new SourceRepository
-func NewSourceRepository(db *gorm.DB) *SourceRepository {
-	return &SourceRepository{db: db}
+func NewSourceRepository(db *gorm.DB) SourceRepository {
+	return &sourceRepository{db: db}
 }
 
 // sourceModelToType converts a database model to types
@@ -77,7 +88,7 @@ func sourceTypeToModel(s *types.Source) *models.Source {
 }
 
 // FindByID retrieves a source by its ID
-func (r *SourceRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.Source, error) {
+func (r *sourceRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.Source, error) {
 	var model models.Source
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -89,7 +100,7 @@ func (r *SourceRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.S
 }
 
 // FindByArticleID retrieves all sources for an article
-func (r *SourceRepository) FindByArticleID(ctx context.Context, articleID uuid.UUID) ([]types.Source, error) {
+func (r *sourceRepository) FindByArticleID(ctx context.Context, articleID uuid.UUID) ([]types.Source, error) {
 	var sourceModels []models.Source
 	if err := r.db.WithContext(ctx).Where("article_id = ?", articleID).Order("created_at DESC").Find(&sourceModels).Error; err != nil {
 		return nil, err
@@ -102,8 +113,56 @@ func (r *SourceRepository) FindByArticleID(ctx context.Context, articleID uuid.U
 	return sources, nil
 }
 
+// sourceWithArticleRow represents the joined query result
+type sourceWithArticleRow struct {
+	models.Source
+	ArticleTitle string `gorm:"column:article_title"`
+	ArticleSlug  string `gorm:"column:article_slug"`
+}
+
+// List retrieves all sources with pagination and article metadata
+func (r *sourceRepository) List(ctx context.Context, opts types.SourceListOptions) ([]types.SourceWithArticle, int64, error) {
+	if opts.Page < 1 {
+		opts.Page = 1
+	}
+	if opts.PerPage < 1 || opts.PerPage > 100 {
+		opts.PerPage = 20
+	}
+
+	offset := (opts.Page - 1) * opts.PerPage
+
+	var total int64
+	if err := r.db.WithContext(ctx).Model(&models.Source{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var rows []sourceWithArticleRow
+	err := r.db.WithContext(ctx).Table("article_source").
+		Select("article_source.*, article.draft_title as article_title, article.slug as article_slug").
+		Joins("LEFT JOIN article ON article.id = article_source.article_id").
+		Order("article_source.created_at DESC").
+		Offset(offset).
+		Limit(opts.PerPage).
+		Scan(&rows).Error
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	results := make([]types.SourceWithArticle, len(rows))
+	for i, row := range rows {
+		results[i] = types.SourceWithArticle{
+			Source:       *sourceModelToType(&row.Source),
+			ArticleTitle: row.ArticleTitle,
+			ArticleSlug:  row.ArticleSlug,
+		}
+	}
+
+	return results, total, nil
+}
+
 // SearchSimilar performs vector similarity search for sources within an article
-func (r *SourceRepository) SearchSimilar(ctx context.Context, articleID uuid.UUID, embedding []float32, limit int) ([]types.Source, error) {
+func (r *sourceRepository) SearchSimilar(ctx context.Context, articleID uuid.UUID, embedding []float32, limit int) ([]types.Source, error) {
 	var sourceModels []models.Source
 
 	embeddingVector := pgvector.NewVector(embedding)
@@ -126,7 +185,7 @@ func (r *SourceRepository) SearchSimilar(ctx context.Context, articleID uuid.UUI
 }
 
 // Save creates a new source
-func (r *SourceRepository) Save(ctx context.Context, source *types.Source) error {
+func (r *sourceRepository) Save(ctx context.Context, source *types.Source) error {
 	model := sourceTypeToModel(source)
 	if model.ID == uuid.Nil {
 		model.ID = uuid.New()
@@ -136,13 +195,13 @@ func (r *SourceRepository) Save(ctx context.Context, source *types.Source) error
 }
 
 // Update updates an existing source
-func (r *SourceRepository) Update(ctx context.Context, source *types.Source) error {
+func (r *sourceRepository) Update(ctx context.Context, source *types.Source) error {
 	model := sourceTypeToModel(source)
 	return r.db.WithContext(ctx).Save(model).Error
 }
 
 // Delete removes a source by its ID
-func (r *SourceRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *sourceRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	result := r.db.WithContext(ctx).Delete(&models.Source{}, id)
 	if result.Error != nil {
 		return result.Error

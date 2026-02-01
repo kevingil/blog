@@ -15,14 +15,35 @@ import (
 	"gorm.io/gorm"
 )
 
-// CrawledContentRepository provides data access for crawled content
-type CrawledContentRepository struct {
+// CrawledContentRepository defines the interface for crawled content access
+type CrawledContentRepository interface {
+	// From CrawledContentStore (datasource package)
+	FindByDataSourceID(ctx context.Context, dsID uuid.UUID, offset, limit int) ([]types.CrawledContent, int64, error)
+
+	// From InsightCrawledContentStore (insight package)
+	FindByIDs(ctx context.Context, ids []uuid.UUID) ([]types.CrawledContent, error)
+	SearchSimilar(ctx context.Context, embedding []float32, limit int) ([]types.CrawledContent, error)
+	SearchSimilarByOrg(ctx context.Context, orgID uuid.UUID, embedding []float32, limit int) ([]types.CrawledContent, error)
+	FindRecentByOrg(ctx context.Context, orgID uuid.UUID, limit int) ([]types.CrawledContent, error)
+
+	// Additional repository methods
+	FindByID(ctx context.Context, id uuid.UUID) (*types.CrawledContent, error)
+	FindByURL(ctx context.Context, dataSourceID uuid.UUID, url string) (*types.CrawledContent, error)
+	Save(ctx context.Context, content *types.CrawledContent) error
+	Update(ctx context.Context, content *types.CrawledContent) error
+	Delete(ctx context.Context, id uuid.UUID) error
+	DeleteByDataSourceID(ctx context.Context, dataSourceID uuid.UUID) error
+	CountByDataSourceID(ctx context.Context, dataSourceID uuid.UUID) (int64, error)
+}
+
+// crawledContentRepository provides data access for crawled content
+type crawledContentRepository struct {
 	db *gorm.DB
 }
 
 // NewCrawledContentRepository creates a new CrawledContentRepository
-func NewCrawledContentRepository(db *gorm.DB) *CrawledContentRepository {
-	return &CrawledContentRepository{db: db}
+func NewCrawledContentRepository(db *gorm.DB) CrawledContentRepository {
+	return &crawledContentRepository{db: db}
 }
 
 // crawledContentModelToType converts a database model to types
@@ -81,7 +102,7 @@ func crawledContentTypeToModel(c *types.CrawledContent) *models.CrawledContent {
 }
 
 // FindByID retrieves crawled content by its ID
-func (r *CrawledContentRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.CrawledContent, error) {
+func (r *crawledContentRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.CrawledContent, error) {
 	var model models.CrawledContent
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -93,7 +114,7 @@ func (r *CrawledContentRepository) FindByID(ctx context.Context, id uuid.UUID) (
 }
 
 // FindByDataSourceID retrieves all crawled content for a data source
-func (r *CrawledContentRepository) FindByDataSourceID(ctx context.Context, dataSourceID uuid.UUID, offset, limit int) ([]types.CrawledContent, int64, error) {
+func (r *crawledContentRepository) FindByDataSourceID(ctx context.Context, dataSourceID uuid.UUID, offset, limit int) ([]types.CrawledContent, int64, error) {
 	var contentModels []models.CrawledContent
 	var total int64
 
@@ -118,7 +139,7 @@ func (r *CrawledContentRepository) FindByDataSourceID(ctx context.Context, dataS
 }
 
 // FindByURL checks if content with the given URL exists for a data source
-func (r *CrawledContentRepository) FindByURL(ctx context.Context, dataSourceID uuid.UUID, url string) (*types.CrawledContent, error) {
+func (r *crawledContentRepository) FindByURL(ctx context.Context, dataSourceID uuid.UUID, url string) (*types.CrawledContent, error) {
 	var model models.CrawledContent
 	if err := r.db.WithContext(ctx).Where("data_source_id = ? AND url = ?", dataSourceID, url).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -130,7 +151,7 @@ func (r *CrawledContentRepository) FindByURL(ctx context.Context, dataSourceID u
 }
 
 // FindByIDs retrieves multiple crawled content by their IDs
-func (r *CrawledContentRepository) FindByIDs(ctx context.Context, ids []uuid.UUID) ([]types.CrawledContent, error) {
+func (r *crawledContentRepository) FindByIDs(ctx context.Context, ids []uuid.UUID) ([]types.CrawledContent, error) {
 	var contentModels []models.CrawledContent
 	if err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&contentModels).Error; err != nil {
 		return nil, err
@@ -144,7 +165,7 @@ func (r *CrawledContentRepository) FindByIDs(ctx context.Context, ids []uuid.UUI
 }
 
 // SearchSimilar performs vector similarity search for crawled content
-func (r *CrawledContentRepository) SearchSimilar(ctx context.Context, embedding []float32, limit int) ([]types.CrawledContent, error) {
+func (r *crawledContentRepository) SearchSimilar(ctx context.Context, embedding []float32, limit int) ([]types.CrawledContent, error) {
 	var contentModels []models.CrawledContent
 
 	embeddingVector := pgvector.NewVector(embedding)
@@ -166,7 +187,7 @@ func (r *CrawledContentRepository) SearchSimilar(ctx context.Context, embedding 
 }
 
 // SearchSimilarByOrg performs vector similarity search for crawled content within an organization
-func (r *CrawledContentRepository) SearchSimilarByOrg(ctx context.Context, orgID uuid.UUID, embedding []float32, limit int) ([]types.CrawledContent, error) {
+func (r *crawledContentRepository) SearchSimilarByOrg(ctx context.Context, orgID uuid.UUID, embedding []float32, limit int) ([]types.CrawledContent, error) {
 	var contentModels []models.CrawledContent
 
 	embeddingVector := pgvector.NewVector(embedding)
@@ -192,7 +213,7 @@ func (r *CrawledContentRepository) SearchSimilarByOrg(ctx context.Context, orgID
 }
 
 // Save creates new crawled content (upserts based on data_source_id + url)
-func (r *CrawledContentRepository) Save(ctx context.Context, content *types.CrawledContent) error {
+func (r *crawledContentRepository) Save(ctx context.Context, content *types.CrawledContent) error {
 	model := crawledContentTypeToModel(content)
 	if model.ID == uuid.Nil {
 		model.ID = uuid.New()
@@ -207,13 +228,13 @@ func (r *CrawledContentRepository) Save(ctx context.Context, content *types.Craw
 }
 
 // Update updates existing crawled content
-func (r *CrawledContentRepository) Update(ctx context.Context, content *types.CrawledContent) error {
+func (r *crawledContentRepository) Update(ctx context.Context, content *types.CrawledContent) error {
 	model := crawledContentTypeToModel(content)
 	return r.db.WithContext(ctx).Save(model).Error
 }
 
 // Delete removes crawled content by its ID
-func (r *CrawledContentRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *crawledContentRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	result := r.db.WithContext(ctx).Delete(&models.CrawledContent{}, id)
 	if result.Error != nil {
 		return result.Error
@@ -225,12 +246,12 @@ func (r *CrawledContentRepository) Delete(ctx context.Context, id uuid.UUID) err
 }
 
 // DeleteByDataSourceID removes all crawled content for a data source
-func (r *CrawledContentRepository) DeleteByDataSourceID(ctx context.Context, dataSourceID uuid.UUID) error {
+func (r *crawledContentRepository) DeleteByDataSourceID(ctx context.Context, dataSourceID uuid.UUID) error {
 	return r.db.WithContext(ctx).Where("data_source_id = ?", dataSourceID).Delete(&models.CrawledContent{}).Error
 }
 
 // CountByDataSourceID counts crawled content for a data source
-func (r *CrawledContentRepository) CountByDataSourceID(ctx context.Context, dataSourceID uuid.UUID) (int64, error) {
+func (r *crawledContentRepository) CountByDataSourceID(ctx context.Context, dataSourceID uuid.UUID) (int64, error) {
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&models.CrawledContent{}).Where("data_source_id = ?", dataSourceID).Count(&count).Error; err != nil {
 		return 0, err
@@ -239,7 +260,7 @@ func (r *CrawledContentRepository) CountByDataSourceID(ctx context.Context, data
 }
 
 // FindRecentByOrg retrieves recent crawled content for an organization
-func (r *CrawledContentRepository) FindRecentByOrg(ctx context.Context, orgID uuid.UUID, limit int) ([]types.CrawledContent, error) {
+func (r *crawledContentRepository) FindRecentByOrg(ctx context.Context, orgID uuid.UUID, limit int) ([]types.CrawledContent, error) {
 	var contentModels []models.CrawledContent
 
 	if err := r.db.WithContext(ctx).

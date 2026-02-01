@@ -1,15 +1,35 @@
 package project
 
 import (
+	"sync"
+
 	"backend/pkg/api/middleware"
 	"backend/pkg/api/response"
 	"backend/pkg/api/validation"
 	"backend/pkg/core"
 	"backend/pkg/core/project"
+	"backend/pkg/database"
+	"backend/pkg/database/repository"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
+
+var (
+	serviceInstance *project.Service
+	serviceOnce     sync.Once
+)
+
+// getService returns the project service instance (lazily initialized)
+func getService() *project.Service {
+	serviceOnce.Do(func() {
+		db := database.DB()
+		projectRepo := repository.NewProjectRepository(db)
+		tagRepo := repository.NewTagRepository(db)
+		serviceInstance = project.NewService(projectRepo, tagRepo)
+	})
+	return serviceInstance
+}
 
 // ListProjects handles GET /projects
 // @Summary List projects
@@ -26,7 +46,8 @@ func ListProjects(c *fiber.Ctx) error {
 	page := c.QueryInt("page", 1)
 	perPage := c.QueryInt("perPage", 20)
 
-	result, err := project.List(c.Context(), page, perPage)
+	svc := getService()
+	result, err := svc.List(c.Context(), page, perPage)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -58,7 +79,8 @@ func GetProject(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid project ID"))
 	}
 
-	detail, err := project.GetDetail(c.Context(), id)
+	svc := getService()
+	detail, err := svc.GetDetail(c.Context(), id)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -89,7 +111,8 @@ func CreateProject(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	result, err := project.Create(c.Context(), req)
+	svc := getService()
+	result, err := svc.Create(c.Context(), req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -122,8 +145,12 @@ func UpdateProject(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
+	}
 
-	result, err := project.Update(c.Context(), id, req)
+	svc := getService()
+	result, err := svc.Update(c.Context(), id, req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -158,7 +185,8 @@ func DeleteProject(c *fiber.Ctx) error {
 		return response.Error(c, core.UnauthorizedError("Not authenticated"))
 	}
 
-	if err := project.Delete(c.Context(), id); err != nil {
+	svc := getService()
+	if err := svc.Delete(c.Context(), id); err != nil {
 		return response.Error(c, err)
 	}
 

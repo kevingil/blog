@@ -3,7 +3,9 @@ package storage
 import (
 	"io"
 
+	"backend/pkg/api/dto"
 	"backend/pkg/api/response"
+	"backend/pkg/api/validation"
 	"backend/pkg/core"
 	coreStorage "backend/pkg/core/storage"
 
@@ -110,18 +112,13 @@ func DeleteFile(c *fiber.Ctx) error {
 	return response.Success(c, fiber.Map{"success": true})
 }
 
-// CreateFolderRequest represents the request body for creating a folder
-type CreateFolderRequest struct {
-	Path string `json:"path"`
-}
-
 // CreateFolder handles POST /storage/folders
 // @Summary Create folder
 // @Description Create a new folder in storage
 // @Tags storage
 // @Accept json
 // @Produce json
-// @Param request body storage.CreateFolderRequest true "Folder path"
+// @Param request body dto.CreateFolderRequest true "Folder path"
 // @Success 200 {object} response.SuccessResponse{data=object{success=boolean}}
 // @Failure 400 {object} response.SuccessResponse
 // @Failure 401 {object} response.SuccessResponse
@@ -129,13 +126,12 @@ type CreateFolderRequest struct {
 // @Security BearerAuth
 // @Router /storage/folders [post]
 func CreateFolder(c *fiber.Ctx) error {
-	var req CreateFolderRequest
+	var req dto.CreateFolderRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
-
-	if req.Path == "" {
-		return response.Error(c, core.InvalidInputError("Folder path is required"))
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
 	}
 
 	if err := coreStorage.CreateFolder(c.Context(), req.Path); err != nil {
@@ -144,19 +140,13 @@ func CreateFolder(c *fiber.Ctx) error {
 	return response.Success(c, fiber.Map{"success": true})
 }
 
-// UpdateFolderRequest represents the request body for updating a folder
-type UpdateFolderRequest struct {
-	OldPath string `json:"oldPath"`
-	NewPath string `json:"newPath"`
-}
-
 // UpdateFolder handles PUT /storage/folders
 // @Summary Update folder
 // @Description Rename/move a folder in storage
 // @Tags storage
 // @Accept json
 // @Produce json
-// @Param request body storage.UpdateFolderRequest true "Old and new folder paths"
+// @Param request body dto.UpdateFolderRequest true "Old and new folder paths"
 // @Success 200 {object} response.SuccessResponse{data=object{success=boolean}}
 // @Failure 400 {object} response.SuccessResponse
 // @Failure 401 {object} response.SuccessResponse
@@ -164,16 +154,12 @@ type UpdateFolderRequest struct {
 // @Security BearerAuth
 // @Router /storage/folders [put]
 func UpdateFolder(c *fiber.Ctx) error {
-	var req UpdateFolderRequest
+	var req dto.UpdateFolderRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
-
-	if req.OldPath == "" {
-		return response.Error(c, core.InvalidInputError("Old path is required"))
-	}
-	if req.NewPath == "" {
-		return response.Error(c, core.InvalidInputError("New path is required"))
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
 	}
 
 	if err := coreStorage.UpdateFolder(c.Context(), req.OldPath, req.NewPath); err != nil {

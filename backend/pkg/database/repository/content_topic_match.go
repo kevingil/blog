@@ -12,14 +12,21 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// ContentTopicMatchRepository provides data access for content-topic matches
-type ContentTopicMatchRepository struct {
+// ContentTopicMatchRepository defines the interface for content-topic match data access
+type ContentTopicMatchRepository interface {
+	SaveBatch(ctx context.Context, matches []types.ContentTopicMatch) error
+	CountByTopicID(ctx context.Context, topicID uuid.UUID) (int64, error)
+	FindPrimaryByTopicID(ctx context.Context, topicID uuid.UUID, offset, limit int) ([]types.ContentTopicMatch, int64, error)
+}
+
+// contentTopicMatchRepository provides data access for content-topic matches
+type contentTopicMatchRepository struct {
 	db *gorm.DB
 }
 
 // NewContentTopicMatchRepository creates a new ContentTopicMatchRepository
-func NewContentTopicMatchRepository(db *gorm.DB) *ContentTopicMatchRepository {
-	return &ContentTopicMatchRepository{db: db}
+func NewContentTopicMatchRepository(db *gorm.DB) ContentTopicMatchRepository {
+	return &contentTopicMatchRepository{db: db}
 }
 
 // contentTopicMatchModelToType converts a database model to types
@@ -47,7 +54,7 @@ func contentTopicMatchTypeToModel(m *types.ContentTopicMatch) *models.ContentTop
 }
 
 // FindByContentID retrieves all topic matches for a content item
-func (r *ContentTopicMatchRepository) FindByContentID(ctx context.Context, contentID uuid.UUID) ([]types.ContentTopicMatch, error) {
+func (r *contentTopicMatchRepository) FindByContentID(ctx context.Context, contentID uuid.UUID) ([]types.ContentTopicMatch, error) {
 	var matchModels []models.ContentTopicMatch
 	if err := r.db.WithContext(ctx).
 		Where("content_id = ?", contentID).
@@ -64,7 +71,7 @@ func (r *ContentTopicMatchRepository) FindByContentID(ctx context.Context, conte
 }
 
 // FindByTopicID retrieves all content matches for a topic
-func (r *ContentTopicMatchRepository) FindByTopicID(ctx context.Context, topicID uuid.UUID, offset, limit int) ([]types.ContentTopicMatch, int64, error) {
+func (r *contentTopicMatchRepository) FindByTopicID(ctx context.Context, topicID uuid.UUID, offset, limit int) ([]types.ContentTopicMatch, int64, error) {
 	var matchModels []models.ContentTopicMatch
 	var total int64
 
@@ -89,7 +96,7 @@ func (r *ContentTopicMatchRepository) FindByTopicID(ctx context.Context, topicID
 }
 
 // FindPrimaryByTopicID retrieves all primary matches for a topic
-func (r *ContentTopicMatchRepository) FindPrimaryByTopicID(ctx context.Context, topicID uuid.UUID, offset, limit int) ([]types.ContentTopicMatch, int64, error) {
+func (r *contentTopicMatchRepository) FindPrimaryByTopicID(ctx context.Context, topicID uuid.UUID, offset, limit int) ([]types.ContentTopicMatch, int64, error) {
 	var matchModels []models.ContentTopicMatch
 	var total int64
 
@@ -116,7 +123,7 @@ func (r *ContentTopicMatchRepository) FindPrimaryByTopicID(ctx context.Context, 
 }
 
 // Save creates or updates a content-topic match (upserts)
-func (r *ContentTopicMatchRepository) Save(ctx context.Context, match *types.ContentTopicMatch) error {
+func (r *contentTopicMatchRepository) Save(ctx context.Context, match *types.ContentTopicMatch) error {
 	model := contentTopicMatchTypeToModel(match)
 	if model.ID == uuid.Nil {
 		model.ID = uuid.New()
@@ -130,7 +137,7 @@ func (r *ContentTopicMatchRepository) Save(ctx context.Context, match *types.Con
 }
 
 // SaveBatch creates or updates multiple content-topic matches
-func (r *ContentTopicMatchRepository) SaveBatch(ctx context.Context, matches []types.ContentTopicMatch) error {
+func (r *contentTopicMatchRepository) SaveBatch(ctx context.Context, matches []types.ContentTopicMatch) error {
 	if len(matches) == 0 {
 		return nil
 	}
@@ -150,17 +157,17 @@ func (r *ContentTopicMatchRepository) SaveBatch(ctx context.Context, matches []t
 }
 
 // DeleteByContentID removes all topic matches for a content item
-func (r *ContentTopicMatchRepository) DeleteByContentID(ctx context.Context, contentID uuid.UUID) error {
+func (r *contentTopicMatchRepository) DeleteByContentID(ctx context.Context, contentID uuid.UUID) error {
 	return r.db.WithContext(ctx).Where("content_id = ?", contentID).Delete(&models.ContentTopicMatch{}).Error
 }
 
 // DeleteByTopicID removes all content matches for a topic
-func (r *ContentTopicMatchRepository) DeleteByTopicID(ctx context.Context, topicID uuid.UUID) error {
+func (r *contentTopicMatchRepository) DeleteByTopicID(ctx context.Context, topicID uuid.UUID) error {
 	return r.db.WithContext(ctx).Where("topic_id = ?", topicID).Delete(&models.ContentTopicMatch{}).Error
 }
 
 // Delete removes a specific content-topic match
-func (r *ContentTopicMatchRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *contentTopicMatchRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	result := r.db.WithContext(ctx).Delete(&models.ContentTopicMatch{}, id)
 	if result.Error != nil {
 		return result.Error
@@ -172,7 +179,7 @@ func (r *ContentTopicMatchRepository) Delete(ctx context.Context, id uuid.UUID) 
 }
 
 // CountByTopicID counts matches for a topic
-func (r *ContentTopicMatchRepository) CountByTopicID(ctx context.Context, topicID uuid.UUID) (int64, error) {
+func (r *contentTopicMatchRepository) CountByTopicID(ctx context.Context, topicID uuid.UUID) (int64, error) {
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&models.ContentTopicMatch{}).
 		Where("topic_id = ?", topicID).
@@ -183,14 +190,14 @@ func (r *ContentTopicMatchRepository) CountByTopicID(ctx context.Context, topicI
 }
 
 // UpdatePrimaryStatus sets the is_primary flag for a match
-func (r *ContentTopicMatchRepository) UpdatePrimaryStatus(ctx context.Context, contentID uuid.UUID, topicID uuid.UUID, isPrimary bool) error {
+func (r *contentTopicMatchRepository) UpdatePrimaryStatus(ctx context.Context, contentID uuid.UUID, topicID uuid.UUID, isPrimary bool) error {
 	return r.db.WithContext(ctx).Model(&models.ContentTopicMatch{}).
 		Where("content_id = ? AND topic_id = ?", contentID, topicID).
 		Update("is_primary", isPrimary).Error
 }
 
 // ClearPrimaryForContent clears primary flag for all matches of a content item
-func (r *ContentTopicMatchRepository) ClearPrimaryForContent(ctx context.Context, contentID uuid.UUID) error {
+func (r *contentTopicMatchRepository) ClearPrimaryForContent(ctx context.Context, contentID uuid.UUID) error {
 	return r.db.WithContext(ctx).Model(&models.ContentTopicMatch{}).
 		Where("content_id = ?", contentID).
 		Update("is_primary", false).Error

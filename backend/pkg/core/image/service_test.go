@@ -15,7 +15,7 @@ import (
 
 func TestService_GetByID(t *testing.T) {
 	ctx := context.Background()
-	mockStore := new(mocks.MockImageStore)
+	mockStore := new(mocks.MockImageRepository)
 	svc := image.NewService(mockStore)
 
 	t.Run("returns image generation when found", func(t *testing.T) {
@@ -44,7 +44,7 @@ func TestService_GetByID(t *testing.T) {
 
 func TestService_GetByRequestID(t *testing.T) {
 	ctx := context.Background()
-	mockStore := new(mocks.MockImageStore)
+	mockStore := new(mocks.MockImageRepository)
 	svc := image.NewService(mockStore)
 
 	t.Run("returns image generation when found", func(t *testing.T) {
@@ -62,7 +62,7 @@ func TestService_GetByRequestID(t *testing.T) {
 
 func TestService_Create(t *testing.T) {
 	ctx := context.Background()
-	mockStore := new(mocks.MockImageStore)
+	mockStore := new(mocks.MockImageRepository)
 	svc := image.NewService(mockStore)
 
 	t.Run("creates image generation successfully", func(t *testing.T) {
@@ -87,7 +87,7 @@ func TestService_Create(t *testing.T) {
 
 func TestService_MarkCompleted(t *testing.T) {
 	ctx := context.Background()
-	mockStore := new(mocks.MockImageStore)
+	mockStore := new(mocks.MockImageRepository)
 	svc := image.NewService(mockStore)
 
 	t.Run("marks image as completed", func(t *testing.T) {
@@ -121,7 +121,7 @@ func TestService_MarkCompleted(t *testing.T) {
 
 func TestService_MarkFailed(t *testing.T) {
 	ctx := context.Background()
-	mockStore := new(mocks.MockImageStore)
+	mockStore := new(mocks.MockImageRepository)
 	svc := image.NewService(mockStore)
 
 	t.Run("marks image as failed", func(t *testing.T) {
@@ -144,7 +144,7 @@ func TestService_MarkFailed(t *testing.T) {
 
 func TestService_GetStatus(t *testing.T) {
 	ctx := context.Background()
-	mockStore := new(mocks.MockImageStore)
+	mockStore := new(mocks.MockImageRepository)
 	svc := image.NewService(mockStore)
 
 	t.Run("returns status", func(t *testing.T) {

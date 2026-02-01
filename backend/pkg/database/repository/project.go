@@ -12,14 +12,23 @@ import (
 	"gorm.io/gorm"
 )
 
-// ProjectRepository implements data access for projects using GORM
-type ProjectRepository struct {
+// ProjectRepository defines the interface for project data access
+type ProjectRepository interface {
+	FindByID(ctx context.Context, id uuid.UUID) (*types.Project, error)
+	List(ctx context.Context, opts types.ProjectListOptions) ([]types.Project, int64, error)
+	Save(ctx context.Context, project *types.Project) error
+	Update(ctx context.Context, project *types.Project) error
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+// projectRepository implements data access for projects using GORM
+type projectRepository struct {
 	db *gorm.DB
 }
 
 // NewProjectRepository creates a new ProjectRepository
-func NewProjectRepository(db *gorm.DB) *ProjectRepository {
-	return &ProjectRepository{db: db}
+func NewProjectRepository(db *gorm.DB) ProjectRepository {
+	return &projectRepository{db: db}
 }
 
 // projectModelToType converts a GORM model to the types
@@ -53,7 +62,7 @@ func projectTypeToModel(p *types.Project) *models.Project {
 }
 
 // FindByID retrieves a project by its ID
-func (r *ProjectRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.Project, error) {
+func (r *projectRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.Project, error) {
 	var model models.Project
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -65,7 +74,7 @@ func (r *ProjectRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.
 }
 
 // List retrieves projects with pagination
-func (r *ProjectRepository) List(ctx context.Context, opts types.ProjectListOptions) ([]types.Project, int64, error) {
+func (r *projectRepository) List(ctx context.Context, opts types.ProjectListOptions) ([]types.Project, int64, error) {
 	var projectModels []models.Project
 	var total int64
 
@@ -92,7 +101,7 @@ func (r *ProjectRepository) List(ctx context.Context, opts types.ProjectListOpti
 }
 
 // Save creates a new project
-func (r *ProjectRepository) Save(ctx context.Context, p *types.Project) error {
+func (r *projectRepository) Save(ctx context.Context, p *types.Project) error {
 	model := projectTypeToModel(p)
 
 	if p.ID == uuid.Nil {
@@ -104,13 +113,13 @@ func (r *ProjectRepository) Save(ctx context.Context, p *types.Project) error {
 }
 
 // Update updates an existing project
-func (r *ProjectRepository) Update(ctx context.Context, p *types.Project) error {
+func (r *projectRepository) Update(ctx context.Context, p *types.Project) error {
 	model := projectTypeToModel(p)
 	return r.db.WithContext(ctx).Save(model).Error
 }
 
 // Delete removes a project by its ID
-func (r *ProjectRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *projectRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	result := r.db.WithContext(ctx).Delete(&models.Project{}, id)
 	if result.Error != nil {
 		return result.Error

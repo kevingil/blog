@@ -16,10 +16,11 @@ import (
 
 // DiscoveryWorker discovers similar websites using Exa
 type DiscoveryWorker struct {
-	logger           *slog.Logger
-	exaClient        *exa.Client
-	maxDiscoveries   int
-	maxSourcesPerRun int
+	logger            *slog.Logger
+	exaClient         *exa.Client
+	maxDiscoveries    int
+	maxSourcesPerRun  int
+	dataSourceService *datasource.Service
 }
 
 // NewDiscoveryWorker creates a new DiscoveryWorker instance
@@ -33,11 +34,18 @@ func NewDiscoveryWorker(logger *slog.Logger, exaAPIKey string) *DiscoveryWorker 
 		client = exa.NewClient(exaAPIKey)
 	}
 
+	// Initialize datasource service
+	db := database.DB()
+	dataSourceRepo := repository.NewDataSourceRepository(db)
+	crawledContentRepo := repository.NewCrawledContentRepository(db)
+	dataSourceService := datasource.NewService(dataSourceRepo, crawledContentRepo)
+
 	return &DiscoveryWorker{
-		logger:           logger,
-		exaClient:        client,
-		maxDiscoveries:   5, // Max new sources to discover per existing source
-		maxSourcesPerRun: 5, // Max sources to process per run
+		logger:            logger,
+		exaClient:         client,
+		maxDiscoveries:    5, // Max new sources to discover per existing source
+		maxSourcesPerRun:  5, // Max sources to process per run
+		dataSourceService: dataSourceService,
 	}
 }
 
@@ -94,7 +102,7 @@ func (w *DiscoveryWorker) Run(ctx context.Context) error {
 			return ctx.Err()
 		default:
 			statusService.SetProgress(w.Name(), i, len(activeManualSources), fmt.Sprintf("Finding similar sites for: %s", source.Name))
-			
+
 			discovered, err := w.discoverSimilarSites(ctx, &source)
 			if err != nil {
 				w.logger.Error("failed to discover similar sites", "source_id", source.ID, "error", err)
@@ -115,7 +123,7 @@ func (w *DiscoveryWorker) discoverSimilarSites(ctx context.Context, source *type
 
 	// Use Exa to find similar sites
 	results, err := w.exaClient.FindSimilar(ctx, source.URL, &exa.FindSimilarOptions{
-		NumResults:        w.maxDiscoveries + 5, // Get extra to account for filtering
+		NumResults:          w.maxDiscoveries + 5, // Get extra to account for filtering
 		ExcludeSourceDomain: true,
 	})
 	if err != nil {
@@ -156,7 +164,7 @@ func (w *DiscoveryWorker) discoverSimilarSites(ctx context.Context, source *type
 		}
 
 		// Pass both orgID and userID from the source
-		_, err := datasource.CreateDiscoveredSource(ctx, source.OrganizationID, source.UserID, source.ID, name, normalizedURL)
+		_, err := w.dataSourceService.CreateDiscoveredSource(ctx, source.OrganizationID, source.UserID, source.ID, name, normalizedURL)
 		if err != nil {
 			// Skip if already exists
 			if strings.Contains(err.Error(), "already exists") {

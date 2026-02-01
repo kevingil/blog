@@ -14,14 +14,30 @@ import (
 	"gorm.io/gorm"
 )
 
-// DataSourceRepository provides data access for data sources
-type DataSourceRepository struct {
+// DataSourceRepository defines the interface for data source access
+type DataSourceRepository interface {
+	FindByID(ctx context.Context, id uuid.UUID) (*types.DataSource, error)
+	FindByOrganizationID(ctx context.Context, orgID uuid.UUID) ([]types.DataSource, error)
+	FindByUserID(ctx context.Context, userID uuid.UUID) ([]types.DataSource, error)
+	FindByURL(ctx context.Context, url string) (*types.DataSource, error)
+	FindDueToCrawl(ctx context.Context, limit int) ([]types.DataSource, error)
+	List(ctx context.Context, offset, limit int) ([]types.DataSource, int64, error)
+	Save(ctx context.Context, source *types.DataSource) error
+	Update(ctx context.Context, source *types.DataSource) error
+	UpdateCrawlStatus(ctx context.Context, id uuid.UUID, status string, errorMsg *string) error
+	UpdateNextCrawlAt(ctx context.Context, id uuid.UUID, nextCrawlAt time.Time) error
+	IncrementContentCount(ctx context.Context, id uuid.UUID, delta int) error
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+// dataSourceRepository provides data access for data sources
+type dataSourceRepository struct {
 	db *gorm.DB
 }
 
 // NewDataSourceRepository creates a new DataSourceRepository
-func NewDataSourceRepository(db *gorm.DB) *DataSourceRepository {
-	return &DataSourceRepository{db: db}
+func NewDataSourceRepository(db *gorm.DB) DataSourceRepository {
+	return &dataSourceRepository{db: db}
 }
 
 // dataSourceModelToType converts a database model to types
@@ -88,7 +104,7 @@ func dataSourceTypeToModel(s *types.DataSource) *models.DataSource {
 }
 
 // FindByID retrieves a data source by its ID
-func (r *DataSourceRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.DataSource, error) {
+func (r *dataSourceRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.DataSource, error) {
 	var model models.DataSource
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -100,7 +116,7 @@ func (r *DataSourceRepository) FindByID(ctx context.Context, id uuid.UUID) (*typ
 }
 
 // FindByOrganizationID retrieves all data sources for an organization
-func (r *DataSourceRepository) FindByOrganizationID(ctx context.Context, orgID uuid.UUID) ([]types.DataSource, error) {
+func (r *dataSourceRepository) FindByOrganizationID(ctx context.Context, orgID uuid.UUID) ([]types.DataSource, error) {
 	var dataSourceModels []models.DataSource
 	if err := r.db.WithContext(ctx).Where("organization_id = ?", orgID).Order("created_at DESC").Find(&dataSourceModels).Error; err != nil {
 		return nil, err
@@ -114,7 +130,7 @@ func (r *DataSourceRepository) FindByOrganizationID(ctx context.Context, orgID u
 }
 
 // FindByUserID retrieves all data sources for a user (without organization)
-func (r *DataSourceRepository) FindByUserID(ctx context.Context, userID uuid.UUID) ([]types.DataSource, error) {
+func (r *dataSourceRepository) FindByUserID(ctx context.Context, userID uuid.UUID) ([]types.DataSource, error) {
 	var dataSourceModels []models.DataSource
 	if err := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("created_at DESC").Find(&dataSourceModels).Error; err != nil {
 		return nil, err
@@ -128,7 +144,7 @@ func (r *DataSourceRepository) FindByUserID(ctx context.Context, userID uuid.UUI
 }
 
 // FindByURL checks if a data source with the given URL exists
-func (r *DataSourceRepository) FindByURL(ctx context.Context, url string) (*types.DataSource, error) {
+func (r *dataSourceRepository) FindByURL(ctx context.Context, url string) (*types.DataSource, error) {
 	var model models.DataSource
 	if err := r.db.WithContext(ctx).Where("url = ?", url).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -140,7 +156,7 @@ func (r *DataSourceRepository) FindByURL(ctx context.Context, url string) (*type
 }
 
 // FindDueToCrawl retrieves data sources that are due for crawling
-func (r *DataSourceRepository) FindDueToCrawl(ctx context.Context, limit int) ([]types.DataSource, error) {
+func (r *dataSourceRepository) FindDueToCrawl(ctx context.Context, limit int) ([]types.DataSource, error) {
 	var dataSourceModels []models.DataSource
 	now := time.Now()
 	if err := r.db.WithContext(ctx).
@@ -160,7 +176,7 @@ func (r *DataSourceRepository) FindDueToCrawl(ctx context.Context, limit int) ([
 }
 
 // Save creates a new data source
-func (r *DataSourceRepository) Save(ctx context.Context, source *types.DataSource) error {
+func (r *dataSourceRepository) Save(ctx context.Context, source *types.DataSource) error {
 	model := dataSourceTypeToModel(source)
 	if model.ID == uuid.Nil {
 		model.ID = uuid.New()
@@ -170,13 +186,13 @@ func (r *DataSourceRepository) Save(ctx context.Context, source *types.DataSourc
 }
 
 // Update updates an existing data source
-func (r *DataSourceRepository) Update(ctx context.Context, source *types.DataSource) error {
+func (r *dataSourceRepository) Update(ctx context.Context, source *types.DataSource) error {
 	model := dataSourceTypeToModel(source)
 	return r.db.WithContext(ctx).Save(model).Error
 }
 
 // UpdateCrawlStatus updates the crawl status of a data source
-func (r *DataSourceRepository) UpdateCrawlStatus(ctx context.Context, id uuid.UUID, status string, errorMsg *string) error {
+func (r *dataSourceRepository) UpdateCrawlStatus(ctx context.Context, id uuid.UUID, status string, errorMsg *string) error {
 	updates := map[string]interface{}{
 		"crawl_status": status,
 		"updated_at":   time.Now(),
@@ -193,21 +209,21 @@ func (r *DataSourceRepository) UpdateCrawlStatus(ctx context.Context, id uuid.UU
 }
 
 // UpdateNextCrawlAt updates the next crawl time
-func (r *DataSourceRepository) UpdateNextCrawlAt(ctx context.Context, id uuid.UUID, nextCrawlAt time.Time) error {
+func (r *dataSourceRepository) UpdateNextCrawlAt(ctx context.Context, id uuid.UUID, nextCrawlAt time.Time) error {
 	return r.db.WithContext(ctx).Model(&models.DataSource{}).
 		Where("id = ?", id).
 		Update("next_crawl_at", nextCrawlAt).Error
 }
 
 // IncrementContentCount increments the content count for a data source
-func (r *DataSourceRepository) IncrementContentCount(ctx context.Context, id uuid.UUID, delta int) error {
+func (r *dataSourceRepository) IncrementContentCount(ctx context.Context, id uuid.UUID, delta int) error {
 	return r.db.WithContext(ctx).Model(&models.DataSource{}).
 		Where("id = ?", id).
 		Update("content_count", gorm.Expr("content_count + ?", delta)).Error
 }
 
 // Delete removes a data source by its ID
-func (r *DataSourceRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *dataSourceRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	result := r.db.WithContext(ctx).Delete(&models.DataSource{}, id)
 	if result.Error != nil {
 		return result.Error
@@ -219,7 +235,7 @@ func (r *DataSourceRepository) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 // List retrieves all data sources with pagination
-func (r *DataSourceRepository) List(ctx context.Context, offset, limit int) ([]types.DataSource, int64, error) {
+func (r *dataSourceRepository) List(ctx context.Context, offset, limit int) ([]types.DataSource, int64, error) {
 	var dataSourceModels []models.DataSource
 	var total int64
 

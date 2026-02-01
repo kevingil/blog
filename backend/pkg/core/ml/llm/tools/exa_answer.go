@@ -5,32 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+
+	"backend/pkg/integrations/exa"
 )
 
 // ExaAnswerService interface for Exa answer operations
+// Satisfied directly by exa.Client
 type ExaAnswerService interface {
-	AnswerWithDefaults(ctx context.Context, question string) (*ExaAnswerResponse, error)
+	AnswerWithDefaults(ctx context.Context, question string) (*exa.AnswerResponse, error)
 	IsConfigured() bool
-}
-
-// ExaAnswerResponse represents the response from Exa answer API
-type ExaAnswerResponse struct {
-	Answer      string                 `json:"answer"`
-	Citations   []ExaAnswerCitation    `json:"citations"`
-	CostDollars map[string]interface{} `json:"costDollars,omitempty"`
-}
-
-// ExaAnswerCitation represents a citation from the Exa answer API
-type ExaAnswerCitation struct {
-	ID            string                 `json:"id"`
-	URL           string                 `json:"url"`
-	Title         string                 `json:"title"`
-	Author        string                 `json:"author,omitempty"`
-	PublishedDate string                 `json:"publishedDate,omitempty"`
-	Text          string                 `json:"text,omitempty"`
-	Image         string                 `json:"image,omitempty"`
-	Favicon       string                 `json:"favicon,omitempty"`
-	Extras        map[string]interface{} `json:"extras,omitempty"`
 }
 
 // ExaAnswerTool gets direct answers to questions using Exa's /answer endpoint

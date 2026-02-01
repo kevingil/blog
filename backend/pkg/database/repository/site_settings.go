@@ -12,14 +12,20 @@ import (
 	"gorm.io/gorm"
 )
 
-// SiteSettingsRepository provides data access for site settings
-type SiteSettingsRepository struct {
+// SiteSettingsRepository defines the interface for site settings data access
+type SiteSettingsRepository interface {
+	Get(ctx context.Context) (*types.SiteSettings, error)
+	Save(ctx context.Context, settings *types.SiteSettings) error
+}
+
+// siteSettingsRepository provides data access for site settings
+type siteSettingsRepository struct {
 	db *gorm.DB
 }
 
 // NewSiteSettingsRepository creates a new SiteSettingsRepository
-func NewSiteSettingsRepository(db *gorm.DB) *SiteSettingsRepository {
-	return &SiteSettingsRepository{db: db}
+func NewSiteSettingsRepository(db *gorm.DB) SiteSettingsRepository {
+	return &siteSettingsRepository{db: db}
 }
 
 // siteSettingsModelToType converts a database model to types
@@ -47,7 +53,7 @@ func siteSettingsTypeToModel(s *types.SiteSettings) *models.SiteSettings {
 }
 
 // Get retrieves the site settings (there's only one row)
-func (r *SiteSettingsRepository) Get(ctx context.Context) (*types.SiteSettings, error) {
+func (r *siteSettingsRepository) Get(ctx context.Context) (*types.SiteSettings, error) {
 	var model models.SiteSettings
 	if err := r.db.WithContext(ctx).First(&model, 1).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -59,25 +65,31 @@ func (r *SiteSettingsRepository) Get(ctx context.Context) (*types.SiteSettings, 
 }
 
 // Save creates or updates site settings
-func (r *SiteSettingsRepository) Save(ctx context.Context, settings *types.SiteSettings) error {
+func (r *siteSettingsRepository) Save(ctx context.Context, settings *types.SiteSettings) error {
 	model := siteSettingsTypeToModel(settings)
 	model.ID = 1 // Always use ID 1 for site settings
 	settings.ID = 1
 	return r.db.WithContext(ctx).Save(model).Error
 }
 
-// ProfileRepository provides data access for profile-related operations
-type ProfileRepository struct {
+// ProfileRepository defines the interface for profile data access
+type ProfileRepository interface {
+	GetPublicProfile(ctx context.Context) (*types.PublicProfile, error)
+	IsUserAdmin(ctx context.Context, userID uuid.UUID) (bool, error)
+}
+
+// profileRepository provides data access for profile-related operations
+type profileRepository struct {
 	db *gorm.DB
 }
 
 // NewProfileRepository creates a new ProfileRepository
-func NewProfileRepository(db *gorm.DB) *ProfileRepository {
-	return &ProfileRepository{db: db}
+func NewProfileRepository(db *gorm.DB) ProfileRepository {
+	return &profileRepository{db: db}
 }
 
 // GetPublicProfile retrieves the public profile based on site settings
-func (r *ProfileRepository) GetPublicProfile(ctx context.Context) (*types.PublicProfile, error) {
+func (r *profileRepository) GetPublicProfile(ctx context.Context) (*types.PublicProfile, error) {
 	var settings models.SiteSettings
 	if err := r.db.WithContext(ctx).
 		Preload("PublicUser").
@@ -124,7 +136,7 @@ func (r *ProfileRepository) GetPublicProfile(ctx context.Context) (*types.Public
 }
 
 // IsUserAdmin checks if a user has admin role
-func (r *ProfileRepository) IsUserAdmin(ctx context.Context, userID uuid.UUID) (bool, error) {
+func (r *profileRepository) IsUserAdmin(ctx context.Context, userID uuid.UUID) (bool, error) {
 	var model models.Account
 	if err := r.db.WithContext(ctx).Select("role").First(&model, userID).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {

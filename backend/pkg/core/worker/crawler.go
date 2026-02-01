@@ -26,11 +26,13 @@ import (
 
 // CrawlWorker crawls data sources and stores content
 type CrawlWorker struct {
-	logger           *slog.Logger
-	exaClient        *exa.Client
-	batchSize        int
-	topicThreshold   float64
-	embeddingService *ml.EmbeddingService
+	logger            *slog.Logger
+	exaClient         *exa.Client
+	batchSize         int
+	topicThreshold    float64
+	embeddingService  *ml.EmbeddingService
+	dataSourceService *datasource.Service
+	insightService    *insight.Service
 }
 
 // NewCrawlWorker creates a new CrawlWorker instance
@@ -44,12 +46,30 @@ func NewCrawlWorker(logger *slog.Logger, exaAPIKey string) *CrawlWorker {
 		exaClient = exa.NewClient(exaAPIKey)
 	}
 
+	// Initialize datasource service
+	db := database.DB()
+	dataSourceRepo := repository.NewDataSourceRepository(db)
+	crawledContentRepo := repository.NewCrawledContentRepository(db)
+	dataSourceService := datasource.NewService(dataSourceRepo, crawledContentRepo)
+
+	// Initialize insight service
+	insightService := insight.NewService(
+		repository.NewInsightRepository(db),
+		repository.NewInsightTopicRepository(db),
+		repository.NewUserInsightStatusRepository(db),
+		crawledContentRepo,
+		repository.NewContentTopicMatchRepository(db),
+		ml.NewEmbeddingService(),
+	)
+
 	return &CrawlWorker{
-		logger:           logger,
-		exaClient:        exaClient,
-		batchSize:        10,
-		topicThreshold:   0.6,
-		embeddingService: ml.NewEmbeddingService(),
+		logger:            logger,
+		exaClient:         exaClient,
+		batchSize:         10,
+		topicThreshold:    0.6,
+		embeddingService:  ml.NewEmbeddingService(),
+		dataSourceService: dataSourceService,
+		insightService:    insightService,
 	}
 }
 
@@ -71,7 +91,7 @@ func (w *CrawlWorker) Run(ctx context.Context) error {
 
 	// Get data sources due for crawling
 	statusService.UpdateStatus(w.Name(), StateRunning, 0, "Fetching sources to crawl...")
-	sources, err := datasource.GetDueToCrawl(ctx, w.batchSize)
+	sources, err := w.dataSourceService.GetDueToCrawl(ctx, w.batchSize)
 	if err != nil {
 		return fmt.Errorf("failed to get sources due for crawling: %w", err)
 	}
@@ -91,14 +111,14 @@ func (w *CrawlWorker) Run(ctx context.Context) error {
 			return ctx.Err()
 		default:
 			statusService.SetProgress(w.Name(), i, len(sources), fmt.Sprintf("Crawling: %s", source.Name))
-			
+
 			if err := w.crawlSource(ctx, &source); err != nil {
 				w.logger.Error("failed to crawl source", "id", source.ID, "url", source.URL, "error", err)
 				errMsg := err.Error()
-				_ = datasource.UpdateCrawlStatus(ctx, source.ID, "failed", &errMsg)
+				_ = w.dataSourceService.UpdateCrawlStatus(ctx, source.ID, "failed", &errMsg)
 			} else {
-				_ = datasource.UpdateCrawlStatus(ctx, source.ID, "success", nil)
-				_ = datasource.SetNextCrawlTime(ctx, source.ID, source.CrawlFrequency)
+				_ = w.dataSourceService.UpdateCrawlStatus(ctx, source.ID, "success", nil)
+				_ = w.dataSourceService.SetNextCrawlTime(ctx, source.ID, source.CrawlFrequency)
 			}
 		}
 	}
@@ -112,7 +132,7 @@ func (w *CrawlWorker) crawlSource(ctx context.Context, source *types.DataSource)
 	w.logger.Info("crawling source", "id", source.ID, "name", source.Name, "url", source.URL)
 
 	// Update status to crawling
-	_ = datasource.UpdateCrawlStatus(ctx, source.ID, "crawling", nil)
+	_ = w.dataSourceService.UpdateCrawlStatus(ctx, source.ID, "crawling", nil)
 
 	// Determine crawl strategy based on source type
 	var contents []crawledItem
@@ -190,7 +210,7 @@ func (w *CrawlWorker) crawlWebsite(ctx context.Context, source *types.DataSource
 	// Use Exa to search for content from this domain
 	// Search for recent content from the specific domain
 	searchQuery := fmt.Sprintf("site:%s", domain)
-	
+
 	results, err := w.exaClient.Search(ctx, searchQuery, &exa.SearchOptions{
 		NumResults:     20, // Get up to 20 articles per crawl
 		IncludeDomains: []string{domain},
@@ -255,7 +275,7 @@ func (w *CrawlWorker) crawlPDF(ctx context.Context, pdfURL string) ([]crawledIte
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return []crawledItem{{
 		URL:     pdfURL,
 		Title:   title,
@@ -271,13 +291,13 @@ func (w *CrawlWorker) checkIfPDF(targetURL string) (bool, error) {
 		return false, err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; BlogAgent/1.0)")
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return false, err
 	}
 	defer resp.Body.Close()
-	
+
 	contentType := resp.Header.Get("Content-Type")
 	return strings.Contains(contentType, "application/pdf"), nil
 }
@@ -439,7 +459,7 @@ func (w *CrawlWorker) crawlArticle(ctx context.Context, articleURL string) (*cra
 }
 
 // processContent processes a single content item (embed and match to topics)
-func (w *CrawlWorker) processContent(ctx context.Context, repo *repository.CrawledContentRepository, source *types.DataSource, item *crawledItem) error {
+func (w *CrawlWorker) processContent(ctx context.Context, repo repository.CrawledContentRepository, source *types.DataSource, item *crawledItem) error {
 	// Check if content already exists
 	existing, err := repo.FindByURL(ctx, source.ID, item.URL)
 	if err == nil && existing != nil {
@@ -476,7 +496,7 @@ func (w *CrawlWorker) processContent(ctx context.Context, repo *repository.Crawl
 	}
 
 	// Match content to topics
-	_, err = insight.MatchContentToTopics(ctx, content.ID, embedding.Slice(), w.topicThreshold)
+	_, err = w.insightService.MatchContentToTopics(ctx, content.ID, embedding.Slice(), w.topicThreshold)
 	if err != nil {
 		w.logger.Warn("failed to match content to topics", "content_id", content.ID, "error", err)
 	}

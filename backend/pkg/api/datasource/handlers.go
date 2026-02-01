@@ -1,16 +1,36 @@
 package datasource
 
 import (
+	"sync"
+
+	"backend/pkg/api/dto"
 	"backend/pkg/api/middleware"
 	"backend/pkg/api/response"
 	"backend/pkg/api/validation"
 	"backend/pkg/core"
 	coreDS "backend/pkg/core/datasource"
-	"backend/pkg/types"
+	"backend/pkg/database"
+	"backend/pkg/database/repository"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
+
+var (
+	serviceInstance *coreDS.Service
+	serviceOnce     sync.Once
+)
+
+// getService returns the data source service instance (lazily initialized)
+func getService() *coreDS.Service {
+	serviceOnce.Do(func() {
+		db := database.DB()
+		dataSourceRepo := repository.NewDataSourceRepository(db)
+		crawledContentRepo := repository.NewCrawledContentRepository(db)
+		serviceInstance = coreDS.NewService(dataSourceRepo, crawledContentRepo)
+	})
+	return serviceInstance
+}
 
 // ListDataSources handles GET /data-sources
 // @Summary List data sources
@@ -20,16 +40,17 @@ import (
 // @Produce json
 // @Param page query int false "Page number" default(1)
 // @Param limit query int false "Items per page" default(20)
-// @Success 200 {object} response.SuccessResponse{data=[]types.DataSourceResponse}
+// @Success 200 {object} response.SuccessResponse{data=[]dto.DataSourceResponse}
 // @Failure 500 {object} response.SuccessResponse
 // @Security BearerAuth
 // @Router /data-sources [get]
 func ListDataSources(c *fiber.Ctx) error {
+	svc := getService()
 	orgID := middleware.GetOrgID(c)
 
 	// If user has an organization, get org data sources
 	if orgID != nil {
-		sources, err := coreDS.List(c.Context(), *orgID)
+		sources, err := svc.List(c.Context(), *orgID)
 		if err != nil {
 			return response.Error(c, err)
 		}
@@ -42,7 +63,7 @@ func ListDataSources(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	sources, err := coreDS.ListByUserID(c.Context(), userID)
+	sources, err := svc.ListByUserID(c.Context(), userID)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -56,20 +77,21 @@ func ListDataSources(c *fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Param id path string true "Data Source ID"
-// @Success 200 {object} response.SuccessResponse{data=types.DataSourceResponse}
+// @Success 200 {object} response.SuccessResponse{data=dto.DataSourceResponse}
 // @Failure 400 {object} response.SuccessResponse
 // @Failure 404 {object} response.SuccessResponse
 // @Failure 500 {object} response.SuccessResponse
 // @Security BearerAuth
 // @Router /data-sources/{id} [get]
 func GetDataSource(c *fiber.Ctx) error {
+	svc := getService()
 	idStr := c.Params("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid data source ID"))
 	}
 
-	ds, err := coreDS.GetByID(c.Context(), id)
+	ds, err := svc.GetByID(c.Context(), id)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -82,15 +104,16 @@ func GetDataSource(c *fiber.Ctx) error {
 // @Tags data-sources
 // @Accept json
 // @Produce json
-// @Param request body types.DataSourceCreateRequest true "Data source details"
-// @Success 201 {object} response.SuccessResponse{data=types.DataSourceResponse}
+// @Param request body dto.DataSourceCreateRequest true "Data source details"
+// @Success 201 {object} response.SuccessResponse{data=dto.DataSourceResponse}
 // @Failure 400 {object} response.SuccessResponse
 // @Failure 401 {object} response.SuccessResponse
 // @Failure 500 {object} response.SuccessResponse
 // @Security BearerAuth
 // @Router /data-sources [post]
 func CreateDataSource(c *fiber.Ctx) error {
-	var req types.DataSourceCreateRequest
+	svc := getService()
+	var req dto.DataSourceCreateRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
@@ -110,7 +133,7 @@ func CreateDataSource(c *fiber.Ctx) error {
 		userID = &uid
 	}
 
-	ds, err := coreDS.Create(c.Context(), orgID, userID, req)
+	ds, err := svc.Create(c.Context(), orgID, userID, req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -124,26 +147,27 @@ func CreateDataSource(c *fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Param id path string true "Data Source ID"
-// @Param request body types.DataSourceUpdateRequest true "Data source update details"
-// @Success 200 {object} response.SuccessResponse{data=types.DataSourceResponse}
+// @Param request body dto.DataSourceUpdateRequest true "Data source update details"
+// @Success 200 {object} response.SuccessResponse{data=dto.DataSourceResponse}
 // @Failure 400 {object} response.SuccessResponse
 // @Failure 404 {object} response.SuccessResponse
 // @Failure 500 {object} response.SuccessResponse
 // @Security BearerAuth
 // @Router /data-sources/{id} [put]
 func UpdateDataSource(c *fiber.Ctx) error {
+	svc := getService()
 	idStr := c.Params("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid data source ID"))
 	}
 
-	var req types.DataSourceUpdateRequest
+	var req dto.DataSourceUpdateRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
 
-	ds, err := coreDS.Update(c.Context(), id, req)
+	ds, err := svc.Update(c.Context(), id, req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -164,13 +188,14 @@ func UpdateDataSource(c *fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /data-sources/{id} [delete]
 func DeleteDataSource(c *fiber.Ctx) error {
+	svc := getService()
 	idStr := c.Params("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid data source ID"))
 	}
 
-	if err := coreDS.Delete(c.Context(), id); err != nil {
+	if err := svc.Delete(c.Context(), id); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Success(c, fiber.Map{"success": true})
@@ -190,13 +215,14 @@ func DeleteDataSource(c *fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /data-sources/{id}/crawl [post]
 func TriggerCrawl(c *fiber.Ctx) error {
+	svc := getService()
 	idStr := c.Params("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid data source ID"))
 	}
 
-	if err := coreDS.TriggerCrawl(c.Context(), id); err != nil {
+	if err := svc.TriggerCrawl(c.Context(), id); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Success(c, fiber.Map{
@@ -214,13 +240,14 @@ func TriggerCrawl(c *fiber.Ctx) error {
 // @Param id path string true "Data Source ID"
 // @Param page query int false "Page number" default(1)
 // @Param limit query int false "Items per page" default(20)
-// @Success 200 {object} response.SuccessResponse{data=object{contents=[]types.CrawledContentResponse,total=int64}}
+// @Success 200 {object} response.SuccessResponse{data=object{contents=[]dto.CrawledContentResponse,total=int64}}
 // @Failure 400 {object} response.SuccessResponse
 // @Failure 404 {object} response.SuccessResponse
 // @Failure 500 {object} response.SuccessResponse
 // @Security BearerAuth
 // @Router /data-sources/{id}/content [get]
 func GetDataSourceContent(c *fiber.Ctx) error {
+	svc := getService()
 	idStr := c.Params("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -230,7 +257,7 @@ func GetDataSourceContent(c *fiber.Ctx) error {
 	page := c.QueryInt("page", 1)
 	limit := c.QueryInt("limit", 20)
 
-	contents, total, err := coreDS.GetContent(c.Context(), id, page, limit)
+	contents, total, err := svc.GetContent(c.Context(), id, page, limit)
 	if err != nil {
 		return response.Error(c, err)
 	}

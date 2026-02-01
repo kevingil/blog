@@ -13,14 +13,23 @@ import (
 	"gorm.io/gorm"
 )
 
-// AccountRepository provides data access for accounts
-type AccountRepository struct {
+// AccountRepository defines the interface for account data access
+type AccountRepository interface {
+	FindByID(ctx context.Context, id uuid.UUID) (*types.Account, error)
+	FindByEmail(ctx context.Context, email string) (*types.Account, error)
+	Save(ctx context.Context, account *types.Account) error
+	Update(ctx context.Context, account *types.Account) error
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+// accountRepository provides data access for accounts
+type accountRepository struct {
 	db *gorm.DB
 }
 
 // NewAccountRepository creates a new AccountRepository
-func NewAccountRepository(db *gorm.DB) *AccountRepository {
-	return &AccountRepository{db: db}
+func NewAccountRepository(db *gorm.DB) AccountRepository {
+	return &accountRepository{db: db}
 }
 
 // accountModelToSchema converts a database model to types
@@ -73,7 +82,7 @@ func accountSchemaToModel(s *types.Account) *models.Account {
 }
 
 // FindByID retrieves an account by its ID
-func (r *AccountRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.Account, error) {
+func (r *accountRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.Account, error) {
 	var model models.Account
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -85,7 +94,7 @@ func (r *AccountRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.
 }
 
 // FindByEmail retrieves an account by its email
-func (r *AccountRepository) FindByEmail(ctx context.Context, email string) (*types.Account, error) {
+func (r *accountRepository) FindByEmail(ctx context.Context, email string) (*types.Account, error) {
 	var model models.Account
 	if err := r.db.WithContext(ctx).Where("email = ?", email).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -97,7 +106,7 @@ func (r *AccountRepository) FindByEmail(ctx context.Context, email string) (*typ
 }
 
 // Save creates a new account
-func (r *AccountRepository) Save(ctx context.Context, account *types.Account) error {
+func (r *accountRepository) Save(ctx context.Context, account *types.Account) error {
 	model := accountSchemaToModel(account)
 	if model.ID == uuid.Nil {
 		model.ID = uuid.New()
@@ -107,13 +116,13 @@ func (r *AccountRepository) Save(ctx context.Context, account *types.Account) er
 }
 
 // Update updates an existing account
-func (r *AccountRepository) Update(ctx context.Context, account *types.Account) error {
+func (r *accountRepository) Update(ctx context.Context, account *types.Account) error {
 	model := accountSchemaToModel(account)
 	return r.db.WithContext(ctx).Save(model).Error
 }
 
 // Delete removes an account by its ID
-func (r *AccountRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *accountRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	result := r.db.WithContext(ctx).Delete(&models.Account{}, id)
 	if result.Error != nil {
 		return result.Error

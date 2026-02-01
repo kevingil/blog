@@ -18,14 +18,38 @@ import (
 	"gorm.io/gorm"
 )
 
-// ArticleRepository implements data access for articles using GORM
-type ArticleRepository struct {
+// ArticleRepository defines the interface for article data access
+type ArticleRepository interface {
+	// Basic CRUD operations
+	FindByID(ctx context.Context, id uuid.UUID) (*types.Article, error)
+	FindBySlug(ctx context.Context, slug string) (*types.Article, error)
+	List(ctx context.Context, opts types.ArticleListOptions) ([]types.Article, int64, error)
+	Search(ctx context.Context, opts types.ArticleSearchOptions) ([]types.Article, int64, error)
+	SearchByEmbedding(ctx context.Context, embedding []float32, limit int) ([]types.Article, error)
+	Save(ctx context.Context, article *types.Article) error
+	Delete(ctx context.Context, id uuid.UUID) error
+	GetPopularTags(ctx context.Context, limit int) ([]int64, error)
+
+	// Slug uniqueness check
+	SlugExists(ctx context.Context, slug string, excludeID *uuid.UUID) (bool, error)
+
+	// Version management operations
+	SaveDraft(ctx context.Context, article *types.Article) error
+	Publish(ctx context.Context, article *types.Article) error
+	Unpublish(ctx context.Context, article *types.Article) error
+	ListVersions(ctx context.Context, articleID uuid.UUID) ([]types.ArticleVersion, error)
+	GetVersion(ctx context.Context, versionID uuid.UUID) (*types.ArticleVersion, error)
+	RevertToVersion(ctx context.Context, articleID, versionID uuid.UUID) error
+}
+
+// articleRepository implements data access for articles using GORM
+type articleRepository struct {
 	db *gorm.DB
 }
 
 // NewArticleRepository creates a new ArticleRepository
-func NewArticleRepository(db *gorm.DB) *ArticleRepository {
-	return &ArticleRepository{db: db}
+func NewArticleRepository(db *gorm.DB) ArticleRepository {
+	return &articleRepository{db: db}
 }
 
 // articleModelToType converts a database model to types
@@ -131,7 +155,7 @@ func articleVersionModelToType(m *models.ArticleVersion) *types.ArticleVersion {
 }
 
 // FindByID retrieves an article by its ID
-func (r *ArticleRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.Article, error) {
+func (r *articleRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.Article, error) {
 	var model models.Article
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -143,7 +167,7 @@ func (r *ArticleRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.
 }
 
 // FindBySlug retrieves an article by its slug
-func (r *ArticleRepository) FindBySlug(ctx context.Context, slug string) (*types.Article, error) {
+func (r *articleRepository) FindBySlug(ctx context.Context, slug string) (*types.Article, error) {
 	var model models.Article
 	if err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -155,7 +179,7 @@ func (r *ArticleRepository) FindBySlug(ctx context.Context, slug string) (*types
 }
 
 // List retrieves articles with pagination and filtering
-func (r *ArticleRepository) List(ctx context.Context, opts types.ArticleListOptions) ([]types.Article, int64, error) {
+func (r *articleRepository) List(ctx context.Context, opts types.ArticleListOptions) ([]types.Article, int64, error) {
 	var articleModels []models.Article
 	var total int64
 
@@ -193,7 +217,7 @@ func (r *ArticleRepository) List(ctx context.Context, opts types.ArticleListOpti
 }
 
 // Search performs full-text search on articles
-func (r *ArticleRepository) Search(ctx context.Context, opts types.ArticleSearchOptions) ([]types.Article, int64, error) {
+func (r *articleRepository) Search(ctx context.Context, opts types.ArticleSearchOptions) ([]types.Article, int64, error) {
 	var articleModels []models.Article
 	var total int64
 
@@ -234,7 +258,7 @@ func (r *ArticleRepository) Search(ctx context.Context, opts types.ArticleSearch
 }
 
 // SearchByEmbedding performs vector similarity search
-func (r *ArticleRepository) SearchByEmbedding(ctx context.Context, embedding []float32, limit int) ([]types.Article, error) {
+func (r *articleRepository) SearchByEmbedding(ctx context.Context, embedding []float32, limit int) ([]types.Article, error) {
 	var articleModels []models.Article
 
 	embeddingVector := pgvector.NewVector(embedding)
@@ -257,7 +281,7 @@ func (r *ArticleRepository) SearchByEmbedding(ctx context.Context, embedding []f
 }
 
 // Save creates or updates an article
-func (r *ArticleRepository) Save(ctx context.Context, a *types.Article) error {
+func (r *articleRepository) Save(ctx context.Context, a *types.Article) error {
 	model := articleTypeToModel(a)
 
 	// Check if article exists
@@ -279,7 +303,7 @@ func (r *ArticleRepository) Save(ctx context.Context, a *types.Article) error {
 }
 
 // Delete removes an article by its ID
-func (r *ArticleRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *articleRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	result := r.db.WithContext(ctx).Delete(&models.Article{}, id)
 	if result.Error != nil {
 		return result.Error
@@ -290,8 +314,21 @@ func (r *ArticleRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// SlugExists checks if a slug already exists, optionally excluding a specific article ID
+func (r *articleRepository) SlugExists(ctx context.Context, slug string, excludeID *uuid.UUID) (bool, error) {
+	var count int64
+	query := r.db.WithContext(ctx).Model(&models.Article{}).Where("slug = ?", slug)
+	if excludeID != nil {
+		query = query.Where("id != ?", *excludeID)
+	}
+	if err := query.Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 // GetPopularTags returns the most frequently used tag IDs
-func (r *ArticleRepository) GetPopularTags(ctx context.Context, limit int) ([]int64, error) {
+func (r *articleRepository) GetPopularTags(ctx context.Context, limit int) ([]int64, error) {
 	var results []struct {
 		TagID int64 `gorm:"column:tag_id"`
 		Count int   `gorm:"column:count"`
@@ -319,7 +356,7 @@ func (r *ArticleRepository) GetPopularTags(ctx context.Context, limit int) ([]in
 }
 
 // SaveDraft updates cached draft content and creates version asynchronously
-func (r *ArticleRepository) SaveDraft(ctx context.Context, a *types.Article) error {
+func (r *articleRepository) SaveDraft(ctx context.Context, a *types.Article) error {
 	now := time.Now()
 
 	// 1. Update article table synchronously (draft fields only)
@@ -344,7 +381,7 @@ func (r *ArticleRepository) SaveDraft(ctx context.Context, a *types.Article) err
 }
 
 // Publish copies draft to published and creates version asynchronously
-func (r *ArticleRepository) Publish(ctx context.Context, a *types.Article) error {
+func (r *articleRepository) Publish(ctx context.Context, a *types.Article) error {
 	now := time.Now()
 
 	// 1. Copy draft fields to published fields synchronously
@@ -382,7 +419,7 @@ func (r *ArticleRepository) Publish(ctx context.Context, a *types.Article) error
 }
 
 // Unpublish removes published status while preserving version history
-func (r *ArticleRepository) Unpublish(ctx context.Context, a *types.Article) error {
+func (r *articleRepository) Unpublish(ctx context.Context, a *types.Article) error {
 	now := time.Now()
 
 	err := r.db.WithContext(ctx).Model(&models.Article{}).
@@ -413,7 +450,7 @@ func (r *ArticleRepository) Unpublish(ctx context.Context, a *types.Article) err
 }
 
 // ListVersions retrieves all versions for an article
-func (r *ArticleRepository) ListVersions(ctx context.Context, articleID uuid.UUID) ([]types.ArticleVersion, error) {
+func (r *articleRepository) ListVersions(ctx context.Context, articleID uuid.UUID) ([]types.ArticleVersion, error) {
 	var versionModels []models.ArticleVersion
 
 	err := r.db.WithContext(ctx).
@@ -433,7 +470,7 @@ func (r *ArticleRepository) ListVersions(ctx context.Context, articleID uuid.UUI
 }
 
 // GetVersion retrieves a specific version by ID
-func (r *ArticleRepository) GetVersion(ctx context.Context, versionID uuid.UUID) (*types.ArticleVersion, error) {
+func (r *articleRepository) GetVersion(ctx context.Context, versionID uuid.UUID) (*types.ArticleVersion, error) {
 	var model models.ArticleVersion
 
 	if err := r.db.WithContext(ctx).First(&model, versionID).Error; err != nil {
@@ -447,7 +484,7 @@ func (r *ArticleRepository) GetVersion(ctx context.Context, versionID uuid.UUID)
 }
 
 // RevertToVersion creates a new draft by copying content from a historical version
-func (r *ArticleRepository) RevertToVersion(ctx context.Context, articleID, versionID uuid.UUID) error {
+func (r *articleRepository) RevertToVersion(ctx context.Context, articleID, versionID uuid.UUID) error {
 	// Get the version to revert to
 	var versionModel models.ArticleVersion
 	if err := r.db.WithContext(ctx).First(&versionModel, versionID).Error; err != nil {
@@ -498,7 +535,7 @@ func (r *ArticleRepository) RevertToVersion(ctx context.Context, articleID, vers
 }
 
 // createVersionAsync creates a version record asynchronously
-func (r *ArticleRepository) createVersionAsync(articleID uuid.UUID, title, content, imageURL string, embedding []float32, status string, editedBy uuid.UUID) {
+func (r *articleRepository) createVersionAsync(articleID uuid.UUID, title, content, imageURL string, embedding []float32, status string, editedBy uuid.UUID) {
 	ctx := context.Background()
 
 	// Get next version number

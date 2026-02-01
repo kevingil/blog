@@ -1,14 +1,33 @@
 package auth
 
 import (
+	"sync"
+
 	"backend/pkg/api/middleware"
 	"backend/pkg/api/response"
 	"backend/pkg/api/validation"
 	"backend/pkg/core"
 	coreAuth "backend/pkg/core/auth"
+	"backend/pkg/database"
+	"backend/pkg/database/repository"
 
 	"github.com/gofiber/fiber/v2"
 )
+
+var (
+	serviceInstance *coreAuth.Service
+	serviceOnce     sync.Once
+)
+
+// getService returns the auth service instance (lazily initialized)
+func getService() *coreAuth.Service {
+	serviceOnce.Do(func() {
+		db := database.DB()
+		accountRepo := repository.NewAccountRepository(db)
+		serviceInstance = coreAuth.NewService(accountRepo)
+	})
+	return serviceInstance
+}
 
 // Login handles POST /auth/login
 // @Summary User login
@@ -30,7 +49,8 @@ func Login(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	resp, err := coreAuth.Login(c.Context(), req)
+	svc := getService()
+	resp, err := svc.Login(c.Context(), req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -57,7 +77,8 @@ func RegisterHandler(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	if err := coreAuth.Register(c.Context(), req); err != nil {
+	svc := getService()
+	if err := svc.Register(c.Context(), req); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Created(c, fiber.Map{
@@ -106,7 +127,8 @@ func UpdateAccount(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	if err := coreAuth.UpdateAccount(c.Context(), userID, req); err != nil {
+	svc := getService()
+	if err := svc.UpdateAccount(c.Context(), userID, req); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Success(c, fiber.Map{"message": "Account updated successfully"})
@@ -138,7 +160,8 @@ func UpdatePassword(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	if err := coreAuth.UpdatePassword(c.Context(), userID, req); err != nil {
+	svc := getService()
+	if err := svc.UpdatePassword(c.Context(), userID, req); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Success(c, fiber.Map{"message": "Password updated successfully"})
@@ -163,13 +186,17 @@ func DeleteAccount(c *fiber.Ctx) error {
 	}
 
 	var req struct {
-		Password string `json:"password"`
+		Password string `json:"password" validate:"required"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
+	}
 
-	if err := coreAuth.DeleteAccount(c.Context(), userID, req.Password); err != nil {
+	svc := getService()
+	if err := svc.DeleteAccount(c.Context(), userID, req.Password); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Success(c, fiber.Map{"message": "Account deleted successfully"})

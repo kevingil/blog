@@ -13,14 +13,24 @@ import (
 	"gorm.io/gorm"
 )
 
-// OrganizationRepository provides data access for organizations
-type OrganizationRepository struct {
+// OrganizationRepository defines the interface for organization data access
+type OrganizationRepository interface {
+	FindByID(ctx context.Context, id uuid.UUID) (*types.Organization, error)
+	FindBySlug(ctx context.Context, slug string) (*types.Organization, error)
+	List(ctx context.Context) ([]types.Organization, error)
+	Save(ctx context.Context, org *types.Organization) error
+	Update(ctx context.Context, org *types.Organization) error
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+// organizationRepository provides data access for organizations
+type organizationRepository struct {
 	db *gorm.DB
 }
 
 // NewOrganizationRepository creates a new OrganizationRepository
-func NewOrganizationRepository(db *gorm.DB) *OrganizationRepository {
-	return &OrganizationRepository{db: db}
+func NewOrganizationRepository(db *gorm.DB) OrganizationRepository {
+	return &organizationRepository{db: db}
 }
 
 // orgModelToType converts a database model to types
@@ -69,7 +79,7 @@ func orgTypeToModel(o *types.Organization) *models.Organization {
 }
 
 // FindByID retrieves an organization by its ID
-func (r *OrganizationRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.Organization, error) {
+func (r *organizationRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.Organization, error) {
 	var model models.Organization
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -81,7 +91,7 @@ func (r *OrganizationRepository) FindByID(ctx context.Context, id uuid.UUID) (*t
 }
 
 // FindBySlug retrieves an organization by its slug
-func (r *OrganizationRepository) FindBySlug(ctx context.Context, slug string) (*types.Organization, error) {
+func (r *organizationRepository) FindBySlug(ctx context.Context, slug string) (*types.Organization, error) {
 	var model models.Organization
 	if err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -93,7 +103,7 @@ func (r *OrganizationRepository) FindBySlug(ctx context.Context, slug string) (*
 }
 
 // List retrieves all organizations
-func (r *OrganizationRepository) List(ctx context.Context) ([]types.Organization, error) {
+func (r *organizationRepository) List(ctx context.Context) ([]types.Organization, error) {
 	var orgModels []models.Organization
 	if err := r.db.WithContext(ctx).Order("created_at DESC").Find(&orgModels).Error; err != nil {
 		return nil, err
@@ -107,7 +117,7 @@ func (r *OrganizationRepository) List(ctx context.Context) ([]types.Organization
 }
 
 // Save creates a new organization
-func (r *OrganizationRepository) Save(ctx context.Context, org *types.Organization) error {
+func (r *organizationRepository) Save(ctx context.Context, org *types.Organization) error {
 	model := orgTypeToModel(org)
 	if model.ID == uuid.Nil {
 		model.ID = uuid.New()
@@ -117,13 +127,13 @@ func (r *OrganizationRepository) Save(ctx context.Context, org *types.Organizati
 }
 
 // Update updates an existing organization
-func (r *OrganizationRepository) Update(ctx context.Context, org *types.Organization) error {
+func (r *organizationRepository) Update(ctx context.Context, org *types.Organization) error {
 	model := orgTypeToModel(org)
 	return r.db.WithContext(ctx).Save(model).Error
 }
 
 // Delete removes an organization by its ID
-func (r *OrganizationRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *organizationRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	result := r.db.WithContext(ctx).Delete(&models.Organization{}, id)
 	if result.Error != nil {
 		return result.Error

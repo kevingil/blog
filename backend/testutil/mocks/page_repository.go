@@ -10,12 +10,12 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockPageStore is a mock implementation of page.PageStore
-type MockPageStore struct {
+// MockPageRepository is a mock implementation of repository.PageRepository
+type MockPageRepository struct {
 	mock.Mock
 }
 
-func (m *MockPageStore) FindByID(ctx context.Context, id uuid.UUID) (*types.Page, error) {
+func (m *MockPageRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.Page, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -23,7 +23,7 @@ func (m *MockPageStore) FindByID(ctx context.Context, id uuid.UUID) (*types.Page
 	return args.Get(0).(*types.Page), args.Error(1)
 }
 
-func (m *MockPageStore) FindBySlug(ctx context.Context, slug string) (*types.Page, error) {
+func (m *MockPageRepository) FindBySlug(ctx context.Context, slug string) (*types.Page, error) {
 	args := m.Called(ctx, slug)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -31,17 +31,17 @@ func (m *MockPageStore) FindBySlug(ctx context.Context, slug string) (*types.Pag
 	return args.Get(0).(*types.Page), args.Error(1)
 }
 
-func (m *MockPageStore) List(ctx context.Context, opts types.PageListOptions) ([]types.Page, int64, error) {
+func (m *MockPageRepository) List(ctx context.Context, opts types.PageListOptions) ([]types.Page, int64, error) {
 	args := m.Called(ctx, opts)
 	return args.Get(0).([]types.Page), args.Get(1).(int64), args.Error(2)
 }
 
-func (m *MockPageStore) Save(ctx context.Context, p *types.Page) error {
+func (m *MockPageRepository) Save(ctx context.Context, p *types.Page) error {
 	args := m.Called(ctx, p)
 	return args.Error(0)
 }
 
-func (m *MockPageStore) Delete(ctx context.Context, id uuid.UUID) error {
+func (m *MockPageRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
 }

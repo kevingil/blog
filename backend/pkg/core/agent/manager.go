@@ -106,14 +106,15 @@ func SetGlobalAgentManager(manager *AgentAsyncCopilotManager) {
 	globalAgentManager = manager
 }
 
-// ExaAdapter is a combined adapter for Exa services
-type ExaAdapter interface {
+// ExaClient interface combines ExaSearchService and ExaAnswerService
+// Satisfied directly by exa.Client - no adapter needed
+type ExaClient interface {
 	tools.ExaSearchService
 	tools.ExaAnswerService
 }
 
 // InitializeAgentCopilotManager initializes the agent copilot manager with real services
-func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, chatService ChatMessageServiceInterface, exaAdapter ExaAdapter, sourceServiceAdapter tools.ExaSourceService) error {
+func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, chatService ChatMessageServiceInterface, exaClient ExaClient, sourceCreator tools.SourceCreator) error {
 	// Load agent configuration
 	cfg := LoadConfig()
 
@@ -132,11 +133,11 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 		tools.NewGenerateTextContentTool(textGenService),
 	}
 
-	// Add Exa tools if adapter is provided
-	if exaAdapter != nil && sourceServiceAdapter != nil {
+	// Add Exa tools if client is provided
+	if exaClient != nil && sourceCreator != nil {
 		writingTools = append(writingTools,
-			tools.NewExaSearchTool(exaAdapter, sourceServiceAdapter),
-			tools.NewExaAnswerTool(exaAdapter),
+			tools.NewExaSearchTool(exaClient, sourceCreator),
+			tools.NewExaAnswerTool(exaClient),
 		)
 	}
 
@@ -168,10 +169,10 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 }
 
 // InitializeWithDefaults initializes the agent copilot manager with default services
-// This is a convenience function that creates all necessary adapters
+// This is a convenience function that initializes without optional services
 func InitializeWithDefaults(chatService ChatMessageServiceInterface) error {
-	// For now, we initialize without source service and exa adapters
-	// These can be added later when proper adapters are set up
+	// Initialize without source service and exa client
+	// These can be provided via InitializeAgentCopilotManager when available
 	return InitializeAgentCopilotManager(nil, chatService, nil, nil)
 }
 

@@ -1,16 +1,41 @@
 package insight
 
 import (
+	"sync"
+
+	"backend/pkg/api/dto"
 	"backend/pkg/api/middleware"
 	"backend/pkg/api/response"
 	"backend/pkg/api/validation"
 	"backend/pkg/core"
 	coreInsight "backend/pkg/core/insight"
-	"backend/pkg/types"
+	"backend/pkg/core/ml"
+	"backend/pkg/database"
+	"backend/pkg/database/repository"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
+
+var (
+	serviceInstance *coreInsight.Service
+	serviceOnce     sync.Once
+)
+
+// getService returns the insight service instance (lazily initialized)
+func getService() *coreInsight.Service {
+	serviceOnce.Do(func() {
+		db := database.DB()
+		insightRepo := repository.NewInsightRepository(db)
+		topicRepo := repository.NewInsightTopicRepository(db)
+		userStatusRepo := repository.NewUserInsightStatusRepository(db)
+		contentRepo := repository.NewCrawledContentRepository(db)
+		topicMatchRepo := repository.NewContentTopicMatchRepository(db)
+		embeddingService := ml.NewEmbeddingService()
+		serviceInstance = coreInsight.NewService(insightRepo, topicRepo, userStatusRepo, contentRepo, topicMatchRepo, embeddingService)
+	})
+	return serviceInstance
+}
 
 // =============================================================================
 // Insight Handlers
@@ -25,7 +50,7 @@ import (
 // @Param page query int false "Page number" default(1)
 // @Param limit query int false "Items per page" default(20)
 // @Param topic_id query string false "Filter by topic ID"
-// @Success 200 {object} response.SuccessResponse{data=object{insights=[]types.InsightWithUserStatus,total=int64}}
+// @Success 200 {object} response.SuccessResponse{data=object{insights=[]dto.InsightWithUserStatus,total=int64}}
 // @Failure 500 {object} response.SuccessResponse
 // @Security BearerAuth
 // @Router /insights [get]
@@ -39,13 +64,15 @@ func ListInsights(c *fiber.Ctx) error {
 	limit := c.QueryInt("limit", 20)
 	topicIDStr := c.Query("topic_id")
 
+	svc := getService()
+
 	// For topic filtering, use legacy function then merge with user status
 	if topicIDStr != "" {
 		topicID, parseErr := uuid.Parse(topicIDStr)
 		if parseErr != nil {
 			return response.Error(c, core.InvalidInputError("Invalid topic ID"))
 		}
-		insights, total, err := coreInsight.ListInsightsByTopic(c.Context(), topicID, page, limit)
+		insights, total, err := svc.ListInsightsByTopic(c.Context(), topicID, page, limit)
 		if err != nil {
 			return response.Error(c, err)
 		}
@@ -58,7 +85,7 @@ func ListInsights(c *fiber.Ctx) error {
 	}
 
 	// Get insights with user-specific status
-	insights, total, err := coreInsight.ListInsightsWithUserStatus(c.Context(), userID, page, limit)
+	insights, total, err := svc.ListInsightsWithUserStatus(c.Context(), userID, page, limit)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -78,7 +105,7 @@ func ListInsights(c *fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Param id path string true "Insight ID"
-// @Success 200 {object} response.SuccessResponse{data=types.InsightWithSources}
+// @Success 200 {object} response.SuccessResponse{data=dto.InsightWithSources}
 // @Failure 400 {object} response.SuccessResponse
 // @Failure 404 {object} response.SuccessResponse
 // @Failure 500 {object} response.SuccessResponse
@@ -91,7 +118,8 @@ func GetInsight(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid insight ID"))
 	}
 
-	insight, err := coreInsight.GetInsightWithSources(c.Context(), id)
+	svc := getService()
+	insight, err := svc.GetInsightWithSources(c.Context(), id)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -123,7 +151,8 @@ func MarkInsightAsRead(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid insight ID"))
 	}
 
-	if err := coreInsight.MarkInsightAsReadForUser(c.Context(), userID, insightID); err != nil {
+	svc := getService()
+	if err := svc.MarkInsightAsReadForUser(c.Context(), userID, insightID); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Success(c, fiber.Map{"success": true})
@@ -154,7 +183,8 @@ func ToggleInsightPinned(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid insight ID"))
 	}
 
-	isPinned, err := coreInsight.ToggleInsightPinnedForUser(c.Context(), userID, insightID)
+	svc := getService()
+	isPinned, err := svc.ToggleInsightPinnedForUser(c.Context(), userID, insightID)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -169,7 +199,7 @@ func ToggleInsightPinned(c *fiber.Ctx) error {
 // @Produce json
 // @Param q query string true "Search query"
 // @Param limit query int false "Max results" default(10)
-// @Success 200 {object} response.SuccessResponse{data=[]types.InsightResponse}
+// @Success 200 {object} response.SuccessResponse{data=[]dto.InsightResponse}
 // @Failure 400 {object} response.SuccessResponse
 // @Failure 500 {object} response.SuccessResponse
 // @Security BearerAuth
@@ -182,21 +212,22 @@ func SearchInsights(c *fiber.Ctx) error {
 
 	limit := c.QueryInt("limit", 10)
 
+	svc := getService()
 	orgID := middleware.GetOrgID(c)
 	if orgID != nil {
-		insights, err := coreInsight.SearchInsightsByOrg(c.Context(), *orgID, query, limit)
+		insights, err := svc.SearchInsightsByOrg(c.Context(), *orgID, query, limit)
 		if err != nil {
 			return response.Error(c, err)
 		}
 		return response.Success(c, insights)
 	}
 
-	req := types.InsightSearchRequest{
+	req := dto.InsightSearchRequest{
 		Query: query,
 		Limit: limit,
 	}
 
-	insights, err := coreInsight.SearchInsights(c.Context(), req)
+	insights, err := svc.SearchInsights(c.Context(), req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -219,7 +250,8 @@ func GetUnreadCount(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	count, err := coreInsight.CountUnreadInsightsForUser(c.Context(), userID)
+	svc := getService()
+	count, err := svc.CountUnreadInsightsForUser(c.Context(), userID)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -246,7 +278,8 @@ func DeleteInsight(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid insight ID"))
 	}
 
-	if err := coreInsight.DeleteInsight(c.Context(), id); err != nil {
+	svc := getService()
+	if err := svc.DeleteInsight(c.Context(), id); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Success(c, fiber.Map{"success": true})
@@ -262,20 +295,21 @@ func DeleteInsight(c *fiber.Ctx) error {
 // @Tags insights
 // @Accept json
 // @Produce json
-// @Success 200 {object} response.SuccessResponse{data=[]types.InsightTopicResponse}
+// @Success 200 {object} response.SuccessResponse{data=[]dto.InsightTopicResponse}
 // @Failure 500 {object} response.SuccessResponse
 // @Security BearerAuth
 // @Router /insights/topics [get]
 func ListTopics(c *fiber.Ctx) error {
 	orgID := middleware.GetOrgID(c)
 
-	var topics []types.InsightTopicResponse
+	var topics []dto.InsightTopicResponse
 	var err error
 
+	svc := getService()
 	if orgID != nil {
-		topics, err = coreInsight.ListTopics(c.Context(), *orgID)
+		topics, err = svc.ListTopics(c.Context(), *orgID)
 	} else {
-		topics, err = coreInsight.ListAllTopics(c.Context())
+		topics, err = svc.ListAllTopics(c.Context())
 	}
 
 	if err != nil {
@@ -291,7 +325,7 @@ func ListTopics(c *fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Param id path string true "Topic ID"
-// @Success 200 {object} response.SuccessResponse{data=types.InsightTopicResponse}
+// @Success 200 {object} response.SuccessResponse{data=dto.InsightTopicResponse}
 // @Failure 400 {object} response.SuccessResponse
 // @Failure 404 {object} response.SuccessResponse
 // @Failure 500 {object} response.SuccessResponse
@@ -304,7 +338,8 @@ func GetTopic(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid topic ID"))
 	}
 
-	topic, err := coreInsight.GetTopicByID(c.Context(), id)
+	svc := getService()
+	topic, err := svc.GetTopicByID(c.Context(), id)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -317,15 +352,15 @@ func GetTopic(c *fiber.Ctx) error {
 // @Tags insights
 // @Accept json
 // @Produce json
-// @Param request body types.InsightTopicCreateRequest true "Topic details"
-// @Success 201 {object} response.SuccessResponse{data=types.InsightTopicResponse}
+// @Param request body dto.InsightTopicCreateRequest true "Topic details"
+// @Success 201 {object} response.SuccessResponse{data=dto.InsightTopicResponse}
 // @Failure 400 {object} response.SuccessResponse
 // @Failure 401 {object} response.SuccessResponse
 // @Failure 500 {object} response.SuccessResponse
 // @Security BearerAuth
 // @Router /insights/topics [post]
 func CreateTopic(c *fiber.Ctx) error {
-	var req types.InsightTopicCreateRequest
+	var req dto.InsightTopicCreateRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
@@ -335,7 +370,8 @@ func CreateTopic(c *fiber.Ctx) error {
 
 	orgID := middleware.GetOrgID(c)
 
-	topic, err := coreInsight.CreateTopic(c.Context(), orgID, req)
+	svc := getService()
+	topic, err := svc.CreateTopic(c.Context(), orgID, req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -349,8 +385,8 @@ func CreateTopic(c *fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Param id path string true "Topic ID"
-// @Param request body types.InsightTopicUpdateRequest true "Topic update details"
-// @Success 200 {object} response.SuccessResponse{data=types.InsightTopicResponse}
+// @Param request body dto.InsightTopicUpdateRequest true "Topic update details"
+// @Success 200 {object} response.SuccessResponse{data=dto.InsightTopicResponse}
 // @Failure 400 {object} response.SuccessResponse
 // @Failure 404 {object} response.SuccessResponse
 // @Failure 500 {object} response.SuccessResponse
@@ -363,12 +399,13 @@ func UpdateTopic(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid topic ID"))
 	}
 
-	var req types.InsightTopicUpdateRequest
+	var req dto.InsightTopicUpdateRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
 
-	topic, err := coreInsight.UpdateTopic(c.Context(), id, req)
+	svc := getService()
+	topic, err := svc.UpdateTopic(c.Context(), id, req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -395,7 +432,8 @@ func DeleteTopic(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Invalid topic ID"))
 	}
 
-	if err := coreInsight.DeleteTopic(c.Context(), id); err != nil {
+	svc := getService()
+	if err := svc.DeleteTopic(c.Context(), id); err != nil {
 		return response.Error(c, err)
 	}
 	return response.Success(c, fiber.Map{"success": true})
@@ -413,7 +451,7 @@ func DeleteTopic(c *fiber.Ctx) error {
 // @Produce json
 // @Param q query string true "Search query"
 // @Param limit query int false "Max results" default(10)
-// @Success 200 {object} response.SuccessResponse{data=[]types.CrawledContentResponse}
+// @Success 200 {object} response.SuccessResponse{data=[]dto.CrawledContentResponse}
 // @Failure 400 {object} response.SuccessResponse
 // @Failure 500 {object} response.SuccessResponse
 // @Security BearerAuth
@@ -426,16 +464,17 @@ func SearchCrawledContent(c *fiber.Ctx) error {
 
 	limit := c.QueryInt("limit", 10)
 
+	svc := getService()
 	orgID := middleware.GetOrgID(c)
 	if orgID != nil {
-		contents, err := coreInsight.SearchCrawledContentByOrg(c.Context(), *orgID, query, limit)
+		contents, err := svc.SearchCrawledContentByOrg(c.Context(), *orgID, query, limit)
 		if err != nil {
 			return response.Error(c, err)
 		}
 		return response.Success(c, contents)
 	}
 
-	contents, err := coreInsight.SearchCrawledContent(c.Context(), query, limit)
+	contents, err := svc.SearchCrawledContent(c.Context(), query, limit)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -449,7 +488,7 @@ func SearchCrawledContent(c *fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Param limit query int false "Max results" default(20)
-// @Success 200 {object} response.SuccessResponse{data=[]types.CrawledContentResponse}
+// @Success 200 {object} response.SuccessResponse{data=[]dto.CrawledContentResponse}
 // @Failure 500 {object} response.SuccessResponse
 // @Security BearerAuth
 // @Router /insights/content/recent [get]
@@ -461,7 +500,8 @@ func GetRecentCrawledContent(c *fiber.Ctx) error {
 
 	limit := c.QueryInt("limit", 20)
 
-	contents, err := coreInsight.GetRecentCrawledContent(c.Context(), *orgID, limit)
+	svc := getService()
+	contents, err := svc.GetRecentCrawledContent(c.Context(), *orgID, limit)
 	if err != nil {
 		return response.Error(c, err)
 	}

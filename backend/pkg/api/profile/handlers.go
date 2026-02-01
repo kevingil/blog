@@ -1,13 +1,37 @@
 package profile
 
 import (
+	"sync"
+
+	"backend/pkg/api/dto"
 	"backend/pkg/api/middleware"
 	"backend/pkg/api/response"
+	"backend/pkg/api/validation"
 	"backend/pkg/core"
 	coreProfile "backend/pkg/core/profile"
+	"backend/pkg/database"
+	"backend/pkg/database/repository"
 
 	"github.com/gofiber/fiber/v2"
 )
+
+var (
+	serviceInstance *coreProfile.Service
+	serviceOnce     sync.Once
+)
+
+// getService returns the profile service instance (lazily initialized)
+func getService() *coreProfile.Service {
+	serviceOnce.Do(func() {
+		db := database.DB()
+		profileRepo := repository.NewProfileRepository(db)
+		siteSettingsRepo := repository.NewSiteSettingsRepository(db)
+		accountRepo := repository.NewAccountRepository(db)
+		orgRepo := repository.NewOrganizationRepository(db)
+		serviceInstance = coreProfile.NewService(profileRepo, siteSettingsRepo, accountRepo, orgRepo)
+	})
+	return serviceInstance
+}
 
 // GetPublicProfile handles GET /profile/public
 // @Summary Get public profile
@@ -19,7 +43,8 @@ import (
 // @Failure 500 {object} response.SuccessResponse
 // @Router /profile/public [get]
 func GetPublicProfile(c *fiber.Ctx) error {
-	profile, err := coreProfile.GetPublicProfile(c.Context())
+	svc := getService()
+	profile, err := svc.GetPublicProfile(c.Context())
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -43,7 +68,8 @@ func GetMyProfile(c *fiber.Ctx) error {
 		return response.Error(c, core.UnauthorizedError("Not authenticated"))
 	}
 
-	profile, err := coreProfile.GetUserProfile(c.Context(), userID)
+	svc := getService()
+	profile, err := svc.GetUserProfile(c.Context(), userID)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -69,12 +95,16 @@ func UpdateProfile(c *fiber.Ctx) error {
 		return response.Error(c, core.UnauthorizedError("Not authenticated"))
 	}
 
-	var req coreProfile.ProfileUpdateRequest
+	var req dto.ProfileUpdateRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
+	}
 
-	profile, err := coreProfile.UpdateUserProfile(c.Context(), userID, req)
+	svc := getService()
+	profile, err := svc.UpdateUserProfile(c.Context(), userID, req)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -91,7 +121,8 @@ func UpdateProfile(c *fiber.Ctx) error {
 // @Failure 500 {object} response.SuccessResponse
 // @Router /profile/settings [get]
 func GetSiteSettings(c *fiber.Ctx) error {
-	settings, err := coreProfile.GetSiteSettings(c.Context())
+	svc := getService()
+	settings, err := svc.GetSiteSettings(c.Context())
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -118,8 +149,10 @@ func UpdateSiteSettings(c *fiber.Ctx) error {
 		return response.Error(c, core.UnauthorizedError("Not authenticated"))
 	}
 
+	svc := getService()
+
 	// Check if user is admin
-	isAdmin, err := coreProfile.IsUserAdmin(c.Context(), userID)
+	isAdmin, err := svc.IsUserAdmin(c.Context(), userID)
 	if err != nil {
 		return response.Error(c, err)
 	}
@@ -127,12 +160,15 @@ func UpdateSiteSettings(c *fiber.Ctx) error {
 		return response.Error(c, core.ForbiddenError("Only admins can update site settings"))
 	}
 
-	var req coreProfile.SiteSettingsUpdateRequest
+	var req dto.SiteSettingsUpdateRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
+	}
 
-	settings, err := coreProfile.UpdateSiteSettings(c.Context(), req)
+	settings, err := svc.UpdateSiteSettings(c.Context(), req)
 	if err != nil {
 		return response.Error(c, err)
 	}

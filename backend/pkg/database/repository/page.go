@@ -13,14 +13,23 @@ import (
 	"gorm.io/gorm"
 )
 
-// PageRepository provides data access for pages
-type PageRepository struct {
+// PageRepository defines the interface for page data access
+type PageRepository interface {
+	FindByID(ctx context.Context, id uuid.UUID) (*types.Page, error)
+	FindBySlug(ctx context.Context, slug string) (*types.Page, error)
+	List(ctx context.Context, opts types.PageListOptions) ([]types.Page, int64, error)
+	Save(ctx context.Context, page *types.Page) error
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+// pageRepository provides data access for pages
+type pageRepository struct {
 	db *gorm.DB
 }
 
 // NewPageRepository creates a new PageRepository
-func NewPageRepository(db *gorm.DB) *PageRepository {
-	return &PageRepository{db: db}
+func NewPageRepository(db *gorm.DB) PageRepository {
+	return &pageRepository{db: db}
 }
 
 // pageModelToType converts a database model to types
@@ -67,7 +76,7 @@ func pageTypeToModel(p *types.Page) *models.Page {
 }
 
 // FindByID retrieves a page by its ID
-func (r *PageRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.Page, error) {
+func (r *pageRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.Page, error) {
 	var model models.Page
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -79,7 +88,7 @@ func (r *PageRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.Pag
 }
 
 // FindBySlug retrieves a page by its slug
-func (r *PageRepository) FindBySlug(ctx context.Context, slug string) (*types.Page, error) {
+func (r *pageRepository) FindBySlug(ctx context.Context, slug string) (*types.Page, error) {
 	var model models.Page
 	if err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -91,7 +100,7 @@ func (r *PageRepository) FindBySlug(ctx context.Context, slug string) (*types.Pa
 }
 
 // List retrieves pages with pagination
-func (r *PageRepository) List(ctx context.Context, opts types.PageListOptions) ([]types.Page, int64, error) {
+func (r *pageRepository) List(ctx context.Context, opts types.PageListOptions) ([]types.Page, int64, error) {
 	var pageModels []models.Page
 	var total int64
 
@@ -122,7 +131,7 @@ func (r *PageRepository) List(ctx context.Context, opts types.PageListOptions) (
 }
 
 // Save creates or updates a page
-func (r *PageRepository) Save(ctx context.Context, page *types.Page) error {
+func (r *pageRepository) Save(ctx context.Context, page *types.Page) error {
 	model := pageTypeToModel(page)
 
 	// Check if page exists
@@ -144,7 +153,7 @@ func (r *PageRepository) Save(ctx context.Context, page *types.Page) error {
 }
 
 // Delete removes a page by its ID
-func (r *PageRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *pageRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	result := r.db.WithContext(ctx).Delete(&models.Page{}, id)
 	if result.Error != nil {
 		return result.Error
