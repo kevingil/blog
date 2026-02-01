@@ -10,12 +10,12 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockImageStore is a mock implementation of image.ImageStore
-type MockImageStore struct {
+// MockImageRepository is a mock implementation of repository.ImageRepository
+type MockImageRepository struct {
 	mock.Mock
 }
 
-func (m *MockImageStore) FindByID(ctx context.Context, id uuid.UUID) (*types.ImageGeneration, error) {
+func (m *MockImageRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.ImageGeneration, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -23,7 +23,7 @@ func (m *MockImageStore) FindByID(ctx context.Context, id uuid.UUID) (*types.Ima
 	return args.Get(0).(*types.ImageGeneration), args.Error(1)
 }
 
-func (m *MockImageStore) FindByRequestID(ctx context.Context, requestID string) (*types.ImageGeneration, error) {
+func (m *MockImageRepository) FindByRequestID(ctx context.Context, requestID string) (*types.ImageGeneration, error) {
 	args := m.Called(ctx, requestID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -31,12 +31,12 @@ func (m *MockImageStore) FindByRequestID(ctx context.Context, requestID string) 
 	return args.Get(0).(*types.ImageGeneration), args.Error(1)
 }
 
-func (m *MockImageStore) Save(ctx context.Context, img *types.ImageGeneration) error {
+func (m *MockImageRepository) Save(ctx context.Context, img *types.ImageGeneration) error {
 	args := m.Called(ctx, img)
 	return args.Error(0)
 }
 
-func (m *MockImageStore) Update(ctx context.Context, img *types.ImageGeneration) error {
+func (m *MockImageRepository) Update(ctx context.Context, img *types.ImageGeneration) error {
 	args := m.Called(ctx, img)
 	return args.Error(0)
 }
