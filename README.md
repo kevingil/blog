@@ -84,15 +84,10 @@ const articles = await Articles.getBlogArticles({ query: { page: 1 } })
 ### Quick Overview
 
 
-
-
-#### Insights crawler data pipeline
-
-
 #### Backend clean code architecture layers
 
 
-Dependencies point inward toward core:
+Dependencies point inward toward core.:
 
 ```mermaid
 flowchart TB
@@ -104,13 +99,12 @@ flowchart TB
     
     subgraph layers [Internal Layers]
         Handlers
-        Database[Database/Repository]
+        Repository[Repository - Interfaces + Implementations]
         Integrations
     end
     
-    subgraph core [Core - Domain + Business Logic]
+    subgraph core [Core - Business Logic]
         Types[Types]
-        Interfaces[Store Interfaces]
         Services[Services]
         Errors[Errors]
     end
@@ -118,9 +112,8 @@ flowchart TB
     HTTP --> Handlers
     Handlers --> Services
     Services --> Types
-    Services --> Interfaces
-    Database --> DB
-    Interfaces -.-> Database
+    Services --> Repository
+    Repository --> DB
     Integrations --> External
 ```
 
