@@ -21,9 +21,9 @@ import (
 
 // CreateRequest represents a request to create a source
 type CreateRequest struct {
-	ArticleID  uuid.UUID `json:"article_id"`
+	ArticleID  uuid.UUID `json:"article_id" validate:"required"`
 	Title      string    `json:"title"`
-	Content    string    `json:"content"`
+	Content    string    `json:"content" validate:"required"`
 	URL        string    `json:"url"`
 	SourceType string    `json:"source_type"`
 }
