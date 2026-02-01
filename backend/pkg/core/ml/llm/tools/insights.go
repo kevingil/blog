@@ -7,19 +7,35 @@ import (
 	"log"
 	"strings"
 
+	"backend/pkg/api/dto"
 	"backend/pkg/core/insight"
-	"backend/pkg/types"
+	"backend/pkg/core/ml"
+	"backend/pkg/database"
+	"backend/pkg/database/repository"
 
 	"github.com/google/uuid"
 )
 
 // InsightService interface for insight operations
 type InsightService interface {
-	SearchInsightsByOrg(ctx context.Context, orgID uuid.UUID, query string, limit int) ([]types.InsightResponse, error)
-	SearchCrawledContentByOrg(ctx context.Context, orgID uuid.UUID, query string, limit int) ([]types.CrawledContentResponse, error)
-	GetTopicByID(ctx context.Context, id uuid.UUID) (*types.InsightTopicResponse, error)
-	ListTopics(ctx context.Context, orgID uuid.UUID) ([]types.InsightTopicResponse, error)
-	ListInsightsByTopic(ctx context.Context, topicID uuid.UUID, page, limit int) ([]types.InsightResponse, int64, error)
+	SearchInsightsByOrg(ctx context.Context, orgID uuid.UUID, query string, limit int) ([]dto.InsightResponse, error)
+	SearchCrawledContentByOrg(ctx context.Context, orgID uuid.UUID, query string, limit int) ([]dto.CrawledContentResponse, error)
+	GetTopicByID(ctx context.Context, id uuid.UUID) (*dto.InsightTopicResponse, error)
+	ListTopics(ctx context.Context, orgID uuid.UUID) ([]dto.InsightTopicResponse, error)
+	ListInsightsByTopic(ctx context.Context, topicID uuid.UUID, page, limit int) ([]dto.InsightResponse, int64, error)
+}
+
+// getInsightService creates and returns an insight service instance
+func getInsightService() *insight.Service {
+	db := database.DB()
+	return insight.NewService(
+		repository.NewInsightRepository(db),
+		repository.NewInsightTopicRepository(db),
+		repository.NewUserInsightStatusRepository(db),
+		repository.NewCrawledContentRepository(db),
+		repository.NewContentTopicMatchRepository(db),
+		ml.NewEmbeddingService(),
+	)
 }
 
 // organizationIDContextKey is the key for organization ID in context
@@ -114,7 +130,8 @@ func (t *GetInsightsTool) Run(ctx context.Context, params ToolCall) (ToolRespons
 		return NewTextErrorResponse("Organization context not available"), nil
 	}
 
-	insights, err := insight.SearchInsightsByOrg(ctx, *orgID, input.Query, limit)
+	svc := getInsightService()
+	insights, err := svc.SearchInsightsByOrg(ctx, *orgID, input.Query, limit)
 	if err != nil {
 		log.Printf("🔍 [GetInsights] Error: %v", err)
 		return NewTextErrorResponse(fmt.Sprintf("Failed to search insights: %v", err)), nil
@@ -234,7 +251,8 @@ func (t *SearchCrawledContentTool) Run(ctx context.Context, params ToolCall) (To
 		return NewTextErrorResponse("Organization context not available"), nil
 	}
 
-	contents, err := insight.SearchCrawledContentByOrg(ctx, *orgID, input.Query, limit)
+	svc := getInsightService()
+	contents, err := svc.SearchCrawledContentByOrg(ctx, *orgID, input.Query, limit)
 	if err != nil {
 		log.Printf("📚 [SearchCrawledContent] Error: %v", err)
 		return NewTextErrorResponse(fmt.Sprintf("Failed to search content: %v", err)), nil
@@ -345,11 +363,13 @@ func (t *GetTopicSummaryTool) Run(ctx context.Context, params ToolCall) (ToolRes
 		return NewTextErrorResponse("Organization context not available"), nil
 	}
 
+	svc := getInsightService()
+
 	// If no topic ID provided, list available topics
 	if input.TopicID == "" {
 		log.Printf("📋 [GetTopicSummary] Listing available topics")
 
-		topics, err := insight.ListTopics(ctx, *orgID)
+		topics, err := svc.ListTopics(ctx, *orgID)
 		if err != nil {
 			return NewTextErrorResponse(fmt.Sprintf("Failed to list topics: %v", err)), nil
 		}
@@ -387,13 +407,13 @@ func (t *GetTopicSummaryTool) Run(ctx context.Context, params ToolCall) (ToolRes
 	log.Printf("📋 [GetTopicSummary] Getting insights for topic: %s", topicID)
 
 	// Get topic details
-	topic, err := insight.GetTopicByID(ctx, topicID)
+	topic, err := svc.GetTopicByID(ctx, topicID)
 	if err != nil {
 		return NewTextErrorResponse(fmt.Sprintf("Failed to get topic: %v", err)), nil
 	}
 
 	// Get latest insights for topic
-	insights, total, err := insight.ListInsightsByTopic(ctx, topicID, 1, 5)
+	insights, total, err := svc.ListInsightsByTopic(ctx, topicID, 1, 5)
 	if err != nil {
 		return NewTextErrorResponse(fmt.Sprintf("Failed to get insights: %v", err)), nil
 	}

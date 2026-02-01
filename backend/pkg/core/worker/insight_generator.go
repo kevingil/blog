@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"backend/pkg/core/insight"
+	"backend/pkg/core/ml"
 	"backend/pkg/core/ml/llm/message"
 	"backend/pkg/core/ml/llm/models"
 	"backend/pkg/core/ml/llm/provider"
@@ -24,6 +25,7 @@ type InsightWorker struct {
 	llmProvider      provider.Provider
 	minContentCount  int
 	maxContentPerGen int
+	insightService   *insight.Service
 }
 
 // NewInsightWorker creates a new InsightWorker instance
@@ -45,11 +47,23 @@ func NewInsightWorker(logger *slog.Logger, groqAPIKey string) *InsightWorker {
 		}
 	}
 
+	// Initialize insight service
+	db := database.DB()
+	insightService := insight.NewService(
+		repository.NewInsightRepository(db),
+		repository.NewInsightTopicRepository(db),
+		repository.NewUserInsightStatusRepository(db),
+		repository.NewCrawledContentRepository(db),
+		repository.NewContentTopicMatchRepository(db),
+		ml.NewEmbeddingService(),
+	)
+
 	return &InsightWorker{
 		logger:           logger,
 		llmProvider:      llmProvider,
 		minContentCount:  3,  // Minimum content items to generate an insight
 		maxContentPerGen: 10, // Maximum content items per insight
+		insightService:   insightService,
 	}
 }
 
@@ -173,7 +187,7 @@ func (w *InsightWorker) generateInsightForTopic(ctx context.Context, topic *type
 	}
 
 	// Create the insight
-	_, err = insight.CreateInsight(
+	_, err = w.insightService.CreateInsight(
 		ctx,
 		topic.OrganizationID,
 		&topic.ID,
