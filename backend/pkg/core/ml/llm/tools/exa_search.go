@@ -1,73 +1,42 @@
 package tools
 
 import (
-	"backend/pkg/database/models"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
 
+	"backend/pkg/core/source"
+	"backend/pkg/integrations/exa"
+	"backend/pkg/types"
+
 	"github.com/google/uuid"
 )
 
-// ExaSearchResult represents a single search result from Exa
-type ExaSearchResult struct {
-	Title         string                 `json:"title"`
-	URL           string                 `json:"url"`
-	ID            string                 `json:"id"`
-	PublishedDate string                 `json:"publishedDate,omitempty"`
-	Author        string                 `json:"author,omitempty"`
-	Text          string                 `json:"text,omitempty"`
-	Highlights    []string               `json:"highlights,omitempty"`
-	Summary       string                 `json:"summary,omitempty"`
-	Image         string                 `json:"image,omitempty"`
-	Favicon       string                 `json:"favicon,omitempty"`
-	Score         float64                `json:"score,omitempty"`
-	Extras        map[string]interface{} `json:"extras,omitempty"`
-}
-
-// ExaSearchResponse represents the response from Exa search API
-type ExaSearchResponse struct {
-	RequestID          string                 `json:"requestId"`
-	ResolvedSearchType string                 `json:"resolvedSearchType"`
-	Results            []ExaSearchResult      `json:"results"`
-	SearchType         string                 `json:"searchType"`
-	Context            string                 `json:"context,omitempty"`
-	CostDollars        map[string]interface{} `json:"costDollars,omitempty"`
-}
-
 // ExaSearchService interface for Exa search operations
+// Satisfied directly by exa.Client
 type ExaSearchService interface {
-	SearchWithDefaults(ctx context.Context, query string) (*ExaSearchResponse, error)
+	SearchWithDefaults(ctx context.Context, query string) (*exa.SearchResponse, error)
 	IsConfigured() bool
 }
 
-// CreateSourceRequest represents the request for creating a new source
-type CreateSourceRequest struct {
-	ArticleID  uuid.UUID `json:"article_id"`
-	Title      string    `json:"title"`
-	Content    string    `json:"content"`
-	URL        string    `json:"url"`
-	SourceType string    `json:"source_type"`
-}
-
-// ExaSourceService interface for creating sources from search results
-type ExaSourceService interface {
-	ScrapeAndCreateSource(ctx context.Context, articleID uuid.UUID, targetURL string) (*models.Source, error)
-	CreateSource(ctx context.Context, req CreateSourceRequest) (*models.Source, error)
+// SourceCreator interface for creating sources from search results
+// Satisfied directly by source.Service
+type SourceCreator interface {
+	Create(ctx context.Context, req source.CreateRequest) (*types.Source, error)
 }
 
 // ExaSearchTool searches the web using Exa and automatically creates sources
 type ExaSearchTool struct {
 	exaService    ExaSearchService
-	sourceService ExaSourceService
+	sourceCreator SourceCreator
 }
 
-func NewExaSearchTool(exaService ExaSearchService, sourceService ExaSourceService) *ExaSearchTool {
+func NewExaSearchTool(exaService ExaSearchService, sourceCreator SourceCreator) *ExaSearchTool {
 	return &ExaSearchTool{
 		exaService:    exaService,
-		sourceService: sourceService,
+		sourceCreator: sourceCreator,
 	}
 }
 
@@ -215,7 +184,7 @@ func (t *ExaSearchTool) Run(ctx context.Context, params ToolCall) (ToolResponse,
 		searchResults = append(searchResults, searchResult)
 
 		// Attempt to create source if enabled and we have full text content
-		if input.CreateSources && t.sourceService != nil && result.Text != "" {
+		if input.CreateSources && t.sourceCreator != nil && result.Text != "" {
 			sourcesAttempted++
 			log.Printf("🔍 [ExaSearch] Creating web content source from search result: %s", result.URL)
 
@@ -246,8 +215,8 @@ func (t *ExaSearchTool) Run(ctx context.Context, params ToolCall) (ToolResponse,
 			// Convert to ArticleSource and create in database
 			articleSource := webContentSource.ToSource()
 
-			// Use the existing service to create the source with embedding generation
-			source, err := t.sourceService.CreateSource(ctx, CreateSourceRequest{
+			// Use the source service directly to create the source with embedding generation
+			createdSource, err := t.sourceCreator.Create(ctx, source.CreateRequest{
 				ArticleID:  articleSource.ArticleID,
 				Title:      articleSource.Title,
 				Content:    articleSource.Content,
@@ -261,14 +230,14 @@ func (t *ExaSearchTool) Run(ctx context.Context, params ToolCall) (ToolResponse,
 			}
 
 			sourcesSuccessful++
-			log.Printf("🔍 [ExaSearch] ✅ Successfully created web content source from %s (ID: %s)", result.URL, source.ID)
+			log.Printf("🔍 [ExaSearch] ✅ Successfully created web content source from %s (ID: %s)", result.URL, createdSource.ID)
 
 			sourceInfo := map[string]interface{}{
 				"original_title":   result.Title,
 				"original_url":     result.URL,
 				"source_created":   true,
 				"search_result_id": result.ID,
-				"source_id":        source.ID,
+				"source_id":        createdSource.ID,
 				"content_length":   len(result.Text),
 				"source_type":      "web_search",
 				"search_query":     input.Query,
