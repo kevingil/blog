@@ -16,14 +16,32 @@ import (
 	"gorm.io/gorm"
 )
 
-// InsightRepository provides data access for insights
-type InsightRepository struct {
+// InsightRepository defines the interface for insight data access
+type InsightRepository interface {
+	FindByID(ctx context.Context, id uuid.UUID) (*types.Insight, error)
+	List(ctx context.Context, offset, limit int) ([]types.Insight, int64, error)
+	FindByOrganizationID(ctx context.Context, orgID uuid.UUID, offset, limit int) ([]types.Insight, int64, error)
+	FindByTopicID(ctx context.Context, topicID uuid.UUID, offset, limit int) ([]types.Insight, int64, error)
+	FindUnread(ctx context.Context, orgID uuid.UUID, limit int) ([]types.Insight, error)
+	SearchSimilar(ctx context.Context, embedding []float32, limit int) ([]types.Insight, error)
+	SearchSimilarByOrg(ctx context.Context, orgID uuid.UUID, embedding []float32, limit int) ([]types.Insight, error)
+	Save(ctx context.Context, insight *types.Insight) error
+	MarkAsRead(ctx context.Context, id uuid.UUID) error
+	TogglePinned(ctx context.Context, id uuid.UUID) error
+	MarkAsUsedInArticle(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID) error
+	CountUnread(ctx context.Context, orgID uuid.UUID) (int64, error)
+	CountAllUnread(ctx context.Context) (int64, error)
+}
+
+// insightRepository provides data access for insights
+type insightRepository struct {
 	db *gorm.DB
 }
 
 // NewInsightRepository creates a new InsightRepository
-func NewInsightRepository(db *gorm.DB) *InsightRepository {
-	return &InsightRepository{db: db}
+func NewInsightRepository(db *gorm.DB) InsightRepository {
+	return &insightRepository{db: db}
 }
 
 // insightModelToType converts a database model to types
@@ -117,7 +135,7 @@ func insightTypeToModel(i *types.Insight) *models.Insight {
 }
 
 // FindByID retrieves an insight by its ID
-func (r *InsightRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.Insight, error) {
+func (r *insightRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.Insight, error) {
 	var model models.Insight
 	if err := r.db.WithContext(ctx).Preload("Topic").First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -129,7 +147,7 @@ func (r *InsightRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.
 }
 
 // List retrieves all insights with pagination
-func (r *InsightRepository) List(ctx context.Context, offset, limit int) ([]types.Insight, int64, error) {
+func (r *insightRepository) List(ctx context.Context, offset, limit int) ([]types.Insight, int64, error) {
 	var insightModels []models.Insight
 	var total int64
 
@@ -154,7 +172,7 @@ func (r *InsightRepository) List(ctx context.Context, offset, limit int) ([]type
 }
 
 // FindByOrganizationID retrieves all insights for an organization
-func (r *InsightRepository) FindByOrganizationID(ctx context.Context, orgID uuid.UUID, offset, limit int) ([]types.Insight, int64, error) {
+func (r *insightRepository) FindByOrganizationID(ctx context.Context, orgID uuid.UUID, offset, limit int) ([]types.Insight, int64, error) {
 	var insightModels []models.Insight
 	var total int64
 
@@ -180,7 +198,7 @@ func (r *InsightRepository) FindByOrganizationID(ctx context.Context, orgID uuid
 }
 
 // FindByTopicID retrieves all insights for a topic
-func (r *InsightRepository) FindByTopicID(ctx context.Context, topicID uuid.UUID, offset, limit int) ([]types.Insight, int64, error) {
+func (r *insightRepository) FindByTopicID(ctx context.Context, topicID uuid.UUID, offset, limit int) ([]types.Insight, int64, error) {
 	var insightModels []models.Insight
 	var total int64
 
@@ -206,7 +224,7 @@ func (r *InsightRepository) FindByTopicID(ctx context.Context, topicID uuid.UUID
 }
 
 // FindUnread retrieves unread insights for an organization
-func (r *InsightRepository) FindUnread(ctx context.Context, orgID uuid.UUID, limit int) ([]types.Insight, error) {
+func (r *insightRepository) FindUnread(ctx context.Context, orgID uuid.UUID, limit int) ([]types.Insight, error) {
 	var insightModels []models.Insight
 
 	if err := r.db.WithContext(ctx).
@@ -226,7 +244,7 @@ func (r *InsightRepository) FindUnread(ctx context.Context, orgID uuid.UUID, lim
 }
 
 // SearchSimilar performs vector similarity search for insights
-func (r *InsightRepository) SearchSimilar(ctx context.Context, embedding []float32, limit int) ([]types.Insight, error) {
+func (r *insightRepository) SearchSimilar(ctx context.Context, embedding []float32, limit int) ([]types.Insight, error) {
 	var insightModels []models.Insight
 
 	embeddingVector := pgvector.NewVector(embedding)
@@ -248,7 +266,7 @@ func (r *InsightRepository) SearchSimilar(ctx context.Context, embedding []float
 }
 
 // SearchSimilarByOrg performs vector similarity search for insights within an organization
-func (r *InsightRepository) SearchSimilarByOrg(ctx context.Context, orgID uuid.UUID, embedding []float32, limit int) ([]types.Insight, error) {
+func (r *insightRepository) SearchSimilarByOrg(ctx context.Context, orgID uuid.UUID, embedding []float32, limit int) ([]types.Insight, error) {
 	var insightModels []models.Insight
 
 	embeddingVector := pgvector.NewVector(embedding)
@@ -271,7 +289,7 @@ func (r *InsightRepository) SearchSimilarByOrg(ctx context.Context, orgID uuid.U
 }
 
 // Save creates a new insight
-func (r *InsightRepository) Save(ctx context.Context, insight *types.Insight) error {
+func (r *insightRepository) Save(ctx context.Context, insight *types.Insight) error {
 	model := insightTypeToModel(insight)
 	if model.ID == uuid.Nil {
 		model.ID = uuid.New()
@@ -281,34 +299,34 @@ func (r *InsightRepository) Save(ctx context.Context, insight *types.Insight) er
 }
 
 // Update updates an existing insight
-func (r *InsightRepository) Update(ctx context.Context, insight *types.Insight) error {
+func (r *insightRepository) Update(ctx context.Context, insight *types.Insight) error {
 	model := insightTypeToModel(insight)
 	return r.db.WithContext(ctx).Save(model).Error
 }
 
 // MarkAsRead marks an insight as read
-func (r *InsightRepository) MarkAsRead(ctx context.Context, id uuid.UUID) error {
+func (r *insightRepository) MarkAsRead(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Model(&models.Insight{}).
 		Where("id = ?", id).
 		Update("is_read", true).Error
 }
 
 // TogglePinned toggles the pinned status of an insight
-func (r *InsightRepository) TogglePinned(ctx context.Context, id uuid.UUID) error {
+func (r *insightRepository) TogglePinned(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Model(&models.Insight{}).
 		Where("id = ?", id).
 		Update("is_pinned", gorm.Expr("NOT is_pinned")).Error
 }
 
 // MarkAsUsedInArticle marks an insight as used in an article
-func (r *InsightRepository) MarkAsUsedInArticle(ctx context.Context, id uuid.UUID) error {
+func (r *insightRepository) MarkAsUsedInArticle(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Model(&models.Insight{}).
 		Where("id = ?", id).
 		Update("is_used_in_article", true).Error
 }
 
 // Delete removes an insight by its ID
-func (r *InsightRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *insightRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	result := r.db.WithContext(ctx).Delete(&models.Insight{}, id)
 	if result.Error != nil {
 		return result.Error
@@ -320,7 +338,7 @@ func (r *InsightRepository) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 // CountUnread counts unread insights for an organization
-func (r *InsightRepository) CountUnread(ctx context.Context, orgID uuid.UUID) (int64, error) {
+func (r *insightRepository) CountUnread(ctx context.Context, orgID uuid.UUID) (int64, error) {
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&models.Insight{}).
 		Where("organization_id = ? AND is_read = ?", orgID, false).
@@ -331,7 +349,7 @@ func (r *InsightRepository) CountUnread(ctx context.Context, orgID uuid.UUID) (i
 }
 
 // CountAllUnread returns the total count of unread insights (no org filter)
-func (r *InsightRepository) CountAllUnread(ctx context.Context) (int64, error) {
+func (r *insightRepository) CountAllUnread(ctx context.Context) (int64, error) {
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&models.Insight{}).
 		Where("is_read = ?", false).

@@ -14,14 +14,22 @@ import (
 	"gorm.io/gorm"
 )
 
-// ImageRepository provides data access for image generations
-type ImageRepository struct {
+// ImageRepository defines the interface for image generation data access
+type ImageRepository interface {
+	FindByID(ctx context.Context, id uuid.UUID) (*types.ImageGeneration, error)
+	FindByRequestID(ctx context.Context, requestID string) (*types.ImageGeneration, error)
+	Save(ctx context.Context, img *types.ImageGeneration) error
+	Update(ctx context.Context, img *types.ImageGeneration) error
+}
+
+// imageRepository provides data access for image generations
+type imageRepository struct {
 	db *gorm.DB
 }
 
 // NewImageRepository creates a new ImageRepository
-func NewImageRepository(db *gorm.DB) *ImageRepository {
-	return &ImageRepository{db: db}
+func NewImageRepository(db *gorm.DB) ImageRepository {
+	return &imageRepository{db: db}
 }
 
 // imageModelToType converts a database model to types
@@ -86,7 +94,7 @@ func imageTypeToModel(i *types.ImageGeneration) *models.ImageGeneration {
 }
 
 // FindByID retrieves an image generation by its ID
-func (r *ImageRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.ImageGeneration, error) {
+func (r *imageRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.ImageGeneration, error) {
 	var model models.ImageGeneration
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -98,7 +106,7 @@ func (r *ImageRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.Im
 }
 
 // FindByRequestID retrieves an image generation by its request ID
-func (r *ImageRepository) FindByRequestID(ctx context.Context, requestID string) (*types.ImageGeneration, error) {
+func (r *imageRepository) FindByRequestID(ctx context.Context, requestID string) (*types.ImageGeneration, error) {
 	var model models.ImageGeneration
 	if err := r.db.WithContext(ctx).Where("request_id = ?", requestID).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -110,7 +118,7 @@ func (r *ImageRepository) FindByRequestID(ctx context.Context, requestID string)
 }
 
 // Save creates a new image generation
-func (r *ImageRepository) Save(ctx context.Context, img *types.ImageGeneration) error {
+func (r *imageRepository) Save(ctx context.Context, img *types.ImageGeneration) error {
 	model := imageTypeToModel(img)
 	if model.ID == uuid.Nil {
 		model.ID = uuid.New()
@@ -120,7 +128,7 @@ func (r *ImageRepository) Save(ctx context.Context, img *types.ImageGeneration) 
 }
 
 // Update updates an existing image generation
-func (r *ImageRepository) Update(ctx context.Context, img *types.ImageGeneration) error {
+func (r *imageRepository) Update(ctx context.Context, img *types.ImageGeneration) error {
 	model := imageTypeToModel(img)
 	return r.db.WithContext(ctx).Save(model).Error
 }

@@ -12,14 +12,24 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// UserInsightStatusRepository provides data access for user insight status
-type UserInsightStatusRepository struct {
+// UserInsightStatusRepository defines the interface for user insight status data access
+type UserInsightStatusRepository interface {
+	FindByUserAndInsight(ctx context.Context, userID, insightID uuid.UUID) (*types.UserInsightStatus, error)
+	MarkAsRead(ctx context.Context, userID, insightID uuid.UUID) error
+	TogglePinned(ctx context.Context, userID, insightID uuid.UUID) (bool, error)
+	MarkAsUsedInArticle(ctx context.Context, userID, insightID uuid.UUID) error
+	GetStatusMapForInsights(ctx context.Context, userID uuid.UUID, insightIDs []uuid.UUID) (map[uuid.UUID]*types.UserInsightStatus, error)
+	CountUnreadByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
+}
+
+// userInsightStatusRepository provides data access for user insight status
+type userInsightStatusRepository struct {
 	db *gorm.DB
 }
 
 // NewUserInsightStatusRepository creates a new UserInsightStatusRepository
-func NewUserInsightStatusRepository(db *gorm.DB) *UserInsightStatusRepository {
-	return &UserInsightStatusRepository{db: db}
+func NewUserInsightStatusRepository(db *gorm.DB) UserInsightStatusRepository {
+	return &userInsightStatusRepository{db: db}
 }
 
 // userInsightStatusModelToType converts a database model to types
@@ -51,7 +61,7 @@ func userInsightStatusTypeToModel(s *types.UserInsightStatus) *models.UserInsigh
 }
 
 // FindByUserAndInsight retrieves a user insight status by user and insight IDs
-func (r *UserInsightStatusRepository) FindByUserAndInsight(ctx context.Context, userID, insightID uuid.UUID) (*types.UserInsightStatus, error) {
+func (r *userInsightStatusRepository) FindByUserAndInsight(ctx context.Context, userID, insightID uuid.UUID) (*types.UserInsightStatus, error) {
 	var model models.UserInsightStatus
 	if err := r.db.WithContext(ctx).
 		Where("user_id = ? AND insight_id = ?", userID, insightID).
@@ -65,7 +75,7 @@ func (r *UserInsightStatusRepository) FindByUserAndInsight(ctx context.Context, 
 }
 
 // FindByUserID retrieves all insight statuses for a user
-func (r *UserInsightStatusRepository) FindByUserID(ctx context.Context, userID uuid.UUID) ([]types.UserInsightStatus, error) {
+func (r *userInsightStatusRepository) FindByUserID(ctx context.Context, userID uuid.UUID) ([]types.UserInsightStatus, error) {
 	var statusModels []models.UserInsightStatus
 	if err := r.db.WithContext(ctx).
 		Where("user_id = ?", userID).
@@ -81,7 +91,7 @@ func (r *UserInsightStatusRepository) FindByUserID(ctx context.Context, userID u
 }
 
 // FindUnreadByUserID retrieves unread insight statuses for a user
-func (r *UserInsightStatusRepository) FindUnreadByUserID(ctx context.Context, userID uuid.UUID) ([]types.UserInsightStatus, error) {
+func (r *userInsightStatusRepository) FindUnreadByUserID(ctx context.Context, userID uuid.UUID) ([]types.UserInsightStatus, error) {
 	var statusModels []models.UserInsightStatus
 	if err := r.db.WithContext(ctx).
 		Where("user_id = ? AND is_read = ?", userID, false).
@@ -97,7 +107,7 @@ func (r *UserInsightStatusRepository) FindUnreadByUserID(ctx context.Context, us
 }
 
 // FindPinnedByUserID retrieves pinned insight statuses for a user
-func (r *UserInsightStatusRepository) FindPinnedByUserID(ctx context.Context, userID uuid.UUID) ([]types.UserInsightStatus, error) {
+func (r *userInsightStatusRepository) FindPinnedByUserID(ctx context.Context, userID uuid.UUID) ([]types.UserInsightStatus, error) {
 	var statusModels []models.UserInsightStatus
 	if err := r.db.WithContext(ctx).
 		Where("user_id = ? AND is_pinned = ?", userID, true).
@@ -113,7 +123,7 @@ func (r *UserInsightStatusRepository) FindPinnedByUserID(ctx context.Context, us
 }
 
 // Upsert creates or updates a user insight status
-func (r *UserInsightStatusRepository) Upsert(ctx context.Context, status *types.UserInsightStatus) error {
+func (r *userInsightStatusRepository) Upsert(ctx context.Context, status *types.UserInsightStatus) error {
 	model := userInsightStatusTypeToModel(status)
 	if model.ID == uuid.Nil {
 		model.ID = uuid.New()
@@ -127,7 +137,7 @@ func (r *UserInsightStatusRepository) Upsert(ctx context.Context, status *types.
 }
 
 // MarkAsRead marks an insight as read for a user
-func (r *UserInsightStatusRepository) MarkAsRead(ctx context.Context, userID, insightID uuid.UUID) error {
+func (r *userInsightStatusRepository) MarkAsRead(ctx context.Context, userID, insightID uuid.UUID) error {
 	now := time.Now()
 	status := &types.UserInsightStatus{
 		UserID:    userID,
@@ -139,7 +149,7 @@ func (r *UserInsightStatusRepository) MarkAsRead(ctx context.Context, userID, in
 }
 
 // TogglePinned toggles the pinned status for a user's insight
-func (r *UserInsightStatusRepository) TogglePinned(ctx context.Context, userID, insightID uuid.UUID) (bool, error) {
+func (r *userInsightStatusRepository) TogglePinned(ctx context.Context, userID, insightID uuid.UUID) (bool, error) {
 	// First, try to find existing status
 	existing, err := r.FindByUserAndInsight(ctx, userID, insightID)
 	if err != nil {
@@ -167,7 +177,7 @@ func (r *UserInsightStatusRepository) TogglePinned(ctx context.Context, userID, 
 }
 
 // MarkAsUsedInArticle marks an insight as used in an article for a user
-func (r *UserInsightStatusRepository) MarkAsUsedInArticle(ctx context.Context, userID, insightID uuid.UUID) error {
+func (r *userInsightStatusRepository) MarkAsUsedInArticle(ctx context.Context, userID, insightID uuid.UUID) error {
 	existing, err := r.FindByUserAndInsight(ctx, userID, insightID)
 	if err != nil {
 		return err
@@ -189,7 +199,7 @@ func (r *UserInsightStatusRepository) MarkAsUsedInArticle(ctx context.Context, u
 }
 
 // CountUnreadByUserID counts unread insights for a user
-func (r *UserInsightStatusRepository) CountUnreadByUserID(ctx context.Context, userID uuid.UUID) (int64, error) {
+func (r *userInsightStatusRepository) CountUnreadByUserID(ctx context.Context, userID uuid.UUID) (int64, error) {
 	var count int64
 	// Count insights that don't have a read status or have is_read = false
 	// This requires a subquery approach since we want insights without any status too
@@ -203,7 +213,7 @@ func (r *UserInsightStatusRepository) CountUnreadByUserID(ctx context.Context, u
 }
 
 // GetStatusMapForInsights returns a map of insight ID to user status for multiple insights
-func (r *UserInsightStatusRepository) GetStatusMapForInsights(ctx context.Context, userID uuid.UUID, insightIDs []uuid.UUID) (map[uuid.UUID]*types.UserInsightStatus, error) {
+func (r *userInsightStatusRepository) GetStatusMapForInsights(ctx context.Context, userID uuid.UUID, insightIDs []uuid.UUID) (map[uuid.UUID]*types.UserInsightStatus, error) {
 	if len(insightIDs) == 0 {
 		return make(map[uuid.UUID]*types.UserInsightStatus), nil
 	}
@@ -224,7 +234,7 @@ func (r *UserInsightStatusRepository) GetStatusMapForInsights(ctx context.Contex
 }
 
 // Delete removes a user insight status
-func (r *UserInsightStatusRepository) Delete(ctx context.Context, userID, insightID uuid.UUID) error {
+func (r *userInsightStatusRepository) Delete(ctx context.Context, userID, insightID uuid.UUID) error {
 	return r.db.WithContext(ctx).
 		Where("user_id = ? AND insight_id = ?", userID, insightID).
 		Delete(&models.UserInsightStatus{}).Error

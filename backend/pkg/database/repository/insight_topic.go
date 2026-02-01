@@ -16,14 +16,27 @@ import (
 	"gorm.io/gorm"
 )
 
-// InsightTopicRepository provides data access for insight topics
-type InsightTopicRepository struct {
+// InsightTopicRepository defines the interface for insight topic data access
+type InsightTopicRepository interface {
+	FindByID(ctx context.Context, id uuid.UUID) (*types.InsightTopic, error)
+	FindByOrganizationID(ctx context.Context, orgID uuid.UUID) ([]types.InsightTopic, error)
+	FindAll(ctx context.Context) ([]types.InsightTopic, error)
+	SearchSimilar(ctx context.Context, embedding []float32, limit int, threshold float64) ([]types.InsightTopic, []float64, error)
+	Save(ctx context.Context, topic *types.InsightTopic) error
+	Update(ctx context.Context, topic *types.InsightTopic) error
+	UpdateContentCount(ctx context.Context, id uuid.UUID, count int) error
+	UpdateLastInsightAt(ctx context.Context, id uuid.UUID, timestamp time.Time) error
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+// insightTopicRepository provides data access for insight topics
+type insightTopicRepository struct {
 	db *gorm.DB
 }
 
 // NewInsightTopicRepository creates a new InsightTopicRepository
-func NewInsightTopicRepository(db *gorm.DB) *InsightTopicRepository {
-	return &InsightTopicRepository{db: db}
+func NewInsightTopicRepository(db *gorm.DB) InsightTopicRepository {
+	return &insightTopicRepository{db: db}
 }
 
 // insightTopicModelToType converts a database model to types
@@ -86,7 +99,7 @@ func insightTopicTypeToModel(t *types.InsightTopic) *models.InsightTopic {
 }
 
 // FindByID retrieves an insight topic by its ID
-func (r *InsightTopicRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.InsightTopic, error) {
+func (r *insightTopicRepository) FindByID(ctx context.Context, id uuid.UUID) (*types.InsightTopic, error) {
 	var model models.InsightTopic
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -98,7 +111,7 @@ func (r *InsightTopicRepository) FindByID(ctx context.Context, id uuid.UUID) (*t
 }
 
 // FindByOrganizationID retrieves all insight topics for an organization
-func (r *InsightTopicRepository) FindByOrganizationID(ctx context.Context, orgID uuid.UUID) ([]types.InsightTopic, error) {
+func (r *insightTopicRepository) FindByOrganizationID(ctx context.Context, orgID uuid.UUID) ([]types.InsightTopic, error) {
 	var topicModels []models.InsightTopic
 	if err := r.db.WithContext(ctx).Where("organization_id = ?", orgID).Order("name ASC").Find(&topicModels).Error; err != nil {
 		return nil, err
@@ -112,7 +125,7 @@ func (r *InsightTopicRepository) FindByOrganizationID(ctx context.Context, orgID
 }
 
 // FindAll retrieves all insight topics
-func (r *InsightTopicRepository) FindAll(ctx context.Context) ([]types.InsightTopic, error) {
+func (r *insightTopicRepository) FindAll(ctx context.Context) ([]types.InsightTopic, error) {
 	var topicModels []models.InsightTopic
 	if err := r.db.WithContext(ctx).Order("name ASC").Find(&topicModels).Error; err != nil {
 		return nil, err
@@ -126,7 +139,7 @@ func (r *InsightTopicRepository) FindAll(ctx context.Context) ([]types.InsightTo
 }
 
 // SearchSimilar performs vector similarity search for topics
-func (r *InsightTopicRepository) SearchSimilar(ctx context.Context, embedding []float32, limit int, threshold float64) ([]types.InsightTopic, []float64, error) {
+func (r *insightTopicRepository) SearchSimilar(ctx context.Context, embedding []float32, limit int, threshold float64) ([]types.InsightTopic, []float64, error) {
 	var results []struct {
 		models.InsightTopic
 		Distance float64 `gorm:"column:distance"`
@@ -157,7 +170,7 @@ func (r *InsightTopicRepository) SearchSimilar(ctx context.Context, embedding []
 }
 
 // Save creates a new insight topic
-func (r *InsightTopicRepository) Save(ctx context.Context, topic *types.InsightTopic) error {
+func (r *insightTopicRepository) Save(ctx context.Context, topic *types.InsightTopic) error {
 	model := insightTopicTypeToModel(topic)
 	if model.ID == uuid.Nil {
 		model.ID = uuid.New()
@@ -167,27 +180,27 @@ func (r *InsightTopicRepository) Save(ctx context.Context, topic *types.InsightT
 }
 
 // Update updates an existing insight topic
-func (r *InsightTopicRepository) Update(ctx context.Context, topic *types.InsightTopic) error {
+func (r *insightTopicRepository) Update(ctx context.Context, topic *types.InsightTopic) error {
 	model := insightTopicTypeToModel(topic)
 	return r.db.WithContext(ctx).Save(model).Error
 }
 
 // UpdateContentCount updates the content count for a topic
-func (r *InsightTopicRepository) UpdateContentCount(ctx context.Context, id uuid.UUID, count int) error {
+func (r *insightTopicRepository) UpdateContentCount(ctx context.Context, id uuid.UUID, count int) error {
 	return r.db.WithContext(ctx).Model(&models.InsightTopic{}).
 		Where("id = ?", id).
 		Update("content_count", count).Error
 }
 
 // UpdateLastInsightAt updates the last insight timestamp for a topic
-func (r *InsightTopicRepository) UpdateLastInsightAt(ctx context.Context, id uuid.UUID, timestamp time.Time) error {
+func (r *insightTopicRepository) UpdateLastInsightAt(ctx context.Context, id uuid.UUID, timestamp time.Time) error {
 	return r.db.WithContext(ctx).Model(&models.InsightTopic{}).
 		Where("id = ?", id).
 		Update("last_insight_at", timestamp).Error
 }
 
 // Delete removes an insight topic by its ID
-func (r *InsightTopicRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *insightTopicRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	result := r.db.WithContext(ctx).Delete(&models.InsightTopic{}, id)
 	if result.Error != nil {
 		return result.Error
