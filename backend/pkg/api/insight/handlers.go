@@ -1,6 +1,8 @@
 package insight
 
 import (
+	"sync"
+
 	"backend/pkg/api/dto"
 	"backend/pkg/api/middleware"
 	"backend/pkg/api/response"
@@ -15,17 +17,24 @@ import (
 	"github.com/google/uuid"
 )
 
-// getService creates and returns an insight service instance
+var (
+	serviceInstance *coreInsight.Service
+	serviceOnce     sync.Once
+)
+
+// getService returns the insight service instance (lazily initialized)
 func getService() *coreInsight.Service {
-	db := database.DB()
-	return coreInsight.NewService(
-		repository.NewInsightRepository(db),
-		repository.NewInsightTopicRepository(db),
-		repository.NewUserInsightStatusRepository(db),
-		repository.NewCrawledContentRepository(db),
-		repository.NewContentTopicMatchRepository(db),
-		ml.NewEmbeddingService(),
-	)
+	serviceOnce.Do(func() {
+		db := database.DB()
+		insightRepo := repository.NewInsightRepository(db)
+		topicRepo := repository.NewInsightTopicRepository(db)
+		userStatusRepo := repository.NewUserInsightStatusRepository(db)
+		contentRepo := repository.NewCrawledContentRepository(db)
+		topicMatchRepo := repository.NewContentTopicMatchRepository(db)
+		embeddingService := ml.NewEmbeddingService()
+		serviceInstance = coreInsight.NewService(insightRepo, topicRepo, userStatusRepo, contentRepo, topicMatchRepo, embeddingService)
+	})
+	return serviceInstance
 }
 
 // =============================================================================

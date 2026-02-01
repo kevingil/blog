@@ -1,6 +1,8 @@
 package organization
 
 import (
+	"sync"
+
 	"backend/pkg/api/middleware"
 	"backend/pkg/api/response"
 	"backend/pkg/api/validation"
@@ -13,12 +15,20 @@ import (
 	"github.com/google/uuid"
 )
 
-// getService creates and returns an organization service with repository injection
+var (
+	serviceInstance *coreOrg.Service
+	serviceOnce     sync.Once
+)
+
+// getService returns the organization service instance (lazily initialized)
 func getService() *coreOrg.Service {
-	db := database.DB()
-	orgRepo := repository.NewOrganizationRepository(db)
-	accountRepo := repository.NewAccountRepository(db)
-	return coreOrg.NewService(orgRepo, accountRepo)
+	serviceOnce.Do(func() {
+		db := database.DB()
+		orgRepo := repository.NewOrganizationRepository(db)
+		accountRepo := repository.NewAccountRepository(db)
+		serviceInstance = coreOrg.NewService(orgRepo, accountRepo)
+	})
+	return serviceInstance
 }
 
 // ListOrganizations handles GET /organizations

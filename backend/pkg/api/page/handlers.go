@@ -1,6 +1,8 @@
 package page
 
 import (
+	"sync"
+
 	"backend/pkg/api/response"
 	"backend/pkg/api/validation"
 	"backend/pkg/core"
@@ -12,10 +14,19 @@ import (
 	"github.com/google/uuid"
 )
 
-// getService creates a new page service with repository injection
+var (
+	serviceInstance *corePage.Service
+	serviceOnce     sync.Once
+)
+
+// getService returns the page service instance (lazily initialized)
 func getService() *corePage.Service {
-	pageRepo := repository.NewPageRepository(database.DB())
-	return corePage.NewService(pageRepo)
+	serviceOnce.Do(func() {
+		db := database.DB()
+		pageRepo := repository.NewPageRepository(db)
+		serviceInstance = corePage.NewService(pageRepo)
+	})
+	return serviceInstance
 }
 
 // GetPageBySlug handles GET /pages/:slug

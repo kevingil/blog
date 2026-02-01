@@ -1,6 +1,8 @@
 package project
 
 import (
+	"sync"
+
 	"backend/pkg/api/middleware"
 	"backend/pkg/api/response"
 	"backend/pkg/api/validation"
@@ -13,12 +15,20 @@ import (
 	"github.com/google/uuid"
 )
 
-// getService creates a project service with repository injection
+var (
+	serviceInstance *project.Service
+	serviceOnce     sync.Once
+)
+
+// getService returns the project service instance (lazily initialized)
 func getService() *project.Service {
-	db := database.DB()
-	projectRepo := repository.NewProjectRepository(db)
-	tagRepo := repository.NewTagRepository(db)
-	return project.NewService(projectRepo, tagRepo)
+	serviceOnce.Do(func() {
+		db := database.DB()
+		projectRepo := repository.NewProjectRepository(db)
+		tagRepo := repository.NewTagRepository(db)
+		serviceInstance = project.NewService(projectRepo, tagRepo)
+	})
+	return serviceInstance
 }
 
 // ListProjects handles GET /projects

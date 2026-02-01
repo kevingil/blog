@@ -1,6 +1,8 @@
 package profile
 
 import (
+	"sync"
+
 	"backend/pkg/api/dto"
 	"backend/pkg/api/middleware"
 	"backend/pkg/api/response"
@@ -13,15 +15,22 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// getService creates a new profile service with repository dependencies
+var (
+	serviceInstance *coreProfile.Service
+	serviceOnce     sync.Once
+)
+
+// getService returns the profile service instance (lazily initialized)
 func getService() *coreProfile.Service {
-	db := database.DB()
-	return coreProfile.NewService(
-		repository.NewProfileRepository(db),
-		repository.NewSiteSettingsRepository(db),
-		repository.NewAccountRepository(db),
-		repository.NewOrganizationRepository(db),
-	)
+	serviceOnce.Do(func() {
+		db := database.DB()
+		profileRepo := repository.NewProfileRepository(db)
+		siteSettingsRepo := repository.NewSiteSettingsRepository(db)
+		accountRepo := repository.NewAccountRepository(db)
+		orgRepo := repository.NewOrganizationRepository(db)
+		serviceInstance = coreProfile.NewService(profileRepo, siteSettingsRepo, accountRepo, orgRepo)
+	})
+	return serviceInstance
 }
 
 // GetPublicProfile handles GET /profile/public

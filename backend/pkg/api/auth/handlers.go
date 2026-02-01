@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"sync"
+
 	"backend/pkg/api/middleware"
 	"backend/pkg/api/response"
 	"backend/pkg/api/validation"
@@ -12,10 +14,19 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// getService creates a new auth service with repository injection
+var (
+	serviceInstance *coreAuth.Service
+	serviceOnce     sync.Once
+)
+
+// getService returns the auth service instance (lazily initialized)
 func getService() *coreAuth.Service {
-	accountRepo := repository.NewAccountRepository(database.DB())
-	return coreAuth.NewService(accountRepo)
+	serviceOnce.Do(func() {
+		db := database.DB()
+		accountRepo := repository.NewAccountRepository(db)
+		serviceInstance = coreAuth.NewService(accountRepo)
+	})
+	return serviceInstance
 }
 
 // Login handles POST /auth/login

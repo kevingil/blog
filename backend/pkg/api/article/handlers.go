@@ -1,6 +1,8 @@
 package article
 
 import (
+	"sync"
+
 	"backend/pkg/api/middleware"
 	"backend/pkg/api/response"
 	"backend/pkg/api/validation"
@@ -13,13 +15,21 @@ import (
 	"github.com/google/uuid"
 )
 
-// getService creates an article service with repository injection
+var (
+	serviceInstance *coreArticle.Service
+	serviceOnce     sync.Once
+)
+
+// getService returns the article service instance (lazily initialized)
 func getService() *coreArticle.Service {
-	db := database.DB()
-	articleRepo := repository.NewArticleRepository(db)
-	accountRepo := repository.NewAccountRepository(db)
-	tagRepo := repository.NewTagRepository(db)
-	return coreArticle.NewService(articleRepo, accountRepo, tagRepo)
+	serviceOnce.Do(func() {
+		db := database.DB()
+		articleRepo := repository.NewArticleRepository(db)
+		accountRepo := repository.NewAccountRepository(db)
+		tagRepo := repository.NewTagRepository(db)
+		serviceInstance = coreArticle.NewService(articleRepo, accountRepo, tagRepo)
+	})
+	return serviceInstance
 }
 
 // GenerateArticle handles POST /blog/generate

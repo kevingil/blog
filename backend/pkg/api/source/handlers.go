@@ -1,6 +1,8 @@
 package source
 
 import (
+	"sync"
+
 	"backend/pkg/api/response"
 	"backend/pkg/api/validation"
 	"backend/pkg/core"
@@ -12,12 +14,20 @@ import (
 	"github.com/google/uuid"
 )
 
-// getService creates a new source service with repository injection
+var (
+	serviceInstance *coreSource.Service
+	serviceOnce     sync.Once
+)
+
+// getService returns the source service instance (lazily initialized)
 func getService() *coreSource.Service {
-	db := database.DB()
-	sourceRepo := repository.NewSourceRepository(db)
-	articleRepo := repository.NewArticleRepository(db)
-	return coreSource.NewService(sourceRepo, articleRepo)
+	serviceOnce.Do(func() {
+		db := database.DB()
+		sourceRepo := repository.NewSourceRepository(db)
+		articleRepo := repository.NewArticleRepository(db)
+		serviceInstance = coreSource.NewService(sourceRepo, articleRepo)
+	})
+	return serviceInstance
 }
 
 // ListAllSources handles GET /dashboard/sources
