@@ -4,28 +4,30 @@ import (
 	"context"
 	"time"
 
+	"backend/pkg/api/dto"
 	"backend/pkg/core"
-	"backend/pkg/database"
-	"backend/pkg/database/repository"
 	"backend/pkg/types"
 
 	"github.com/google/uuid"
 )
 
-// getDataSourceRepo returns a data source repository instance
-func getDataSourceRepo() *repository.DataSourceRepository {
-	return repository.NewDataSourceRepository(database.DB())
+// Service provides business logic for data sources
+type Service struct {
+	dataSourceStore     DataSourceStore
+	crawledContentStore CrawledContentStore
 }
 
-// getCrawledContentRepo returns a crawled content repository instance
-func getCrawledContentRepo() *repository.CrawledContentRepository {
-	return repository.NewCrawledContentRepository(database.DB())
+// NewService creates a new data source service with the provided stores
+func NewService(dataSourceStore DataSourceStore, crawledContentStore CrawledContentStore) *Service {
+	return &Service{
+		dataSourceStore:     dataSourceStore,
+		crawledContentStore: crawledContentStore,
+	}
 }
 
 // GetByID retrieves a data source by its ID
-func GetByID(ctx context.Context, id uuid.UUID) (*types.DataSourceResponse, error) {
-	repo := getDataSourceRepo()
-	ds, err := repo.FindByID(ctx, id)
+func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*dto.DataSourceResponse, error) {
+	ds, err := s.dataSourceStore.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -33,14 +35,13 @@ func GetByID(ctx context.Context, id uuid.UUID) (*types.DataSourceResponse, erro
 }
 
 // List retrieves all data sources for an organization
-func List(ctx context.Context, orgID uuid.UUID) ([]types.DataSourceResponse, error) {
-	repo := getDataSourceRepo()
-	sources, err := repo.FindByOrganizationID(ctx, orgID)
+func (s *Service) List(ctx context.Context, orgID uuid.UUID) ([]dto.DataSourceResponse, error) {
+	sources, err := s.dataSourceStore.FindByOrganizationID(ctx, orgID)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]types.DataSourceResponse, len(sources))
+	result := make([]dto.DataSourceResponse, len(sources))
 	for i, ds := range sources {
 		result[i] = *toResponse(&ds)
 	}
@@ -48,14 +49,13 @@ func List(ctx context.Context, orgID uuid.UUID) ([]types.DataSourceResponse, err
 }
 
 // ListByUserID retrieves all data sources for a user (without organization)
-func ListByUserID(ctx context.Context, userID uuid.UUID) ([]types.DataSourceResponse, error) {
-	repo := getDataSourceRepo()
-	sources, err := repo.FindByUserID(ctx, userID)
+func (s *Service) ListByUserID(ctx context.Context, userID uuid.UUID) ([]dto.DataSourceResponse, error) {
+	sources, err := s.dataSourceStore.FindByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]types.DataSourceResponse, len(sources))
+	result := make([]dto.DataSourceResponse, len(sources))
 	for i, ds := range sources {
 		result[i] = *toResponse(&ds)
 	}
@@ -63,9 +63,7 @@ func ListByUserID(ctx context.Context, userID uuid.UUID) ([]types.DataSourceResp
 }
 
 // ListAll retrieves all data sources with pagination
-func ListAll(ctx context.Context, page, limit int) ([]types.DataSourceResponse, int64, error) {
-	repo := getDataSourceRepo()
-
+func (s *Service) ListAll(ctx context.Context, page, limit int) ([]dto.DataSourceResponse, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -74,12 +72,12 @@ func ListAll(ctx context.Context, page, limit int) ([]types.DataSourceResponse, 
 	}
 	offset := (page - 1) * limit
 
-	sources, total, err := repo.List(ctx, offset, limit)
+	sources, total, err := s.dataSourceStore.List(ctx, offset, limit)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	result := make([]types.DataSourceResponse, len(sources))
+	result := make([]dto.DataSourceResponse, len(sources))
 	for i, ds := range sources {
 		result[i] = *toResponse(&ds)
 	}
@@ -88,16 +86,14 @@ func ListAll(ctx context.Context, page, limit int) ([]types.DataSourceResponse, 
 
 // Create creates a new data source
 // Either orgID or userID must be provided
-func Create(ctx context.Context, orgID *uuid.UUID, userID *uuid.UUID, req types.DataSourceCreateRequest) (*types.DataSourceResponse, error) {
-	repo := getDataSourceRepo()
-
+func (s *Service) Create(ctx context.Context, orgID *uuid.UUID, userID *uuid.UUID, req dto.DataSourceCreateRequest) (*dto.DataSourceResponse, error) {
 	// Validate that at least one owner is provided
 	if orgID == nil && userID == nil {
 		return nil, core.InvalidInputError("Either organization_id or user_id must be provided")
 	}
 
 	// Check if URL already exists
-	existing, err := repo.FindByURL(ctx, req.URL)
+	existing, err := s.dataSourceStore.FindByURL(ctx, req.URL)
 	if err != nil && err != core.ErrNotFound {
 		return nil, err
 	}
@@ -141,7 +137,7 @@ func Create(ctx context.Context, orgID *uuid.UUID, userID *uuid.UUID, req types.
 		NextCrawlAt:     &nextCrawlAt,
 	}
 
-	if err := repo.Save(ctx, ds); err != nil {
+	if err := s.dataSourceStore.Save(ctx, ds); err != nil {
 		return nil, err
 	}
 
@@ -149,17 +145,15 @@ func Create(ctx context.Context, orgID *uuid.UUID, userID *uuid.UUID, req types.
 }
 
 // Update updates an existing data source
-func Update(ctx context.Context, id uuid.UUID, req types.DataSourceUpdateRequest) (*types.DataSourceResponse, error) {
-	repo := getDataSourceRepo()
-
-	ds, err := repo.FindByID(ctx, id)
+func (s *Service) Update(ctx context.Context, id uuid.UUID, req dto.DataSourceUpdateRequest) (*dto.DataSourceResponse, error) {
+	ds, err := s.dataSourceStore.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
 	// Check if new URL already exists
 	if req.URL != nil && *req.URL != ds.URL {
-		existing, err := repo.FindByURL(ctx, *req.URL)
+		existing, err := s.dataSourceStore.FindByURL(ctx, *req.URL)
 		if err != nil && err != core.ErrNotFound {
 			return nil, err
 		}
@@ -188,7 +182,7 @@ func Update(ctx context.Context, id uuid.UUID, req types.DataSourceUpdateRequest
 		ds.IsEnabled = *req.IsEnabled
 	}
 
-	if err := repo.Update(ctx, ds); err != nil {
+	if err := s.dataSourceStore.Update(ctx, ds); err != nil {
 		return nil, err
 	}
 
@@ -196,16 +190,13 @@ func Update(ctx context.Context, id uuid.UUID, req types.DataSourceUpdateRequest
 }
 
 // Delete removes a data source by its ID
-func Delete(ctx context.Context, id uuid.UUID) error {
-	repo := getDataSourceRepo()
-	return repo.Delete(ctx, id)
+func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
+	return s.dataSourceStore.Delete(ctx, id)
 }
 
 // TriggerCrawl triggers a manual crawl for a data source
-func TriggerCrawl(ctx context.Context, id uuid.UUID) error {
-	repo := getDataSourceRepo()
-
-	ds, err := repo.FindByID(ctx, id)
+func (s *Service) TriggerCrawl(ctx context.Context, id uuid.UUID) error {
+	ds, err := s.dataSourceStore.FindByID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -215,13 +206,11 @@ func TriggerCrawl(ctx context.Context, id uuid.UUID) error {
 	ds.CrawlStatus = "pending"
 	ds.NextCrawlAt = &now
 
-	return repo.Update(ctx, ds)
+	return s.dataSourceStore.Update(ctx, ds)
 }
 
 // GetContent retrieves crawled content for a data source
-func GetContent(ctx context.Context, dataSourceID uuid.UUID, page, limit int) ([]types.CrawledContentResponse, int64, error) {
-	contentRepo := getCrawledContentRepo()
-
+func (s *Service) GetContent(ctx context.Context, dataSourceID uuid.UUID, page, limit int) ([]dto.CrawledContentResponse, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -230,12 +219,12 @@ func GetContent(ctx context.Context, dataSourceID uuid.UUID, page, limit int) ([
 	}
 	offset := (page - 1) * limit
 
-	contents, total, err := contentRepo.FindByDataSourceID(ctx, dataSourceID, offset, limit)
+	contents, total, err := s.crawledContentStore.FindByDataSourceID(ctx, dataSourceID, offset, limit)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	result := make([]types.CrawledContentResponse, len(contents))
+	result := make([]dto.CrawledContentResponse, len(contents))
 	for i, c := range contents {
 		result[i] = toContentResponse(&c)
 	}
@@ -243,36 +232,31 @@ func GetContent(ctx context.Context, dataSourceID uuid.UUID, page, limit int) ([
 }
 
 // GetDueToCrawl retrieves data sources that are due for crawling
-func GetDueToCrawl(ctx context.Context, limit int) ([]types.DataSource, error) {
-	repo := getDataSourceRepo()
-	return repo.FindDueToCrawl(ctx, limit)
+func (s *Service) GetDueToCrawl(ctx context.Context, limit int) ([]types.DataSource, error) {
+	return s.dataSourceStore.FindDueToCrawl(ctx, limit)
 }
 
 // UpdateCrawlStatus updates the crawl status of a data source
-func UpdateCrawlStatus(ctx context.Context, id uuid.UUID, status string, errorMsg *string) error {
-	repo := getDataSourceRepo()
-	return repo.UpdateCrawlStatus(ctx, id, status, errorMsg)
+func (s *Service) UpdateCrawlStatus(ctx context.Context, id uuid.UUID, status string, errorMsg *string) error {
+	return s.dataSourceStore.UpdateCrawlStatus(ctx, id, status, errorMsg)
 }
 
 // SetNextCrawlTime sets the next crawl time for a data source
-func SetNextCrawlTime(ctx context.Context, id uuid.UUID, frequency string) error {
-	repo := getDataSourceRepo()
+func (s *Service) SetNextCrawlTime(ctx context.Context, id uuid.UUID, frequency string) error {
 	nextCrawlAt := calculateNextCrawlTime(frequency)
-	return repo.UpdateNextCrawlAt(ctx, id, nextCrawlAt)
+	return s.dataSourceStore.UpdateNextCrawlAt(ctx, id, nextCrawlAt)
 }
 
 // CreateDiscoveredSource creates a data source that was discovered automatically
 // Either orgID or userID must be provided
-func CreateDiscoveredSource(ctx context.Context, orgID *uuid.UUID, userID *uuid.UUID, discoveredFromID uuid.UUID, name, url string) (*types.DataSourceResponse, error) {
-	repo := getDataSourceRepo()
-
+func (s *Service) CreateDiscoveredSource(ctx context.Context, orgID *uuid.UUID, userID *uuid.UUID, discoveredFromID uuid.UUID, name, url string) (*dto.DataSourceResponse, error) {
 	// Validate that at least one owner is provided
 	if orgID == nil && userID == nil {
 		return nil, core.InvalidInputError("Either organization_id or user_id must be provided")
 	}
 
 	// Check if URL already exists
-	existing, err := repo.FindByURL(ctx, url)
+	existing, err := s.dataSourceStore.FindByURL(ctx, url)
 	if err != nil && err != core.ErrNotFound {
 		return nil, err
 	}
@@ -299,7 +283,7 @@ func CreateDiscoveredSource(ctx context.Context, orgID *uuid.UUID, userID *uuid.
 		NextCrawlAt:      &nextCrawlAt,
 	}
 
-	if err := repo.Save(ctx, ds); err != nil {
+	if err := s.dataSourceStore.Save(ctx, ds); err != nil {
 		return nil, err
 	}
 
@@ -322,8 +306,8 @@ func calculateNextCrawlTime(frequency string) time.Time {
 	}
 }
 
-func toResponse(ds *types.DataSource) *types.DataSourceResponse {
-	return &types.DataSourceResponse{
+func toResponse(ds *types.DataSource) *dto.DataSourceResponse {
+	return &dto.DataSourceResponse{
 		ID:               ds.ID,
 		OrganizationID:   ds.OrganizationID,
 		UserID:           ds.UserID,
@@ -347,8 +331,8 @@ func toResponse(ds *types.DataSource) *types.DataSourceResponse {
 	}
 }
 
-func toContentResponse(c *types.CrawledContent) types.CrawledContentResponse {
-	return types.CrawledContentResponse{
+func toContentResponse(c *types.CrawledContent) dto.CrawledContentResponse {
+	return dto.CrawledContentResponse{
 		ID:           c.ID,
 		DataSourceID: c.DataSourceID,
 		URL:          c.URL,
