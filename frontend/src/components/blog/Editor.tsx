@@ -15,6 +15,7 @@ import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import MarkdownIt from 'markdown-it';
+import TurndownService from 'turndown';
 import { diffWords } from 'diff';
 import type { Editor as TiptapEditor } from '@tiptap/core';
 import { VITE_API_BASE_URL } from "@/services/constants";
@@ -1213,6 +1214,17 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   }
   const mdParser = mdParserRef.current;
 
+  const turndownRef = useRef<TurndownService>();
+  if (!turndownRef.current) {
+    turndownRef.current = new TurndownService({
+      headingStyle: 'atx',
+      codeBlockStyle: 'fenced',
+      emDelimiter: '*',
+      bulletListMarker: '-',
+    });
+  }
+  const turndownService = turndownRef.current;
+
   const [diffing, setDiffing] = useState(false);
   const [originalDocument, setOriginalDocument] = useState<string>('');
   const [pendingNewDocument, setPendingNewDocument] = useState<string>('');
@@ -1593,55 +1605,36 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   };
 
-  // Apply text edit from AI assistant (HTML-based search/replace)
-  const applyTextEdit = (originalText: string, newText: string, reason: string) => {
+  // Apply text edit from AI assistant (markdown-based str_replace)
+  // If newMarkdown is provided (from backend validation), convert it directly to HTML.
+  // Otherwise, apply the edit locally by converting current HTML to markdown, replacing, and converting back.
+  const applyTextEdit = (oldStr: string, newStr: string, reason: string, newMarkdown?: string) => {
     if (!editor) return;
     
-    const oldHtml = editor.getHTML();
+    const currentHtml = editor.getHTML();
     
-    // Search for original HTML in current HTML content
-    const index = oldHtml.indexOf(originalText);
-    if (index === -1) {
-      toast({
-        title: 'Edit Warning',
-        description: 'Could not locate the text to edit. The document may have changed.',
-        variant: 'destructive'
-      });
-      return;
+    let newHtml: string;
+    if (newMarkdown) {
+      // Backend applied the edit and returned full new markdown -- just convert to HTML
+      newHtml = mdParser.render(newMarkdown);
+    } else {
+      // Fallback: apply the edit locally on markdown
+      const currentMd = turndownService.turndown(currentHtml);
+      const index = currentMd.indexOf(oldStr);
+      if (index === -1) {
+        toast({
+          title: 'Edit Warning',
+          description: 'Could not locate the text to edit in the document markdown. The document may have changed.',
+          variant: 'destructive'
+        });
+        return;
+      }
+      const newMd = currentMd.substring(0, index) + newStr + currentMd.substring(index + oldStr.length);
+      newHtml = mdParser.render(newMd);
     }
     
-    // Replace HTML directly
-    const newHtml = oldHtml.substring(0, index) + newText + oldHtml.substring(index + originalText.length);
-    
-    // Pass edit info for precise highlighting
-    enterDiffPreview(oldHtml, newHtml, reason, {
-      originalText,
-      newText,
-      htmlIndex: index
-    });
-  };
-
-  // Apply patch from AI assistant (HTML-based search/replace)
-  const applyPatch = (patch: any, originalText: string, newText: string, reason: string) => {
-    if (!editor) return;
-    
-    const oldHtml = editor.getHTML();
-    
-    // Search for original HTML in current HTML content
-    const index = oldHtml.indexOf(originalText);
-    if (index === -1) {
-      toast({
-        title: 'Patch Failed',
-        description: 'Could not locate the text to edit. The document may have changed.',
-        variant: 'destructive'
-      });
-      return;
-    }
-    
-    // Replace HTML directly
-    const newHtml = oldHtml.substring(0, index) + newText + oldHtml.substring(index + originalText.length);
-    
-    enterDiffPreview(oldHtml, newHtml, reason);
+    // Full-document diff mode (no precise editInfo since HTML structure may shift from markdown round-trip)
+    enterDiffPreview(currentHtml, newHtml, reason);
   };
 
   // Apply document rewrite from AI assistant
@@ -1664,8 +1657,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       return;
     }
 
-    // Get current document content to send separately (HTML format)
+    // Get current document content in both HTML and markdown formats
     const currentContent = editor?.getHTML() || '';
+    const currentMarkdown = currentContent ? turndownService.turndown(currentContent) : '';
 
     // Check if this looks like an edit request
     const isEditRequest = /\b(rewrite|edit|improve|change|update|fix|enhance|modify)\b/i.test(text);
@@ -1680,7 +1674,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     setChatMessages((prev) => [...prev, { role: 'assistant', content: '' } as ChatMessage]);
 
     // Send only the new message text - backend will load context from database
-    await performChatRequest(text, assistantIndex, isEditRequest, currentContent);
+    await performChatRequest(text, assistantIndex, isEditRequest, currentContent, currentMarkdown);
   };
 
   const sendChat = async () => {
@@ -1693,7 +1687,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     await sendChatWithMessage(text);
   };
 
-  const performChatRequest = async (messageText: string, assistantIndex: number, isEditRequest: boolean, documentContent: string) => {
+  const performChatRequest = async (messageText: string, assistantIndex: number, isEditRequest: boolean, documentContent: string, documentMarkdown?: string) => {
     setChatLoading(true);
     try {
       if (!article?.article?.id) {
@@ -1704,6 +1698,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       const result = await apiPost<{ requestId: string; status: string }>('/agent', {
         message: messageText,  // Single message string
         documentContent: documentContent,
+        documentMarkdown: documentMarkdown || '',  // Markdown version for agent editing
         articleId: article.article.id  // Required for loading context
       });
       
@@ -2019,11 +2014,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       
                       // For edit tools, also apply the diff preview
                       if (toolResult.tool_name === 'edit_text' && isNewMessage) {
-                        if (toolResult.edit_type === 'patch' && toolResult.patch) {
-                          applyPatch(toolResult.patch, toolResult.original_text, toolResult.new_text, toolResult.reason);
-                        } else {
-                          applyTextEdit(toolResult.original_text, toolResult.new_text, toolResult.reason);
-                        }
+                        applyTextEdit(toolResult.old_str || toolResult.original_text, toolResult.new_str || toolResult.new_text, toolResult.reason, toolResult.new_markdown);
                         setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
                       } else if (toolResult.tool_name === 'rewrite_document' && isNewMessage) {
                         applyDocumentRewrite(toolResult.new_content, toolResult.reason, toolResult.original_content);
@@ -2156,7 +2147,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   if (artifact && toolExec?.output) {
                     const toolName = toolExec.tool_name;
                     if (toolName === 'edit_text') {
-                      applyTextEdit(toolExec.output.original_text, toolExec.output.new_text, toolExec.output.reason);
+                      applyTextEdit(toolExec.output.old_str || toolExec.output.original_text, toolExec.output.new_str || toolExec.output.new_text, toolExec.output.reason, toolExec.output.new_markdown);
                     } else if (toolName === 'rewrite_document') {
                       applyDocumentRewrite(toolExec.output.new_content, toolExec.output.reason, toolExec.output.original_content);
                     }
@@ -2231,11 +2222,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               
               // Handle edit_text tool specifically - only for new messages
               if (toolResult.tool_name === 'edit_text' && isNewMessage) {
-                if (toolResult.edit_type === 'patch' && toolResult.patch) {
-                  applyPatch(toolResult.patch, toolResult.original_text, toolResult.new_text, toolResult.reason);
-                } else {
-                  applyTextEdit(toolResult.original_text, toolResult.new_text, toolResult.reason);
-                }
+                applyTextEdit(toolResult.old_str || toolResult.original_text, toolResult.new_str || toolResult.new_text, toolResult.reason, toolResult.new_markdown);
                 
                 // Mark this tool message as processed
                 setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
@@ -2921,14 +2908,15 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       if (call && (call.name === 'edit_text' || call.name === 'rewrite_document')) {
                         const result = call.result;
                         if (action === 'accept' && result && editor) {
-                          const oldContent = (result.original_text || result.original_content) as string;
-                          const newContent = (result.new_text || result.new_content) as string;
+                          const oldContent = (result.old_str || result.original_text || result.original_content) as string;
+                          const newContent = (result.new_str || result.new_text || result.new_content) as string;
+                          const newMarkdown = (result.new_markdown) as string | undefined;
                           const reason = (result.reason as string) || '';
                           
                           if (newContent) {
                             if (call.name === 'edit_text' && oldContent) {
-                              // edit_text: do find-and-replace
-                              applyTextEdit(oldContent, newContent, reason);
+                              // edit_text: markdown str_replace
+                              applyTextEdit(oldContent, newContent, reason, newMarkdown);
                             } else {
                               // rewrite_document: replace entire document
                               const currentHtml = editor.getHTML();
@@ -3009,15 +2997,19 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 
                 // Get diff data from tool_context.output - handle both edit_text and rewrite_document formats
                 const toolOutput = m.tool_context?.output as { 
-                  original_text?: string;  // edit_text format
-                  new_text?: string;       // edit_text format
+                  old_str?: string;          // new edit_text format
+                  new_str?: string;          // new edit_text format
+                  new_markdown?: string;     // new edit_text format
+                  original_text?: string;    // legacy edit_text format
+                  new_text?: string;         // legacy edit_text format
                   original_content?: string; // rewrite_document format
                   new_content?: string;      // rewrite_document format
                 } | undefined;
                 
-                // edit_text uses original_text/new_text, rewrite_document uses original_content/new_content
-                const oldText = toolOutput?.original_text || toolOutput?.original_content || '';
-                const newText = toolOutput?.new_text || toolOutput?.new_content || '';
+                // edit_text uses old_str/new_str (or legacy original_text/new_text), rewrite_document uses original_content/new_content
+                const oldText = toolOutput?.old_str || toolOutput?.original_text || toolOutput?.original_content || '';
+                const newText = toolOutput?.new_str || toolOutput?.new_text || toolOutput?.new_content || '';
+                const newMarkdown = toolOutput?.new_markdown;
                 const isEditText = tool_name === 'edit_text';
                 
                 // Show DiffArtifact with diff preview and Apply button
@@ -3032,8 +3024,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       if (!editor || !newText) return;
                       
                       if (isEditText && oldText) {
-                        // edit_text: do find-and-replace
-                        applyTextEdit(oldText, newText, reason || '');
+                        // edit_text: markdown str_replace
+                        applyTextEdit(oldText, newText, reason || '', newMarkdown);
                       } else {
                         // rewrite_document: replace entire document
                         const currentHtml = editor.getHTML();
@@ -3123,15 +3115,19 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   const artifact = m.meta_data.artifact;
                   const toolExec = m.meta_data?.tool_execution;
                   const toolOutput = toolExec?.output as { 
-                    original_text?: string;  // edit_text format
-                    new_text?: string;       // edit_text format
+                    old_str?: string;          // new edit_text format
+                    new_str?: string;          // new edit_text format
+                    new_markdown?: string;     // new edit_text format
+                    original_text?: string;    // legacy edit_text format
+                    new_text?: string;         // legacy edit_text format
                     original_content?: string; // rewrite_document format
                     new_content?: string;      // rewrite_document format
                   } | undefined;
                   
                   // Get diff data - handle both edit_text and rewrite_document formats
-                  const oldText = toolOutput?.original_text || toolOutput?.original_content || '';
-                  const newText = toolOutput?.new_text || toolOutput?.new_content || artifact.content || '';
+                  const oldText = toolOutput?.old_str || toolOutput?.original_text || toolOutput?.original_content || '';
+                  const newText = toolOutput?.new_str || toolOutput?.new_text || toolOutput?.new_content || artifact.content || '';
+                  const newMarkdown = toolOutput?.new_markdown;
                   const isEditText = toolExec?.tool_name === 'edit_text';
                   
                   return (
@@ -3145,8 +3141,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         if (!editor || !newText) return;
                         
                         if (isEditText && oldText) {
-                          // edit_text: do find-and-replace
-                          applyTextEdit(oldText, newText, artifact.description || '');
+                          // edit_text: markdown str_replace
+                          applyTextEdit(oldText, newText, artifact.description || '', newMarkdown);
                         } else {
                           // rewrite_document: replace entire document
                           const currentHtml = editor.getHTML();
@@ -3205,13 +3201,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                     if (call && (call.name === 'edit_text' || call.name === 'rewrite_document')) {
                                       const result = call.result;
                                       if (action === 'accept' && result && editor) {
-                                        const oldContent = (result.original_text || result.original_content) as string;
-                                        const newContent = (result.new_text || result.new_content) as string;
+                                        const oldContent = (result.old_str || result.original_text || result.original_content) as string;
+                                        const newContent = (result.new_str || result.new_text || result.new_content) as string;
+                                        const newMarkdown = (result.new_markdown) as string | undefined;
                                         const reason = (result.reason as string) || '';
                                         
                                         if (newContent) {
                                           if (call.name === 'edit_text' && oldContent) {
-                                            applyTextEdit(oldContent, newContent, reason);
+                                            applyTextEdit(oldContent, newContent, reason, newMarkdown);
                                           } else {
                                             const currentHtml = editor.getHTML();
                                             const newHtml = mdParser.render(newContent);
