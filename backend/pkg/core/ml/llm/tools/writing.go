@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"os"
 	"sort"
 	"strings"
-	"time"
 
 	"backend/pkg/database/models"
 
@@ -82,7 +80,6 @@ func (t *ReadDocumentTool) Run(ctx context.Context, params ToolCall) (ToolRespon
 
 	// Get markdown content (preferred) or fall back to HTML
 	docContent := GetDocumentMarkdownFromContext(ctx)
-	isMarkdown := docContent != ""
 	if docContent == "" {
 		docContent = GetDocumentHTMLFromContext(ctx)
 	}
@@ -90,25 +87,6 @@ func (t *ReadDocumentTool) Run(ctx context.Context, params ToolCall) (ToolRespon
 		log.Printf("📖 [ReadDocument] ERROR: No document content in context")
 		return NewTextErrorResponse("No document content available. The document may be empty or not loaded."), nil
 	}
-
-	// #region agent log
-	// Find the code section by searching for "func Index" or "data.About" in the markdown
-	codeSnippet := ""
-	funcIdx := strings.Index(docContent, "func Index")
-	if funcIdx == -1 { funcIdx = strings.Index(docContent, "data.About") }
-	if funcIdx == -1 { funcIdx = strings.Index(docContent, "models.") }
-	if funcIdx != -1 {
-		start := funcIdx - 100; if start < 0 { start = 0 }
-		end := funcIdx + 300; if end > len(docContent) { end = len(docContent) }
-		codeSnippet = docContent[start:end]
-	}
-	hasFencedCode := strings.Contains(docContent, "```")
-	hasIndentedCode := strings.Contains(docContent, "    func") || strings.Contains(docContent, "\t\tfunc")
-	hasHTMLPre := strings.Contains(docContent, "<pre") || strings.Contains(docContent, "<code")
-	debugEntry := fmt.Sprintf(`{"location":"writing.go:read_document","message":"read_document source","data":{"isMarkdown":%v,"contentLen":%d,"hasFencedCode":%v,"hasIndentedCode":%v,"hasHTMLPre":%v,"codeSnippet":%q},"timestamp":%d,"hypothesisId":"H6"}`,
-		isMarkdown, len(docContent), hasFencedCode, hasIndentedCode, hasHTMLPre, codeSnippet, time.Now().UnixMilli())
-	if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugEntry + "\n"); f.Close() }
-	// #endregion
 
 	lines := strings.Split(docContent, "\n")
 	totalLines := len(lines)
@@ -587,20 +565,7 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 		return NewTextErrorResponse("Invalid input format"), err
 	}
 
-	// #region agent log
-	debugRaw := fmt.Sprintf(`{"location":"writing.go:edit_text_input","message":"edit_text raw input","data":{"rawInputLen":%d,"rawFirst200":%q},"timestamp":%d,"hypothesisId":"H2"}`,
-		len(params.Input),
-		func() string { s := params.Input; if len(s) > 200 { s = s[:200] }; return s }(),
-		time.Now().UnixMilli())
-	if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugRaw + "\n"); f.Close() }
-	// #endregion
-
 	if input.OldStr == "" || input.NewStr == "" {
-		// #region agent log
-		debugEmpty := fmt.Sprintf(`{"location":"writing.go:edit_text_empty","message":"old_str or new_str empty","data":{"oldStrLen":%d,"newStrLen":%d},"timestamp":%d,"hypothesisId":"H2"}`,
-			len(input.OldStr), len(input.NewStr), time.Now().UnixMilli())
-		if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugEmpty + "\n"); f.Close() }
-		// #endregion
 		return NewTextErrorResponse("old_str and new_str are required"), fmt.Errorf("old_str and new_str are required")
 	}
 
@@ -612,24 +577,13 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 	// Get the document markdown from context to validate the edit
 	documentMarkdown := GetDocumentMarkdownFromContext(ctx)
 
-	// #region agent log
-	debugValidation := fmt.Sprintf(`{"location":"writing.go:edit_text_validate","message":"edit_text validation","data":{"docMdLen":%d,"oldStrLen":%d,"oldStrFirst100":%q,"docMdFirst100":%q},"timestamp":%d,"hypothesisId":"H3,H4"}`,
-		len(documentMarkdown), len(input.OldStr),
-		func() string { s := input.OldStr; if len(s) > 100 { s = s[:100] }; return s }(),
-		func() string { s := documentMarkdown; if len(s) > 100 { s = s[:100] }; return s }(),
-		time.Now().UnixMilli())
-	if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugValidation + "\n"); f.Close() }
-	// #endregion
-
 	var newMarkdown string
 	if documentMarkdown != "" {
 		// Validate: old_str must exist in the document
 		index := strings.Index(documentMarkdown, input.OldStr)
 
 		// If exact match fails, try normalizing markdown escapes
-		normalizedOldStr := input.OldStr
 		if index == -1 {
-			// Strip common markdown escape sequences: \* -> *, \_ -> _, \[ -> [, \] -> ], \# -> #, \` -> `
 			normalizer := strings.NewReplacer(
 				`\*`, `*`,
 				`\_`, `_`,
@@ -637,11 +591,10 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 				`\]`, `]`,
 				`\#`, `#`,
 			)
-			normalizedOldStr = normalizer.Replace(input.OldStr)
+			normalizedOldStr := normalizer.Replace(input.OldStr)
 			normalizedDoc := normalizer.Replace(documentMarkdown)
 			index = strings.Index(normalizedDoc, normalizedOldStr)
 			if index != -1 {
-				// Use the normalized document for the replacement too
 				documentMarkdown = normalizedDoc
 				input.OldStr = normalizedOldStr
 				log.Printf("   🔄 Matched after normalizing markdown escapes")
@@ -650,21 +603,6 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 
 		if index == -1 {
 			log.Printf("   ❌ old_str not found in document markdown")
-			// #region agent log
-			// Find the code block section of the document for comparison
-			codeBlockStart := strings.Index(documentMarkdown, "```")
-			docCodeSection := ""
-			if codeBlockStart != -1 {
-				end := codeBlockStart + 300
-				if end > len(documentMarkdown) { end = len(documentMarkdown) }
-				docCodeSection = documentMarkdown[codeBlockStart:end]
-			}
-			debugNotFound := fmt.Sprintf(`{"location":"writing.go:edit_text_notfound","message":"old_str NOT FOUND","data":{"oldStrFirst200":%q,"docCodeSection":%q,"docMdLen":%d},"timestamp":%d,"hypothesisId":"H4"}`,
-				func() string { s := input.OldStr; if len(s) > 200 { s = s[:200] }; return s }(),
-				docCodeSection,
-				len(documentMarkdown), time.Now().UnixMilli())
-			if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugNotFound + "\n"); f.Close() }
-			// #endregion
 			return NewTextErrorResponse("old_str not found in document. Make sure it matches exactly, including whitespace and line breaks. Use read_document to see the current content."), nil
 		}
 
@@ -678,18 +616,8 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 		// Apply the replacement to produce the full new markdown
 		newMarkdown = documentMarkdown[:index] + input.NewStr + documentMarkdown[index+len(input.OldStr):]
 		log.Printf("   ✅ Edit applied to document markdown (new length: %d)", len(newMarkdown))
-
-		// #region agent log
-		debugSuccess := fmt.Sprintf(`{"location":"writing.go:edit_text_success","message":"edit_text SUCCEEDED","data":{"oldStrLen":%d,"newStrLen":%d,"newMdLen":%d},"timestamp":%d,"hypothesisId":"H4"}`,
-			len(input.OldStr), len(input.NewStr), len(newMarkdown), time.Now().UnixMilli())
-		if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugSuccess + "\n"); f.Close() }
-		// #endregion
 	} else {
 		log.Printf("   ⚠️ No document markdown in context, returning edit without validation")
-		// #region agent log
-		debugNoMd := fmt.Sprintf(`{"location":"writing.go:edit_text_nomd","message":"NO markdown in context","data":{},"timestamp":%d,"hypothesisId":"H1"}`, time.Now().UnixMilli())
-		if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugNoMd + "\n"); f.Close() }
-		// #endregion
 	}
 
 	// Generate diff for display
