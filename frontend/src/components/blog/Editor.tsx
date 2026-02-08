@@ -850,9 +850,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   // If newMarkdown is provided (from backend validation), convert it directly to HTML.
   // Otherwise, apply the edit locally by converting current HTML to markdown, replacing, and converting back.
   const applyTextEdit = (oldStr: string, newStr: string, reason: string, newMarkdown?: string) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5ed2ef34-0520-4861-bbfe-52c16271e660',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Editor.tsx:applyTextEdit',message:'applyTextEdit called',data:{oldStrLen:oldStr?.length,newStrLen:newStr?.length,hasNewMarkdown:!!newMarkdown,newMdLen:newMarkdown?.length,reason:reason},timestamp:Date.now(),hypothesisId:'H5'})}).catch(()=>{});
-    // #endregion
     if (!editor) return;
     
     const currentHtml = editor.getHTML();
@@ -877,8 +874,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       newHtml = mdParser.render(newMd);
     }
     
-    // Full-document diff mode (no precise editInfo since HTML structure may shift from markdown round-trip)
-    enterDiffPreview(currentHtml, newHtml, reason);
+    // Normalize old HTML through the same markdown round-trip so both sides use the same renderer.
+    // Without this, diffWords shows false positives from structural HTML differences between
+    // TipTap's getHTML() and markdown-it's render() (e.g., whitespace, tag structure).
+    const normalizedOldHtml = mdParser.render(turndownService.turndown(currentHtml));
+    enterDiffPreview(normalizedOldHtml, newHtml, reason);
   };
 
   // Apply document rewrite from AI assistant
@@ -904,10 +904,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     // Get current document content in both HTML and markdown formats
     const currentContent = editor?.getHTML() || '';
     const currentMarkdown = currentContent ? turndownService.turndown(currentContent) : '';
-
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5ed2ef34-0520-4861-bbfe-52c16271e660',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Editor.tsx:sendChat',message:'sending chat with markdown',data:{htmlLen:currentContent.length,mdLen:currentMarkdown.length,mdFirst200:currentMarkdown.substring(0,200)},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
 
     // Check if this looks like an edit request
     const isEditRequest = /\b(rewrite|edit|improve|change|update|fix|enhance|modify)\b/i.test(text);
