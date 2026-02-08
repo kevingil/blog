@@ -11,9 +11,10 @@ type ChatMessage struct {
 // ChatRequest is what the /agent endpoint receives from the frontend.
 // It contains a single user message, document context, and the article ID for loading conversation history.
 type ChatRequest struct {
-	Message         string `json:"message" validate:"required,min=1"`
-	DocumentContent string `json:"documentContent,omitempty"`
-	ArticleID       string `json:"articleId" validate:"required"` // Required for loading context
+	Message          string `json:"message" validate:"required,min=1"`
+	DocumentContent  string `json:"documentContent,omitempty"`
+	DocumentMarkdown string `json:"documentMarkdown,omitempty"` // Markdown version of the document for agent editing
+	ArticleID        string `json:"articleId" validate:"required"`  // Required for loading context
 }
 
 // ChatRequestResponse is the immediate response returned when a chat request is submitted

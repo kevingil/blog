@@ -359,11 +359,18 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	}
 
 	userPrompt := asyncReq.Request.Message
-	if asyncReq.Request.DocumentContent != "" {
-		ctx = tools.WithDocumentContent(ctx, asyncReq.Request.DocumentContent, "")
-		layout := generateHTMLOutline(asyncReq.Request.DocumentContent)
+	if asyncReq.Request.DocumentContent != "" || asyncReq.Request.DocumentMarkdown != "" {
+		ctx = tools.WithDocumentContent(ctx, asyncReq.Request.DocumentContent, asyncReq.Request.DocumentMarkdown)
+
+		// Generate outline from markdown if available, otherwise fall back to HTML
+		var layout string
+		if asyncReq.Request.DocumentMarkdown != "" {
+			layout = generateMarkdownOutline(asyncReq.Request.DocumentMarkdown)
+		} else {
+			layout = generateHTMLOutline(asyncReq.Request.DocumentContent)
+		}
 		userPrompt += "\n\n--- Document Layout (use read_document to see full content) ---\n" + layout
-		log.Printf("[Agent] Document layout generated (%d headers), full content stored in context", strings.Count(layout, "\n")+1)
+		log.Printf("[Agent] Document layout generated (%d headers), content stored in context (markdown: %v)", strings.Count(layout, "\n")+1, asyncReq.Request.DocumentMarkdown != "")
 	}
 
 	asyncReq.iteration = 1
@@ -1030,6 +1037,52 @@ func convertHTMLToMarkdown(html string) (string, error) {
 		return "", err
 	}
 	return markdown, nil
+}
+
+// generateMarkdownOutline extracts headings from markdown to show document structure
+func generateMarkdownOutline(markdown string) string {
+	lines := strings.Split(markdown, "\n")
+	var outline []string
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Match markdown headings (## Heading, ### Heading, etc.)
+		if !strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		// Count the heading level
+		level := 0
+		for _, ch := range trimmed {
+			if ch == '#' {
+				level++
+			} else {
+				break
+			}
+		}
+		if level < 1 || level > 6 {
+			continue
+		}
+
+		headerText := strings.TrimSpace(trimmed[level:])
+		if headerText == "" {
+			continue
+		}
+
+		indent := ""
+		if level > 2 {
+			indent = strings.Repeat("  ", level-2)
+		}
+
+		outline = append(outline, fmt.Sprintf("%s- %s (line %d)", indent, headerText, i+1))
+	}
+
+	if len(outline) == 0 {
+		return "(empty document)"
+	}
+
+	return strings.Join(outline, "\n")
 }
 
 // generateHTMLOutline extracts only headers from HTML to show document structure
