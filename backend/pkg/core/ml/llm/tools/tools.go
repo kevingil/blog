@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"strings"
 )
 
 type ToolInfo struct {
@@ -143,11 +144,37 @@ func WithArticleID(ctx context.Context, articleID string) context.Context {
 	return context.WithValue(ctx, ArticleIDContextKey, articleID)
 }
 
-// WithDocumentContent adds document content (both HTML and markdown) to context for tools
+// WithDocumentContent adds document content (both HTML and markdown) to context for tools.
+// The markdown is unescaped before storing so the LLM sees clean content that it can reproduce.
 func WithDocumentContent(ctx context.Context, html, markdown string) context.Context {
 	ctx = context.WithValue(ctx, DocumentContentContextKey, html)
+	// Unescape markdown so read_document returns clean text the LLM can match exactly.
+	// Turndown escapes characters like \*, \_, \`, \[ etc. which the LLM can't reproduce.
+	if markdown != "" {
+		markdown = unescapeMarkdown(markdown)
+	}
 	ctx = context.WithValue(ctx, DocumentMarkdownContextKey, markdown)
 	return ctx
+}
+
+// unescapeMarkdown removes Turndown's backslash escapes that make LLM matching impossible.
+func unescapeMarkdown(s string) string {
+	r := strings.NewReplacer(
+		`\*`, `*`,
+		`\_`, `_`,
+		`\[`, `[`,
+		`\]`, `]`,
+		`\#`, `#`,
+		`\>`, `>`,
+		`\-`, `-`,
+		`\+`, `+`,
+		`\~`, `~`,
+		`\|`, `|`,
+	)
+	// Also unescape backticks: \` -> `
+	result := r.Replace(s)
+	result = strings.ReplaceAll(result, "\\`", "`")
+	return result
 }
 
 // GetDocumentHTMLFromContext retrieves the original HTML document content from context

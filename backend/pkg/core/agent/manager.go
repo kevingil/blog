@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -898,31 +899,46 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 		log.Printf("[Agent]       Call ID: %s", toolResult.ToolCallID)
 		log.Printf("[Agent]       Is Error: %v", toolResult.IsError)
 
-		if toolResult.IsError {
-			log.Printf("[Agent]       ⚠️  Skipping error result")
-			continue
-		}
+		// #region agent log
+		debugSave := fmt.Sprintf(`{"location":"manager.go:saveToolResult","message":"tool result save","data":{"idx":%d,"callId":%q,"isError":%v,"contentFirst100":%q},"timestamp":%d,"hypothesisId":"H5_save"}`,
+			idx, toolResult.ToolCallID, toolResult.IsError,
+			func() string { s := toolResult.Content; if len(s) > 100 { s = s[:100] }; return s }(),
+			time.Now().UnixMilli())
+		if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugSave + "\n"); f.Close() }
+		// #endregion
+
+		// Don't skip error results -- save them so they appear in conversation history
+		isError := toolResult.IsError
 
 		var toolResultData map[string]interface{}
 		if err := json.Unmarshal([]byte(toolResult.Content), &toolResultData); err != nil {
-			log.Printf("[Agent]       ⚠️  Failed to parse tool result: %v", err)
-			continue
+			if isError {
+				// Error results are often plain text, not JSON -- wrap them
+				toolResultData = map[string]interface{}{
+					"content":  toolResult.Content,
+					"is_error": true,
+				}
+				log.Printf("[Agent]       ⚠️  Error result (plain text): %s", truncate(toolResult.Content, 100))
+			} else {
+				log.Printf("[Agent]       ⚠️  Failed to parse tool result: %v", err)
+				continue
+			}
 		}
 
 		toolName, _ := toolResultData["tool_name"].(string)
-		log.Printf("[Agent]       Tool Name: %s", toolName)
+		log.Printf("[Agent]       Tool Name: %s (isError: %v)", toolName, isError)
 
 		toolExec := &metadata.ToolExecution{
 			ToolName:   toolName,
 			ToolID:     toolResult.ToolCallID,
 			Output:     toolResultData,
 			ExecutedAt: time.Now(),
-			Success:    true,
+			Success:    !isError,
 		}
 		msgMetadata.WithToolExecution(toolExec)
 
 		if toolName == "edit_text" || toolName == "rewrite_document" {
-			log.Printf("[Agent]       ✏️  ARTIFACT TOOL DETECTED")
+			log.Printf("[Agent]       ✏️  ARTIFACT TOOL DETECTED (isError: %v)", isError)
 
 			artifactID := uuid.New().String()
 			artifactType := metadata.ArtifactTypeCodeEdit
@@ -935,14 +951,23 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 			var description string
 
 			if toolName == "edit_text" {
-				if newText, ok := toolResultData["new_text"].(string); ok {
+				// Support both new field names (old_str/new_str) and legacy (original_text/new_text)
+				if newStr, ok := toolResultData["new_str"].(string); ok {
+					artifactContent = newStr
+				} else if newText, ok := toolResultData["new_text"].(string); ok {
 					artifactContent = newText
 				}
-				if oldText, ok := toolResultData["original_text"].(string); ok {
+				if oldStr, ok := toolResultData["old_str"].(string); ok {
+					diffPreview = fmt.Sprintf("Old: %s\nNew: %s", truncate(oldStr, 50), truncate(artifactContent, 50))
+				} else if oldText, ok := toolResultData["original_text"].(string); ok {
 					diffPreview = fmt.Sprintf("Old: %s\nNew: %s", truncate(oldText, 50), truncate(artifactContent, 50))
 				}
 				if reason, ok := toolResultData["reason"].(string); ok {
 					description = reason
+				}
+				// For error results, use the error content as description if no reason
+				if isError && description == "" {
+					description = toolResult.Content
 				}
 			} else if toolName == "rewrite_document" {
 				if newContent, ok := toolResultData["new_content"].(string); ok {
@@ -956,10 +981,15 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 				}
 			}
 
+			artifactStatus := metadata.ArtifactStatusPending
+			if isError {
+				artifactStatus = "error"
+			}
+
 			artifact := &metadata.ArtifactInfo{
 				ID:          artifactID,
 				Type:        artifactType,
-				Status:      metadata.ArtifactStatusPending,
+				Status:      artifactStatus,
 				Content:     artifactContent,
 				DiffPreview: diffPreview,
 				Title:       fmt.Sprintf("%s result", toolName),

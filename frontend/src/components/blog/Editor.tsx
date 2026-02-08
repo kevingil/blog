@@ -7,7 +7,7 @@ import { format } from "date-fns"
 import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, ArrowUp, Square, Settings, Trash2 } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, type Editor as TiptapEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import CodeBlock from '@tiptap/extension-code-block';
 import MarkdownIt from 'markdown-it';
@@ -903,7 +903,23 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
     // Get current document content in both HTML and markdown formats
     const currentContent = editor?.getHTML() || '';
+    // #region agent log
+    // Check what HTML TipTap produces for <pre> tags
+    const hasPreTag = currentContent.includes('<pre');
+    const hasCodeTag = currentContent.includes('<code');
+    const preIdx = currentContent.indexOf('<pre');
+    const htmlAroundPre = preIdx !== -1 ? currentContent.substring(preIdx, Math.min(preIdx + 200, currentContent.length)) : 'NO_PRE_TAG';
+    fetch('http://127.0.0.1:7242/ingest/5ed2ef34-0520-4861-bbfe-52c16271e660',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Editor.tsx:htmlInput',message:'HTML before turndown',data:{htmlLen:currentContent.length,hasPreTag,hasCodeTag,htmlAroundPre},timestamp:Date.now(),hypothesisId:'H2_html'})}).catch(()=>{});
+    // #endregion
+
     const currentMarkdown = currentContent ? turndownService.turndown(currentContent) : '';
+
+    // #region agent log
+    const hasFenced = currentMarkdown.includes('```');
+    const hasEscapedBacktick = currentMarkdown.includes('\\`');
+    const mdSample = currentMarkdown.substring(0, 300);
+    fetch('http://127.0.0.1:7242/ingest/5ed2ef34-0520-4861-bbfe-52c16271e660',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Editor.tsx:sendChat',message:'markdown produced by turndown',data:{mdLen:currentMarkdown.length,hasFenced,hasEscapedBacktick,mdSample},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
 
     // Check if this looks like an edit request
     const isEditRequest = /\b(rewrite|edit|improve|change|update|fix|enhance|modify)\b/i.test(text);
@@ -1228,17 +1244,21 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                               const calls = steps[i].toolGroup!.calls;
                               for (let j = 0; j < calls.length; j++) {
                                 if (calls[j].name === toolResult.tool_name && calls[j].status === 'running') {
+                                  const toolStatus = toolResult.is_error ? 'error' : 'completed';
                                   calls[j] = {
                                     ...calls[j],
-                                    status: 'completed',
+                                    status: toolStatus,
                                     result: toolResult,
+                                    error: toolResult.is_error ? (toolResult.error || 'Edit failed') : undefined,
                                     completed_at: new Date().toISOString(),
                                   };
+                                  // Group status is error if any call errored
+                                  const groupStatus = calls.some((c: any) => c.status === 'error') ? 'error' : 'completed';
                                   steps[i] = {
                                     ...steps[i],
                                     toolGroup: {
                                       ...steps[i].toolGroup!,
-                                      status: 'completed',
+                                      status: groupStatus,
                                       calls: [...calls],
                                     },
                                   };
@@ -1256,11 +1276,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         return updated;
                       });
                       
-                      // For edit tools, also apply the diff preview
-                      if (toolResult.tool_name === 'edit_text' && isNewMessage) {
+                      // For edit tools, also apply the diff preview (only for successful results)
+                      if (toolResult.tool_name === 'edit_text' && isNewMessage && !toolResult.is_error) {
                         applyTextEdit(toolResult.old_str || toolResult.original_text, toolResult.new_str || toolResult.new_text, toolResult.reason, toolResult.new_markdown);
                         setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
-                      } else if (toolResult.tool_name === 'rewrite_document' && isNewMessage) {
+                      } else if (toolResult.tool_name === 'rewrite_document' && isNewMessage && !toolResult.is_error) {
                         applyDocumentRewrite(toolResult.new_content, toolResult.reason, toolResult.original_content);
                         setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
                       }
@@ -1464,13 +1484,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               // Parse the tool result content to extract artifacts
               const toolResult = JSON.parse(msg.content);
               
-              // Handle edit_text tool specifically - only for new messages
-              if (toolResult.tool_name === 'edit_text' && isNewMessage) {
+              // Handle edit_text tool specifically - only for new messages (skip error results)
+              if (toolResult.tool_name === 'edit_text' && isNewMessage && !toolResult.is_error) {
                 applyTextEdit(toolResult.old_str || toolResult.original_text, toolResult.new_str || toolResult.new_text, toolResult.reason, toolResult.new_markdown);
                 
                 // Mark this tool message as processed
                 setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
-              } else if (toolResult.tool_name === 'rewrite_document' && isNewMessage) {
+              } else if (toolResult.tool_name === 'rewrite_document' && isNewMessage && !toolResult.is_error) {
                 // Handle document rewrite with diff preview
                 applyDocumentRewrite(toolResult.new_content, toolResult.reason, toolResult.original_content);
                 

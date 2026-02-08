@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"backend/pkg/database/models"
 
@@ -577,19 +579,46 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 	// Get the document markdown from context to validate the edit
 	documentMarkdown := GetDocumentMarkdownFromContext(ctx)
 
+	// #region agent log
+	// Log: what does the old_str look like byte-by-byte for first 80 chars, and does the doc contain the first line?
+	oldStrFirst80 := input.OldStr; if len(oldStrFirst80) > 80 { oldStrFirst80 = oldStrFirst80[:80] }
+	firstNewline := strings.Index(input.OldStr, "\n")
+	firstLine := input.OldStr; if firstNewline > 0 { firstLine = input.OldStr[:firstNewline] }
+	firstLineInDoc := strings.Contains(documentMarkdown, firstLine)
+	hasFenced := strings.Contains(documentMarkdown, "```")
+	// Find closest match by searching for progressively shorter prefixes
+	matchLen := 0
+	for i := len(firstLine); i > 10; i-- {
+		if strings.Contains(documentMarkdown, firstLine[:i]) { matchLen = i; break }
+	}
+	debugEntry := fmt.Sprintf(`{"location":"writing.go:edit_text","message":"edit validation detail","data":{"oldStrLen":%d,"docLen":%d,"firstLine":%q,"firstLineInDoc":%v,"firstLineLen":%d,"matchLen":%d,"hasFenced":%v,"oldStrBytes":%q},"timestamp":%d,"hypothesisId":"H1,H3"}`,
+		len(input.OldStr), len(documentMarkdown), firstLine, firstLineInDoc, len(firstLine), matchLen, hasFenced,
+		[]byte(oldStrFirst80), time.Now().UnixMilli())
+	if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugEntry + "\n"); f.Close() }
+	// #endregion
+
 	var newMarkdown string
 	if documentMarkdown != "" {
 		// Validate: old_str must exist in the document
 		index := strings.Index(documentMarkdown, input.OldStr)
 
-		// If exact match fails, try normalizing markdown escapes
+		// If exact match fails, try normalizing markdown escapes, JSON unicode escapes, and whitespace
 		if index == -1 {
 			normalizer := strings.NewReplacer(
+				// Markdown backslash escapes
 				`\*`, `*`,
 				`\_`, `_`,
 				`\[`, `[`,
 				`\]`, `]`,
 				`\#`, `#`,
+				"\\`", "`",
+				`\&`, `&`,
+				// JSON unicode escapes that LLMs double-escape
+				`\u0026`, `&`,
+				`\u003c`, `<`,
+				`\u003e`, `>`,
+				`\u0022`, `"`,
+				`\u0027`, `'`,
 			)
 			normalizedOldStr := normalizer.Replace(input.OldStr)
 			normalizedDoc := normalizer.Replace(documentMarkdown)
@@ -598,24 +627,126 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 				documentMarkdown = normalizedDoc
 				input.OldStr = normalizedOldStr
 				log.Printf("   🔄 Matched after normalizing markdown escapes")
+				// #region agent log
+				debugNorm := fmt.Sprintf(`{"location":"writing.go:edit_text_norm","message":"MATCHED via escape normalization","data":{"index":%d},"timestamp":%d,"hypothesisId":"H3"}`, index, time.Now().UnixMilli())
+				if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugNorm + "\n"); f.Close() }
+				// #endregion
+			}
+		}
+
+		// Second fallback: also collapse repeated whitespace (spaces, tabs) to single space
+		if index == -1 {
+			collapseWS := func(s string) string {
+				// Normalize markdown escapes and JSON unicode escapes first
+				n := strings.NewReplacer(`\*`, `*`, `\_`, `_`, `\[`, `[`, `\]`, `]`, `\#`, `#`, "\\`", "`", `\&`, `&`, `\u0026`, `&`, `\u003c`, `<`, `\u003e`, `>`, `\u0022`, `"`, `\u0027`, `'`).Replace(s)
+				// Collapse runs of whitespace (but preserve newlines)
+				var b strings.Builder
+				prevSpace := false
+				for _, r := range n {
+					if r == ' ' || r == '\t' {
+						if !prevSpace { b.WriteRune(' ') }
+						prevSpace = true
+					} else {
+						b.WriteRune(r)
+						prevSpace = false
+					}
+				}
+				return b.String()
+			}
+			wsOldStr := collapseWS(input.OldStr)
+			wsDoc := collapseWS(documentMarkdown)
+			index = strings.Index(wsDoc, wsOldStr)
+			if index != -1 {
+				documentMarkdown = wsDoc
+				input.OldStr = wsOldStr
+				log.Printf("   🔄 Matched after whitespace normalization")
+				// #region agent log
+				debugWS := fmt.Sprintf(`{"location":"writing.go:edit_text_ws","message":"MATCHED via whitespace normalization","data":{"index":%d},"timestamp":%d,"hypothesisId":"H3"}`, index, time.Now().UnixMilli())
+				if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugWS + "\n"); f.Close() }
+				// #endregion
+			}
+		}
+
+		// Third fallback: fuzzy patch matching using diffmatchpatch
+		if index == -1 {
+			log.Printf("   🔄 Trying fuzzy patch match...")
+			fuzzyDmp := diffmatchpatch.New()
+			fuzzyDmp.MatchThreshold = 0.3 // Allow 30% character differences
+			fuzzyDmp.MatchDistance = 1000  // Search across a wide range
+			fuzzyDmp.PatchDeleteThreshold = 0.4
+
+			// Create a patch from old_str -> new_str
+			patches := fuzzyDmp.PatchMake(input.OldStr, input.NewStr)
+			// Apply the patch to the full document with fuzzy matching
+			applied, results := fuzzyDmp.PatchApply(patches, documentMarkdown)
+			anyApplied := false
+			for _, r := range results {
+				if r { anyApplied = true; break }
+			}
+			if anyApplied && applied != documentMarkdown {
+				newMarkdown = applied
+				log.Printf("   🔄 Fuzzy patch applied successfully (%d/%d hunks)", countTrue(results), len(results))
+				// #region agent log
+				debugFuzzy := fmt.Sprintf(`{"location":"writing.go:edit_text_fuzzy","message":"MATCHED via fuzzy patch","data":{"hunksApplied":%d,"hunksTotal":%d,"newLen":%d},"timestamp":%d,"hypothesisId":"H_fuzzy"}`,
+					countTrue(results), len(results), len(newMarkdown), time.Now().UnixMilli())
+				if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugFuzzy + "\n"); f.Close() }
+				// #endregion
+				// Skip the exact match path below -- we already have newMarkdown
+				index = 0 // sentinel: mark as found so we skip the error path
 			}
 		}
 
 		if index == -1 {
-			log.Printf("   ❌ old_str not found in document markdown")
-			return NewTextErrorResponse("old_str not found in document. Make sure it matches exactly, including whitespace and line breaks. Use read_document to see the current content."), nil
+			log.Printf("   ❌ old_str not found even with fuzzy matching")
+			// #region agent log
+			debugFail := fmt.Sprintf(`{"location":"writing.go:edit_text_fail","message":"ALL MATCH STRATEGIES FAILED","data":{"oldStrLen":%d,"docLen":%d},"timestamp":%d,"hypothesisId":"H_fail"}`,
+				len(input.OldStr), len(documentMarkdown), time.Now().UnixMilli())
+			if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugFail + "\n"); f.Close() }
+			// #endregion
+
+			// Return error but include the proposed edit data so the DiffArtifact can display it
+			result := map[string]interface{}{
+				"old_str":   input.OldStr,
+				"new_str":   input.NewStr,
+				"reason":    input.Reason,
+				"tool_name": "edit_text",
+				"is_error":  true,
+				"error":     "Could not locate the text to edit. The text may contain special characters that were modified during formatting.",
+			}
+			resultJSON, _ := json.Marshal(result)
+			return ToolResponse{
+				Type:    ToolResponseTypeText,
+				Content: string(resultJSON),
+				Result:  result,
+				IsError: true,
+				Artifact: &ArtifactHint{
+					Type: ArtifactHintTypeDiff,
+					Data: map[string]interface{}{
+						"original": input.OldStr,
+						"proposed": input.NewStr,
+						"reason":   input.Reason,
+					},
+				},
+			}, nil
 		}
 
-		// Validate: old_str must be unique
-		lastIndex := strings.LastIndex(documentMarkdown, input.OldStr)
-		if index != lastIndex {
-			log.Printf("   ❌ old_str appears multiple times in document")
-			return NewTextErrorResponse("old_str appears multiple times in the document. Include more surrounding context to make it unique."), nil
-		}
+		if index != -1 && newMarkdown == "" {
+			// Exact/normalized match succeeded -- apply via string replacement
+			// (fuzzy path already set newMarkdown, so skip this if newMarkdown is set)
+			lastIndex := strings.LastIndex(documentMarkdown, input.OldStr)
+			if index != lastIndex {
+				log.Printf("   ❌ old_str appears multiple times in document")
+				return NewTextErrorResponse("old_str appears multiple times in the document. Include more surrounding context to make it unique."), nil
+			}
 
-		// Apply the replacement to produce the full new markdown
-		newMarkdown = documentMarkdown[:index] + input.NewStr + documentMarkdown[index+len(input.OldStr):]
-		log.Printf("   ✅ Edit applied to document markdown (new length: %d)", len(newMarkdown))
+			newMarkdown = documentMarkdown[:index] + input.NewStr + documentMarkdown[index+len(input.OldStr):]
+			log.Printf("   ✅ Edit applied to document markdown (new length: %d)", len(newMarkdown))
+			// #region agent log
+			debugOk := fmt.Sprintf(`{"location":"writing.go:edit_text_ok","message":"MATCH SUCCESS","data":{"index":%d,"oldStrLen":%d},"timestamp":%d,"hypothesisId":"H1"}`,
+				index, len(input.OldStr), time.Now().UnixMilli())
+			if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugOk + "\n"); f.Close() }
+			// #endregion
+		}
 	} else {
 		log.Printf("   ⚠️ No document markdown in context, returning edit without validation")
 	}
@@ -665,6 +796,14 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 }
 
 // Helper function to count characters by diff type
+func countTrue(results []bool) int {
+	count := 0
+	for _, r := range results {
+		if r { count++ }
+	}
+	return count
+}
+
 func countDiffType(diffs []diffmatchpatch.Diff, diffType diffmatchpatch.Operation) int {
 	count := 0
 	for _, diff := range diffs {
