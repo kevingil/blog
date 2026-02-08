@@ -483,9 +483,9 @@ export function ToolGroupDisplay({ group, onArtifactAction }: ToolGroupDisplayPr
         // Use DiffArtifact for edit tools
         if (isArtifactTool(call.name) && call.status === 'completed' && call.result) {
           const result = call.result;
-          // edit_text uses original_text/new_text, rewrite_document uses original_content/new_content
-          const oldText = (result.original_text || result.original_content || '') as string;
-          const newText = (result.new_text || result.new_content || '') as string;
+          // edit_text uses old_str/new_str (new) or original_text/new_text (legacy), rewrite_document uses original_content/new_content
+          const oldText = (result.old_str || result.original_text || result.original_content || '') as string;
+          const newText = (result.new_str || result.new_text || result.new_content || '') as string;
           const reason = (result.reason || '') as string;
           
           return (
