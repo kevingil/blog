@@ -27,6 +27,7 @@ import (
 	"backend/pkg/core/chat"
 	"backend/pkg/core/worker"
 	"backend/pkg/database"
+	"backend/pkg/database/repository"
 	"fmt"
 	"log"
 	"log/slog"
@@ -46,9 +47,11 @@ func main() {
 	// Initialize database (makes it available via database.DB())
 	database.Init()
 
-	// Initialize Agent-powered copilot manager with chat service
+	// Initialize Agent-powered copilot manager with chat + draft services
 	chatService := chat.NewMessageService(database.New())
-	if err := coreAgent.InitializeWithDefaults(chatService); err != nil {
+	articleRepo := repository.NewArticleRepository(database.DB())
+	draftService := coreAgent.NewArticleDraftService(articleRepo)
+	if err := coreAgent.InitializeWithDefaults(chatService, draftService); err != nil {
 		log.Printf("Warning: Failed to initialize AgentCopilotManager: %v", err)
 	}
 	log.Printf("Initialized Agent Services")

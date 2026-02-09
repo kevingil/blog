@@ -40,6 +40,14 @@ type ArticleRepository interface {
 	ListVersions(ctx context.Context, articleID uuid.UUID) ([]types.ArticleVersion, error)
 	GetVersion(ctx context.Context, versionID uuid.UUID) (*types.ArticleVersion, error)
 	RevertToVersion(ctx context.Context, articleID, versionID uuid.UUID) error
+
+	// Agent draft operations
+	// CreateDraftSnapshot saves the current draft as a version record and returns the version ID.
+	// Used before an agent turn to create an "undo point".
+	CreateDraftSnapshot(ctx context.Context, articleID uuid.UUID) (*uuid.UUID, error)
+	// UpdateDraftContent updates only draft_content + updated_at without creating a version record.
+	// Used during agent turns to persist each edit without version spam.
+	UpdateDraftContent(ctx context.Context, articleID uuid.UUID, htmlContent string) error
 }
 
 // articleRepository implements data access for articles using GORM
@@ -584,4 +592,64 @@ func (r *articleRepository) createVersionAsync(articleID uuid.UUID, title, conte
 	r.db.Model(&models.Article{}).
 		Where("id = ?", articleID).
 		Update(pointerField, version.ID)
+}
+
+// CreateDraftSnapshot saves the current draft content as a version record (synchronously)
+// and returns the version ID. Used before an agent turn to create an "undo point".
+func (r *articleRepository) CreateDraftSnapshot(ctx context.Context, articleID uuid.UUID) (*uuid.UUID, error) {
+	// Fetch the current article
+	var article models.Article
+	if err := r.db.WithContext(ctx).First(&article, articleID).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch article for snapshot: %w", err)
+	}
+
+	// Get next version number
+	var maxVersion int
+	r.db.Model(&models.ArticleVersion{}).
+		Where("article_id = ?", articleID).
+		Select("COALESCE(MAX(version_number), 0)").
+		Scan(&maxVersion)
+
+	versionID := uuid.New()
+	version := &models.ArticleVersion{
+		ID:            versionID,
+		ArticleID:     articleID,
+		VersionNumber: maxVersion + 1,
+		Status:        "draft",
+		Title:         article.DraftTitle,
+		Content:       article.DraftContent,
+		ImageURL:      article.DraftImageURL,
+		EditedBy:      &article.AuthorID,
+		CreatedAt:     time.Now(),
+	}
+
+	// Create version - omit embedding if empty
+	var err error
+	if article.DraftEmbedding.Slice() != nil && len(article.DraftEmbedding.Slice()) > 0 {
+		version.Embedding = article.DraftEmbedding
+		err = r.db.WithContext(ctx).Create(version).Error
+	} else {
+		err = r.db.WithContext(ctx).Omit("Embedding").Create(version).Error
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to create draft snapshot: %w", err)
+	}
+
+	// Update version pointer on article
+	r.db.Model(&models.Article{}).
+		Where("id = ?", articleID).
+		Update("current_draft_version_id", versionID)
+
+	return &versionID, nil
+}
+
+// UpdateDraftContent updates only draft_content + updated_at on an article.
+// Does NOT create a version record -- used during agent turns to avoid version spam.
+func (r *articleRepository) UpdateDraftContent(ctx context.Context, articleID uuid.UUID, htmlContent string) error {
+	return r.db.WithContext(ctx).Model(&models.Article{}).
+		Where("id = ?", articleID).
+		Updates(map[string]interface{}{
+			"draft_content": htmlContent,
+			"updated_at":    time.Now(),
+		}).Error
 }

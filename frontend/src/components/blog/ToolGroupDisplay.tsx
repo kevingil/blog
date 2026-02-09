@@ -480,13 +480,14 @@ export function ToolGroupDisplay({ group, onArtifactAction }: ToolGroupDisplayPr
   return (
     <div className="space-y-1">
       {group.calls.map((call) => {
-        // Use DiffArtifact for edit tools
-        if (isArtifactTool(call.name) && call.status === 'completed' && call.result) {
-          const result = call.result;
-          // edit_text uses original_text/new_text, rewrite_document uses original_content/new_content
-          const oldText = (result.original_text || result.original_content || '') as string;
-          const newText = (result.new_text || result.new_content || '') as string;
+        // Use DiffArtifact for edit tools (both completed and errored -- show whatever data is available)
+        if (isArtifactTool(call.name) && (call.status === 'completed' || call.status === 'error') && (call.result || call.error)) {
+          const result = call.result || {};
+          // edit_text uses old_str/new_str (new) or original_text/new_text (legacy), rewrite_document uses original_content/new_content
+          const oldText = (result.old_str || result.original_text || result.original_content || '') as string;
+          const newText = (result.new_str || result.new_text || result.new_content || '') as string;
           const reason = (result.reason || '') as string;
+          const errorMsg = call.error || (result.error as string) || (result.is_error ? 'Edit failed' : '');
           
           return (
             <DiffArtifact
@@ -495,7 +496,9 @@ export function ToolGroupDisplay({ group, onArtifactAction }: ToolGroupDisplayPr
               description={reason}
               oldText={oldText}
               newText={newText}
-              onApply={onArtifactAction ? () => onArtifactAction(call.id, 'accept') : undefined}
+              error={errorMsg || undefined}
+              status={errorMsg ? 'error' : call.status === 'completed' ? 'completed' : 'error'}
+              onApply={call.status === 'completed' && !errorMsg && onArtifactAction ? () => onArtifactAction(call.id, 'accept') : undefined}
             />
           );
         }

@@ -3,23 +3,32 @@ import { useParams, useNavigate } from '@tanstack/react-router';
 import { useAuth } from '@/services/auth/auth';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, List, ListOrdered, Quote, Undo, Redo, ArrowUp, Square, Settings, Trash2 } from "lucide-react"
+import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, ArrowUp, Square, Settings, Trash2 } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, type Editor as TiptapEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import CodeBlock from '@tiptap/extension-code-block';
-import { Extension } from '@tiptap/core';
-import { Plugin, PluginKey } from 'prosemirror-state';
-import { Decoration, DecorationSet } from 'prosemirror-view';
 import MarkdownIt from 'markdown-it';
-import { diffWords } from 'diff';
-import type { Editor as TiptapEditor } from '@tiptap/core';
 import { VITE_API_BASE_URL } from "@/services/constants";
 import { apiPost, isAuthError } from '@/services/authenticatedFetch';
 import '@/tiptap.css';
+
+// Extracted editor modules
+import { DiffHighlighter } from './editor/diff-highlighter';
+import { FormattingToolbar } from './editor/FormattingToolbar';
+import { ImageLoader } from './editor/ImageLoader';
+import { turndownService } from './editor/turndown';
+import { 
+  DEFAULT_IMAGE_PROMPT, 
+  articleSchema, 
+  getToolDisplayName,
+  type ArticleFormData, 
+  type ChatMessage, 
+  type SearchResult, 
+  type SourceInfo 
+} from './editor/editor-types';
 
 // Card removed - no longer needed after toolbar simplification
 import { Input } from "@/components/ui/input";
@@ -50,7 +59,6 @@ import { ToolGroupDisplay } from "./ToolGroupDisplay";
 import type { 
   ToolGroup, 
   ThinkingBlock, 
-  Artifact as NewArtifact,
   TurnStep,
 } from "./types";
 import { 
@@ -97,763 +105,6 @@ import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle, Drawer
 import { SourcesManager } from './SourcesManager';
 import { SourcesPreview } from './SourcesPreview';
 
-// Helper function to convert tool names to user-friendly display names
-function getToolDisplayName(toolName: string): string {
-  const toolDisplayMap: Record<string, string> = {
-    'rewrite_document': 'Rewriting document',
-    'edit_text': 'Editing text',
-    'analyze_document': 'Analyzing document',
-    'generate_image_prompt': 'Generating image prompt',
-    'search_web': 'Searching the web',
-    'fetch_url': 'Fetching content',
-    'search_documents': 'Searching documents',
-    'read_file': 'Reading file',
-    'write_file': 'Writing file',
-    'calculate': 'Calculating',
-    'translate': 'Translating',
-    'research': 'Researching'
-  };
-  
-  if (toolDisplayMap[toolName]) {
-    return toolDisplayMap[toolName];
-  }
-  
-  const friendlyName = toolName
-    .replace(/_/g, ' ')
-    .replace(/([A-Z])/g, ' $1')
-    .toLowerCase()
-    .replace(/^./, str => str.toUpperCase())
-    .trim();
-  
-  if (toolName.toLowerCase().includes('search')) {
-    return `Searching for ${friendlyName.toLowerCase()}`;
-  } else if (toolName.toLowerCase().includes('generate')) {
-    return `Generating ${friendlyName.toLowerCase()}`;
-  } else if (toolName.toLowerCase().includes('fetch') || toolName.toLowerCase().includes('get')) {
-    return `Fetching ${friendlyName.toLowerCase()}`;
-  } else if (toolName.toLowerCase().includes('analyze')) {
-    return `Analyzing ${friendlyName.toLowerCase()}`;
-  } else {
-    return `Using ${friendlyName.toLowerCase()}`;
-  }
-}
-
-const DEFAULT_IMAGE_PROMPT = [
-  "A modern, minimalist illustration",
-  "A vibrant, colorful scene",
-  "A professional business setting",
-  "A natural landscape",
-  "An abstract design"
-];
-
-const articleSchema = z.object({
-  title: z.string().min(1, 'Title is required'),
-  content: z.string().min(1, 'Content is required'),
-  image_url: z.union([z.string().url(), z.literal('')]).optional(),
-  tags: z.array(z.string()),
-  // Note: isDraft removed - publish/unpublish is now a separate action
-});
-
-type ArticleFormData = z.infer<typeof articleSchema>;
-
-type SearchResult = {
-  title: string;
-  url: string;
-  summary?: string;
-  author?: string;
-  published_date?: string;
-  favicon?: string;
-  highlights?: string[];
-  text_preview?: string;
-  has_full_text?: boolean;
-};
-
-type SourceInfo = {
-  source_id: string;
-  original_title: string;
-  original_url: string;
-  content_length: number;
-  source_type?: string;
-  search_query?: string;
-};
-
-type ChatMessage = {
-  id?: string;
-  role: 'user' | 'assistant' | 'tool';
-  content: string;
-  diffState?: 'accepted' | 'rejected';
-  diffPreview?: {
-    oldText: string;
-    newText: string;
-    reason?: string;
-  };
-  meta_data?: {
-    artifact?: {
-      id: string;
-      type: string;
-      status: string;
-      content: string;
-      diff_preview?: string;
-      title?: string;
-      description?: string;
-      applied_at?: string;
-    };
-    task_status?: any;
-    tool_execution?: any;
-    tool_group?: ToolGroup;
-    thinking?: ThinkingBlock;
-    artifacts?: NewArtifact[];
-    context?: any;
-    user_action?: any;
-  };
-  // New: Tool group for unified tool call display
-  tool_group?: ToolGroup;
-  // New: Thinking/chain of thought
-  thinking?: ThinkingBlock;
-  // Chain of thought steps (reasoning -> tool -> reasoning -> content)
-  steps?: TurnStep[];
-  // Streaming state
-  isReasoningStreaming?: boolean;
-  // Legacy tool_context for backward compatibility
-  tool_context?: {
-    tool_name: string;
-    tool_id: string;
-    status: 'starting' | 'running' | 'completed' | 'error';
-    // Web search specific
-    search_query?: string;
-    search_results?: SearchResult[];
-    sources_created?: SourceInfo[];
-    total_found?: number;
-    sources_successful?: number;
-    // Ask question specific
-    answer?: string;
-    citations?: Array<{
-      url: string;
-      title: string;
-      author?: string;
-      published_date?: string;
-    }>;
-    // Generic tool fields
-    message?: string;
-    input?: Record<string, unknown>;
-    output?: Record<string, unknown>;
-    reason?: string;
-  };
-  created_at?: string;
-};
-
-// === TipTap Diff Extension ================================================
-//
-// This extension provides inline diff highlighting for the TipTap editor.
-// It visualizes changes between old and new content with green (added) and
-// red strikethrough (removed) decorations.
-//
-// ## Architecture
-//
-// The diff system operates in two modes:
-//
-// ### 1. PRECISE MODE (for edit_text operations)
-// When we know exactly what was replaced and where:
-// - Receives: originalText, newText, and the HTML index where the edit occurred
-// - Extracts plain text from editor's document (NOT htmlToPlainText) for accuracy
-// - Detects common edit patterns for reliable highlighting:
-//   - INSERT BEFORE: Uses indexOf() to find preserved text position in editor
-//   - INSERT AFTER: "Summary" → "Summary + New content" (new starts with original)
-//   - PURE REPLACEMENT: Original text completely replaced
-//   - COMPLEX: Falls back to word-level diff
-// - Avoids false matches that occur when diffing entire documents
-//
-// ### 2. FULL DOCUMENT MODE (for rewrite_document operations)
-// When the entire document is rewritten:
-// - Compares full old vs new document plain text
-// - Uses word-level diff (diffWords) for change detection
-// - Includes structural change detection (same text, different HTML tag)
-//
-// ## Position Mapping
-//
-// HTML content is converted to plain text for diffing, then diff positions
-// are mapped back to ProseMirror editor positions. Key considerations:
-// - HTML tags don't appear in plain text but affect editor positions
-// - Text node boundaries require careful offset-to-position mapping
-// - The offsetToPos function handles gaps between text nodes
-//
-// CRITICAL: For PRECISE MODE, plain text MUST be extracted from the editor's
-// document (tr.doc.descendants) rather than using htmlToPlainText(). This is
-// because htmlToPlainText() can include whitespace (like newlines) that
-// ProseMirror treats as structural boundaries, causing character count
-// mismatches that result in incorrect highlight boundaries.
-//
-// ## Usage Flow
-//
-// 1. enterDiffPreview() is called with old/new HTML and optional editInfo
-// 2. Editor content is set to new HTML
-// 3. showDiff command computes diff parts based on mode
-// 4. ProseMirror plugin applies decorations based on diff parts
-// 5. User accepts (keeps new) or rejects (reverts to old)
-//
-// =========================================================================
-
-// Represents a text segment with its HTML context and position
-type TextSegment = {
-  text: string;
-  tagContext: string; // e.g., "h2", "p", "h3"
-  startOffset: number; // position in plain text
-  endOffset: number;
-};
-
-// Extract text segments with their tag context from HTML
-function extractTextSegments(html: string): TextSegment[] {
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  const segments: TextSegment[] = [];
-  let currentOffset = 0;
-  
-  function walk(node: Node, parentTag: string) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.textContent || '';
-      if (text.length > 0) {
-        segments.push({ 
-          text, 
-          tagContext: parentTag,
-          startOffset: currentOffset,
-          endOffset: currentOffset + text.length
-        });
-        currentOffset += text.length;
-      }
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const el = node as Element;
-      const tag = el.tagName.toLowerCase();
-      for (const child of Array.from(el.childNodes)) {
-        walk(child, tag);
-      }
-    }
-  }
-  
-  for (const child of Array.from(div.childNodes)) {
-    walk(child, 'root');
-  }
-  return segments;
-}
-
-// Extract plain text from HTML (for position mapping)
-function htmlToPlainText(html: string): string {
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  return div.textContent || div.innerText || '';
-}
-
-// Type for diff parts (compatible with diffWords output from 'diff' library)
-// - added: true if this text was inserted
-// - removed: true if this text was deleted
-// - value: the actual text content
-// - count: optional word count (from diffWords)
-type DiffPart = { added?: boolean; removed?: boolean; value: string; count?: number };
-
-// Detect structural changes where text content is the same but HTML tag changed.
-// For example, if "Summary" was in <h3> but is now in <h2>, this marks it as changed.
-// Used in FULL DOCUMENT MODE to highlight tag-level modifications.
-function detectStructuralChanges(
-  oldSegments: TextSegment[],
-  newSegments: TextSegment[],
-  parts: DiffPart[]
-): DiffPart[] {
-  // Build a map of text -> tag for old content
-  const oldTextToTag = new Map<string, string>();
-  for (const seg of oldSegments) {
-    const trimmed = seg.text.trim();
-    if (trimmed) {
-      oldTextToTag.set(trimmed, seg.tagContext);
-    }
-  }
-  
-  // Build a map of text -> tag for new content  
-  const newTextToTag = new Map<string, string>();
-  for (const seg of newSegments) {
-    const trimmed = seg.text.trim();
-    if (trimmed) {
-      newTextToTag.set(trimmed, seg.tagContext);
-    }
-  }
-  
-  // Process parts and mark structural changes
-  const result: DiffPart[] = [];
-  
-  for (const part of parts) {
-    // Only check unchanged parts for structural changes
-    if (!part.added && !part.removed) {
-      const trimmed = part.value.trim();
-      const oldTag = oldTextToTag.get(trimmed);
-      const newTag = newTextToTag.get(trimmed);
-      
-      // If same text exists in both but with different tags, mark as changed
-      if (oldTag && newTag && oldTag !== newTag) {
-        result.push({ added: true, value: part.value });
-      } else {
-        result.push(part);
-      }
-    } else {
-      result.push(part);
-    }
-  }
-  
-  return result;
-}
-
-const DIFF_PLUGIN_KEY = new PluginKey('diff-highlighter');
-const DiffHighlighter = Extension.create({
-  name: 'diffHighlighter',
-  addStorage() {
-    return {
-      active: false as boolean,
-      parts: [] as DiffPart[],
-    };
-  },
-  addCommands() {
-    return {
-      showDiff:
-        (oldHtml: string, newHtml: string, editInfo?: { originalText: string; newText: string; htmlIndex: number }) =>
-          ({ tr, dispatch }: { tr: unknown; dispatch: (tr: unknown) => void }) => {
-          try {
-            let parts: DiffPart[];
-            
-            if (editInfo) {
-              // PRECISE MODE: Use exact edit boundaries for edit_text operations
-              // This avoids false matches from diffing the entire document
-              
-              // Extract plain text from the original and new edit content
-              const originalPlainText = htmlToPlainText(editInfo.originalText);
-              const newPlainText = htmlToPlainText(editInfo.newText);
-              
-              // IMPORTANT: Get plain text from the EDITOR'S document, not htmlToPlainText
-              // This ensures lengths match exactly with the text nodes used in offsetToPos
-              // htmlToPlainText can include whitespace that the editor treats as structural
-              const doc = (tr as any).doc;
-              let fullNewPlainText = '';
-              doc.descendants((node: any) => {
-                if (node.isText) {
-                  fullNewPlainText += node.text || '';
-                }
-                return true;
-              });
-              
-              parts = [];
-              
-              // Find where the edit occurred by locating the HTML index position
-              const beforeEditHtml = newHtml.substring(0, editInfo.htmlIndex);
-              const editStartOffset = htmlToPlainText(beforeEditHtml).length;
-              
-              // Detect common edit patterns
-              const isInsertBefore = newPlainText.endsWith(originalPlainText) && newPlainText.length > originalPlainText.length;
-              const isInsertAfter = newPlainText.startsWith(originalPlainText) && newPlainText.length > originalPlainText.length;
-              const isPureReplacement = !newPlainText.includes(originalPlainText);
-              
-              // Add unchanged prefix (content before the edit location)
-              if (editStartOffset > 0) {
-                parts.push({ value: fullNewPlainText.substring(0, editStartOffset) });
-              }
-              
-              if (isInsertBefore) {
-                // INSERT BEFORE: "Summary" → "New content...Summary"
-                // Find where the preserved text (originalPlainText) appears in the editor's text
-                // Search from editStartOffset onwards to find the preserved content
-                const preservedStartInEditor = fullNewPlainText.indexOf(originalPlainText, editStartOffset);
-                
-                if (preservedStartInEditor !== -1) {
-                  // The inserted content is everything from editStartOffset to preservedStartInEditor
-                  const insertedValue = fullNewPlainText.substring(editStartOffset, preservedStartInEditor);
-                  // The preserved content is from preservedStartInEditor for the length of originalPlainText
-                  const preservedValue = fullNewPlainText.substring(preservedStartInEditor, preservedStartInEditor + originalPlainText.length);
-                  
-                  parts.push({ added: true, value: insertedValue });
-                  parts.push({ value: preservedValue });
-                  
-                  // Content after the edit
-                  const editEndOffset = preservedStartInEditor + originalPlainText.length;
-                  if (editEndOffset < fullNewPlainText.length) {
-                    parts.push({ value: fullNewPlainText.substring(editEndOffset) });
-                  }
-                } else {
-                  // Fallback: couldn't find preserved text, highlight the whole new content
-                  const insertedLength = newPlainText.length - originalPlainText.length;
-                  parts.push({ added: true, value: fullNewPlainText.substring(editStartOffset, editStartOffset + insertedLength) });
-                  parts.push({ value: fullNewPlainText.substring(editStartOffset + insertedLength) });
-                }
-              } else if (isInsertAfter) {
-                // INSERT AFTER: "Summary" → "Summary...New content"
-                const preservedLength = originalPlainText.length;
-                const insertedLength = newPlainText.length - originalPlainText.length;
-                
-                // The preserved original content (not highlighted)
-                parts.push({ value: fullNewPlainText.substring(editStartOffset, editStartOffset + preservedLength) });
-                
-                // The inserted content (highlighted)
-                parts.push({ added: true, value: fullNewPlainText.substring(editStartOffset + preservedLength, editStartOffset + preservedLength + insertedLength) });
-                
-                // Content after the edit
-                const editEndOffset = editStartOffset + newPlainText.length;
-                if (editEndOffset < fullNewPlainText.length) {
-                  parts.push({ value: fullNewPlainText.substring(editEndOffset) });
-                }
-              } else if (isPureReplacement) {
-                // PURE REPLACEMENT: original completely replaced
-                // Show removed text as widget, new text as highlighted
-                if (originalPlainText.length > 0) {
-                  parts.push({ removed: true, value: originalPlainText });
-                }
-                parts.push({ added: true, value: fullNewPlainText.substring(editStartOffset, editStartOffset + newPlainText.length) });
-                
-                // Content after the edit
-                const editEndOffset = editStartOffset + newPlainText.length;
-                if (editEndOffset < fullNewPlainText.length) {
-                  parts.push({ value: fullNewPlainText.substring(editEndOffset) });
-                }
-              } else {
-                // COMPLEX EDIT: original appears somewhere in the middle
-                // Use word-level diff as fallback
-                const editDiffParts = diffWords(originalPlainText, newPlainText);
-                for (const part of editDiffParts) {
-                  parts.push(part as DiffPart);
-                }
-                
-                // Content after the edit
-                const editEndOffset = editStartOffset + newPlainText.length;
-                if (editEndOffset < fullNewPlainText.length) {
-                  parts.push({ value: fullNewPlainText.substring(editEndOffset) });
-                }
-              }
-            } else {
-              // FULL DOCUMENT MODE: For rewrite_document operations
-              // Extract plain text for position-accurate diffing
-              const oldText = htmlToPlainText(oldHtml);
-              const newText = htmlToPlainText(newHtml);
-              
-              // Compute diff on plain text (positions will match editor)
-              const rawParts = diffWords(oldText, newText);
-              
-              // Detect structural changes (same text, different tag)
-              const oldSegments = extractTextSegments(oldHtml);
-              const newSegments = extractTextSegments(newHtml);
-              parts = detectStructuralChanges(oldSegments, newSegments, rawParts as DiffPart[]);
-            }
-            
-            // @ts-ignore
-            this.storage.active = true;
-            // @ts-ignore
-            this.storage.parts = parts;
-            // @ts-ignore - set meta to force plugin to recompute decorations
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (tr as any).setMeta(DIFF_PLUGIN_KEY, { updatedAt: Date.now(), active: true });
-            if (dispatch) dispatch(tr);
-            return true;
-          } catch (e) {
-            console.error('Failed to compute diff:', e);
-            return false;
-          }
-        },
-      clearDiff:
-        () => ({ tr, dispatch }: { tr: unknown; dispatch: (tr: unknown) => void }) => {
-          // @ts-ignore
-          this.storage.active = false;
-          // @ts-ignore
-          this.storage.parts = [];
-          // @ts-ignore
-          (tr as any).setMeta(DIFF_PLUGIN_KEY, { updatedAt: Date.now(), active: false });
-          if (dispatch) dispatch(tr);
-          return true;
-        },
-    } as any;
-  },
-  addProseMirrorPlugins() {
-    const ext = this;
-    return [
-      new Plugin({
-        key: DIFF_PLUGIN_KEY,
-        state: {
-          init: () => DecorationSet.empty,
-          apply(tr, _value) {
-            // @ts-ignore
-            if (!ext.storage.active || !(ext.storage.parts && ext.storage.parts.length)) {
-              return DecorationSet.empty;
-            }
-            const doc = tr.doc;
-            const decorations: Decoration[] = [];
-            const textNodes: Array<{ from: number; to: number; text: string }> = [];
-            doc.descendants((node, pos) => {
-              if (node.isText) {
-                textNodes.push({ from: pos, to: pos + node.nodeSize, text: node.text || '' });
-              }
-              return true;
-            });
-
-            const offsetToPos = (offset: number): number => {
-              let acc = 0;
-              for (const n of textNodes) {
-                const len = n.text.length;
-                // Use < not <= to correctly handle text node boundaries
-                // When offset equals acc + len, we want the START of the next node
-                if (offset < acc + len) {
-                  const within = offset - acc;
-                  return n.from + within;
-                }
-                acc += len;
-              }
-              // Handle offset at or beyond end of all text
-              if (textNodes.length > 0) {
-                const last = textNodes[textNodes.length - 1];
-                return last.to;
-              }
-              return doc.content.size - 1;
-            };
-
-            let newIdx = 0;
-            // @ts-ignore
-            for (const part of ext.storage.parts) {
-              if (part.added) {
-                const fromOff = newIdx;
-                const toOff = newIdx + part.value.length;
-                const from = offsetToPos(fromOff);
-                const to = offsetToPos(toOff);
-                if (from < to) {
-                  decorations.push(Decoration.inline(from, to, { class: 'diff-insert' }));
-                }
-                newIdx += part.value.length;
-              } else if (part.removed) {
-                const at = offsetToPos(newIdx);
-                const value = part.value;
-                decorations.push(
-                  Decoration.widget(
-                    at,
-                    () => {
-                      const span = document.createElement('span');
-                      span.className = 'diff-delete';
-                      span.textContent = value;
-                      return span;
-                    },
-                    { side: -1 }
-                  )
-                );
-              } else {
-                newIdx += part.value.length;
-              }
-            }
-
-            const deco = DecorationSet.create(doc, decorations);
-            return deco.map(tr.mapping, tr.doc);
-          },
-        },
-        props: {
-          decorations(state) {
-            return (this as any).getState(state);
-          },
-        },
-      }),
-    ];
-  },
-});
-
-// Formatting toolbar component
-function FormattingToolbar({ editor }: { editor: TiptapEditor | null }) {
-  if (!editor) {
-    return null;
-  }
-
-  return (
-    <div className="flex flex-wrap gap-1 p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 rounded-t-md">
-      {/* Text formatting */}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleBold().run()}
-        className={editor.isActive('bold') ? 'bg-gray-200 dark:bg-gray-700' : ''}
-      >
-        <Bold className="w-4 h-4" />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleItalic().run()}
-        className={editor.isActive('italic') ? 'bg-gray-200 dark:bg-gray-700' : ''}
-      >
-        <Italic className="w-4 h-4" />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleStrike().run()}
-        className={editor.isActive('strike') ? 'bg-gray-200 dark:bg-gray-700' : ''}
-      >
-        <Strikethrough className="w-4 h-4" />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleCode().run()}
-        className={editor.isActive('code') ? 'bg-gray-200 dark:bg-gray-700' : ''}
-      >
-        <Code className="w-4 h-4" />
-      </Button>
-
-      {/* Separator */}
-      <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
-
-      {/* Headings */}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-        className={editor.isActive('heading', { level: 1 }) ? 'bg-gray-200 dark:bg-gray-700' : ''}
-      >
-        <Heading1 className="w-4 h-4" />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-        className={editor.isActive('heading', { level: 2 }) ? 'bg-gray-200 dark:bg-gray-700' : ''}
-      >
-        <Heading2 className="w-4 h-4" />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-        className={editor.isActive('heading', { level: 3 }) ? 'bg-gray-200 dark:bg-gray-700' : ''}
-      >
-        <Heading3 className="w-4 h-4" />
-      </Button>
-
-      {/* Separator */}
-      <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
-
-      {/* Lists */}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleBulletList().run()}
-        className={editor.isActive('bulletList') ? 'bg-gray-200 dark:bg-gray-700' : ''}
-      >
-        <List className="w-4 h-4" />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleOrderedList().run()}
-        className={editor.isActive('orderedList') ? 'bg-gray-200 dark:bg-gray-700' : ''}
-      >
-        <ListOrdered className="w-4 h-4" />
-      </Button>
-
-      {/* Separator */}
-      <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
-
-      {/* Code block */}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-        className={editor.isActive('codeBlock') ? 'bg-gray-200 dark:bg-gray-700' : ''}
-      >
-        <Code className="w-4 h-4" />
-        <span className="ml-1 text-xs">Block</span>
-      </Button>
-
-      {/* Quote */}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().toggleBlockquote().run()}
-        className={editor.isActive('blockquote') ? 'bg-gray-200 dark:bg-gray-700' : ''}
-      >
-        <Quote className="w-4 h-4" />
-      </Button>
-
-      {/* Separator */}
-      <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
-
-      {/* Undo/Redo */}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().undo().run()}
-        disabled={!editor.can().undo()}
-      >
-        <Undo className="w-4 h-4" />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => editor.chain().focus().redo().run()}
-        disabled={!editor.can().redo()}
-      >
-        <Redo className="w-4 h-4" />
-      </Button>
-    </div>
-  );
-}
-
-export function ImageLoader({ article, newImageGenerationRequestId, stagedImageUrl, setStagedImageUrl }: {
-  article: ArticleListItem | null | undefined,
-  newImageGenerationRequestId: string | null | undefined,
-  stagedImageUrl: string | null | undefined,
-  setStagedImageUrl: (url: string | null | undefined) => void
-}) {
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    const requestToFetch = newImageGenerationRequestId || article?.article.image_generation_request_id || null;
-    async function fetchImageGeneration() {
-      if (requestToFetch) {
-        const imgGen = await getImageGeneration(requestToFetch);
-        if (imgGen) {
-          if (imgGen.outputUrl) {
-            setImageUrl(imgGen.outputUrl);
-            setStagedImageUrl(imgGen.outputUrl);
-          } else {
-            const status = await getImageGenerationStatus(requestToFetch);
-            if (status.outputUrl) {
-              setImageUrl(status.outputUrl);
-              setStagedImageUrl(status.outputUrl);
-            }
-          }
-        }
-      }
-    }
-    fetchImageGeneration();
-
-    if (stagedImageUrl !== undefined) {
-      setImageUrl(stagedImageUrl);
-    } else if (article && article.article.draft_image_url) {
-      setImageUrl(article.article.draft_image_url);
-    }
-  }, [article, stagedImageUrl, newImageGenerationRequestId]);
-
-  if (!article) {
-    return null;
-  }
-
-  if (imageUrl) {
-    return (
-      <div className='flex items-center justify-center'>
-        <img className='rounded-md aspect-video object-cover' src={imageUrl} alt={article.article.draft_title || ''} width={'100%'} />
-      </div>
-    )
-  }
-
-  return null;
-}
 
 export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const { toast } = useToast()
@@ -1213,19 +464,27 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   }
   const mdParser = mdParserRef.current;
 
+  // turndownService is imported from ./editor/turndown (module-level singleton)
+
   const [diffing, setDiffing] = useState(false);
   const [originalDocument, setOriginalDocument] = useState<string>('');
   const [pendingNewDocument, setPendingNewDocument] = useState<string>('');
   const [currentDiffReason, setCurrentDiffReason] = useState<string>('');
 
+  // Turn-level state for "Undo All" across multi-edit agent turns.
+  // turnOriginalDocument captures the editor HTML before the first edit of a turn (set once).
+  // turnSnapshotVersionId is the version ID from the backend's pre-turn snapshot.
+  const [turnOriginalDocument, setTurnOriginalDocument] = useState<string>('');
+  const [turnSnapshotVersionId, setTurnSnapshotVersionId] = useState<string>('');
+
 
   // Inline diff lifecycle helpers
-  // editInfo is optional - if provided, uses precise edit boundaries instead of full-doc diff
+  // Compares old vs new HTML using character-by-character comparison
+  // to find the exact edit boundaries and show red (removed) / green (added) highlights
   const enterDiffPreview = (
     oldHtml: string, 
     newHtml: string, 
     reason?: string,
-    editInfo?: { originalText: string; newText: string; htmlIndex: number }
   ) => {
     if (!editor) return;
     
@@ -1241,13 +500,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     // @ts-ignore custom command provided by DiffHighlighter
     if ((editor as any).commands?.showDiff) {
       // @ts-ignore
-      if (editInfo) {
-        // Use precise edit boundaries - much more accurate for edit_text operations
-        (editor as any).commands.showDiff(oldHtml, newHtml, editInfo);
-      } else {
-        // Fall back to full document diff for rewrite operations
-        (editor as any).commands.showDiff(oldHtml, newHtml);
-      }
+      (editor as any).commands.showDiff(oldHtml, newHtml);
     }
     
     // Force a tiny transaction to ensure decorations render
@@ -1266,25 +519,49 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const acceptDiff = () => {
     if (!editor) return;
     
-    // Apply the pending changes
+    // Apply the pending changes (content is already saved on the backend by the agent)
     editor.commands.setContent(pendingNewDocument || editor.getHTML());
     setValue('content', editor.getHTML());
     clearDiffDecorations();
     setDiffing(false);
     setPendingNewDocument('');
     setCurrentDiffReason('');
+    setTurnOriginalDocument('');
+    setTurnSnapshotVersionId('');
   };
 
-  const rejectDiff = () => {
+  const rejectDiff = async () => {
     if (!editor) return;
-    
-    // Revert to original content
-    editor.commands.setContent(originalDocument || editor.getHTML());
-    setValue('content', originalDocument || editor.getHTML());
+
+    // Determine the content to revert to (prefer turn-level original for multi-edit undo)
+    const revertContent = turnOriginalDocument || originalDocument || editor.getHTML();
+
+    // If we have a backend snapshot, revert the DB too so backend stays in sync
+    if (turnSnapshotVersionId && blogSlug) {
+      try {
+        const reverted = await revertToVersion(blogSlug as string, turnSnapshotVersionId);
+        // Use the reverted draft content from the API response if available
+        const revertedContent = reverted.article?.draft_content || revertContent;
+        editor.commands.setContent(revertedContent);
+        setValue('content', revertedContent);
+      } catch (err) {
+        console.error('[Editor] Failed to revert backend to snapshot:', err);
+        // Fallback to local revert
+        editor.commands.setContent(revertContent);
+        setValue('content', revertContent);
+      }
+    } else {
+      // No backend snapshot -- local-only revert
+      editor.commands.setContent(revertContent);
+      setValue('content', revertContent);
+    }
+
     clearDiffDecorations();
     setDiffing(false);
     setPendingNewDocument('');
     setCurrentDiffReason('');
+    setTurnOriginalDocument('');
+    setTurnSnapshotVersionId('');
   };
 
   const editor = useEditor({
@@ -1593,54 +870,46 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   };
 
-  // Apply text edit from AI assistant (HTML-based search/replace)
-  const applyTextEdit = (originalText: string, newText: string, reason: string) => {
+  // Apply text edit from AI assistant (markdown-based str_replace)
+  // Renders both old and new markdown to HTML, then uses character-by-character
+  // comparison in the diff-highlighter to find the exact edit boundaries.
+  const applyTextEdit = (oldStr: string, newStr: string, reason: string, newMarkdown?: string) => {
     if (!editor) return;
     
-    const oldHtml = editor.getHTML();
+    const currentHtml = editor.getHTML();
     
-    // Search for original HTML in current HTML content
-    const index = oldHtml.indexOf(originalText);
-    if (index === -1) {
-      toast({
-        title: 'Edit Warning',
-        description: 'Could not locate the text to edit. The document may have changed.',
-        variant: 'destructive'
-      });
-      return;
+    let newHtml: string;
+    let oldMd: string;
+    if (newMarkdown) {
+      // Backend applied the edit and returned full new markdown
+      newHtml = mdParser.render(newMarkdown);
+      // Reconstruct old markdown by reversing the edit
+      const newStrIdx = newMarkdown.indexOf(newStr);
+      if (newStrIdx !== -1) {
+        oldMd = newMarkdown.substring(0, newStrIdx) + oldStr + newMarkdown.substring(newStrIdx + newStr.length);
+      } else {
+        oldMd = turndownService.turndown(currentHtml);
+      }
+    } else {
+      // Fallback: apply the edit locally on markdown
+      oldMd = turndownService.turndown(currentHtml);
+      const index = oldMd.indexOf(oldStr);
+      if (index === -1) {
+        toast({
+          title: 'Edit Warning',
+          description: 'Could not locate the text to edit in the document markdown. The document may have changed.',
+          variant: 'destructive'
+        });
+        return;
+      }
+      newHtml = mdParser.render(oldMd.substring(0, index) + newStr + oldMd.substring(index + oldStr.length));
     }
     
-    // Replace HTML directly
-    const newHtml = oldHtml.substring(0, index) + newText + oldHtml.substring(index + originalText.length);
-    
-    // Pass edit info for precise highlighting
-    enterDiffPreview(oldHtml, newHtml, reason, {
-      originalText,
-      newText,
-      htmlIndex: index
-    });
-  };
+    // Render old markdown to HTML through the same renderer so both sides are consistent
+    const oldHtml = mdParser.render(oldMd);
 
-  // Apply patch from AI assistant (HTML-based search/replace)
-  const applyPatch = (patch: any, originalText: string, newText: string, reason: string) => {
-    if (!editor) return;
-    
-    const oldHtml = editor.getHTML();
-    
-    // Search for original HTML in current HTML content
-    const index = oldHtml.indexOf(originalText);
-    if (index === -1) {
-      toast({
-        title: 'Patch Failed',
-        description: 'Could not locate the text to edit. The document may have changed.',
-        variant: 'destructive'
-      });
-      return;
-    }
-    
-    // Replace HTML directly
-    const newHtml = oldHtml.substring(0, index) + newText + oldHtml.substring(index + originalText.length);
-    
+    // The diff-highlighter compares old vs new text character-by-character
+    // to find the exact edit boundaries -- no position mapping needed
     enterDiffPreview(oldHtml, newHtml, reason);
   };
 
@@ -1664,8 +933,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       return;
     }
 
-    // Get current document content to send separately (HTML format)
+    // Get current document content in both HTML and markdown formats
     const currentContent = editor?.getHTML() || '';
+    const currentMarkdown = currentContent ? turndownService.turndown(currentContent) : '';
 
     // Check if this looks like an edit request
     const isEditRequest = /\b(rewrite|edit|improve|change|update|fix|enhance|modify)\b/i.test(text);
@@ -1680,7 +950,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     setChatMessages((prev) => [...prev, { role: 'assistant', content: '' } as ChatMessage]);
 
     // Send only the new message text - backend will load context from database
-    await performChatRequest(text, assistantIndex, isEditRequest, currentContent);
+    await performChatRequest(text, assistantIndex, isEditRequest, currentContent, currentMarkdown);
   };
 
   const sendChat = async () => {
@@ -1693,7 +963,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     await sendChatWithMessage(text);
   };
 
-  const performChatRequest = async (messageText: string, assistantIndex: number, isEditRequest: boolean, documentContent: string) => {
+  const performChatRequest = async (messageText: string, assistantIndex: number, isEditRequest: boolean, documentContent: string, documentMarkdown?: string) => {
     setChatLoading(true);
     try {
       if (!article?.article?.id) {
@@ -1704,6 +974,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       const result = await apiPost<{ requestId: string; status: string }>('/agent', {
         message: messageText,  // Single message string
         documentContent: documentContent,
+        documentMarkdown: documentMarkdown || '',  // Markdown version for agent editing
         articleId: article.article.id  // Required for loading context
       });
       
@@ -1783,6 +1054,17 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           // Handle new block-based message types
           if (msg.type) {
             switch (msg.type) {
+              case 'turn_started':
+                // Backend created a pre-turn version snapshot for "Undo All".
+                // Capture the current editor content as the turn baseline.
+                if (msg.data?.snapshot_version_id) {
+                  setTurnSnapshotVersionId(msg.data.snapshot_version_id);
+                  if (editor) {
+                    setTurnOriginalDocument(editor.getHTML());
+                  }
+                }
+                break;
+
               case 'thinking':
                 // Handle thinking state - show shimmer
                 setIsThinking(true);
@@ -1989,17 +1271,21 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                               const calls = steps[i].toolGroup!.calls;
                               for (let j = 0; j < calls.length; j++) {
                                 if (calls[j].name === toolResult.tool_name && calls[j].status === 'running') {
+                                  const toolStatus = toolResult.is_error ? 'error' : 'completed';
                                   calls[j] = {
                                     ...calls[j],
-                                    status: 'completed',
+                                    status: toolStatus,
                                     result: toolResult,
+                                    error: toolResult.is_error ? (toolResult.error || 'Edit failed') : undefined,
                                     completed_at: new Date().toISOString(),
                                   };
+                                  // Group status is error if any call errored
+                                  const groupStatus = calls.some((c: any) => c.status === 'error') ? 'error' : 'completed';
                                   steps[i] = {
                                     ...steps[i],
                                     toolGroup: {
                                       ...steps[i].toolGroup!,
-                                      status: 'completed',
+                                      status: groupStatus,
                                       calls: [...calls],
                                     },
                                   };
@@ -2017,15 +1303,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         return updated;
                       });
                       
-                      // For edit tools, also apply the diff preview
-                      if (toolResult.tool_name === 'edit_text' && isNewMessage) {
-                        if (toolResult.edit_type === 'patch' && toolResult.patch) {
-                          applyPatch(toolResult.patch, toolResult.original_text, toolResult.new_text, toolResult.reason);
-                        } else {
-                          applyTextEdit(toolResult.original_text, toolResult.new_text, toolResult.reason);
-                        }
+                      // For edit tools, also apply the diff preview (only for successful results)
+                      if (toolResult.tool_name === 'edit_text' && isNewMessage && !toolResult.is_error) {
+                        applyTextEdit(toolResult.old_str || toolResult.original_text, toolResult.new_str || toolResult.new_text, toolResult.reason, toolResult.new_markdown);
                         setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
-                      } else if (toolResult.tool_name === 'rewrite_document' && isNewMessage) {
+                      } else if (toolResult.tool_name === 'rewrite_document' && isNewMessage && !toolResult.is_error) {
                         applyDocumentRewrite(toolResult.new_content, toolResult.reason, toolResult.original_content);
                         setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
                       }
@@ -2150,17 +1432,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     return updated;
                   });
                   
-                  // Apply diff if it's an edit tool
-                  const artifact = fullMsg.meta_data?.artifact;
-                  const toolExec = fullMsg.meta_data?.tool_execution;
-                  if (artifact && toolExec?.output) {
-                    const toolName = toolExec.tool_name;
-                    if (toolName === 'edit_text') {
-                      applyTextEdit(toolExec.output.original_text, toolExec.output.new_text, toolExec.output.reason);
-                    } else if (toolName === 'rewrite_document') {
-                      applyDocumentRewrite(toolExec.output.new_content, toolExec.output.reason, toolExec.output.original_content);
-                    }
-                  }
+                  // Don't apply diff here -- the tool_result handler already applied it.
+                  // Applying again from full_message would overwrite the diff decorations.
                 }
                 break;
                 
@@ -2229,17 +1502,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               // Parse the tool result content to extract artifacts
               const toolResult = JSON.parse(msg.content);
               
-              // Handle edit_text tool specifically - only for new messages
-              if (toolResult.tool_name === 'edit_text' && isNewMessage) {
-                if (toolResult.edit_type === 'patch' && toolResult.patch) {
-                  applyPatch(toolResult.patch, toolResult.original_text, toolResult.new_text, toolResult.reason);
-                } else {
-                  applyTextEdit(toolResult.original_text, toolResult.new_text, toolResult.reason);
-                }
+              // Handle edit_text tool specifically - only for new messages (skip error results)
+              if (toolResult.tool_name === 'edit_text' && isNewMessage && !toolResult.is_error) {
+                applyTextEdit(toolResult.old_str || toolResult.original_text, toolResult.new_str || toolResult.new_text, toolResult.reason, toolResult.new_markdown);
                 
                 // Mark this tool message as processed
                 setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
-              } else if (toolResult.tool_name === 'rewrite_document' && isNewMessage) {
+              } else if (toolResult.tool_name === 'rewrite_document' && isNewMessage && !toolResult.is_error) {
                 // Handle document rewrite with diff preview
                 applyDocumentRewrite(toolResult.new_content, toolResult.reason, toolResult.original_content);
                 
@@ -2921,14 +2190,15 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       if (call && (call.name === 'edit_text' || call.name === 'rewrite_document')) {
                         const result = call.result;
                         if (action === 'accept' && result && editor) {
-                          const oldContent = (result.original_text || result.original_content) as string;
-                          const newContent = (result.new_text || result.new_content) as string;
+                          const oldContent = (result.old_str || result.original_text || result.original_content) as string;
+                          const newContent = (result.new_str || result.new_text || result.new_content) as string;
+                          const newMarkdown = (result.new_markdown) as string | undefined;
                           const reason = (result.reason as string) || '';
                           
                           if (newContent) {
                             if (call.name === 'edit_text' && oldContent) {
-                              // edit_text: do find-and-replace
-                              applyTextEdit(oldContent, newContent, reason);
+                              // edit_text: markdown str_replace
+                              applyTextEdit(oldContent, newContent, reason, newMarkdown);
                             } else {
                               // rewrite_document: replace entire document
                               const currentHtml = editor.getHTML();
@@ -3009,15 +2279,19 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 
                 // Get diff data from tool_context.output - handle both edit_text and rewrite_document formats
                 const toolOutput = m.tool_context?.output as { 
-                  original_text?: string;  // edit_text format
-                  new_text?: string;       // edit_text format
+                  old_str?: string;          // new edit_text format
+                  new_str?: string;          // new edit_text format
+                  new_markdown?: string;     // new edit_text format
+                  original_text?: string;    // legacy edit_text format
+                  new_text?: string;         // legacy edit_text format
                   original_content?: string; // rewrite_document format
                   new_content?: string;      // rewrite_document format
                 } | undefined;
                 
-                // edit_text uses original_text/new_text, rewrite_document uses original_content/new_content
-                const oldText = toolOutput?.original_text || toolOutput?.original_content || '';
-                const newText = toolOutput?.new_text || toolOutput?.new_content || '';
+                // edit_text uses old_str/new_str (or legacy original_text/new_text), rewrite_document uses original_content/new_content
+                const oldText = toolOutput?.old_str || toolOutput?.original_text || toolOutput?.original_content || '';
+                const newText = toolOutput?.new_str || toolOutput?.new_text || toolOutput?.new_content || '';
+                const newMarkdown = toolOutput?.new_markdown;
                 const isEditText = tool_name === 'edit_text';
                 
                 // Show DiffArtifact with diff preview and Apply button
@@ -3032,8 +2306,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       if (!editor || !newText) return;
                       
                       if (isEditText && oldText) {
-                        // edit_text: do find-and-replace
-                        applyTextEdit(oldText, newText, reason || '');
+                        // edit_text: markdown str_replace
+                        applyTextEdit(oldText, newText, reason || '', newMarkdown);
                       } else {
                         // rewrite_document: replace entire document
                         const currentHtml = editor.getHTML();
@@ -3123,15 +2397,19 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   const artifact = m.meta_data.artifact;
                   const toolExec = m.meta_data?.tool_execution;
                   const toolOutput = toolExec?.output as { 
-                    original_text?: string;  // edit_text format
-                    new_text?: string;       // edit_text format
+                    old_str?: string;          // new edit_text format
+                    new_str?: string;          // new edit_text format
+                    new_markdown?: string;     // new edit_text format
+                    original_text?: string;    // legacy edit_text format
+                    new_text?: string;         // legacy edit_text format
                     original_content?: string; // rewrite_document format
                     new_content?: string;      // rewrite_document format
                   } | undefined;
                   
                   // Get diff data - handle both edit_text and rewrite_document formats
-                  const oldText = toolOutput?.original_text || toolOutput?.original_content || '';
-                  const newText = toolOutput?.new_text || toolOutput?.new_content || artifact.content || '';
+                  const oldText = toolOutput?.old_str || toolOutput?.original_text || toolOutput?.original_content || '';
+                  const newText = toolOutput?.new_str || toolOutput?.new_text || toolOutput?.new_content || artifact.content || '';
+                  const newMarkdown = toolOutput?.new_markdown;
                   const isEditText = toolExec?.tool_name === 'edit_text';
                   
                   return (
@@ -3145,8 +2423,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         if (!editor || !newText) return;
                         
                         if (isEditText && oldText) {
-                          // edit_text: do find-and-replace
-                          applyTextEdit(oldText, newText, artifact.description || '');
+                          // edit_text: markdown str_replace
+                          applyTextEdit(oldText, newText, artifact.description || '', newMarkdown);
                         } else {
                           // rewrite_document: replace entire document
                           const currentHtml = editor.getHTML();
@@ -3205,13 +2483,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                     if (call && (call.name === 'edit_text' || call.name === 'rewrite_document')) {
                                       const result = call.result;
                                       if (action === 'accept' && result && editor) {
-                                        const oldContent = (result.original_text || result.original_content) as string;
-                                        const newContent = (result.new_text || result.new_content) as string;
+                                        const oldContent = (result.old_str || result.original_text || result.original_content) as string;
+                                        const newContent = (result.new_str || result.new_text || result.new_content) as string;
+                                        const newMarkdown = (result.new_markdown) as string | undefined;
                                         const reason = (result.reason as string) || '';
                                         
                                         if (newContent) {
                                           if (call.name === 'edit_text' && oldContent) {
-                                            applyTextEdit(oldContent, newContent, reason);
+                                            applyTextEdit(oldContent, newContent, reason, newMarkdown);
                                           } else {
                                             const currentHtml = editor.getHTML();
                                             const newHtml = mdParser.render(newContent);
@@ -3318,15 +2597,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               <ThinkShimmerBlock message={thinkingMessage} />
             )}
           </div>
-          
-          {/* Sticky diff action bar - shows when there are pending changes */}
           {diffing && !chatLoading && (
             <DiffActionBar 
               onKeepAll={acceptDiff}
               onReject={rejectDiff}
             />
           )}
-          
         <div className="p-4 border-t space-y-2">
           <PromptInput
             value={chatInput}

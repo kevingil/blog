@@ -44,15 +44,27 @@ type ExaServiceInterface interface {
 	Answer(ctx context.Context, question string) (interface{}, error)
 }
 
+// ArticleDraftService provides draft content persistence for the agent.
+// A pre-turn snapshot enables "Undo All", and per-edit updates keep the DB in sync.
+type ArticleDraftService interface {
+	// CreateDraftSnapshot saves the current draft as a version record (for "Undo All").
+	// Returns the version ID so the frontend can revert to it on reject.
+	CreateDraftSnapshot(ctx context.Context, articleID uuid.UUID) (*uuid.UUID, error)
+	// UpdateDraftContent updates only draft_content + updated_at (no version record).
+	// Used during agent turns to persist each edit without creating version spam.
+	UpdateDraftContent(ctx context.Context, articleID uuid.UUID, htmlContent string) error
+}
+
 // AgentAsyncCopilotManager - LLM Agent Framework powered copilot manager
 type AgentAsyncCopilotManager struct {
-	requests    map[string]*AgentAsyncRequest
-	mu          sync.RWMutex
-	agent       agent.Service
-	sessionSvc  session.Service
-	messageSvc  message.Service
-	chatService ChatMessageServiceInterface
-	config      Config
+	requests     map[string]*AgentAsyncRequest
+	mu           sync.RWMutex
+	agent        agent.Service
+	sessionSvc   session.Service
+	messageSvc   message.Service
+	chatService  ChatMessageServiceInterface
+	draftService ArticleDraftService // nil-safe: version snapshots and DB persistence are skipped if nil
+	config       Config
 }
 
 // AgentAsyncRequest represents an async chat request
@@ -79,14 +91,15 @@ var (
 )
 
 // NewAgentAsyncCopilotManager creates a new agent manager with configuration
-func NewAgentAsyncCopilotManager(cfg Config, agentSvc agent.Service, sessionSvc session.Service, messageSvc message.Service, chatService ChatMessageServiceInterface) *AgentAsyncCopilotManager {
+func NewAgentAsyncCopilotManager(cfg Config, agentSvc agent.Service, sessionSvc session.Service, messageSvc message.Service, chatService ChatMessageServiceInterface, draftService ArticleDraftService) *AgentAsyncCopilotManager {
 	return &AgentAsyncCopilotManager{
-		requests:    make(map[string]*AgentAsyncRequest),
-		agent:       agentSvc,
-		sessionSvc:  sessionSvc,
-		messageSvc:  messageSvc,
-		chatService: chatService,
-		config:      cfg,
+		requests:     make(map[string]*AgentAsyncRequest),
+		agent:        agentSvc,
+		sessionSvc:   sessionSvc,
+		messageSvc:   messageSvc,
+		chatService:  chatService,
+		draftService: draftService,
+		config:       cfg,
 	}
 }
 
@@ -114,7 +127,7 @@ type ExaClient interface {
 }
 
 // InitializeAgentCopilotManager initializes the agent copilot manager with real services
-func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, chatService ChatMessageServiceInterface, exaClient ExaClient, sourceCreator tools.SourceCreator) error {
+func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, chatService ChatMessageServiceInterface, exaClient ExaClient, sourceCreator tools.SourceCreator, draftService ArticleDraftService) error {
 	// Load agent configuration
 	cfg := LoadConfig()
 
@@ -125,10 +138,16 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 	// Create text generation service for tools that need it
 	textGenService := text.NewGenerationService()
 
+	// Create a DraftSaver adapter for the EditTextTool (bridges string articleID to UUID-based ArticleDraftService)
+	var draftSaver tools.DraftSaver
+	if draftService != nil {
+		draftSaver = &draftSaverAdapter{draftService: draftService}
+	}
+
 	// Create writing tools for the agent
 	writingTools := []tools.BaseTool{
 		tools.NewReadDocumentTool(),
-		tools.NewEditTextTool(),
+		tools.NewEditTextTool(draftSaver),
 		tools.NewGenerateImagePromptTool(textGenService),
 		tools.NewGenerateTextContentTool(textGenService),
 	}
@@ -161,7 +180,7 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 	}
 
 	// Create and set the global manager with configuration
-	manager := NewAgentAsyncCopilotManager(cfg, agentSvc, sessionSvc, messageSvc, chatService)
+	manager := NewAgentAsyncCopilotManager(cfg, agentSvc, sessionSvc, messageSvc, chatService, draftService)
 	SetGlobalAgentManager(manager)
 
 	log.Printf("[Agent] Initialized with configuration (max_concurrent=%d, timeout=%v)", cfg.MaxConcurrentRequests, cfg.RequestTimeout)
@@ -170,10 +189,24 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 
 // InitializeWithDefaults initializes the agent copilot manager with default services
 // This is a convenience function that initializes without optional services
-func InitializeWithDefaults(chatService ChatMessageServiceInterface) error {
+func InitializeWithDefaults(chatService ChatMessageServiceInterface, draftService ArticleDraftService) error {
 	// Initialize without source service and exa client
 	// These can be provided via InitializeAgentCopilotManager when available
-	return InitializeAgentCopilotManager(nil, chatService, nil, nil)
+	return InitializeAgentCopilotManager(nil, chatService, nil, nil, draftService)
+}
+
+// draftSaverAdapter bridges the tools.DraftSaver interface (string article IDs)
+// to the ArticleDraftService interface (uuid.UUID article IDs).
+type draftSaverAdapter struct {
+	draftService ArticleDraftService
+}
+
+func (a *draftSaverAdapter) UpdateDraftContent(ctx context.Context, articleID string, htmlContent string) error {
+	parsed, err := uuid.Parse(articleID)
+	if err != nil {
+		return fmt.Errorf("invalid article ID %q: %w", articleID, err)
+	}
+	return a.draftService.UpdateDraftContent(ctx, parsed, htmlContent)
 }
 
 func (m *AgentAsyncCopilotManager) SubmitChatRequest(req ChatRequest) (string, error) {
@@ -359,11 +392,36 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	}
 
 	userPrompt := asyncReq.Request.Message
-	if asyncReq.Request.DocumentContent != "" {
-		ctx = tools.WithDocumentContent(ctx, asyncReq.Request.DocumentContent, "")
-		layout := generateHTMLOutline(asyncReq.Request.DocumentContent)
+	if asyncReq.Request.DocumentContent != "" || asyncReq.Request.DocumentMarkdown != "" {
+		ctx = tools.WithDocumentContent(ctx, asyncReq.Request.DocumentContent, asyncReq.Request.DocumentMarkdown)
+
+		// Generate outline from markdown if available, otherwise fall back to HTML
+		var layout string
+		if asyncReq.Request.DocumentMarkdown != "" {
+			layout = generateMarkdownOutline(asyncReq.Request.DocumentMarkdown)
+		} else {
+			layout = generateHTMLOutline(asyncReq.Request.DocumentContent)
+		}
 		userPrompt += "\n\n--- Document Layout (use read_document to see full content) ---\n" + layout
-		log.Printf("[Agent] Document layout generated (%d headers), full content stored in context", strings.Count(layout, "\n")+1)
+		log.Printf("[Agent] Document layout generated (%d headers), content stored in context (markdown: %v)", strings.Count(layout, "\n")+1, asyncReq.Request.DocumentMarkdown != "")
+	}
+
+	// Create a pre-turn version snapshot so the frontend can "Undo All" agent changes.
+	// This is done before the agent runs so the snapshot captures the state before any edits.
+	if m.draftService != nil && articleID != uuid.Nil {
+		snapshotID, snapErr := m.draftService.CreateDraftSnapshot(ctx, articleID)
+		if snapErr != nil {
+			log.Printf("[Agent] ⚠️ Failed to create pre-turn snapshot: %v", snapErr)
+		} else if snapshotID != nil {
+			log.Printf("[Agent] 📸 Created pre-turn snapshot (version %s) for article %s", snapshotID.String(), articleID)
+			asyncReq.ResponseChan <- StreamResponse{
+				RequestID: asyncReq.ID,
+				Type:      StreamTypeTurnStarted,
+				Data: map[string]interface{}{
+					"snapshot_version_id": snapshotID.String(),
+				},
+			}
+		}
 	}
 
 	asyncReq.iteration = 1
@@ -891,31 +949,38 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 		log.Printf("[Agent]       Call ID: %s", toolResult.ToolCallID)
 		log.Printf("[Agent]       Is Error: %v", toolResult.IsError)
 
-		if toolResult.IsError {
-			log.Printf("[Agent]       ⚠️  Skipping error result")
-			continue
-		}
+		// Don't skip error results -- save them so they appear in conversation history
+		isError := toolResult.IsError
 
 		var toolResultData map[string]interface{}
 		if err := json.Unmarshal([]byte(toolResult.Content), &toolResultData); err != nil {
-			log.Printf("[Agent]       ⚠️  Failed to parse tool result: %v", err)
-			continue
+			if isError {
+				// Error results are often plain text, not JSON -- wrap them
+				toolResultData = map[string]interface{}{
+					"content":  toolResult.Content,
+					"is_error": true,
+				}
+				log.Printf("[Agent]       ⚠️  Error result (plain text): %s", truncate(toolResult.Content, 100))
+			} else {
+				log.Printf("[Agent]       ⚠️  Failed to parse tool result: %v", err)
+				continue
+			}
 		}
 
 		toolName, _ := toolResultData["tool_name"].(string)
-		log.Printf("[Agent]       Tool Name: %s", toolName)
+		log.Printf("[Agent]       Tool Name: %s (isError: %v)", toolName, isError)
 
 		toolExec := &metadata.ToolExecution{
 			ToolName:   toolName,
 			ToolID:     toolResult.ToolCallID,
 			Output:     toolResultData,
 			ExecutedAt: time.Now(),
-			Success:    true,
+			Success:    !isError,
 		}
 		msgMetadata.WithToolExecution(toolExec)
 
 		if toolName == "edit_text" || toolName == "rewrite_document" {
-			log.Printf("[Agent]       ✏️  ARTIFACT TOOL DETECTED")
+			log.Printf("[Agent]       ✏️  ARTIFACT TOOL DETECTED (isError: %v)", isError)
 
 			artifactID := uuid.New().String()
 			artifactType := metadata.ArtifactTypeCodeEdit
@@ -928,14 +993,23 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 			var description string
 
 			if toolName == "edit_text" {
-				if newText, ok := toolResultData["new_text"].(string); ok {
+				// Support both new field names (old_str/new_str) and legacy (original_text/new_text)
+				if newStr, ok := toolResultData["new_str"].(string); ok {
+					artifactContent = newStr
+				} else if newText, ok := toolResultData["new_text"].(string); ok {
 					artifactContent = newText
 				}
-				if oldText, ok := toolResultData["original_text"].(string); ok {
+				if oldStr, ok := toolResultData["old_str"].(string); ok {
+					diffPreview = fmt.Sprintf("Old: %s\nNew: %s", truncate(oldStr, 50), truncate(artifactContent, 50))
+				} else if oldText, ok := toolResultData["original_text"].(string); ok {
 					diffPreview = fmt.Sprintf("Old: %s\nNew: %s", truncate(oldText, 50), truncate(artifactContent, 50))
 				}
 				if reason, ok := toolResultData["reason"].(string); ok {
 					description = reason
+				}
+				// For error results, use the error content as description if no reason
+				if isError && description == "" {
+					description = toolResult.Content
 				}
 			} else if toolName == "rewrite_document" {
 				if newContent, ok := toolResultData["new_content"].(string); ok {
@@ -949,10 +1023,15 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 				}
 			}
 
+			artifactStatus := metadata.ArtifactStatusPending
+			if isError {
+				artifactStatus = "error"
+			}
+
 			artifact := &metadata.ArtifactInfo{
 				ID:          artifactID,
 				Type:        artifactType,
-				Status:      metadata.ArtifactStatusPending,
+				Status:      artifactStatus,
 				Content:     artifactContent,
 				DiffPreview: diffPreview,
 				Title:       fmt.Sprintf("%s result", toolName),
@@ -1030,6 +1109,52 @@ func convertHTMLToMarkdown(html string) (string, error) {
 		return "", err
 	}
 	return markdown, nil
+}
+
+// generateMarkdownOutline extracts headings from markdown to show document structure
+func generateMarkdownOutline(markdown string) string {
+	lines := strings.Split(markdown, "\n")
+	var outline []string
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Match markdown headings (## Heading, ### Heading, etc.)
+		if !strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		// Count the heading level
+		level := 0
+		for _, ch := range trimmed {
+			if ch == '#' {
+				level++
+			} else {
+				break
+			}
+		}
+		if level < 1 || level > 6 {
+			continue
+		}
+
+		headerText := strings.TrimSpace(trimmed[level:])
+		if headerText == "" {
+			continue
+		}
+
+		indent := ""
+		if level > 2 {
+			indent = strings.Repeat("  ", level-2)
+		}
+
+		outline = append(outline, fmt.Sprintf("%s- %s (line %d)", indent, headerText, i+1))
+	}
+
+	if len(outline) == 0 {
+		return "(empty document)"
+	}
+
+	return strings.Join(outline, "\n")
 }
 
 // generateHTMLOutline extracts only headers from HTML to show document structure
