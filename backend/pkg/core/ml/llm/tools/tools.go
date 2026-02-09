@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"sync"
 )
 
 type ToolInfo struct {
@@ -16,23 +17,37 @@ type ToolInfo struct {
 type toolResponseType string
 
 type (
-	sessionIDContextKey        string
-	messageIDContextKey        string
-	articleIDContextKey        string
-	documentContentContextKey  string
-	documentMarkdownContextKey string
+	sessionIDContextKey      string
+	messageIDContextKey      string
+	articleIDContextKey       string
+	documentStateContextKey  string
 )
 
 const (
 	ToolResponseTypeText  toolResponseType = "text"
 	ToolResponseTypeImage toolResponseType = "image"
 
-	SessionIDContextKey        sessionIDContextKey        = "session_id"
-	MessageIDContextKey        messageIDContextKey        = "message_id"
-	ArticleIDContextKey        articleIDContextKey        = "article_id"
-	DocumentContentContextKey  documentContentContextKey  = "document_content"
-	DocumentMarkdownContextKey documentMarkdownContextKey = "document_markdown"
+	SessionIDContextKey      sessionIDContextKey      = "session_id"
+	MessageIDContextKey      messageIDContextKey      = "message_id"
+	ArticleIDContextKey      articleIDContextKey       = "article_id"
+	DocumentStateContextKey  documentStateContextKey  = "document_state"
 )
+
+// DocumentState holds the mutable working copy of the document during an agent turn.
+// Stored as a pointer in context so both read_document and edit_text share the same state.
+// After edit_text produces new content, it updates this state so subsequent read_document
+// calls return the latest version (solving the stale-read problem for multi-edit turns).
+type DocumentState struct {
+	mu       sync.RWMutex
+	HTML     string
+	Markdown string
+}
+
+// DraftSaver is the interface that edit_text uses to persist draft content to the DB
+// after each successful edit. This makes the backend the source of truth for draft content.
+type DraftSaver interface {
+	UpdateDraftContent(ctx context.Context, articleID string, htmlContent string) error
+}
 
 type ToolResponse struct {
 	Type     toolResponseType `json:"type"`
@@ -144,17 +159,59 @@ func WithArticleID(ctx context.Context, articleID string) context.Context {
 	return context.WithValue(ctx, ArticleIDContextKey, articleID)
 }
 
-// WithDocumentContent adds document content (both HTML and markdown) to context for tools.
+// WithDocumentContent creates a mutable DocumentState and stores a pointer in context.
+// Both read_document and edit_text operate on this shared state so the agent always
+// sees the latest content during multi-edit turns.
 // The markdown is unescaped before storing so the LLM sees clean content that it can reproduce.
 func WithDocumentContent(ctx context.Context, html, markdown string) context.Context {
-	ctx = context.WithValue(ctx, DocumentContentContextKey, html)
-	// Unescape markdown so read_document returns clean text the LLM can match exactly.
-	// Turndown escapes characters like \*, \_, \`, \[ etc. which the LLM can't reproduce.
 	if markdown != "" {
 		markdown = unescapeMarkdown(markdown)
 	}
-	ctx = context.WithValue(ctx, DocumentMarkdownContextKey, markdown)
-	return ctx
+	state := &DocumentState{HTML: html, Markdown: markdown}
+	return context.WithValue(ctx, DocumentStateContextKey, state)
+}
+
+// getDocumentState retrieves the mutable DocumentState pointer from context.
+func getDocumentState(ctx context.Context) *DocumentState {
+	state := ctx.Value(DocumentStateContextKey)
+	if state == nil {
+		return nil
+	}
+	return state.(*DocumentState)
+}
+
+// GetDocumentHTMLFromContext retrieves the current HTML document content from context.
+func GetDocumentHTMLFromContext(ctx context.Context) string {
+	state := getDocumentState(ctx)
+	if state == nil {
+		return ""
+	}
+	state.mu.RLock()
+	defer state.mu.RUnlock()
+	return state.HTML
+}
+
+// GetDocumentMarkdownFromContext retrieves the current markdown document content from context.
+func GetDocumentMarkdownFromContext(ctx context.Context) string {
+	state := getDocumentState(ctx)
+	if state == nil {
+		return ""
+	}
+	state.mu.RLock()
+	defer state.mu.RUnlock()
+	return state.Markdown
+}
+
+// UpdateDocumentMarkdown updates the in-memory document state after an edit.
+// This ensures subsequent read_document calls return the post-edit content.
+func UpdateDocumentMarkdown(ctx context.Context, newMarkdown string) {
+	state := getDocumentState(ctx)
+	if state == nil {
+		return
+	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	state.Markdown = newMarkdown
 }
 
 // unescapeMarkdown removes Turndown's backslash escapes that make LLM matching impossible.
@@ -175,22 +232,4 @@ func unescapeMarkdown(s string) string {
 	result := r.Replace(s)
 	result = strings.ReplaceAll(result, "\\`", "`")
 	return result
-}
-
-// GetDocumentHTMLFromContext retrieves the original HTML document content from context
-func GetDocumentHTMLFromContext(ctx context.Context) string {
-	html := ctx.Value(DocumentContentContextKey)
-	if html == nil {
-		return ""
-	}
-	return html.(string)
-}
-
-// GetDocumentMarkdownFromContext retrieves the markdown version of the document from context
-func GetDocumentMarkdownFromContext(ctx context.Context) string {
-	markdown := ctx.Value(DocumentMarkdownContextKey)
-	if markdown == nil {
-		return ""
-	}
-	return markdown.(string)
 }

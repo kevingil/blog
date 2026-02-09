@@ -99,6 +99,7 @@ const (
 	StreamTypeThinking          = "thinking"
 	StreamTypeError             = "error"
 	StreamTypeDone              = "done"
+	StreamTypeTurnStarted       = "turn_started"
 )
 
 // ToolGroupPayload represents a group of tool calls for streaming
