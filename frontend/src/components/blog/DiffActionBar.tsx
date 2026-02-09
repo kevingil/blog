@@ -21,7 +21,7 @@ export function DiffActionBar({
 }: DiffActionBarProps) {
   return (
     <div className={cn(
-      "flex items-center justify-center gap-1 px-3 py-1.5",
+      "flex items-center justify-end gap-1 px-3 py-1.5",
       className
     )}>
       <Button 

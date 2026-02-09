@@ -301,13 +301,37 @@ func (r *articleRepository) Save(ctx context.Context, a *types.Article) error {
 			a.ID = uuid.New()
 			model.ID = a.ID
 		}
-		return r.db.WithContext(ctx).Create(model).Error
+		// Omit empty embedding fields to avoid pgvector error
+		createQuery := r.db.WithContext(ctx)
+		var createOmitFields []string
+		if len(a.DraftEmbedding) == 0 {
+			createOmitFields = append(createOmitFields, "DraftEmbedding")
+		}
+		if len(a.PublishedEmbedding) == 0 {
+			createOmitFields = append(createOmitFields, "PublishedEmbedding")
+		}
+		if len(createOmitFields) > 0 {
+			createQuery = createQuery.Omit(createOmitFields...)
+		}
+		return createQuery.Create(model).Error
 	} else if err != nil {
 		return err
 	}
 
-	// Update existing article
-	return r.db.WithContext(ctx).Save(model).Error
+	// Update existing article - omit empty embedding fields to avoid pgvector error
+	// (pgvector rejects zero-dimension vectors)
+	query := r.db.WithContext(ctx)
+	var omitFields []string
+	if len(a.DraftEmbedding) == 0 {
+		omitFields = append(omitFields, "DraftEmbedding")
+	}
+	if len(a.PublishedEmbedding) == 0 {
+		omitFields = append(omitFields, "PublishedEmbedding")
+	}
+	if len(omitFields) > 0 {
+		query = query.Omit(omitFields...)
+	}
+	return query.Save(model).Error
 }
 
 // Delete removes an article by its ID

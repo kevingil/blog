@@ -3,6 +3,7 @@ package source
 import (
 	"sync"
 
+	"backend/pkg/api/dto"
 	"backend/pkg/api/response"
 	"backend/pkg/api/validation"
 	"backend/pkg/core"
@@ -52,8 +53,13 @@ func ListAllSources(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
+	sources := make([]dto.SourceWithArticleResponse, len(result.Sources))
+	for i, s := range result.Sources {
+		sources[i] = dto.SourceWithArticleToResponse(s)
+	}
+
 	return response.Success(c, fiber.Map{
-		"sources":     result.Sources,
+		"sources":     sources,
 		"total_pages": result.TotalPages,
 		"page":        result.Page,
 	})
