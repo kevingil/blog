@@ -473,12 +473,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
 
   // Inline diff lifecycle helpers
-  // editInfo is optional - if provided, uses precise edit boundaries instead of full-doc diff
+  // Compares old vs new HTML using character-by-character comparison
+  // to find the exact edit boundaries and show red (removed) / green (added) highlights
   const enterDiffPreview = (
     oldHtml: string, 
     newHtml: string, 
     reason?: string,
-    editInfo?: { originalText: string; newText: string; htmlIndex: number }
   ) => {
     if (!editor) return;
     
@@ -494,13 +494,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     // @ts-ignore custom command provided by DiffHighlighter
     if ((editor as any).commands?.showDiff) {
       // @ts-ignore
-      if (editInfo) {
-        // Use precise edit boundaries - much more accurate for edit_text operations
-        (editor as any).commands.showDiff(oldHtml, newHtml, editInfo);
-      } else {
-        // Fall back to full document diff for rewrite operations
-        (editor as any).commands.showDiff(oldHtml, newHtml);
-      }
+      (editor as any).commands.showDiff(oldHtml, newHtml);
     }
     
     // Force a tiny transaction to ensure decorations render
@@ -847,7 +841,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   };
 
   // Apply text edit from AI assistant (markdown-based str_replace)
-  // Computes the edit as old_str/new_str chunks and uses precise diff mode.
+  // Renders both old and new markdown to HTML, then uses character-by-character
+  // comparison in the diff-highlighter to find the exact edit boundaries.
   const applyTextEdit = (oldStr: string, newStr: string, reason: string, newMarkdown?: string) => {
     if (!editor) return;
     
@@ -858,8 +853,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     if (newMarkdown) {
       // Backend applied the edit and returned full new markdown
       newHtml = mdParser.render(newMarkdown);
-      // Reconstruct old markdown by reversing the edit (for the normalized old HTML)
-      // Find new_str in new_markdown and replace with old_str to get old_markdown
+      // Reconstruct old markdown by reversing the edit
       const newStrIdx = newMarkdown.indexOf(newStr);
       if (newStrIdx !== -1) {
         oldMd = newMarkdown.substring(0, newStrIdx) + oldStr + newMarkdown.substring(newStrIdx + newStr.length);
@@ -878,32 +872,15 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         });
         return;
       }
-      newMarkdown = oldMd.substring(0, index) + newStr + oldMd.substring(index + oldStr.length);
-      newHtml = mdParser.render(newMarkdown);
+      newHtml = mdParser.render(oldMd.substring(0, index) + newStr + oldMd.substring(index + oldStr.length));
     }
     
     // Render old markdown to HTML through the same renderer so both sides are consistent
     const oldHtml = mdParser.render(oldMd);
 
-    // Compute the edit position in the rendered new HTML by finding the new_str content.
-    // Render old_str and new_str individually to get their HTML representations
-    const oldStrHtml = mdParser.render(oldStr).trim();
-    const newStrHtml = mdParser.render(newStr).trim();
-    
-    // Find where new_str HTML appears in the full new HTML
-    const htmlIndex = newHtml.indexOf(newStrHtml);
-
-    if (htmlIndex !== -1) {
-      // Use PRECISE MODE with the exact edit boundaries
-      enterDiffPreview(oldHtml, newHtml, reason, {
-        originalText: oldStrHtml,
-        newText: newStrHtml,
-        htmlIndex: htmlIndex,
-      });
-    } else {
-      // Fallback to full-document diff mode
-      enterDiffPreview(oldHtml, newHtml, reason);
-    }
+    // The diff-highlighter compares old vs new text character-by-character
+    // to find the exact edit boundaries -- no position mapping needed
+    enterDiffPreview(oldHtml, newHtml, reason);
   };
 
   // Apply document rewrite from AI assistant

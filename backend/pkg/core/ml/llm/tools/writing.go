@@ -511,39 +511,50 @@ The document content is in Markdown format. You find text (old_str) and replace 
 
 CRITICAL REQUIREMENTS:
 1. old_str must EXACTLY match text in the document (character-for-character, including whitespace and newlines)
-2. old_str must be UNIQUE in the document - include enough surrounding context
+2. old_str MUST include 1-2 lines of surrounding context before AND after the change to ensure uniqueness
 3. Keep edits focused - one logical change at a time
 4. Content is in Markdown format - use markdown syntax for headings, code blocks, lists, etc.
 
+CONTEXT RULES:
+- ALWAYS include the line before and after your change in old_str
+- A heading alone is NEVER enough context
+- The same surrounding context must appear in new_str, with only the changed part modified
+
 EXAMPLES:
 
-BAD (not unique):
-  old_str: "Introduction"
+BAD (heading only - not enough context, could match multiple headings):
+  old_str: "### Results"
+  new_str: "### Summary"
 
-GOOD (unique with context):
-  old_str: "## Introduction\n\nOracle announced JavaScript support"
+GOOD (heading with surrounding context):
+  old_str: "a 60% decrease in page load times.\n\n### Results\n\nAfter running"
+  new_str: "a 60% decrease in page load times.\n\n### Summary\n\nAfter running"
+
+BAD (single sentence - could match multiple places):
+  old_str: "This is important."
+  new_str: "This is critical."
+
+GOOD (sentence with surrounding lines):
+  old_str: "the server responds quickly.\n\nThis is important.\n\nThe next step"
+  new_str: "the server responds quickly.\n\nThis is critical.\n\nThe next step"
 
 BAD (too large - causes JSON errors):
   old_str: [entire 500-word section]
 
-GOOD (focused edit):
-  old_str: "Teams already writing business logic in JavaScript can move that code"
-  new_str: "Teams with existing JavaScript expertise can migrate business logic"
-
-GOOD (editing a code block):
-  old_str: "` + "```" + `go\nfunc main() {\n    fmt.Println(\"hello\")\n}\n` + "```" + `"
-  new_str: "` + "```" + `go\nfunc main() {\n    fmt.Println(\"hello world\")\n}\n` + "```" + `"
+GOOD (editing a code block - include surrounding text):
+  old_str: "the controller selects the appropriate template:\n\n` + "```" + `go\nfunc main() {\n    fmt.Println(\"hello\")\n}\n` + "```" + `\n\nThis function"
+  new_str: "the controller selects the appropriate template:\n\n` + "```" + `go\nfunc main() {\n    fmt.Println(\"hello world\")\n}\n` + "```" + `\n\nThis function"
 
 NEVER include a title/heading at the start of new_str - titles are managed separately.
 Write like a human - avoid puffery, hedging, and AI patterns.`,
 		Parameters: map[string]any{
 			"old_str": map[string]any{
 				"type":        "string",
-				"description": "The exact markdown text to find and replace (must be unique, include surrounding context)",
+				"description": "The exact markdown text to find and replace. MUST include 1-2 lines of context before and after the change for uniqueness.",
 			},
 			"new_str": map[string]any{
 				"type":        "string",
-				"description": "The replacement markdown text. No title/heading at start.",
+				"description": "The replacement markdown text. Must include the same surrounding context as old_str, with only the changed part modified.",
 			},
 			"reason": map[string]any{
 				"type":        "string",
