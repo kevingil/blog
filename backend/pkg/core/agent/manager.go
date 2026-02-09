@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -898,14 +897,6 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 		log.Printf("[Agent]    Tool Result #%d:", idx+1)
 		log.Printf("[Agent]       Call ID: %s", toolResult.ToolCallID)
 		log.Printf("[Agent]       Is Error: %v", toolResult.IsError)
-
-		// #region agent log
-		debugSave := fmt.Sprintf(`{"location":"manager.go:saveToolResult","message":"tool result save","data":{"idx":%d,"callId":%q,"isError":%v,"contentFirst100":%q},"timestamp":%d,"hypothesisId":"H5_save"}`,
-			idx, toolResult.ToolCallID, toolResult.IsError,
-			func() string { s := toolResult.Content; if len(s) > 100 { s = s[:100] }; return s }(),
-			time.Now().UnixMilli())
-		if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugSave + "\n"); f.Close() }
-		// #endregion
 
 		// Don't skip error results -- save them so they appear in conversation history
 		isError := toolResult.IsError

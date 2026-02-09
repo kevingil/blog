@@ -847,21 +847,29 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   };
 
   // Apply text edit from AI assistant (markdown-based str_replace)
-  // If newMarkdown is provided (from backend validation), convert it directly to HTML.
-  // Otherwise, apply the edit locally by converting current HTML to markdown, replacing, and converting back.
+  // Computes the edit as old_str/new_str chunks and uses precise diff mode.
   const applyTextEdit = (oldStr: string, newStr: string, reason: string, newMarkdown?: string) => {
     if (!editor) return;
     
     const currentHtml = editor.getHTML();
     
     let newHtml: string;
+    let oldMd: string;
     if (newMarkdown) {
-      // Backend applied the edit and returned full new markdown -- just convert to HTML
+      // Backend applied the edit and returned full new markdown
       newHtml = mdParser.render(newMarkdown);
+      // Reconstruct old markdown by reversing the edit (for the normalized old HTML)
+      // Find new_str in new_markdown and replace with old_str to get old_markdown
+      const newStrIdx = newMarkdown.indexOf(newStr);
+      if (newStrIdx !== -1) {
+        oldMd = newMarkdown.substring(0, newStrIdx) + oldStr + newMarkdown.substring(newStrIdx + newStr.length);
+      } else {
+        oldMd = turndownService.turndown(currentHtml);
+      }
     } else {
       // Fallback: apply the edit locally on markdown
-      const currentMd = turndownService.turndown(currentHtml);
-      const index = currentMd.indexOf(oldStr);
+      oldMd = turndownService.turndown(currentHtml);
+      const index = oldMd.indexOf(oldStr);
       if (index === -1) {
         toast({
           title: 'Edit Warning',
@@ -870,15 +878,32 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         });
         return;
       }
-      const newMd = currentMd.substring(0, index) + newStr + currentMd.substring(index + oldStr.length);
-      newHtml = mdParser.render(newMd);
+      newMarkdown = oldMd.substring(0, index) + newStr + oldMd.substring(index + oldStr.length);
+      newHtml = mdParser.render(newMarkdown);
     }
     
-    // Normalize old HTML through the same markdown round-trip so both sides use the same renderer.
-    // Without this, diffWords shows false positives from structural HTML differences between
-    // TipTap's getHTML() and markdown-it's render() (e.g., whitespace, tag structure).
-    const normalizedOldHtml = mdParser.render(turndownService.turndown(currentHtml));
-    enterDiffPreview(normalizedOldHtml, newHtml, reason);
+    // Render old markdown to HTML through the same renderer so both sides are consistent
+    const oldHtml = mdParser.render(oldMd);
+
+    // Compute the edit position in the rendered new HTML by finding the new_str content.
+    // Render old_str and new_str individually to get their HTML representations
+    const oldStrHtml = mdParser.render(oldStr).trim();
+    const newStrHtml = mdParser.render(newStr).trim();
+    
+    // Find where new_str HTML appears in the full new HTML
+    const htmlIndex = newHtml.indexOf(newStrHtml);
+
+    if (htmlIndex !== -1) {
+      // Use PRECISE MODE with the exact edit boundaries
+      enterDiffPreview(oldHtml, newHtml, reason, {
+        originalText: oldStrHtml,
+        newText: newStrHtml,
+        htmlIndex: htmlIndex,
+      });
+    } else {
+      // Fallback to full-document diff mode
+      enterDiffPreview(oldHtml, newHtml, reason);
+    }
   };
 
   // Apply document rewrite from AI assistant
@@ -903,23 +928,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
     // Get current document content in both HTML and markdown formats
     const currentContent = editor?.getHTML() || '';
-    // #region agent log
-    // Check what HTML TipTap produces for <pre> tags
-    const hasPreTag = currentContent.includes('<pre');
-    const hasCodeTag = currentContent.includes('<code');
-    const preIdx = currentContent.indexOf('<pre');
-    const htmlAroundPre = preIdx !== -1 ? currentContent.substring(preIdx, Math.min(preIdx + 200, currentContent.length)) : 'NO_PRE_TAG';
-    fetch('http://127.0.0.1:7242/ingest/5ed2ef34-0520-4861-bbfe-52c16271e660',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Editor.tsx:htmlInput',message:'HTML before turndown',data:{htmlLen:currentContent.length,hasPreTag,hasCodeTag,htmlAroundPre},timestamp:Date.now(),hypothesisId:'H2_html'})}).catch(()=>{});
-    // #endregion
-
     const currentMarkdown = currentContent ? turndownService.turndown(currentContent) : '';
-
-    // #region agent log
-    const hasFenced = currentMarkdown.includes('```');
-    const hasEscapedBacktick = currentMarkdown.includes('\\`');
-    const mdSample = currentMarkdown.substring(0, 300);
-    fetch('http://127.0.0.1:7242/ingest/5ed2ef34-0520-4861-bbfe-52c16271e660',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Editor.tsx:sendChat',message:'markdown produced by turndown',data:{mdLen:currentMarkdown.length,hasFenced,hasEscapedBacktick,mdSample},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
 
     // Check if this looks like an edit request
     const isEditRequest = /\b(rewrite|edit|improve|change|update|fix|enhance|modify)\b/i.test(text);
@@ -1405,17 +1414,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     return updated;
                   });
                   
-                  // Apply diff if it's an edit tool
-                  const artifact = fullMsg.meta_data?.artifact;
-                  const toolExec = fullMsg.meta_data?.tool_execution;
-                  if (artifact && toolExec?.output) {
-                    const toolName = toolExec.tool_name;
-                    if (toolName === 'edit_text') {
-                      applyTextEdit(toolExec.output.old_str || toolExec.output.original_text, toolExec.output.new_str || toolExec.output.new_text, toolExec.output.reason, toolExec.output.new_markdown);
-                    } else if (toolName === 'rewrite_document') {
-                      applyDocumentRewrite(toolExec.output.new_content, toolExec.output.reason, toolExec.output.original_content);
-                    }
-                  }
+                  // Don't apply diff here -- the tool_result handler already applied it.
+                  // Applying again from full_message would overwrite the diff decorations.
                 }
                 break;
                 

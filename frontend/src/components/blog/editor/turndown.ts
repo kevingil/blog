@@ -1,9 +1,5 @@
 import TurndownService from 'turndown';
 
-// #region agent log
-console.log('[TURNDOWN] Module loaded at', new Date().toISOString());
-// #endregion
-
 // Module-level singleton: properly configured Turndown instance.
 const turndownService = new TurndownService({
   headingStyle: 'atx',

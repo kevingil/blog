@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"os"
 	"sort"
 	"strings"
-	"time"
 
 	"backend/pkg/database/models"
 
@@ -579,24 +577,6 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 	// Get the document markdown from context to validate the edit
 	documentMarkdown := GetDocumentMarkdownFromContext(ctx)
 
-	// #region agent log
-	// Log: what does the old_str look like byte-by-byte for first 80 chars, and does the doc contain the first line?
-	oldStrFirst80 := input.OldStr; if len(oldStrFirst80) > 80 { oldStrFirst80 = oldStrFirst80[:80] }
-	firstNewline := strings.Index(input.OldStr, "\n")
-	firstLine := input.OldStr; if firstNewline > 0 { firstLine = input.OldStr[:firstNewline] }
-	firstLineInDoc := strings.Contains(documentMarkdown, firstLine)
-	hasFenced := strings.Contains(documentMarkdown, "```")
-	// Find closest match by searching for progressively shorter prefixes
-	matchLen := 0
-	for i := len(firstLine); i > 10; i-- {
-		if strings.Contains(documentMarkdown, firstLine[:i]) { matchLen = i; break }
-	}
-	debugEntry := fmt.Sprintf(`{"location":"writing.go:edit_text","message":"edit validation detail","data":{"oldStrLen":%d,"docLen":%d,"firstLine":%q,"firstLineInDoc":%v,"firstLineLen":%d,"matchLen":%d,"hasFenced":%v,"oldStrBytes":%q},"timestamp":%d,"hypothesisId":"H1,H3"}`,
-		len(input.OldStr), len(documentMarkdown), firstLine, firstLineInDoc, len(firstLine), matchLen, hasFenced,
-		[]byte(oldStrFirst80), time.Now().UnixMilli())
-	if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugEntry + "\n"); f.Close() }
-	// #endregion
-
 	var newMarkdown string
 	if documentMarkdown != "" {
 		// Validate: old_str must exist in the document
@@ -627,10 +607,6 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 				documentMarkdown = normalizedDoc
 				input.OldStr = normalizedOldStr
 				log.Printf("   🔄 Matched after normalizing markdown escapes")
-				// #region agent log
-				debugNorm := fmt.Sprintf(`{"location":"writing.go:edit_text_norm","message":"MATCHED via escape normalization","data":{"index":%d},"timestamp":%d,"hypothesisId":"H3"}`, index, time.Now().UnixMilli())
-				if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugNorm + "\n"); f.Close() }
-				// #endregion
 			}
 		}
 
@@ -660,10 +636,6 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 				documentMarkdown = wsDoc
 				input.OldStr = wsOldStr
 				log.Printf("   🔄 Matched after whitespace normalization")
-				// #region agent log
-				debugWS := fmt.Sprintf(`{"location":"writing.go:edit_text_ws","message":"MATCHED via whitespace normalization","data":{"index":%d},"timestamp":%d,"hypothesisId":"H3"}`, index, time.Now().UnixMilli())
-				if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugWS + "\n"); f.Close() }
-				// #endregion
 			}
 		}
 
@@ -686,11 +658,6 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 			if anyApplied && applied != documentMarkdown {
 				newMarkdown = applied
 				log.Printf("   🔄 Fuzzy patch applied successfully (%d/%d hunks)", countTrue(results), len(results))
-				// #region agent log
-				debugFuzzy := fmt.Sprintf(`{"location":"writing.go:edit_text_fuzzy","message":"MATCHED via fuzzy patch","data":{"hunksApplied":%d,"hunksTotal":%d,"newLen":%d},"timestamp":%d,"hypothesisId":"H_fuzzy"}`,
-					countTrue(results), len(results), len(newMarkdown), time.Now().UnixMilli())
-				if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugFuzzy + "\n"); f.Close() }
-				// #endregion
 				// Skip the exact match path below -- we already have newMarkdown
 				index = 0 // sentinel: mark as found so we skip the error path
 			}
@@ -698,11 +665,6 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 
 		if index == -1 {
 			log.Printf("   ❌ old_str not found even with fuzzy matching")
-			// #region agent log
-			debugFail := fmt.Sprintf(`{"location":"writing.go:edit_text_fail","message":"ALL MATCH STRATEGIES FAILED","data":{"oldStrLen":%d,"docLen":%d},"timestamp":%d,"hypothesisId":"H_fail"}`,
-				len(input.OldStr), len(documentMarkdown), time.Now().UnixMilli())
-			if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugFail + "\n"); f.Close() }
-			// #endregion
 
 			// Return error but include the proposed edit data so the DiffArtifact can display it
 			result := map[string]interface{}{
@@ -741,11 +703,6 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 
 			newMarkdown = documentMarkdown[:index] + input.NewStr + documentMarkdown[index+len(input.OldStr):]
 			log.Printf("   ✅ Edit applied to document markdown (new length: %d)", len(newMarkdown))
-			// #region agent log
-			debugOk := fmt.Sprintf(`{"location":"writing.go:edit_text_ok","message":"MATCH SUCCESS","data":{"index":%d,"oldStrLen":%d},"timestamp":%d,"hypothesisId":"H1"}`,
-				index, len(input.OldStr), time.Now().UnixMilli())
-			if f, err := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil { f.WriteString(debugOk + "\n"); f.Close() }
-			// #endregion
 		}
 	} else {
 		log.Printf("   ⚠️ No document markdown in context, returning edit without validation")
