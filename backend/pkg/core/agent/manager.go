@@ -44,15 +44,27 @@ type ExaServiceInterface interface {
 	Answer(ctx context.Context, question string) (interface{}, error)
 }
 
+// ArticleDraftService provides draft content persistence for the agent.
+// A pre-turn snapshot enables "Undo All", and per-edit updates keep the DB in sync.
+type ArticleDraftService interface {
+	// CreateDraftSnapshot saves the current draft as a version record (for "Undo All").
+	// Returns the version ID so the frontend can revert to it on reject.
+	CreateDraftSnapshot(ctx context.Context, articleID uuid.UUID) (*uuid.UUID, error)
+	// UpdateDraftContent updates only draft_content + updated_at (no version record).
+	// Used during agent turns to persist each edit without creating version spam.
+	UpdateDraftContent(ctx context.Context, articleID uuid.UUID, htmlContent string) error
+}
+
 // AgentAsyncCopilotManager - LLM Agent Framework powered copilot manager
 type AgentAsyncCopilotManager struct {
-	requests    map[string]*AgentAsyncRequest
-	mu          sync.RWMutex
-	agent       agent.Service
-	sessionSvc  session.Service
-	messageSvc  message.Service
-	chatService ChatMessageServiceInterface
-	config      Config
+	requests     map[string]*AgentAsyncRequest
+	mu           sync.RWMutex
+	agent        agent.Service
+	sessionSvc   session.Service
+	messageSvc   message.Service
+	chatService  ChatMessageServiceInterface
+	draftService ArticleDraftService // nil-safe: version snapshots and DB persistence are skipped if nil
+	config       Config
 }
 
 // AgentAsyncRequest represents an async chat request
@@ -79,14 +91,15 @@ var (
 )
 
 // NewAgentAsyncCopilotManager creates a new agent manager with configuration
-func NewAgentAsyncCopilotManager(cfg Config, agentSvc agent.Service, sessionSvc session.Service, messageSvc message.Service, chatService ChatMessageServiceInterface) *AgentAsyncCopilotManager {
+func NewAgentAsyncCopilotManager(cfg Config, agentSvc agent.Service, sessionSvc session.Service, messageSvc message.Service, chatService ChatMessageServiceInterface, draftService ArticleDraftService) *AgentAsyncCopilotManager {
 	return &AgentAsyncCopilotManager{
-		requests:    make(map[string]*AgentAsyncRequest),
-		agent:       agentSvc,
-		sessionSvc:  sessionSvc,
-		messageSvc:  messageSvc,
-		chatService: chatService,
-		config:      cfg,
+		requests:     make(map[string]*AgentAsyncRequest),
+		agent:        agentSvc,
+		sessionSvc:   sessionSvc,
+		messageSvc:   messageSvc,
+		chatService:  chatService,
+		draftService: draftService,
+		config:       cfg,
 	}
 }
 
@@ -114,7 +127,7 @@ type ExaClient interface {
 }
 
 // InitializeAgentCopilotManager initializes the agent copilot manager with real services
-func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, chatService ChatMessageServiceInterface, exaClient ExaClient, sourceCreator tools.SourceCreator) error {
+func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, chatService ChatMessageServiceInterface, exaClient ExaClient, sourceCreator tools.SourceCreator, draftService ArticleDraftService) error {
 	// Load agent configuration
 	cfg := LoadConfig()
 
@@ -125,10 +138,16 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 	// Create text generation service for tools that need it
 	textGenService := text.NewGenerationService()
 
+	// Create a DraftSaver adapter for the EditTextTool (bridges string articleID to UUID-based ArticleDraftService)
+	var draftSaver tools.DraftSaver
+	if draftService != nil {
+		draftSaver = &draftSaverAdapter{draftService: draftService}
+	}
+
 	// Create writing tools for the agent
 	writingTools := []tools.BaseTool{
 		tools.NewReadDocumentTool(),
-		tools.NewEditTextTool(),
+		tools.NewEditTextTool(draftSaver),
 		tools.NewGenerateImagePromptTool(textGenService),
 		tools.NewGenerateTextContentTool(textGenService),
 	}
@@ -161,7 +180,7 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 	}
 
 	// Create and set the global manager with configuration
-	manager := NewAgentAsyncCopilotManager(cfg, agentSvc, sessionSvc, messageSvc, chatService)
+	manager := NewAgentAsyncCopilotManager(cfg, agentSvc, sessionSvc, messageSvc, chatService, draftService)
 	SetGlobalAgentManager(manager)
 
 	log.Printf("[Agent] Initialized with configuration (max_concurrent=%d, timeout=%v)", cfg.MaxConcurrentRequests, cfg.RequestTimeout)
@@ -170,10 +189,24 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 
 // InitializeWithDefaults initializes the agent copilot manager with default services
 // This is a convenience function that initializes without optional services
-func InitializeWithDefaults(chatService ChatMessageServiceInterface) error {
+func InitializeWithDefaults(chatService ChatMessageServiceInterface, draftService ArticleDraftService) error {
 	// Initialize without source service and exa client
 	// These can be provided via InitializeAgentCopilotManager when available
-	return InitializeAgentCopilotManager(nil, chatService, nil, nil)
+	return InitializeAgentCopilotManager(nil, chatService, nil, nil, draftService)
+}
+
+// draftSaverAdapter bridges the tools.DraftSaver interface (string article IDs)
+// to the ArticleDraftService interface (uuid.UUID article IDs).
+type draftSaverAdapter struct {
+	draftService ArticleDraftService
+}
+
+func (a *draftSaverAdapter) UpdateDraftContent(ctx context.Context, articleID string, htmlContent string) error {
+	parsed, err := uuid.Parse(articleID)
+	if err != nil {
+		return fmt.Errorf("invalid article ID %q: %w", articleID, err)
+	}
+	return a.draftService.UpdateDraftContent(ctx, parsed, htmlContent)
 }
 
 func (m *AgentAsyncCopilotManager) SubmitChatRequest(req ChatRequest) (string, error) {
@@ -371,6 +404,24 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 		}
 		userPrompt += "\n\n--- Document Layout (use read_document to see full content) ---\n" + layout
 		log.Printf("[Agent] Document layout generated (%d headers), content stored in context (markdown: %v)", strings.Count(layout, "\n")+1, asyncReq.Request.DocumentMarkdown != "")
+	}
+
+	// Create a pre-turn version snapshot so the frontend can "Undo All" agent changes.
+	// This is done before the agent runs so the snapshot captures the state before any edits.
+	if m.draftService != nil && articleID != uuid.Nil {
+		snapshotID, snapErr := m.draftService.CreateDraftSnapshot(ctx, articleID)
+		if snapErr != nil {
+			log.Printf("[Agent] ⚠️ Failed to create pre-turn snapshot: %v", snapErr)
+		} else if snapshotID != nil {
+			log.Printf("[Agent] 📸 Created pre-turn snapshot (version %s) for article %s", snapshotID.String(), articleID)
+			asyncReq.ResponseChan <- StreamResponse{
+				RequestID: asyncReq.ID,
+				Type:      StreamTypeTurnStarted,
+				Data: map[string]interface{}{
+					"snapshot_version_id": snapshotID.String(),
+				},
+			}
+		}
 	}
 
 	asyncReq.iteration = 1
