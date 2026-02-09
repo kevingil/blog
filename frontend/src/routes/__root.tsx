@@ -1,4 +1,5 @@
 import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/toaster";
 import 'highlight.js/styles/base16/snazzy.css';
 import { createRootRouteWithContext, Outlet } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -15,6 +16,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
         <Outlet />
+        <Toaster />
       </ThemeProvider>
     </QueryClientProvider>
   );

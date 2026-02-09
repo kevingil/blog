@@ -274,7 +274,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     },
     onError: (error) => {
       console.error('Error creating article:', error);
-      toast({ title: "Error", description: "Failed to create article. Please try again.", variant: "destructive" });
+      const errorMessage = error instanceof Error ? error.message : "Failed to create article. Please try again.";
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
     }
   });
 
@@ -391,7 +392,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     },
     onError: (error) => {
       console.error('Error unpublishing article:', error);
-      toast({ title: "Error", description: "Failed to unpublish article. Please try again.", variant: "destructive" });
+      const errorMessage = error instanceof Error ? error.message : "Failed to unpublish article. Please try again.";
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
     }
   });
 
@@ -436,7 +438,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     },
     onError: (error) => {
       console.error('Error reverting to version:', error);
-      toast({ title: "Error", description: "Failed to revert to version. Please try again.", variant: "destructive" });
+      const errorMessage = error instanceof Error ? error.message : "Failed to revert to version. Please try again.";
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
     }
   });
 
