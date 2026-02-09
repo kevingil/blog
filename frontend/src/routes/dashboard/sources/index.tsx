@@ -159,7 +159,8 @@ function SourcesPage() {
     return new Date(dateString).toLocaleDateString();
   };
 
-  const truncateContent = (content: string, maxLength: number = 150) => {
+  const truncateContent = (content: string | undefined, maxLength: number = 150) => {
+    if (!content) return '';
     return content.length > maxLength ? content.substring(0, maxLength) + '...' : content;
   };
 
