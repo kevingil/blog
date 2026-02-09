@@ -471,6 +471,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [pendingNewDocument, setPendingNewDocument] = useState<string>('');
   const [currentDiffReason, setCurrentDiffReason] = useState<string>('');
 
+  // Turn-level state for "Undo All" across multi-edit agent turns.
+  // turnOriginalDocument captures the editor HTML before the first edit of a turn (set once).
+  // turnSnapshotVersionId is the version ID from the backend's pre-turn snapshot.
+  const [turnOriginalDocument, setTurnOriginalDocument] = useState<string>('');
+  const [turnSnapshotVersionId, setTurnSnapshotVersionId] = useState<string>('');
+
 
   // Inline diff lifecycle helpers
   // Compares old vs new HTML using character-by-character comparison
@@ -513,25 +519,49 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const acceptDiff = () => {
     if (!editor) return;
     
-    // Apply the pending changes
+    // Apply the pending changes (content is already saved on the backend by the agent)
     editor.commands.setContent(pendingNewDocument || editor.getHTML());
     setValue('content', editor.getHTML());
     clearDiffDecorations();
     setDiffing(false);
     setPendingNewDocument('');
     setCurrentDiffReason('');
+    setTurnOriginalDocument('');
+    setTurnSnapshotVersionId('');
   };
 
-  const rejectDiff = () => {
+  const rejectDiff = async () => {
     if (!editor) return;
-    
-    // Revert to original content
-    editor.commands.setContent(originalDocument || editor.getHTML());
-    setValue('content', originalDocument || editor.getHTML());
+
+    // Determine the content to revert to (prefer turn-level original for multi-edit undo)
+    const revertContent = turnOriginalDocument || originalDocument || editor.getHTML();
+
+    // If we have a backend snapshot, revert the DB too so backend stays in sync
+    if (turnSnapshotVersionId && blogSlug) {
+      try {
+        const reverted = await revertToVersion(blogSlug as string, turnSnapshotVersionId);
+        // Use the reverted draft content from the API response if available
+        const revertedContent = reverted.article?.draft_content || revertContent;
+        editor.commands.setContent(revertedContent);
+        setValue('content', revertedContent);
+      } catch (err) {
+        console.error('[Editor] Failed to revert backend to snapshot:', err);
+        // Fallback to local revert
+        editor.commands.setContent(revertContent);
+        setValue('content', revertContent);
+      }
+    } else {
+      // No backend snapshot -- local-only revert
+      editor.commands.setContent(revertContent);
+      setValue('content', revertContent);
+    }
+
     clearDiffDecorations();
     setDiffing(false);
     setPendingNewDocument('');
     setCurrentDiffReason('');
+    setTurnOriginalDocument('');
+    setTurnSnapshotVersionId('');
   };
 
   const editor = useEditor({
@@ -878,6 +908,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     // Render old markdown to HTML through the same renderer so both sides are consistent
     const oldHtml = mdParser.render(oldMd);
 
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/5ed2ef34-0520-4861-bbfe-52c16271e660',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Editor.tsx:applyTextEdit',message:'before enterDiffPreview',data:{oldStrLen:oldStr.length,newStrLen:newStr.length,oldStr:oldStr.substring(0,100),newStr:newStr.substring(0,100),newStrIdx:newMarkdown?newMarkdown.indexOf(newStr):-1,oldHtmlLen:oldHtml.length,newHtmlLen:newHtml.length,oldHtmlSample:oldHtml.substring(0,200),newHtmlSample:newHtml.substring(0,200),htmlsEqual:oldHtml===newHtml},timestamp:Date.now(),hypothesisId:'H2,H3'})}).catch(()=>{});
+    // #endregion
+
     // The diff-highlighter compares old vs new text character-by-character
     // to find the exact edit boundaries -- no position mapping needed
     enterDiffPreview(oldHtml, newHtml, reason);
@@ -1024,6 +1058,17 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           // Handle new block-based message types
           if (msg.type) {
             switch (msg.type) {
+              case 'turn_started':
+                // Backend created a pre-turn version snapshot for "Undo All".
+                // Capture the current editor content as the turn baseline.
+                if (msg.data?.snapshot_version_id) {
+                  setTurnSnapshotVersionId(msg.data.snapshot_version_id);
+                  if (editor) {
+                    setTurnOriginalDocument(editor.getHTML());
+                  }
+                }
+                break;
+
               case 'thinking':
                 // Handle thinking state - show shimmer
                 setIsThinking(true);
@@ -2556,15 +2601,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               <ThinkShimmerBlock message={thinkingMessage} />
             )}
           </div>
-          
-          {/* Sticky diff action bar - shows when there are pending changes */}
           {diffing && !chatLoading && (
             <DiffActionBar 
               onKeepAll={acceptDiff}
               onReject={rejectDiff}
             />
           )}
-          
         <div className="p-4 border-t space-y-2">
           <PromptInput
             value={chatInput}
