@@ -31,7 +31,12 @@ function extractDocText(html: string): string {
   let text = '';
   function walk(node: Node) {
     if (node.nodeType === Node.TEXT_NODE) {
-      text += node.textContent || '';
+      const content = node.textContent || '';
+      // Skip whitespace-only text nodes between block elements --
+      // ProseMirror doesn't include these in its document text
+      if (content.trim().length > 0) {
+        text += content;
+      }
     } else {
       for (const child of Array.from(node.childNodes)) {
         walk(child);
@@ -106,6 +111,7 @@ export const DiffHighlighter = Extension.create({
             if (newEnd < newDocText.length) {
               parts.push({ value: newDocText.substring(newEnd) });
             }
+
 
             // @ts-ignore
             this.storage.active = true;

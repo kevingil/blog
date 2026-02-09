@@ -908,10 +908,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     // Render old markdown to HTML through the same renderer so both sides are consistent
     const oldHtml = mdParser.render(oldMd);
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5ed2ef34-0520-4861-bbfe-52c16271e660',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Editor.tsx:applyTextEdit',message:'before enterDiffPreview',data:{oldStrLen:oldStr.length,newStrLen:newStr.length,oldStr:oldStr.substring(0,100),newStr:newStr.substring(0,100),newStrIdx:newMarkdown?newMarkdown.indexOf(newStr):-1,oldHtmlLen:oldHtml.length,newHtmlLen:newHtml.length,oldHtmlSample:oldHtml.substring(0,200),newHtmlSample:newHtml.substring(0,200),htmlsEqual:oldHtml===newHtml},timestamp:Date.now(),hypothesisId:'H2,H3'})}).catch(()=>{});
-    // #endregion
-
     // The diff-highlighter compares old vs new text character-by-character
     // to find the exact edit boundaries -- no position mapping needed
     enterDiffPreview(oldHtml, newHtml, reason);
