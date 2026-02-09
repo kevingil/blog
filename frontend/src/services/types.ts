@@ -250,6 +250,7 @@ export interface ArticleSource {
 }
 
 export interface ArticleSourceWithArticle extends ArticleSource {
+  content_preview: string;
   article_title: string;
   article_slug: string;
 }

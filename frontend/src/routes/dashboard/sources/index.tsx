@@ -261,7 +261,7 @@ function SourcesPage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <p className="text-sm text-muted-foreground line-clamp-3 mb-3">
-                    {truncateContent(source.content)}
+                    {source.content_preview || truncateContent(source.content)}
                   </p>
                   
                   {/* Article Link */}
