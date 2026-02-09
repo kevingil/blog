@@ -493,11 +493,16 @@ func (t *GetRelevantSourcesTool) calculateRelevanceScore(text string, queryKeywo
 	return score
 }
 
-// EditTextTool edits specific text in the document
-type EditTextTool struct{}
+// EditTextTool edits specific text in the document.
+// It updates the mutable DocumentState in context so subsequent read_document calls
+// return the post-edit content. If a DraftSaver is provided, it also persists the
+// edit to the database immediately (making the backend the source of truth).
+type EditTextTool struct {
+	draftSaver DraftSaver // nil-safe: skips DB persistence if nil
+}
 
-func NewEditTextTool() *EditTextTool {
-	return &EditTextTool{}
+func NewEditTextTool(draftSaver DraftSaver) *EditTextTool {
+	return &EditTextTool{draftSaver: draftSaver}
 }
 
 func (t *EditTextTool) Info() ToolInfo {
@@ -717,6 +722,25 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 		}
 	} else {
 		log.Printf("   ⚠️ No document markdown in context, returning edit without validation")
+	}
+
+	// Update the mutable document state so subsequent read_document calls return the
+	// post-edit content (solves stale-read during multi-edit turns).
+	// Also persist to DB so the backend is the source of truth for draft content.
+	if newMarkdown != "" {
+		UpdateDocumentMarkdown(ctx, newMarkdown)
+
+		if t.draftSaver != nil {
+			articleID := GetArticleIDFromContext(ctx)
+			if articleID != "" {
+				html := renderMarkdownToHTML(newMarkdown)
+				if err := t.draftSaver.UpdateDraftContent(ctx, articleID, html); err != nil {
+					log.Printf("   ⚠️ [EditText] Failed to persist draft to DB: %v", err)
+				} else {
+					log.Printf("   💾 [EditText] Draft content persisted to DB")
+				}
+			}
+		}
 	}
 
 	// Generate diff for display
