@@ -148,6 +148,7 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 	writingTools := []tools.BaseTool{
 		tools.NewReadDocumentTool(),
 		tools.NewEditTextTool(draftSaver),
+		tools.NewRewriteSectionTool(draftSaver),
 		tools.NewGenerateImagePromptTool(textGenService),
 		tools.NewGenerateTextContentTool(textGenService),
 	}
@@ -657,11 +658,13 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 
 				for _, toolResult := range toolResults {
 					isSearchTool := false
+					resultToolName := ""
 					if !toolResult.IsError {
 						var resultData map[string]interface{}
 						if err := json.Unmarshal([]byte(toolResult.Content), &resultData); err == nil {
-							if toolName, ok := resultData["tool_name"].(string); ok {
-								isSearchTool = toolName == "search_web_sources" || toolName == "ask_question"
+							if tn, ok := resultData["tool_name"].(string); ok {
+								resultToolName = tn
+								isSearchTool = tn == "search_web_sources" || tn == "ask_question"
 							}
 						}
 					}
@@ -671,11 +674,13 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 						Type:      StreamTypeToolResult,
 						Iteration: asyncReq.iteration,
 						ToolID:    toolResult.ToolCallID,
+						ToolName:  resultToolName,
 						ToolResult: map[string]interface{}{
 							"content":   toolResult.Content,
 							"metadata":  toolResult.Metadata,
 							"is_error":  toolResult.IsError,
 							"is_search": isSearchTool,
+							"tool_name": resultToolName,
 						},
 					}
 				}
@@ -979,8 +984,8 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 		}
 		msgMetadata.WithToolExecution(toolExec)
 
-		if toolName == "edit_text" || toolName == "rewrite_document" {
-			log.Printf("[Agent]       ✏️  ARTIFACT TOOL DETECTED (isError: %v)", isError)
+		if toolName == "edit_text" || toolName == "rewrite_section" || toolName == "rewrite_document" {
+			log.Printf("[Agent]       ✏️  ARTIFACT TOOL DETECTED: %s (isError: %v)", toolName, isError)
 
 			artifactID := uuid.New().String()
 			artifactType := metadata.ArtifactTypeCodeEdit
@@ -992,8 +997,8 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 			var diffPreview string
 			var description string
 
-			if toolName == "edit_text" {
-				// Support both new field names (old_str/new_str) and legacy (original_text/new_text)
+			if toolName == "edit_text" || toolName == "rewrite_section" {
+				// Both edit_text and rewrite_section use old_str/new_str format
 				if newStr, ok := toolResultData["new_str"].(string); ok {
 					artifactContent = newStr
 				} else if newText, ok := toolResultData["new_text"].(string); ok {
