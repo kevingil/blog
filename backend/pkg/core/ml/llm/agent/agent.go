@@ -17,6 +17,7 @@ import (
 	"backend/pkg/core/ml/llm/tools"
 )
 
+
 // Common errors
 var (
 	ErrRequestCancelled = errors.New("request cancelled by user")
@@ -80,7 +81,13 @@ func NewAgent(
 	messages message.Service,
 	agentTools []tools.BaseTool,
 ) (Service, error) {
-	agentProvider, err := createAgentProvider(agentName)
+	// Extract tool names so the system prompt only references registered tools
+	toolNames := make([]string, len(agentTools))
+	for i, t := range agentTools {
+		toolNames[i] = t.Info().Name
+	}
+
+	agentProvider, err := createAgentProvider(agentName, toolNames)
 	if err != nil {
 		return nil, err
 	}
@@ -188,6 +195,8 @@ func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, cont
 
 	msgHistory := append(msgs, userMsg)
 
+	const maxIterations = 15 // Prevent runaway agent loops
+
 	iteration := 0
 	for {
 		// Check for cancellation before each iteration
@@ -200,6 +209,25 @@ func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, cont
 
 		// Emit thinking event at the start of each iteration
 		iteration++
+
+		// Guard against infinite loops - force a final response if we hit the limit
+		if iteration > maxIterations {
+			log.Printf("[Agent] ⚠️ Hit max iterations (%d), forcing completion", maxIterations)
+			finalMsg, err := a.messages.Create(ctx, sessionID, message.CreateMessageParams{
+				Role:  message.Assistant,
+				Parts: []message.ContentPart{message.TextContent{Text: "I've made several edits to your document. Let me know if you'd like me to continue with additional changes."}},
+				Model: string(a.provider.Model().ID),
+			})
+			if err != nil {
+				return a.err(fmt.Errorf("max iterations reached (%d), failed to create final message: %w", maxIterations, err))
+			}
+			finalMsg.AddFinish(message.FinishReasonEndTurn)
+			return AgentEvent{
+				Type:    AgentEventTypeResponse,
+				Message: finalMsg,
+				Done:    true,
+			}
+		}
 		thinkingEvent := AgentEvent{
 			Type:            AgentEventTypeThinking,
 			ThinkingMessage: "Thinking...",
@@ -208,7 +236,10 @@ func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, cont
 		}
 		events <- thinkingEvent
 
+		log.Printf("[Agent] Iteration %d starting (msgs: %d)", iteration, len(msgHistory))
 		agentMessage, toolResults, err := a.streamAndHandleEvents(ctx, sessionID, msgHistory, events)
+		log.Printf("[Agent] Iteration %d done (finish: %s, hasTools: %v)", iteration, agentMessage.FinishReason(), toolResults != nil)
+
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				agentMessage.AddFinish(message.FinishReasonCanceled)
@@ -459,17 +490,18 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 						Content:    fmt.Sprintf("Tool execution error: %v", toolErr),
 						IsError:    true,
 					}
-				} else {
-					toolResults[i] = message.ToolResult{
-						ToolCallID: toolCall.ID,
-						Content:    toolResult.Content,
-						Metadata:   toolResult.Metadata,
-						IsError:    toolResult.IsError,
-					}
+			} else {
+				toolResults[i] = message.ToolResult{
+					ToolCallID: toolCall.ID,
+					Content:    toolResult.Content,
+					Metadata:   toolResult.Metadata,
+					IsError:    toolResult.IsError,
 				}
+				log.Printf("│   Tool %q → %d chars (error: %v)", toolCall.Name, len(toolResult.Content), toolResult.IsError)
 			}
 		}
 	}
+}
 out:
 	if len(toolResults) == 0 {
 		return assistantMsg, nil, nil
@@ -596,7 +628,12 @@ func (a *agent) Update(agentName config.AgentName, modelID models.ModelID) (mode
 		return models.Model{}, fmt.Errorf("failed to update config: %w", err)
 	}
 
-	provider, err := createAgentProvider(agentName)
+	toolNames := make([]string, len(a.tools))
+	for i, t := range a.tools {
+		toolNames[i] = t.Info().Name
+	}
+
+	provider, err := createAgentProvider(agentName, toolNames)
 	if err != nil {
 		return models.Model{}, fmt.Errorf("failed to create provider for model %s: %w", modelID, err)
 	}
@@ -652,7 +689,7 @@ func (a *agent) estimateTokens(msgs []message.Message) int {
 	return total
 }
 
-func createAgentProvider(agentName config.AgentName) (provider.Provider, error) {
+func createAgentProvider(agentName config.AgentName, availableTools []string) (provider.Provider, error) {
 	cfg := config.Get()
 	agentConfig, ok := cfg.Agents[agentName]
 	if !ok {
@@ -677,7 +714,7 @@ func createAgentProvider(agentName config.AgentName) (provider.Provider, error) 
 	opts := []provider.ProviderClientOption{
 		provider.WithAPIKey(providerCfg.APIKey),
 		provider.WithModel(model),
-		provider.WithSystemMessage(prompt.GetAgentPrompt(agentName, model.Provider)),
+		provider.WithSystemMessage(prompt.GetAgentPrompt(agentName, model.Provider, availableTools)),
 		provider.WithMaxTokens(maxTokens),
 	}
 	if (model.Provider == models.ProviderOpenAI || model.Provider == models.ProviderGROQ) && model.CanReason {
