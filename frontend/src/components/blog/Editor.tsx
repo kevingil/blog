@@ -479,6 +479,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   // turnSnapshotVersionId is the version ID from the backend's pre-turn snapshot.
   const [turnOriginalDocument, setTurnOriginalDocument] = useState<string>('');
   const [turnSnapshotVersionId, setTurnSnapshotVersionId] = useState<string>('');
+  // Ref to track the latest editor HTML during a turn (updated silently per edit, used for combined diff on 'done')
+  const pendingNewDocumentRef = useRef<string>('');
 
 
   // Inline diff lifecycle helpers
@@ -1037,9 +1039,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       let currentAssistantContent = '';
       let hasInitialContent = false;
 
+
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
+
           
           if (msg.error) {
             console.error('Stream error:', msg.error);
@@ -1203,240 +1207,139 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 break;
                 
               case 'tool_use':
-                // Hide thinking state on tool use
                 setIsThinking(false);
-                
-                // Display tool usage feedback using tool_context for all tools
                 if (msg.tool_name) {
-                  // Also add tool step to the current assistant message's steps array
+                  const toolId = msg.tool_id || `tool-${Date.now()}`;
+                  console.debug('[Agent] tool_use:', msg.tool_name, toolId);
                   setChatMessages((prev) => {
                     const updated = [...prev];
-                    if (updated[assistantIndex]) {
-                      const currentMsg = updated[assistantIndex];
-                      const steps = [...(currentMsg.steps || [])];
-                      
-                      // Mark any previous reasoning steps as done
-                      steps.forEach((step, idx) => {
-                        if (step.type === 'reasoning' && step.isStreaming) {
-                          steps[idx] = { ...step, isStreaming: false };
-                        }
-                      });
-                      
-                      // Add tool step
-                      steps.push({
-                        type: 'tool_group',
-                        toolGroup: {
-                          group_id: msg.tool_id || `tool-${Date.now()}`,
-                          status: 'running',
-                          calls: [{
-                            id: msg.tool_id || `call-${Date.now()}`,
-                            name: msg.tool_name,
-                            input: msg.tool_input as Record<string, unknown> || {},
-                            status: 'running',
-                            started_at: new Date().toISOString(),
-                          }],
-                        },
-                      });
-                      
-                      updated[assistantIndex] = {
-                        ...currentMsg,
-                        steps,
-                        isReasoningStreaming: false,
-                      };
+                    if (!updated[assistantIndex]) return updated;
+                    const steps = [...(updated[assistantIndex].steps || [])];
+                    // Mark prior reasoning as done
+                    for (let i = 0; i < steps.length; i++) {
+                      if (steps[i].type === 'reasoning' && steps[i].isStreaming) {
+                        steps[i] = { ...steps[i], isStreaming: false };
+                      }
                     }
+                    // Push new tool step with tool_id for later matching
+                    steps.push({
+                      type: 'tool_group',
+                      toolGroup: {
+                        group_id: toolId,
+                        status: 'running',
+                        calls: [{
+                          id: toolId,
+                          name: msg.tool_name,
+                          input: msg.tool_input as Record<string, unknown> || {},
+                          status: 'running',
+                          started_at: new Date().toISOString(),
+                        }],
+                      },
+                    });
+                    updated[assistantIndex] = { ...updated[assistantIndex], steps, isReasoningStreaming: false };
                     return updated;
                   });
                 }
                 break;
                 
               case 'tool_result':
-                // Hide thinking state on tool result
                 setIsThinking(false);
-                
-                // Handle tool results with structured data
                 if (msg.tool_result) {
-                  // Create a unique identifier for this tool message
-                  const toolMessageId = `${requestId}-${Date.now()}-tool-result`;
+                  const toolId = msg.tool_id;
+                  const toolMessageId = `${requestId}-${toolId || Date.now()}-tool-result`;
                   const isNewMessage = !processedToolMessages.has(toolMessageId);
-                  
+
                   try {
-                    if (msg.tool_result.content) {
-                      const toolResult = JSON.parse(msg.tool_result.content);
-                      
-                      // Update tool steps in the assistant message
-                      setChatMessages((prev) => {
-                        const updated = [...prev];
-                        if (updated[assistantIndex] && updated[assistantIndex].steps) {
-                          const steps = [...updated[assistantIndex].steps!];
-                          // Find and update the matching tool step
-                          for (let i = steps.length - 1; i >= 0; i--) {
-                            if (steps[i].type === 'tool_group' && steps[i].toolGroup) {
-                              const calls = steps[i].toolGroup!.calls;
-                              for (let j = 0; j < calls.length; j++) {
-                                if (calls[j].name === toolResult.tool_name && calls[j].status === 'running') {
-                                  const toolStatus = toolResult.is_error ? 'error' : 'completed';
-                                  calls[j] = {
-                                    ...calls[j],
-                                    status: toolStatus,
-                                    result: toolResult,
-                                    error: toolResult.is_error ? (toolResult.error || 'Edit failed') : undefined,
-                                    completed_at: new Date().toISOString(),
-                                  };
-                                  // Group status is error if any call errored
-                                  const groupStatus = calls.some((c: any) => c.status === 'error') ? 'error' : 'completed';
-                                  steps[i] = {
-                                    ...steps[i],
-                                    toolGroup: {
-                                      ...steps[i].toolGroup!,
-                                      status: groupStatus,
-                                      calls: [...calls],
-                                    },
-                                  };
-                                  break;
-                                }
-                              }
-                              break;
-                            }
-                          }
-                          updated[assistantIndex] = {
-                            ...updated[assistantIndex],
-                            steps,
-                          };
-                        }
-                        return updated;
-                      });
-                      
-                      // For edit tools, also apply the diff preview (only for successful results)
-                      if (toolResult.tool_name === 'edit_text' && isNewMessage && !toolResult.is_error) {
-                        applyTextEdit(toolResult.old_str || toolResult.original_text, toolResult.new_str || toolResult.new_text, toolResult.reason, toolResult.new_markdown);
-                        setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
-                      } else if (toolResult.tool_name === 'rewrite_document' && isNewMessage && !toolResult.is_error) {
-                        applyDocumentRewrite(toolResult.new_content, toolResult.reason, toolResult.original_content);
-                        setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
-                      }
-                    }
-                  } catch (error) {
-                    console.error('[Editor] Failed to parse tool result:', error);
-                    // Update tool step to error state
+                    const toolResult = msg.tool_result.content ? JSON.parse(msg.tool_result.content) : {};
+                    const toolName = msg.tool_name || toolResult.tool_name || '';
+                    const isError = toolResult.is_error || msg.tool_result.is_error;
+
+                    console.debug('[Agent] tool_result:', toolName, toolId, isError ? 'ERROR' : 'OK');
+
+                    // Match by tool_id (not name), scan ALL steps, no status filter
                     setChatMessages((prev) => {
                       const updated = [...prev];
-                      if (updated[assistantIndex] && updated[assistantIndex].steps) {
-                        const steps = [...updated[assistantIndex].steps!];
-                        // Find and mark last running tool step as error
-                        for (let i = steps.length - 1; i >= 0; i--) {
-                          if (steps[i].type === 'tool_group' && steps[i].toolGroup?.status === 'running') {
-                            steps[i] = {
-                              ...steps[i],
-                              toolGroup: {
-                                ...steps[i].toolGroup!,
-                                status: 'error',
-                              },
+                      if (!updated[assistantIndex]?.steps) return updated;
+                      const steps = [...updated[assistantIndex].steps!];
+                      for (let i = 0; i < steps.length; i++) {
+                        if (steps[i].type !== 'tool_group' || !steps[i].toolGroup) continue;
+                        const calls = [...steps[i].toolGroup!.calls];
+                        let found = false;
+                        for (let j = 0; j < calls.length; j++) {
+                          if (calls[j].id === toolId) {
+                            calls[j] = {
+                              ...calls[j],
+                              status: isError ? 'error' : 'completed',
+                              result: toolResult,
+                              error: isError ? (toolResult.error || 'Failed') : undefined,
+                              completed_at: new Date().toISOString(),
                             };
+                            found = true;
                             break;
                           }
                         }
-                        updated[assistantIndex] = { ...updated[assistantIndex], steps };
+                        if (found) {
+                          const groupStatus = calls.some((c: any) => c.status === 'error') ? 'error' :
+                                              calls.every((c: any) => c.status === 'completed' || c.status === 'error') ? 'completed' : 'running';
+                          steps[i] = {
+                            ...steps[i],
+                            toolGroup: { ...steps[i].toolGroup!, status: groupStatus, calls },
+                          };
+                          break;
+                        }
                       }
+                      updated[assistantIndex] = { ...updated[assistantIndex], steps };
                       return updated;
                     });
+
+                    // Silently apply edits to editor (combined diff shown on 'done')
+                    if ((toolName === 'edit_text' || toolName === 'rewrite_section') && isNewMessage && !isError) {
+                      if (toolResult.new_markdown && editor) {
+                        const newHtml = mdParser.render(toolResult.new_markdown);
+                        editor.commands.setContent(newHtml);
+                        pendingNewDocumentRef.current = newHtml;
+                      }
+                      setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
+                    } else if (toolName === 'rewrite_document' && isNewMessage && !isError) {
+                      if (toolResult.new_content && editor) {
+                        const newHtml = mdParser.render(toolResult.new_content);
+                        editor.commands.setContent(newHtml);
+                        pendingNewDocumentRef.current = newHtml;
+                      }
+                      setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
+                    }
+                  } catch (e) {
+                    console.error('[Editor] Failed to parse tool result:', e);
                   }
                 }
                 break;
 
+              case 'tool_group_complete':
+                // No-op: tool_result is the source of truth for call status.
+                // This event arrives BEFORE tool_result from the backend,
+                // so we must NOT mark calls as completed here (that would
+                // prevent tool_result from attaching result data).
+                setIsThinking(false);
+                break;
+
               case 'full_message':
-                // Handle full message with complete meta_data - merge with streaming state
+                // Only merge metadata -- never overwrite streaming steps
                 setIsThinking(false);
                 if (msg.full_message) {
-                  const fullMsg = msg.full_message;
-                  
                   setChatMessages((prev) => {
                     const updated = [...prev];
-                    if (updated[assistantIndex]) {
-                      const existingMsg = updated[assistantIndex];
-                      
-                      // Get steps: prefer existing streaming steps, fall back to meta_data.steps
-                      let finalSteps = existingMsg.steps || [];
-                      
-                      // If meta_data has steps and we don't have streaming steps, convert them
-                      if (fullMsg.meta_data?.steps && fullMsg.meta_data.steps.length > 0 && finalSteps.length === 0) {
-                        finalSteps = fullMsg.meta_data.steps.map((step: any) => {
-                          const turnStep: TurnStep = { type: step.type };
-                          if (step.type === 'reasoning' && step.reasoning) {
-                            turnStep.thinking = {
-                              content: step.reasoning.content || '',
-                              duration_ms: step.reasoning.duration_ms,
-                              visible: step.reasoning.visible ?? true,
-                            };
-                          } else if (step.type === 'tool' && step.tool) {
-                            turnStep.toolGroup = {
-                              group_id: step.tool.tool_id,
-                              status: step.tool.status === 'completed' ? 'completed' : 
-                                      step.tool.status === 'error' ? 'error' : 'running',
-                              calls: [{
-                                id: step.tool.tool_id,
-                                name: step.tool.tool_name,
-                                input: step.tool.input || {},
-                                status: step.tool.status === 'completed' ? 'completed' : 
-                                        step.tool.status === 'error' ? 'error' : 'running',
-                                result: step.tool.output,
-                                error: step.tool.error,
-                                started_at: step.tool.started_at || '',
-                                completed_at: step.tool.completed_at,
-                                duration_ms: step.tool.duration_ms,
-                              }],
-                            };
-                            turnStep.type = 'tool_group';
-                          } else if (step.type === 'content' && step.content) {
-                            turnStep.content = step.content;
-                          }
-                          return turnStep;
-                        });
-                      }
-                      
-                      // Clear streaming flags on all steps
-                      finalSteps = finalSteps.map(step => ({
-                        ...step,
-                        isStreaming: false,
-                      }));
-                      
-                      // Build tool_group from tool_execution if present
-                      let toolGroup = existingMsg.tool_group;
-                      if (fullMsg.meta_data?.tool_execution) {
-                        const toolExec = fullMsg.meta_data.tool_execution;
-                        const output = toolExec.output;
-                        toolGroup = {
-                          group_id: toolExec.tool_id || `group-${fullMsg.id}`,
-                          status: toolExec.success !== false ? 'completed' : 'error',
-                          calls: [{
-                            id: toolExec.tool_id || `call-${fullMsg.id}`,
-                            name: toolExec.tool_name,
-                            input: typeof toolExec.input === 'object' ? toolExec.input : {},
-                            status: toolExec.success !== false ? 'completed' : 'error',
-                            result: typeof output === 'object' ? output : undefined,
-                            error: toolExec.error,
-                            started_at: toolExec.executed_at || fullMsg.created_at,
-                            duration_ms: toolExec.duration_ms,
-                          }],
-                        };
-                      }
-                      
-                      // Merge full_message data with existing streaming state
-                      updated[assistantIndex] = {
-                        ...existingMsg,
-                        id: fullMsg.id,
-                        content: fullMsg.content || existingMsg.content,
-                        meta_data: fullMsg.meta_data,
-                        created_at: fullMsg.created_at,
-                        steps: finalSteps,
-                        tool_group: toolGroup,
-                        isReasoningStreaming: false,
-                      };
-                    }
+                    if (!updated[assistantIndex]) return updated;
+                    const existing = updated[assistantIndex];
+                    updated[assistantIndex] = {
+                      ...existing,
+                      id: msg.full_message.id,
+                      meta_data: msg.full_message.meta_data,
+                      created_at: msg.full_message.created_at,
+                      // Keep streaming steps -- do NOT overwrite
+                      isReasoningStreaming: false,
+                    };
                     return updated;
                   });
-                  
-                  // Don't apply diff here -- the tool_result handler already applied it.
-                  // Applying again from full_message would overwrite the diff decorations.
                 }
                 break;
                 
@@ -1464,16 +1367,23 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 
                 ws.close();
                 
-                // After response is complete, check if we should show a document edit option
-                if (isEditRequest && currentAssistantContent.length > 100) {
+                // Show combined turn-level diff if any edits were applied during the turn
+                console.debug('[Agent] done: turnOriginal=%d pendingNew=%d', turnOriginalDocument?.length || 0, pendingNewDocumentRef.current?.length || 0);
+                if (turnOriginalDocument && pendingNewDocumentRef.current && editor) {
+                  const currentHtml = pendingNewDocumentRef.current;
+                  if (currentHtml !== turnOriginalDocument) {
+                    enterDiffPreview(turnOriginalDocument, currentHtml, 'Agent changes');
+                  }
+                  pendingNewDocumentRef.current = '';
+                } else if (isEditRequest && currentAssistantContent.length > 100) {
+                  // Fallback: check if response contains a code block with suggested content
                   const codeBlockMatch = currentAssistantContent.match(/```(?:markdown|md)?\n([\s\S]*?)\n```/);
                   if (codeBlockMatch) {
                     const suggestedContent = codeBlockMatch[1].trim();
                     if (suggestedContent.length > 50) {
                       const oldHtml = editor?.getHTML() || '';
                       const newHtml = mdParser.render(suggestedContent);
-                      const reason = 'AI-suggested content from code block';
-                      enterDiffPreview(oldHtml, newHtml, reason);
+                      enterDiffPreview(oldHtml, newHtml, 'AI-suggested content from code block');
                     }
                   }
                 }
@@ -1492,38 +1402,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 ws.close();
                 reject(new Error(msg.error));
                 break;
-            }
-          }
-          
-          // Backward compatibility: Handle legacy role-based messages
-          else if (msg.role === 'tool' && msg.content) {
-            // Create a unique identifier for this tool message
-            const toolMessageId = `${requestId}-${Date.now()}-${msg.content.slice(0, 50)}`;
-            const isNewMessage = !processedToolMessages.has(toolMessageId);
-            
-            try {
-              // Parse the tool result content to extract artifacts
-              const toolResult = JSON.parse(msg.content);
-              
-              // Handle edit_text tool specifically - only for new messages (skip error results)
-              if (toolResult.tool_name === 'edit_text' && isNewMessage && !toolResult.is_error) {
-                applyTextEdit(toolResult.old_str || toolResult.original_text, toolResult.new_str || toolResult.new_text, toolResult.reason, toolResult.new_markdown);
-                
-                // Mark this tool message as processed
-                setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
-              } else if (toolResult.tool_name === 'rewrite_document' && isNewMessage && !toolResult.is_error) {
-                // Handle document rewrite with diff preview
-                applyDocumentRewrite(toolResult.new_content, toolResult.reason, toolResult.original_content);
-                
-                // Mark this tool message as processed
-                setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
-              }
-            } catch (error) {
-              // Add error message
-              setChatMessages((prev) => [
-                ...prev,
-                { role: 'assistant', content: '⚠️ Tool execution completed with warnings' }
-              ]);
             }
           }
           
@@ -2179,272 +2057,18 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       <div className="hidden xl:flex flex-col w-[26rem] border rounded-md">
         <div ref={chatMessagesRef} className="flex-1 overflow-y-auto p-2 space-y-3">
           {chatMessages.map((m, i) => {
-            // Helper function to render tool messages with unified UI
-            const renderToolMessage = () => {
-              // NEW: Use ToolGroupDisplay for tool_group (new architecture)
-              if (m.tool_group) {
-                return (
-                  <ToolGroupDisplay 
-                    key={i} 
-                    group={m.tool_group}
-                    onArtifactAction={(toolId, action) => {
-                      // Handle artifact action for tools like edit_text
-                      const call = m.tool_group?.calls.find(c => c.id === toolId);
-                      if (call && (call.name === 'edit_text' || call.name === 'rewrite_document')) {
-                        const result = call.result;
-                        if (action === 'accept' && result && editor) {
-                          const oldContent = (result.old_str || result.original_text || result.original_content) as string;
-                          const newContent = (result.new_str || result.new_text || result.new_content) as string;
-                          const newMarkdown = (result.new_markdown) as string | undefined;
-                          const reason = (result.reason as string) || '';
-                          
-                          if (newContent) {
-                            if (call.name === 'edit_text' && oldContent) {
-                              // edit_text: markdown str_replace
-                              applyTextEdit(oldContent, newContent, reason, newMarkdown);
-                            } else {
-                              // rewrite_document: replace entire document
-                              const currentHtml = editor.getHTML();
-                              const newHtml = mdParser.render(newContent);
-                              enterDiffPreview(currentHtml, newHtml, reason);
-                            }
-                          }
-                        }
-                      }
-                    }}
-                  />
-                );
-              }
-              
-              // Legacy: Use tool_context for backward compatibility
-              if (!m.tool_context) return null;
-              
-              const { tool_name, status, reason } = m.tool_context;
-              const toolStatus = status === 'starting' ? 'pending' : status;
-              
-              // Tools with custom UI use ToolCall component
-              const customUITools = ['search_web_sources', 'ask_question', 'edit_text', 'rewrite_document'];
-              
-              if (customUITools.includes(tool_name)) {
-                // Web search tool
-                if (tool_name === 'search_web_sources') {
-                  return <WebSearchSteps key={i} tool_context={m.tool_context as WebSearchToolContext} />;
-                }
-                
-                // Ask question tool - use similar display to web search
-                if (tool_name === 'ask_question') {
-                  const { answer, citations } = m.tool_context;
-                  return (
-                    <ToolCall key={i} status={toolStatus === 'running' ? 'running' : 'completed'} defaultOpen={true}>
-                      <ToolCallTrigger icon={<FileSearch className="h-4 w-4" />}>
-                        Ask question
-                      </ToolCallTrigger>
-                      <ToolCallContent>
-                        {toolStatus === 'running' ? (
-                          <ToolCallStatusItem status="running">
-                            Finding answer...
-                          </ToolCallStatusItem>
-                        ) : (
-                          <div className="space-y-2">
-                            <ToolCallStatusItem status="completed">
-                              Answer found with {citations?.length || 0} citations
-                            </ToolCallStatusItem>
-                            {answer && (
-                              <div className="text-sm text-muted-foreground bg-muted/50 rounded-md p-2">
-                                {answer}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </ToolCallContent>
-                    </ToolCall>
-                  );
-                }
-                
-                // Edit/rewrite tools - use DiffArtifact for unified diff display
-                const displayName = tool_name === 'edit_text' ? 'Text edit' : 'Document rewrite';
-                
-                // While running, show a loading state
-                if (toolStatus === 'running') {
-                  return (
-                    <ToolCall key={i} status="running" defaultOpen={true}>
-                      <ToolCallTrigger icon={<FileDiff className="h-4 w-4" />}>
-                        {displayName}{reason ? `: ${reason}` : ''}
-                      </ToolCallTrigger>
-                      <ToolCallContent>
-                        <ToolCallStatusItem status="running">
-                          {tool_name === 'edit_text' ? 'Analyzing text selection...' : 'Analyzing document...'}
-                        </ToolCallStatusItem>
-                      </ToolCallContent>
-                    </ToolCall>
-                  );
-                }
-                
-                // Get diff data from tool_context.output - handle both edit_text and rewrite_document formats
-                const toolOutput = m.tool_context?.output as { 
-                  old_str?: string;          // new edit_text format
-                  new_str?: string;          // new edit_text format
-                  new_markdown?: string;     // new edit_text format
-                  original_text?: string;    // legacy edit_text format
-                  new_text?: string;         // legacy edit_text format
-                  original_content?: string; // rewrite_document format
-                  new_content?: string;      // rewrite_document format
-                } | undefined;
-                
-                // edit_text uses old_str/new_str (or legacy original_text/new_text), rewrite_document uses original_content/new_content
-                const oldText = toolOutput?.old_str || toolOutput?.original_text || toolOutput?.original_content || '';
-                const newText = toolOutput?.new_str || toolOutput?.new_text || toolOutput?.new_content || '';
-                const newMarkdown = toolOutput?.new_markdown;
-                const isEditText = tool_name === 'edit_text';
-                
-                // Show DiffArtifact with diff preview and Apply button
-                return (
-                  <DiffArtifact
-                    key={i}
-                    title={`${displayName}${reason ? `: ${reason}` : ''}`}
-                    description={reason}
-                    oldText={oldText}
-                    newText={newText}
-                    onApply={() => {
-                      if (!editor || !newText) return;
-                      
-                      if (isEditText && oldText) {
-                        // edit_text: markdown str_replace
-                        applyTextEdit(oldText, newText, reason || '', newMarkdown);
-                      } else {
-                        // rewrite_document: replace entire document
-                        const currentHtml = editor.getHTML();
-                        const newHtml = mdParser.render(newText);
-                        enterDiffPreview(currentHtml, newHtml, reason || '');
-                      }
-                    }}
-                  />
-                );
-              }
-              
-              // Simple tools use Steps component
-              const getToolIcon = () => {
-                switch (tool_name) {
-                  case 'analyze_document': return <BookOpen className="h-4 w-4" />;
-                  case 'get_relevant_sources': return <FileSearch className="h-4 w-4" />;
-                  case 'add_context_from_sources': return <PlusCircle className="h-4 w-4" />;
-                  case 'generate_text_content': return <FileText className="h-4 w-4" />;
-                  case 'generate_image_prompt': return <ImageIcon className="h-4 w-4" />;
-                  default: return <Wrench className="h-4 w-4" />;
-                }
-              };
-              
-              const displayName = getToolDisplayName(tool_name);
-              
-              return (
-                <Steps key={i} defaultOpen={false}>
-                  <StepsTrigger icon={getToolIcon()}>
-                    {displayName}
-                  </StepsTrigger>
-                  <StepsContent>
-                    <StepsItem status={toolStatus === 'running' ? 'running' : toolStatus === 'error' ? 'error' : 'completed'}>
-                      {toolStatus === 'running' ? 'Processing...' : toolStatus === 'error' ? (m.tool_context.message || 'Failed') : 'Completed'}
-                    </StepsItem>
-                  </StepsContent>
-                </Steps>
-              );
-            };
-            
             switch (m.role) {
               case 'tool': {
-                // Legacy tool messages - render as simple Steps
-                try {
-                  const toolResult = JSON.parse(m.content);
-                  const displayName = getToolDisplayName(toolResult.tool_name || 'unknown');
-                  
-                  return (
-                    <Steps key={i} defaultOpen={false}>
-                      <StepsTrigger icon={<Wrench className="h-4 w-4" />}>
-                        {displayName}
-                      </StepsTrigger>
-                      <StepsContent>
-                        <StepsItem status="completed">
-                          Completed
-                        </StepsItem>
-                      </StepsContent>
-                    </Steps>
-                  );
-                } catch (_e) {
-                  return (
-                    <Steps key={i} defaultOpen={false}>
-                      <StepsTrigger icon={<Wrench className="h-4 w-4" />}>
-                        Tool executed
-                      </StepsTrigger>
-                      <StepsContent>
-                        <StepsItem status="completed">
-                          Completed
-                        </StepsItem>
-                      </StepsContent>
-                    </Steps>
-                  );
-                }
+                // Tool-role messages are not rendered directly (handled via steps on assistant message)
+                return null;
               }
               case 'assistant': {
-                // NEW: Render tool group messages (new architecture)
-                if (m.tool_group) {
-                  return renderToolMessage();
-                }
-                
-                // Render tool messages with unified UI (legacy)
-                if (m.tool_context) {
-                  return renderToolMessage();
-                }
-                
-                // Render artifacts from metadata using unified DiffArtifact component
-                if (m.meta_data?.artifact) {
-                  const artifact = m.meta_data.artifact;
-                  const toolExec = m.meta_data?.tool_execution;
-                  const toolOutput = toolExec?.output as { 
-                    old_str?: string;          // new edit_text format
-                    new_str?: string;          // new edit_text format
-                    new_markdown?: string;     // new edit_text format
-                    original_text?: string;    // legacy edit_text format
-                    new_text?: string;         // legacy edit_text format
-                    original_content?: string; // rewrite_document format
-                    new_content?: string;      // rewrite_document format
-                  } | undefined;
-                  
-                  // Get diff data - handle both edit_text and rewrite_document formats
-                  const oldText = toolOutput?.old_str || toolOutput?.original_text || toolOutput?.original_content || '';
-                  const newText = toolOutput?.new_str || toolOutput?.new_text || toolOutput?.new_content || artifact.content || '';
-                  const newMarkdown = toolOutput?.new_markdown;
-                  const isEditText = toolExec?.tool_name === 'edit_text';
-                  
-                  return (
-                    <DiffArtifact
-                      key={i}
-                      title={artifact.title || 'Document changes'}
-                      description={artifact.description}
-                      oldText={oldText}
-                      newText={newText}
-                      onApply={() => {
-                        if (!editor || !newText) return;
-                        
-                        if (isEditText && oldText) {
-                          // edit_text: markdown str_replace
-                          applyTextEdit(oldText, newText, artifact.description || '', newMarkdown);
-                        } else {
-                          // rewrite_document: replace entire document
-                          const currentHtml = editor.getHTML();
-                          const newHtml = mdParser.render(newText);
-                          enterDiffPreview(currentHtml, newHtml, artifact.description || '');
-                        }
-                      }}
-                    />
-                  );
-                }
-                
-                // Skip __DIFF_ACTIONS__ messages - diff actions are now handled by the sticky DiffActionBar
+                // Skip __DIFF_ACTIONS__ messages
                 if (m.content === '__DIFF_ACTIONS__') {
                   return null;
                 }
                 
-                // NEW: Use chain of thought steps if available
+                // Render chain of thought steps (the ONLY rendering path for tool display)
                 if (m.steps && m.steps.length > 0) {
                   return (
                     <div key={i} className="w-full space-y-2">
@@ -2472,33 +2096,34 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                           }
                           
                           if (step.type === 'tool_group' && step.toolGroup) {
+                            const groupStatus = step.toolGroup.status === 'running' ? 'running' :
+                                                step.toolGroup.status === 'error' ? 'error' : 'completed';
                             return (
                               <ChainOfThoughtStep 
                                 key={stepIdx} 
                                 type="tool" 
-                                status="completed" 
+                                status={groupStatus}
                                 isLast={isLastStep}
                               >
                                 <ToolGroupDisplay 
                                   group={step.toolGroup}
                                   onArtifactAction={(toolId, action) => {
                                     const call = step.toolGroup?.calls.find(c => c.id === toolId);
-                                    if (call && (call.name === 'edit_text' || call.name === 'rewrite_document')) {
+                                    if (!call || !editor) return;
+                                    const editTools = ['edit_text', 'rewrite_section', 'rewrite_document'];
+                                    if (editTools.includes(call.name) && action === 'accept' && call.result) {
                                       const result = call.result;
-                                      if (action === 'accept' && result && editor) {
-                                        const oldContent = (result.old_str || result.original_text || result.original_content) as string;
-                                        const newContent = (result.new_str || result.new_text || result.new_content) as string;
-                                        const newMarkdown = (result.new_markdown) as string | undefined;
-                                        const reason = (result.reason as string) || '';
-                                        
-                                        if (newContent) {
-                                          if (call.name === 'edit_text' && oldContent) {
-                                            applyTextEdit(oldContent, newContent, reason, newMarkdown);
-                                          } else {
-                                            const currentHtml = editor.getHTML();
-                                            const newHtml = mdParser.render(newContent);
-                                            enterDiffPreview(currentHtml, newHtml, reason);
-                                          }
+                                      const oldContent = (result.old_str || result.original_text || result.original_content) as string;
+                                      const newContent = (result.new_str || result.new_text || result.new_content) as string;
+                                      const newMarkdown = (result.new_markdown) as string | undefined;
+                                      const reason = (result.reason as string) || '';
+                                      if (newContent) {
+                                        if ((call.name === 'edit_text' || call.name === 'rewrite_section') && oldContent) {
+                                          applyTextEdit(oldContent, newContent, reason, newMarkdown);
+                                        } else {
+                                          const currentHtml = editor.getHTML();
+                                          const newHtml = mdParser.render(newContent);
+                                          enterDiffPreview(currentHtml, newHtml, reason);
                                         }
                                       }
                                     }
