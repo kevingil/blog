@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/bedrock"
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
+
 
 type anthropicOptions struct {
 	useBedrock   bool
@@ -337,23 +339,29 @@ func (a *anthropicClient) stream(ctx context.Context, messages []message.Message
 						eventChan <- ProviderEvent{Type: EventContentStop}
 					}
 
-				case anthropic.MessageStopEvent:
-					content := ""
-					for _, block := range accumulatedMessage.Content {
-						if text, ok := block.AsAny().(anthropic.TextBlock); ok {
-							content += text.Text
-						}
+			case anthropic.MessageStopEvent:
+				content := ""
+				for _, block := range accumulatedMessage.Content {
+					if text, ok := block.AsAny().(anthropic.TextBlock); ok {
+						content += text.Text
 					}
+				}
 
-					eventChan <- ProviderEvent{
-						Type: EventComplete,
-						Response: &ProviderResponse{
-							Content:      content,
-							ToolCalls:    a.toolCalls(accumulatedMessage),
-							Usage:        a.usage(accumulatedMessage),
-							FinishReason: a.finishReason(string(accumulatedMessage.StopReason)),
-						},
-					}
+				usage := a.usage(accumulatedMessage)
+				tcs := a.toolCalls(accumulatedMessage)
+				finishReason := a.finishReason(string(accumulatedMessage.StopReason))
+
+				log.Printf("[Anthropic] Complete: %s (tools: %d, content: %d chars, tokens: %d→%d)", finishReason, len(tcs), len(content), usage.InputTokens, usage.OutputTokens)
+
+				eventChan <- ProviderEvent{
+					Type: EventComplete,
+					Response: &ProviderResponse{
+						Content:      content,
+						ToolCalls:    tcs,
+						Usage:        usage,
+						FinishReason: finishReason,
+					},
+				}
 				}
 			}
 
@@ -362,6 +370,7 @@ func (a *anthropicClient) stream(ctx context.Context, messages []message.Message
 				close(eventChan)
 				return
 			}
+			log.Printf("[Anthropic] Stream error (attempt %d): %v", attempts, err)
 			// If there is an error we are going to see if we can retry the call
 			retry, after, retryErr := a.shouldRetry(attempts, err)
 			if retryErr != nil {
