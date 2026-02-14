@@ -1,3 +1,4 @@
+import { useRef, useEffect, useCallback } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MarkdownEditor } from './MarkdownEditor';
 import { DiffView } from './DiffView';
@@ -19,6 +20,30 @@ interface EditorTabsProps {
   tags?: string[];
 }
 
+/**
+ * Find the primary scrollable element inside a container.
+ * CodeMirror uses `.cm-scroller`; other panels use the first descendant
+ * with overflow-y auto/scroll that has overflowing content.
+ */
+function findScrollable(container: HTMLElement | null): HTMLElement | null {
+  if (!container) return null;
+  const cmScroller = container.querySelector('.cm-scroller');
+  if (cmScroller) return cmScroller as HTMLElement;
+  const all = container.querySelectorAll('*');
+  for (const el of all) {
+    const htmlEl = el as HTMLElement;
+    const style = getComputedStyle(htmlEl);
+    if (
+      (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+      htmlEl.scrollHeight > htmlEl.clientHeight + 1
+    ) {
+      return htmlEl;
+    }
+  }
+  if (container.scrollHeight > container.clientHeight + 1) return container;
+  return null;
+}
+
 export function EditorTabs({
   content,
   onChange,
@@ -33,8 +58,53 @@ export function EditorTabs({
   imageUrl,
   tags,
 }: EditorTabsProps) {
+  const scrollFractionRef = useRef(0);
+  const editRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const diffRef = useRef<HTMLDivElement>(null);
+  const prevTabRef = useRef(activeTab);
+
+  const getRefForTab = useCallback((tab: string) => {
+    if (tab === 'edit') return editRef;
+    if (tab === 'preview') return previewRef;
+    return diffRef;
+  }, []);
+
+  /** Intercept tab changes to save scroll position before switching */
+  const handleTabChange = useCallback((newTab: string) => {
+    const scrollable = findScrollable(getRefForTab(activeTab).current);
+    if (scrollable) {
+      const maxScroll = scrollable.scrollHeight - scrollable.clientHeight;
+      scrollFractionRef.current = maxScroll > 0 ? scrollable.scrollTop / maxScroll : 0;
+    }
+    onTabChange(newTab);
+  }, [activeTab, onTabChange, getRefForTab]);
+
+  /** Restore scroll position when the active tab changes */
+  useEffect(() => {
+    if (prevTabRef.current !== activeTab) {
+      prevTabRef.current = activeTab;
+      let cancelled = false;
+      // Double rAF ensures layout is complete after conditional render
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        requestAnimationFrame(() => {
+          if (cancelled) return;
+          const scrollable = findScrollable(getRefForTab(activeTab).current);
+          if (scrollable) {
+            const maxScroll = scrollable.scrollHeight - scrollable.clientHeight;
+            if (maxScroll > 0) {
+              scrollable.scrollTop = scrollFractionRef.current * maxScroll;
+            }
+          }
+        });
+      });
+      return () => { cancelled = true; };
+    }
+  }, [activeTab, getRefForTab]);
+
   return (
-    <Tabs value={activeTab} onValueChange={onTabChange} className="flex flex-col h-full min-w-0">
+    <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col h-full min-w-0">
       <TabsList className="w-full justify-between rounded-none border-b bg-transparent px-2 shrink-0">
         <div className="flex">
           <TabsTrigger value="edit" className="gap-1.5 data-[state=active]:bg-muted">
@@ -59,6 +129,7 @@ export function EditorTabs({
       <div className="flex-1 min-h-0 relative">
         {/* Edit tab -- always mounted, hidden via CSS to preserve CodeMirror state */}
         <div
+          ref={editRef}
           className="absolute inset-0"
           style={{ display: activeTab === 'edit' ? 'block' : 'none' }}
         >
@@ -67,7 +138,7 @@ export function EditorTabs({
 
         {/* Diff/Review tab */}
         {activeTab === 'diff' && (
-          <div className="absolute inset-0 overflow-auto">
+          <div ref={diffRef} className="absolute inset-0 overflow-auto">
             <DiffView
               oldValue={originalContent || content}
               newValue={content}
@@ -79,7 +150,7 @@ export function EditorTabs({
 
         {/* Preview tab */}
         {activeTab === 'preview' && (
-          <div className="absolute inset-0 overflow-auto">
+          <div ref={previewRef} className="absolute inset-0 overflow-auto">
             <MarkdownPreview
               content={content}
               title={title}
