@@ -1,6 +1,9 @@
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown } from '@codemirror/lang-markdown';
 import { vscodeDark } from '@uiw/codemirror-theme-vscode';
+import { EditorView } from '@codemirror/view';
+
+const lineWrapping = EditorView.lineWrapping;
 
 interface MarkdownEditorProps {
   content: string;
@@ -10,11 +13,11 @@ interface MarkdownEditorProps {
 
 export function MarkdownEditor({ content, onChange, readOnly }: MarkdownEditorProps) {
   return (
-    <div className="h-full w-full overflow-hidden">
+    <div className="h-full w-full" style={{ overflow: 'hidden', position: 'relative' }}>
       <CodeMirror
         value={content}
         onChange={onChange}
-        extensions={[markdown()]}
+        extensions={[markdown(), lineWrapping]}
         theme={vscodeDark}
         readOnly={readOnly}
         basicSetup={{
