@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"backend/pkg/database/models"
 
@@ -497,11 +499,18 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 		Reason string `json:"reason"`
 	}
 
+	// #region agent log
+	func() { f, e := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if e != nil { return }; defer f.Close(); preview := params.Input; if len(preview) > 500 { preview = preview[:500] + "..." }; fmt.Fprintf(f, `{"location":"writing.go:edit-raw-input","message":"edit_text raw input","hypothesisId":"A,B,D","data":{"inputLen":%d,"preview":"%s"},"timestamp":%d}`+"\n", len(params.Input), strings.ReplaceAll(strings.ReplaceAll(preview, `"`, `\"`), "\n", "\\n"), time.Now().UnixMilli()) }()
+	// #endregion
+
 	if err := json.Unmarshal([]byte(params.Input), &input); err != nil {
 		return NewTextErrorResponse("Invalid input format"), err
 	}
 
 	if input.OldStr == "" || input.NewStr == "" {
+		// #region agent log
+		func() { f, e := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if e != nil { return }; defer f.Close(); fmt.Fprintf(f, `{"location":"writing.go:edit-empty-params","message":"old_str or new_str empty","hypothesisId":"A,D","data":{"oldStrLen":%d,"newStrLen":%d,"reasonLen":%d},"timestamp":%d}`+"\n", len(input.OldStr), len(input.NewStr), len(input.Reason), time.Now().UnixMilli()) }()
+		// #endregion
 		return NewTextErrorResponse("old_str and new_str are required"), fmt.Errorf("old_str and new_str are required")
 	}
 
@@ -673,17 +682,14 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 	dmp := diffmatchpatch.New()
 	diffs := dmp.DiffMain(input.OldStr, input.NewStr, false)
 
-	// Prepare the result
+	// Prepare the result -- includes new_markdown so the frontend can update the editor
 	result := map[string]interface{}{
-		"old_str":   input.OldStr,
-		"new_str":   input.NewStr,
-		"reason":    input.Reason,
-		"tool_name": "edit_text",
+		"old_str":      input.OldStr,
+		"new_str":      input.NewStr,
+		"reason":       input.Reason,
+		"tool_name":    "edit_text",
+		"new_markdown": newMarkdown,
 	}
-
-	// Note: we intentionally do NOT include new_markdown in the tool result.
-	// It would send the ENTIRE document back to the LLM on every edit, bloating context.
-	// The agent can use read_document to see the updated content if needed.
 
 	result["patch"] = map[string]interface{}{
 		"summary": map[string]interface{}{

@@ -929,7 +929,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 if (msg.data?.snapshot_version_id) {
                   setTurnSnapshotVersionId(msg.data.snapshot_version_id);
                 }
-                console.debug('[Agent] turn_started: captured %d chars', turnOriginalDocRef.current.length);
                 break;
 
               case 'thinking':
@@ -1154,6 +1153,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
                     // Silently apply edits -- content is markdown, set directly via form
                     if ((toolName === 'edit_text' || toolName === 'rewrite_section') && isNewMessage && !isError) {
+                      // #region agent log
+                      fetch('http://127.0.0.1:7242/ingest/5ed2ef34-0520-4861-bbfe-52c16271e660',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Editor.tsx:tool_result:apply',message:'applying edit to form',hypothesisId:'A,D',data:{toolName,hasNewMarkdown:!!toolResult.new_markdown,newMarkdownLen:toolResult.new_markdown?.length||0,resultKeys:Object.keys(toolResult)},timestamp:Date.now()})}).catch(()=>{});
+                      // #endregion
                       if (toolResult.new_markdown) {
                         setValue('content', toolResult.new_markdown);
                         pendingNewDocumentRef.current = toolResult.new_markdown;
@@ -1226,6 +1228,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 ws.close();
                 
                 // Auto-switch to Diff tab if agent made edits during this turn
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/5ed2ef34-0520-4861-bbfe-52c16271e660',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Editor.tsx:done:diff-check',message:'done diff check',hypothesisId:'B',data:{hasTurnOrig:!!turnOriginalDocRef.current,hasPendingNew:!!pendingNewDocumentRef.current,turnOrigLen:turnOriginalDocRef.current?.length||0,pendingNewLen:pendingNewDocumentRef.current?.length||0,areDifferent:turnOriginalDocRef.current!==pendingNewDocumentRef.current},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
                 if (turnOriginalDocRef.current && pendingNewDocumentRef.current) {
                   if (pendingNewDocumentRef.current !== turnOriginalDocRef.current) {
                     setDiffing(true);
