@@ -660,8 +660,7 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 		if t.draftSaver != nil {
 			articleID := GetArticleIDFromContext(ctx)
 			if articleID != "" {
-				html := renderMarkdownToHTML(newMarkdown)
-				if err := t.draftSaver.UpdateDraftContent(ctx, articleID, html); err != nil {
+				if err := t.draftSaver.UpdateDraftContent(ctx, articleID, newMarkdown); err != nil {
 					log.Printf("   ⚠️ [EditText] Failed to persist draft to DB: %v", err)
 				} else {
 					log.Printf("   💾 [EditText] Draft content persisted to DB")
@@ -898,8 +897,7 @@ func (t *RewriteSectionTool) Run(ctx context.Context, params ToolCall) (ToolResp
 	if t.draftSaver != nil {
 		articleID := GetArticleIDFromContext(ctx)
 		if articleID != "" {
-			html := renderMarkdownToHTML(newMarkdown)
-			if err := t.draftSaver.UpdateDraftContent(ctx, articleID, html); err != nil {
+			if err := t.draftSaver.UpdateDraftContent(ctx, articleID, newMarkdown); err != nil {
 				log.Printf("   ⚠️ [RewriteSection] Failed to persist draft: %v", err)
 			} else {
 				log.Printf("   💾 [RewriteSection] Draft persisted to DB")
