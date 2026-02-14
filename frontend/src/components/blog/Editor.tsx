@@ -7,21 +7,11 @@ import { format } from "date-fns"
 import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, ArrowUp, Square, Settings, Trash2 } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEditor, EditorContent, type Editor as TiptapEditor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import CodeBlock from '@tiptap/extension-code-block';
-import { Table } from '@tiptap/extension-table';
-import { TableRow } from '@tiptap/extension-table-row';
-import { TableCell } from '@tiptap/extension-table-cell';
-import { TableHeader } from '@tiptap/extension-table-header';
-import MarkdownIt from 'markdown-it';
 import { VITE_API_BASE_URL } from "@/services/constants";
 import { apiPost, isAuthError } from '@/services/authenticatedFetch';
-import '@/tiptap.css';
 
-// Extracted editor modules
-import { DiffHighlighter } from './editor/diff-highlighter';
-import { FormattingToolbar } from './editor/FormattingToolbar';
+// Editor modules
+import { EditorTabs } from './editor/EditorTabs';
 import { ImageLoader } from './editor/ImageLoader';
 import { turndownService } from './editor/turndown';
 import { 
@@ -425,17 +415,17 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       const tagNames = response.tags ? response.tags
         .map((tag: any) => tag?.name?.toUpperCase())
         .filter((name: string | undefined) => !!name && name !== '') : [];
+      // Detect and convert legacy HTML content to markdown
+      let revertedContent = response.article.draft_content || '';
+      if (revertedContent.startsWith('<') || revertedContent.includes('</p>')) {
+        revertedContent = turndownService.turndown(revertedContent);
+      }
       reset({
         title: response.article.draft_title,
-        content: response.article.draft_content,
+        content: revertedContent,
         image_url: response.article.draft_image_url || '',
         tags: tagNames,
       });
-      
-      // Sync editor content - fix any raw markdown tables from pre-fix content
-      if (editor) {
-        editor.commands.setContent(fixMarkdownTables(response.article.draft_content || ''));
-      }
       
       setSelectedVersion(null);
       setShowVersions(false);
@@ -447,7 +437,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   });
 
-  const { register, handleSubmit, setValue, formState: { errors }, control, reset } = useForm<ArticleFormData>({
+  const { register, handleSubmit, setValue, getValues, formState: { errors }, control, reset } = useForm<ArticleFormData>({
     resolver: zodResolver(articleSchema),
     defaultValues: {
       title: '',
@@ -457,177 +447,68 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   });
 
-  // Watch only the specific fields that need reactive UI updates (NOT content - that causes re-renders on every keystroke)
+  // Watch reactive form fields for UI updates
   const watchedTags = useWatch({ control, name: 'tags' });
+  const watchedContent = useWatch({ control, name: 'content' });
+  const watchedTitle = useWatch({ control, name: 'title' });
 
   const [imagePrompt, setImagePrompt] = useState<string | null>(DEFAULT_IMAGE_PROMPT[Math.floor(Math.random() * DEFAULT_IMAGE_PROMPT.length)]);
 
   /* --------------------------------------------------------------------- */
-  /* Tiptap Editor Setup                                                   */
+  /* Markdown Editor Setup                                                 */
   /* --------------------------------------------------------------------- */
-  const mdParserRef = useRef<MarkdownIt>();
-  if (!mdParserRef.current) {
-    mdParserRef.current = new MarkdownIt({ typographer: true, html: true });
-  }
-  const mdParser = mdParserRef.current;
-
-  // Fix HTML that contains raw markdown tables (pipe syntax) by converting them to <table> HTML.
-  // This happens when content was saved before goldmark had table extension enabled.
-  // Detects pipe-separator rows like |---|---| inside HTML (even within <p> tags).
-  const fixMarkdownTables = (html: string): string => {
-    if (!html) return html;
-    // Look for markdown table separator pattern: |---| or |:--| anywhere in the content
-    const hasTable = /\|\s*[-:]+\s*[-|:]+\s*\|/.test(html);
-    if (!hasTable) return html;
-    // Round-trip: HTML → markdown (turndown) → HTML (markdown-it with table support)
-    let md = turndownService.turndown(html);
-    // Fix single-line tables: goldmark without table extension stored all pipe rows in one <p>,
-    // so turndown produces "| A | B | |---|---| | C | D |" on one line.
-    // Split at row boundaries (| |) so markdown-it can parse the table.
-    md = md.replace(/\| \|/g, '|\n|');
-    return mdParser.render(md);
-  };
-
-  // turndownService is imported from ./editor/turndown (module-level singleton)
-
   const [diffing, setDiffing] = useState(false);
-  const [originalDocument, setOriginalDocument] = useState<string>('');
-  const [pendingNewDocument, setPendingNewDocument] = useState<string>('');
-  const [currentDiffReason, setCurrentDiffReason] = useState<string>('');
-
-  // Turn-level state for "Undo All" across multi-edit agent turns.
-  // Using refs (not state) so WebSocket handlers always read the latest value
-  // without waiting for React re-renders -- avoids stale closure bugs.
-  const turnOriginalDocRef = useRef<string>('');
-  const pendingNewDocumentRef = useRef<string>('');
+  const [activeTab, setActiveTab] = useState<string>('edit');
   const [turnSnapshotVersionId, setTurnSnapshotVersionId] = useState<string>('');
 
+  // Turn-level state: refs so WebSocket handlers always read the latest value
+  const turnOriginalDocRef = useRef<string>('');
+  const pendingNewDocumentRef = useRef<string>('');
 
-  // Inline diff lifecycle helpers
-  // Compares old vs new HTML using character-by-character comparison
-  // to find the exact edit boundaries and show red (removed) / green (added) highlights
-  const enterDiffPreview = (
-    oldHtml: string, 
-    newHtml: string, 
-    reason?: string,
-  ) => {
-    if (!editor) return;
-    
-    // Set the editor content to the new HTML
-    editor.commands.setContent(newHtml);
-    
-    // Store original and new HTML for accept/reject actions
-    setOriginalDocument(oldHtml);
-    setPendingNewDocument(newHtml);
-    setCurrentDiffReason(reason || '');
-    setDiffing(true);
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5ed2ef34-0520-4861-bbfe-52c16271e660',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Editor.tsx:enterDiffPreview',message:'entering diff preview',data:{oldHtmlLen:oldHtml.length,newHtmlLen:newHtml.length,reason},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-
-    // Compute and apply inline diff decorations
-    // @ts-ignore custom command provided by DiffHighlighter
-    if ((editor as any).commands?.showDiff) {
-      // @ts-ignore
-      (editor as any).commands.showDiff(oldHtml, newHtml);
-    }
-    
-    // Scroll to the first diff highlight after decorations render
-    requestAnimationFrame(() => {
-      const firstDiff = document.querySelector('.diff-insert, .diff-delete');
-      if (firstDiff) {
-        firstDiff.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    });
-  };
-
-  const clearDiffDecorations = () => {
-    if (!editor) return;
-    // @ts-ignore
-    if ((editor as any).commands?.clearDiff) {
-      // @ts-ignore
-      (editor as any).commands.clearDiff();
+  // Content update handler -- called by CodeMirror on user edits
+  const onContentChange = (md: string) => {
+    if (!diffing) {
+      setValue('content', md);
     }
   };
 
   const acceptDiff = () => {
-    if (!editor) return;
-    
-    // Apply the pending changes (content is already saved on the backend by the agent)
-    editor.commands.setContent(pendingNewDocument || editor.getHTML());
-    setValue('content', editor.getHTML());
-    clearDiffDecorations();
+    // Content is already set (the agent applied it). Just clear diff state.
     setDiffing(false);
-    setPendingNewDocument('');
-    setCurrentDiffReason('');
+    setActiveTab('edit');
     turnOriginalDocRef.current = '';
     pendingNewDocumentRef.current = '';
     setTurnSnapshotVersionId('');
   };
 
   const rejectDiff = async () => {
-    if (!editor) return;
+    const revertContent = turnOriginalDocRef.current;
+    if (!revertContent) {
+      setDiffing(false);
+      setActiveTab('edit');
+      return;
+    }
 
-    // Determine the content to revert to (prefer turn-level original for multi-edit undo)
-    const revertContent = turnOriginalDocRef.current || originalDocument || editor.getHTML();
-
-    // If we have a backend snapshot, revert the DB too so backend stays in sync
+    // If we have a backend snapshot, revert the DB too
     if (turnSnapshotVersionId && blogSlug) {
       try {
         const reverted = await revertToVersion(blogSlug as string, turnSnapshotVersionId);
-        // Use the reverted draft content from the API response if available
         const revertedContent = reverted.article?.draft_content || revertContent;
-        editor.commands.setContent(revertedContent);
         setValue('content', revertedContent);
       } catch (err) {
         console.error('[Editor] Failed to revert backend to snapshot:', err);
-        // Fallback to local revert
-        editor.commands.setContent(revertContent);
         setValue('content', revertContent);
       }
     } else {
-      // No backend snapshot -- local-only revert
-      editor.commands.setContent(revertContent);
       setValue('content', revertContent);
     }
 
-    clearDiffDecorations();
     setDiffing(false);
-    setPendingNewDocument('');
-    setCurrentDiffReason('');
+    setActiveTab('edit');
     turnOriginalDocRef.current = '';
     pendingNewDocumentRef.current = '';
     setTurnSnapshotVersionId('');
   };
-
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      CodeBlock.configure({
-        HTMLAttributes: {
-          class: 'bg-gray-100 dark:bg-gray-800 p-4 rounded-md border',
-        },
-      }),
-      Table.configure({ resizable: false, HTMLAttributes: { class: 'border-collapse border border-border w-full' } }),
-      TableRow,
-      TableCell.configure({ HTMLAttributes: { class: 'border border-border p-2 text-sm' } }),
-      TableHeader.configure({ HTMLAttributes: { class: 'border border-border p-2 text-sm font-semibold bg-muted' } }),
-      DiffHighlighter,
-    ],
-    content: '', // Start empty, content is synced when article loads
-    editorProps: {
-      attributes: {
-        class:
-          'w-full p-4 focus:outline-none prose prose-sm max-w-none dark:prose-invert',
-      },
-    },
-    onUpdate({ editor }: { editor: TiptapEditor }) {
-      if (!diffing) {
-        setValue('content', editor.getHTML());
-      }
-    },
-  });
 
   if (!user) {
     return <div>Please log in to edit articles.</div>;
@@ -653,9 +534,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       const tagNames = article.tags ? article.tags
         .map((tag: any) => tag?.name?.toUpperCase())
         .filter((name: string | undefined) => !!name && name !== '') : [];
+      // Detect and convert legacy HTML content to markdown
+      let loadedContent = article.article.draft_content || '';
+      if (loadedContent.startsWith('<') || loadedContent.includes('</p>')) {
+        loadedContent = turndownService.turndown(loadedContent);
+      }
       const newValues = {
         title: article.article.draft_title || '',
-        content: article.article.draft_content || '',
+        content: loadedContent,
         image_url: article.article.draft_image_url || '',
         tags: tagNames,
       } as ArticleFormData;
@@ -672,10 +558,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         setPreviewImageUrl('');
       }
       
-      // Sync editor with fresh content - fix any raw markdown tables from pre-fix content
-      if (editor) {
-        editor.commands.setContent(fixMarkdownTables(newValues.content));
-      }
+      // Content is now markdown -- form value is set via reset() above
     } else if (isNew) {
       const blank: ArticleFormData = {
         title: '',
@@ -687,11 +570,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       setImageVersions([]);
       setCurrentVersionIndex(-1);
       setPreviewImageUrl('');
-      if (editor) {
-        editor.commands.setContent('');
-      }
     }
-  }, [article, isNew, reset, editor]);
+  }, [article, isNew, reset]);
 
   // Load conversation history with artifacts when article is loaded
   useEffect(() => {
@@ -872,7 +752,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       // Use publishArticle() separately to publish
       const updateData = {
         title: data.title,
-        content: data.content, // HTML content from Tiptap editor
+        content: data.content, // Markdown content
         image_url: finalImageUrl || undefined,
         tags: data.tags,
       };
@@ -886,21 +766,16 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   };
 
   const rewriteArticle = async () => {
-    if (!article?.article.id || !editor) return;
+    if (!article?.article.id) return;
     setGeneratingRewrite(true);
     try {
-      const oldHtml = editor.getHTML();
-      
       const result = await updateArticleWithContext(article.article.id);
       
-      if (result.success) {
-        const newHtml = result.content;
-        const reason = 'Full-document rewrite';
-        enterDiffPreview(oldHtml, newHtml, reason);
-        // Add a simple message about the proposed changes
+      if (result.success && result.content) {
+        applyMarkdownEdit(result.content);
         setChatMessages((prev) => [
           ...prev,
-          { role: 'assistant', content: '📋 I\'ve prepared a full-document rewrite. Review the changes in the editor and use "Keep All" or "Reject" below.' }
+          { role: 'assistant', content: '📋 I\'ve prepared a full-document rewrite. Review the changes in the Diff tab.' }
         ]);
       }
     } catch (error) {
@@ -914,57 +789,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   // Apply text edit from AI assistant (markdown-based str_replace)
   // Renders both old and new markdown to HTML, then uses character-by-character
   // comparison in the diff-highlighter to find the exact edit boundaries.
-  const applyTextEdit = (oldStr: string, newStr: string, reason: string, newMarkdown?: string) => {
-    if (!editor) return;
-    
-    const currentHtml = editor.getHTML();
-    
-    let newHtml: string;
-    let oldMd: string;
-    if (newMarkdown) {
-      // Backend applied the edit and returned full new markdown
-      newHtml = mdParser.render(newMarkdown);
-      // Reconstruct old markdown by reversing the edit
-      const newStrIdx = newMarkdown.indexOf(newStr);
-      if (newStrIdx !== -1) {
-        oldMd = newMarkdown.substring(0, newStrIdx) + oldStr + newMarkdown.substring(newStrIdx + newStr.length);
-      } else {
-        oldMd = turndownService.turndown(currentHtml);
-      }
-    } else {
-      // Fallback: apply the edit locally on markdown
-      oldMd = turndownService.turndown(currentHtml);
-      const index = oldMd.indexOf(oldStr);
-      if (index === -1) {
-        toast({
-          title: 'Edit Warning',
-          description: 'Could not locate the text to edit in the document markdown. The document may have changed.',
-          variant: 'destructive'
-        });
-        return;
-      }
-      newHtml = mdParser.render(oldMd.substring(0, index) + newStr + oldMd.substring(index + oldStr.length));
-    }
-    
-    // Render old markdown to HTML through the same renderer so both sides are consistent
-    const oldHtml = mdParser.render(oldMd);
-
-    // The diff-highlighter compares old vs new text character-by-character
-    // to find the exact edit boundaries -- no position mapping needed
-    enterDiffPreview(oldHtml, newHtml, reason);
-  };
-
-  // Apply document rewrite from AI assistant
-  const applyDocumentRewrite = (newContent: string, reason: string, originalContent?: string) => {
-    if (!editor) return;
-    
-    const oldHtml = editor.getHTML();
-    
-    // Convert markdown to HTML for the new content
-    const newHtml = mdParser.render(newContent);
-    
-    // Create diff preview
-    enterDiffPreview(oldHtml, newHtml, reason);
+  // Apply a markdown edit from an artifact action (user clicks "Apply" on a tool result card)
+  const applyMarkdownEdit = (newMarkdown: string) => {
+    turnOriginalDocRef.current = getValues('content') || '';
+    setValue('content', newMarkdown);
+    pendingNewDocumentRef.current = newMarkdown;
+    setDiffing(true);
+    setActiveTab('diff');
   };
 
   const sendChatWithMessage = async (message: string) => {
@@ -975,8 +806,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
 
     // Get current document content in both HTML and markdown formats
-    const currentContent = editor?.getHTML() || '';
-    const currentMarkdown = currentContent ? turndownService.turndown(currentContent) : '';
+    // Content is now markdown -- no HTML-to-markdown conversion needed
+    const currentContent = getValues('content') || '';
+    const currentMarkdown = currentContent;
 
     // Check if this looks like an edit request
     const isEditRequest = /\b(rewrite|edit|improve|change|update|fix|enhance|modify)\b/i.test(text);
@@ -1098,19 +930,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           if (msg.type) {
             switch (msg.type) {
               case 'turn_started':
-                // Capture the current editor content as the turn baseline for diff.
+                // Capture the current markdown content as the turn baseline for diff.
                 // Uses a ref (not state) so the done handler always reads the latest value.
-                if (editor) {
-                  const preTurnMd = turndownService.turndown(editor.getHTML());
-                  turnOriginalDocRef.current = mdParser.render(preTurnMd);
-                }
+                turnOriginalDocRef.current = getValues('content') || '';
                 pendingNewDocumentRef.current = '';
                 if (msg.data?.snapshot_version_id) {
                   setTurnSnapshotVersionId(msg.data.snapshot_version_id);
                 }
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/5ed2ef34-0520-4861-bbfe-52c16271e660',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Editor.tsx:turn_started',message:'turn_started captured via ref',data:{hasEditor:!!editor,refLen:turnOriginalDocRef.current.length},timestamp:Date.now()})}).catch(()=>{});
-                // #endregion
+                console.debug('[Agent] turn_started: captured %d chars', turnOriginalDocRef.current.length);
                 break;
 
               case 'thinking':
@@ -1333,19 +1160,17 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       return updated;
                     });
 
-                    // Silently apply edits to editor (combined diff shown on 'done')
+                    // Silently apply edits -- content is markdown, set directly via form
                     if ((toolName === 'edit_text' || toolName === 'rewrite_section') && isNewMessage && !isError) {
-                      if (toolResult.new_markdown && editor) {
-                        const newHtml = mdParser.render(toolResult.new_markdown);
-                        editor.commands.setContent(newHtml);
-                        pendingNewDocumentRef.current = newHtml;
+                      if (toolResult.new_markdown) {
+                        setValue('content', toolResult.new_markdown);
+                        pendingNewDocumentRef.current = toolResult.new_markdown;
                       }
                       setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
                     } else if (toolName === 'rewrite_document' && isNewMessage && !isError) {
-                      if (toolResult.new_content && editor) {
-                        const newHtml = mdParser.render(toolResult.new_content);
-                        editor.commands.setContent(newHtml);
-                        pendingNewDocumentRef.current = newHtml;
+                      if (toolResult.new_content) {
+                        setValue('content', toolResult.new_content);
+                        pendingNewDocumentRef.current = toolResult.new_content;
                       }
                       setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
                     }
@@ -1408,25 +1233,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 
                 ws.close();
                 
-                // Show combined turn-level diff if any edits were applied during the turn
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/5ed2ef34-0520-4861-bbfe-52c16271e660',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Editor.tsx:done',message:'done handler diff check',data:{hasTurnOriginal:!!turnOriginalDocRef.current,hasPendingNew:!!pendingNewDocumentRef.current,hasEditor:!!editor,turnOrigLen:turnOriginalDocRef.current?.length||0,pendingNewLen:pendingNewDocumentRef.current?.length||0},timestamp:Date.now()})}).catch(()=>{});
-                // #endregion
-                if (turnOriginalDocRef.current && pendingNewDocumentRef.current && editor) {
-                  const currentHtml = pendingNewDocumentRef.current;
-                  if (currentHtml !== turnOriginalDocRef.current) {
-                    enterDiffPreview(turnOriginalDocRef.current, currentHtml, 'Agent changes');
-                  }
-                } else if (isEditRequest && currentAssistantContent.length > 100) {
-                  // Fallback: check if response contains a code block with suggested content
-                  const codeBlockMatch = currentAssistantContent.match(/```(?:markdown|md)?\n([\s\S]*?)\n```/);
-                  if (codeBlockMatch) {
-                    const suggestedContent = codeBlockMatch[1].trim();
-                    if (suggestedContent.length > 50) {
-                      const oldHtml = editor?.getHTML() || '';
-                      const newHtml = mdParser.render(suggestedContent);
-                      enterDiffPreview(oldHtml, newHtml, 'AI-suggested content from code block');
-                    }
+                // Auto-switch to Diff tab if agent made edits during this turn
+                if (turnOriginalDocRef.current && pendingNewDocumentRef.current) {
+                  if (pendingNewDocumentRef.current !== turnOriginalDocRef.current) {
+                    setDiffing(true);
+                    setActiveTab('diff');
+                    console.debug('[Agent] done: switching to diff tab');
                   }
                 }
                 
@@ -1474,19 +1286,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           else if (msg.done) {
             ws.close();
             
-            // After response is complete, check if we should show a document edit option
-            if (isEditRequest && currentAssistantContent.length > 100) {
-              const codeBlockMatch = currentAssistantContent.match(/```(?:markdown|md)?\n([\s\S]*?)\n```/);
-              if (codeBlockMatch) {
-                const suggestedContent = codeBlockMatch[1].trim();
-                if (suggestedContent.length > 50) {
-                  const oldHtml = editor?.getHTML() || '';
-                  const newHtml = mdParser.render(suggestedContent);
-                  const reason = 'AI-suggested content from code block (legacy)';
-                  enterDiffPreview(oldHtml, newHtml, reason);
-                }
-              }
-            }
+            // Legacy done signal -- no diff handling needed
             
             resolve();
           }
@@ -1546,7 +1346,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
   return (
     <section className="flex gap-4 p-0 md:p-4 h-[calc(100vh-60px)]">
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Article Metadata Card */}
         
             {/* Article Title Section with Image and Save */}
@@ -2080,17 +1880,24 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               )}
             </div>
 
-          <form className="flex-1 flex flex-col min-h-0">
-
-              <div className="flex-1 flex flex-col border border-gray-300 dark:border-gray-600 rounded-md min-h-0">
-                <FormattingToolbar editor={editor} />
-                <EditorContent
-                  editor={editor}
-                  className="tiptap w-full border-none rounded-b-md flex-1 overflow-y-auto focus:outline-none"
+          <form className="flex-1 flex flex-col min-h-0 min-w-0">
+              <div className="flex-1 flex flex-col border border-gray-300 dark:border-gray-600 rounded-md min-h-0 min-w-0 overflow-hidden">
+                <EditorTabs
+                  content={watchedContent || ''}
+                  onChange={onContentChange}
+                  originalContent={turnOriginalDocRef.current}
+                  diffing={diffing}
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
+                  onAccept={acceptDiff}
+                  onReject={rejectDiff}
+                  title={watchedTitle}
+                  authorName={user?.name}
+                  imageUrl={previewImageUrl}
+                  tags={watchedTags}
                 />
                 {errors.content && <p className="text-red-500">{errors.content.message}</p>}
               </div>
-
           </form>
 
       </div>
@@ -2154,18 +1961,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                     const editTools = ['edit_text', 'rewrite_section', 'rewrite_document'];
                                     if (editTools.includes(call.name) && action === 'accept' && call.result) {
                                       const result = call.result;
-                                      const oldContent = (result.old_str || result.original_text || result.original_content) as string;
-                                      const newContent = (result.new_str || result.new_text || result.new_content) as string;
-                                      const newMarkdown = (result.new_markdown) as string | undefined;
-                                      const reason = (result.reason as string) || '';
-                                      if (newContent) {
-                                        if ((call.name === 'edit_text' || call.name === 'rewrite_section') && oldContent) {
-                                          applyTextEdit(oldContent, newContent, reason, newMarkdown);
-                                        } else {
-                                          const currentHtml = editor.getHTML();
-                                          const newHtml = mdParser.render(newContent);
-                                          enterDiffPreview(currentHtml, newHtml, reason);
-                                        }
+                                      const newMd = (result.new_markdown || result.new_content) as string;
+                                      if (newMd) {
+                                        applyMarkdownEdit(newMd);
                                       }
                                     }
                                   }}
@@ -2266,12 +2064,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               <ThinkShimmerBlock message={thinkingMessage} />
             )}
           </div>
-          {diffing && !chatLoading && (
-            <DiffActionBar 
-              onKeepAll={acceptDiff}
-              onReject={rejectDiff}
-            />
-          )}
         <div className="p-4 border-t space-y-2">
           <PromptInput
             value={chatInput}
