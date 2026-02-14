@@ -1,59 +1,34 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from 'prosemirror-state';
+import { DOMParser as ProseDOMParser } from 'prosemirror-model';
 import { Decoration, DecorationSet } from 'prosemirror-view';
+import { diffWordsWithSpace } from 'diff';
 
 // === TipTap Diff Extension ================================================
 //
-// Provides inline diff highlighting for the TipTap editor.
-// Shows changes between old and new content with green (added) and
-// red strikethrough (removed) decorations.
-//
-// ## How it works
-//
-// 1. enterDiffPreview() sets editor content to newHtml and calls showDiff(oldHtml, newHtml)
-// 2. showDiff extracts plain text from both the old HTML (via DOM) and the new editor document
-// 3. Character-by-character comparison finds the exact divergence boundaries
-// 4. Produces exactly 2-4 parts: prefix + removed (red) + added (green) + suffix
-// 5. ProseMirror plugin applies decorations based on these parts
-// 6. User accepts (keeps new) or rejects (reverts to old)
-//
-// This approach is deterministic and handles repeated words, single-character
-// changes, and all edit types without ambiguity.
+// Inline diff highlighting using word-level diffing.
+// Key insight: both old and new content are parsed through ProseMirror's
+// document model so text extraction is consistent on both sides.
+// This avoids offset misalignment between DOM-based and PM-based text.
 //
 // =========================================================================
 
-// Extract plain text from HTML the same way ProseMirror does:
-// concatenate all text node content without separators between blocks.
-// This ensures offsets match the editor's document text exactly.
-function extractDocText(html: string): string {
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  let text = '';
-  function walk(node: Node) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const content = node.textContent || '';
-      // Skip whitespace-only text nodes between block elements --
-      // ProseMirror doesn't include these in its document text
-      if (content.trim().length > 0) {
-        text += content;
-      }
-    } else {
-      for (const child of Array.from(node.childNodes)) {
-        walk(child);
-      }
-    }
-  }
-  walk(div);
-  return text;
-}
-
-// Type for diff parts
-// - added: true if this text was inserted (green highlight)
-// - removed: true if this text was deleted (red strikethrough)
-// - value: the actual text content
 type DiffPart = { added?: boolean; removed?: boolean; value: string };
 
 const DIFF_PLUGIN_KEY = new PluginKey('diff-highlighter');
+
+// Extract plain text from a ProseMirror document, concatenating all text nodes.
+function pmDocToText(doc: any): string {
+  let text = '';
+  doc.descendants((node: any) => {
+    if (node.isText) {
+      text += node.text || '';
+    }
+    return true;
+  });
+  return text;
+}
+
 export const DiffHighlighter = Extension.create({
   name: 'diffHighlighter',
   addStorage() {
@@ -66,52 +41,22 @@ export const DiffHighlighter = Extension.create({
     return {
       showDiff:
         (oldHtml: string, _newHtml: string) =>
-          ({ tr, dispatch }: { tr: unknown; dispatch: (tr: unknown) => void }) => {
+          ({ tr, dispatch, editor }: { tr: unknown; dispatch: (tr: unknown) => void; editor: any }) => {
           try {
-            // Extract plain text from old HTML (same way ProseMirror extracts from its document)
-            const oldDocText = extractDocText(oldHtml);
+            const newDoc = (tr as any).doc;
 
-            // Extract plain text from the editor's current document (which has the new content)
-            const doc = (tr as any).doc;
-            let newDocText = '';
-            doc.descendants((node: any) => {
-              if (node.isText) {
-                newDocText += node.text || '';
-              }
-              return true;
-            });
+            // Parse old HTML through the SAME ProseMirror schema so text
+            // extraction is identical on both sides (no offset drift).
+            const schema = editor.schema || newDoc.type.schema;
+            const domNode = document.createElement('div');
+            domNode.innerHTML = oldHtml;
+            const oldDoc = ProseDOMParser.fromSchema(schema).parse(domNode);
 
-            // Character-by-character comparison: find where old and new diverge from the start
-            let start = 0;
-            while (start < oldDocText.length && start < newDocText.length
-                   && oldDocText[start] === newDocText[start]) {
-              start++;
-            }
+            const oldText = pmDocToText(oldDoc);
+            const newText = pmDocToText(newDoc);
 
-            // Find where they diverge from the end
-            let oldEnd = oldDocText.length;
-            let newEnd = newDocText.length;
-            while (oldEnd > start && newEnd > start
-                   && oldDocText[oldEnd - 1] === newDocText[newEnd - 1]) {
-              oldEnd--;
-              newEnd--;
-            }
-
-            // Build exactly 2-4 clean parts: prefix + removed + added + suffix
-            const parts: DiffPart[] = [];
-            if (start > 0) {
-              parts.push({ value: newDocText.substring(0, start) });
-            }
-            if (oldEnd > start) {
-              parts.push({ removed: true, value: oldDocText.substring(start, oldEnd) });
-            }
-            if (newEnd > start) {
-              parts.push({ added: true, value: newDocText.substring(start, newEnd) });
-            }
-            if (newEnd < newDocText.length) {
-              parts.push({ value: newDocText.substring(newEnd) });
-            }
-
+            // Word-level diff that preserves whitespace tokens for accurate offsets
+            const parts = diffWordsWithSpace(oldText, newText) as DiffPart[];
 
             // @ts-ignore
             this.storage.active = true;
@@ -122,7 +67,7 @@ export const DiffHighlighter = Extension.create({
             if (dispatch) dispatch(tr);
             return true;
           } catch (e) {
-            console.error('Failed to compute diff:', e);
+            console.error('[DiffHighlighter] Failed to compute diff:', e);
             return false;
           }
         },
@@ -153,66 +98,71 @@ export const DiffHighlighter = Extension.create({
             }
             const doc = tr.doc;
             const decorations: Decoration[] = [];
+
+            // Build text-node map for the NEW document (which is loaded in the editor)
             const textNodes: Array<{ from: number; to: number; text: string }> = [];
-            doc.descendants((node, pos) => {
+            doc.descendants((node: any, pos: number) => {
               if (node.isText) {
                 textNodes.push({ from: pos, to: pos + node.nodeSize, text: node.text || '' });
               }
               return true;
             });
 
-            // Map a plain text offset to a ProseMirror document position
+            // Map a plain-text offset to a ProseMirror position in the new document
             const offsetToPos = (offset: number): number => {
               let acc = 0;
               for (const n of textNodes) {
                 const len = n.text.length;
                 if (offset < acc + len) {
-                  const within = offset - acc;
-                  return n.from + within;
+                  return n.from + (offset - acc);
                 }
                 acc += len;
               }
+              // Clamp to end of last text node
               if (textNodes.length > 0) {
-                const last = textNodes[textNodes.length - 1];
-                return last.to;
+                return textNodes[textNodes.length - 1].to;
               }
-              return doc.content.size - 1;
+              return Math.max(0, doc.content.size - 1);
             };
 
             let newIdx = 0;
             // @ts-ignore
             for (const part of ext.storage.parts) {
               if (part.added) {
-                const fromOff = newIdx;
-                const toOff = newIdx + part.value.length;
-                const from = offsetToPos(fromOff);
-                const to = offsetToPos(toOff);
-                if (from < to) {
+                const from = offsetToPos(newIdx);
+                const to = offsetToPos(newIdx + part.value.length);
+                if (from < to && from >= 0) {
                   decorations.push(Decoration.inline(from, to, { class: 'diff-insert' }));
                 }
                 newIdx += part.value.length;
               } else if (part.removed) {
                 const at = offsetToPos(newIdx);
-                const value = part.value;
-                decorations.push(
-                  Decoration.widget(
-                    at,
-                    () => {
-                      const span = document.createElement('span');
-                      span.className = 'diff-delete';
-                      span.textContent = value;
-                      return span;
-                    },
-                    { side: -1 }
-                  )
-                );
+                if (at >= 0) {
+                  decorations.push(
+                    Decoration.widget(
+                      at,
+                      () => {
+                        const span = document.createElement('span');
+                        span.className = 'diff-delete';
+                        span.textContent = part.value;
+                        return span;
+                      },
+                      { side: -1 }
+                    )
+                  );
+                }
+                // removed text does NOT advance newIdx
               } else {
                 newIdx += part.value.length;
               }
             }
 
-            const deco = DecorationSet.create(doc, decorations);
-            return deco.map(tr.mapping, tr.doc);
+            try {
+              return DecorationSet.create(doc, decorations);
+            } catch (e) {
+              console.error('[DiffHighlighter] Failed to create decorations:', e);
+              return DecorationSet.empty;
+            }
           },
         },
         props: {

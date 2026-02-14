@@ -10,6 +10,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEditor, EditorContent, type Editor as TiptapEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import CodeBlock from '@tiptap/extension-code-block';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableCell } from '@tiptap/extension-table-cell';
+import { TableHeader } from '@tiptap/extension-table-header';
 import MarkdownIt from 'markdown-it';
 import { VITE_API_BASE_URL } from "@/services/constants";
 import { apiPost, isAuthError } from '@/services/authenticatedFetch';
@@ -428,9 +432,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         tags: tagNames,
       });
       
-      // Sync editor content
+      // Sync editor content - fix any raw markdown tables from pre-fix content
       if (editor) {
-        editor.commands.setContent(response.article.draft_content || '');
+        editor.commands.setContent(fixMarkdownTables(response.article.draft_content || ''));
       }
       
       setSelectedVersion(null);
@@ -467,6 +471,23 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   }
   const mdParser = mdParserRef.current;
 
+  // Fix HTML that contains raw markdown tables (pipe syntax) by converting them to <table> HTML.
+  // This happens when content was saved before goldmark had table extension enabled.
+  // Detects pipe-separator rows like |---|---| inside HTML (even within <p> tags).
+  const fixMarkdownTables = (html: string): string => {
+    if (!html) return html;
+    // Look for markdown table separator pattern: |---| or |:--| anywhere in the content
+    const hasTable = /\|\s*[-:]+\s*[-|:]+\s*\|/.test(html);
+    if (!hasTable) return html;
+    // Round-trip: HTML → markdown (turndown) → HTML (markdown-it with table support)
+    let md = turndownService.turndown(html);
+    // Fix single-line tables: goldmark without table extension stored all pipe rows in one <p>,
+    // so turndown produces "| A | B | |---|---| | C | D |" on one line.
+    // Split at row boundaries (| |) so markdown-it can parse the table.
+    md = md.replace(/\| \|/g, '|\n|');
+    return mdParser.render(md);
+  };
+
   // turndownService is imported from ./editor/turndown (module-level singleton)
 
   const [diffing, setDiffing] = useState(false);
@@ -475,12 +496,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [currentDiffReason, setCurrentDiffReason] = useState<string>('');
 
   // Turn-level state for "Undo All" across multi-edit agent turns.
-  // turnOriginalDocument captures the editor HTML before the first edit of a turn (set once).
-  // turnSnapshotVersionId is the version ID from the backend's pre-turn snapshot.
-  const [turnOriginalDocument, setTurnOriginalDocument] = useState<string>('');
-  const [turnSnapshotVersionId, setTurnSnapshotVersionId] = useState<string>('');
-  // Ref to track the latest editor HTML during a turn (updated silently per edit, used for combined diff on 'done')
+  // Using refs (not state) so WebSocket handlers always read the latest value
+  // without waiting for React re-renders -- avoids stale closure bugs.
+  const turnOriginalDocRef = useRef<string>('');
   const pendingNewDocumentRef = useRef<string>('');
+  const [turnSnapshotVersionId, setTurnSnapshotVersionId] = useState<string>('');
 
 
   // Inline diff lifecycle helpers
@@ -502,14 +522,24 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     setCurrentDiffReason(reason || '');
     setDiffing(true);
     
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/5ed2ef34-0520-4861-bbfe-52c16271e660',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Editor.tsx:enterDiffPreview',message:'entering diff preview',data:{oldHtmlLen:oldHtml.length,newHtmlLen:newHtml.length,reason},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+
+    // Compute and apply inline diff decorations
     // @ts-ignore custom command provided by DiffHighlighter
     if ((editor as any).commands?.showDiff) {
       // @ts-ignore
       (editor as any).commands.showDiff(oldHtml, newHtml);
     }
     
-    // Force a tiny transaction to ensure decorations render
-    editor.chain().focus().setTextSelection({ from: 1, to: 1 }).run();
+    // Scroll to the first diff highlight after decorations render
+    requestAnimationFrame(() => {
+      const firstDiff = document.querySelector('.diff-insert, .diff-delete');
+      if (firstDiff) {
+        firstDiff.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
   };
 
   const clearDiffDecorations = () => {
@@ -531,7 +561,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     setDiffing(false);
     setPendingNewDocument('');
     setCurrentDiffReason('');
-    setTurnOriginalDocument('');
+    turnOriginalDocRef.current = '';
+    pendingNewDocumentRef.current = '';
     setTurnSnapshotVersionId('');
   };
 
@@ -539,7 +570,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     if (!editor) return;
 
     // Determine the content to revert to (prefer turn-level original for multi-edit undo)
-    const revertContent = turnOriginalDocument || originalDocument || editor.getHTML();
+    const revertContent = turnOriginalDocRef.current || originalDocument || editor.getHTML();
 
     // If we have a backend snapshot, revert the DB too so backend stays in sync
     if (turnSnapshotVersionId && blogSlug) {
@@ -565,7 +596,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     setDiffing(false);
     setPendingNewDocument('');
     setCurrentDiffReason('');
-    setTurnOriginalDocument('');
+    turnOriginalDocRef.current = '';
+    pendingNewDocumentRef.current = '';
     setTurnSnapshotVersionId('');
   };
 
@@ -577,6 +609,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           class: 'bg-gray-100 dark:bg-gray-800 p-4 rounded-md border',
         },
       }),
+      Table.configure({ resizable: false, HTMLAttributes: { class: 'border-collapse border border-border w-full' } }),
+      TableRow,
+      TableCell.configure({ HTMLAttributes: { class: 'border border-border p-2 text-sm' } }),
+      TableHeader.configure({ HTMLAttributes: { class: 'border border-border p-2 text-sm font-semibold bg-muted' } }),
       DiffHighlighter,
     ],
     content: '', // Start empty, content is synced when article loads
@@ -636,9 +672,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         setPreviewImageUrl('');
       }
       
-      // Sync editor with fresh content - load directly as HTML since content is already HTML
+      // Sync editor with fresh content - fix any raw markdown tables from pre-fix content
       if (editor) {
-        editor.commands.setContent(newValues.content);
+        editor.commands.setContent(fixMarkdownTables(newValues.content));
       }
     } else if (isNew) {
       const blank: ArticleFormData = {
@@ -1062,14 +1098,19 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           if (msg.type) {
             switch (msg.type) {
               case 'turn_started':
-                // Backend created a pre-turn version snapshot for "Undo All".
-                // Capture the current editor content as the turn baseline.
+                // Capture the current editor content as the turn baseline for diff.
+                // Uses a ref (not state) so the done handler always reads the latest value.
+                if (editor) {
+                  const preTurnMd = turndownService.turndown(editor.getHTML());
+                  turnOriginalDocRef.current = mdParser.render(preTurnMd);
+                }
+                pendingNewDocumentRef.current = '';
                 if (msg.data?.snapshot_version_id) {
                   setTurnSnapshotVersionId(msg.data.snapshot_version_id);
-                  if (editor) {
-                    setTurnOriginalDocument(editor.getHTML());
-                  }
                 }
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/5ed2ef34-0520-4861-bbfe-52c16271e660',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Editor.tsx:turn_started',message:'turn_started captured via ref',data:{hasEditor:!!editor,refLen:turnOriginalDocRef.current.length},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
                 break;
 
               case 'thinking':
@@ -1368,13 +1409,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 ws.close();
                 
                 // Show combined turn-level diff if any edits were applied during the turn
-                console.debug('[Agent] done: turnOriginal=%d pendingNew=%d', turnOriginalDocument?.length || 0, pendingNewDocumentRef.current?.length || 0);
-                if (turnOriginalDocument && pendingNewDocumentRef.current && editor) {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/5ed2ef34-0520-4861-bbfe-52c16271e660',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Editor.tsx:done',message:'done handler diff check',data:{hasTurnOriginal:!!turnOriginalDocRef.current,hasPendingNew:!!pendingNewDocumentRef.current,hasEditor:!!editor,turnOrigLen:turnOriginalDocRef.current?.length||0,pendingNewLen:pendingNewDocumentRef.current?.length||0},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
+                if (turnOriginalDocRef.current && pendingNewDocumentRef.current && editor) {
                   const currentHtml = pendingNewDocumentRef.current;
-                  if (currentHtml !== turnOriginalDocument) {
-                    enterDiffPreview(turnOriginalDocument, currentHtml, 'Agent changes');
+                  if (currentHtml !== turnOriginalDocRef.current) {
+                    enterDiffPreview(turnOriginalDocRef.current, currentHtml, 'Agent changes');
                   }
-                  pendingNewDocumentRef.current = '';
                 } else if (isEditRequest && currentAssistantContent.length > 100) {
                   // Fallback: check if response contains a code block with suggested content
                   const codeBlockMatch = currentAssistantContent.match(/```(?:markdown|md)?\n([\s\S]*?)\n```/);
@@ -2096,8 +2138,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                           }
                           
                           if (step.type === 'tool_group' && step.toolGroup) {
-                            const groupStatus = step.toolGroup.status === 'running' ? 'running' :
-                                                step.toolGroup.status === 'error' ? 'error' : 'completed';
+                            const groupStatus = step.toolGroup.status === 'running' ? 'running' : 'completed';
                             return (
                               <ChainOfThoughtStep 
                                 key={stepIdx} 
