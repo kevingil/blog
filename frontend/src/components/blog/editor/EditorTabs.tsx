@@ -1,4 +1,4 @@
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MarkdownEditor } from './MarkdownEditor';
 import { DiffView } from './DiffView';
 import { MarkdownPreview } from './MarkdownPreview';
@@ -34,7 +34,7 @@ export function EditorTabs({
   tags,
 }: EditorTabsProps) {
   return (
-    <Tabs value={activeTab} onValueChange={onTabChange} className="flex flex-col h-full min-w-0 overflow-hidden">
+    <Tabs value={activeTab} onValueChange={onTabChange} className="flex flex-col h-full min-w-0">
       <TabsList className="w-full justify-between rounded-none border-b bg-transparent px-2 shrink-0">
         <div className="flex">
           <TabsTrigger value="edit" className="gap-1.5 data-[state=active]:bg-muted">
@@ -55,28 +55,41 @@ export function EditorTabs({
         </div>
       </TabsList>
 
-      <TabsContent value="edit" className="flex-1 mt-0 min-h-0" forceMount style={{ display: activeTab === 'edit' ? undefined : 'none' }}>
-        <MarkdownEditor content={content} onChange={onChange} />
-      </TabsContent>
+      {/* Manual tab content -- avoids TabsContent flex issues with CodeMirror */}
+      <div className="flex-1 min-h-0 relative">
+        {/* Edit tab -- always mounted, hidden via CSS to preserve CodeMirror state */}
+        <div
+          className="absolute inset-0"
+          style={{ display: activeTab === 'edit' ? 'block' : 'none' }}
+        >
+          <MarkdownEditor content={content} onChange={onChange} />
+        </div>
 
-      <TabsContent value="diff" className="flex-1 mt-0 min-h-0 overflow-auto">
-        <DiffView
-          oldValue={originalContent || content}
-          newValue={content}
-          onAccept={onAccept}
-          onReject={onReject}
-        />
-      </TabsContent>
+        {/* Diff/Review tab */}
+        {activeTab === 'diff' && (
+          <div className="absolute inset-0 overflow-auto">
+            <DiffView
+              oldValue={originalContent || content}
+              newValue={content}
+              onAccept={onAccept}
+              onReject={onReject}
+            />
+          </div>
+        )}
 
-      <TabsContent value="preview" className="flex-1 mt-0 min-h-0 overflow-auto">
-        <MarkdownPreview
-          content={content}
-          title={title}
-          authorName={authorName}
-          imageUrl={imageUrl}
-          tags={tags}
-        />
-      </TabsContent>
+        {/* Preview tab */}
+        {activeTab === 'preview' && (
+          <div className="absolute inset-0 overflow-auto">
+            <MarkdownPreview
+              content={content}
+              title={title}
+              authorName={authorName}
+              imageUrl={imageUrl}
+              tags={tags}
+            />
+          </div>
+        )}
+      </div>
     </Tabs>
   );
 }

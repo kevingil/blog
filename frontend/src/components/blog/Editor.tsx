@@ -415,11 +415,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       const tagNames = response.tags ? response.tags
         .map((tag: any) => tag?.name?.toUpperCase())
         .filter((name: string | undefined) => !!name && name !== '') : [];
-      // Detect and convert legacy HTML content to markdown
-      let revertedContent = response.article.draft_content || '';
-      if (revertedContent.startsWith('<') || revertedContent.includes('</p>')) {
-        revertedContent = turndownService.turndown(revertedContent);
-      }
+      const revertedContent = response.article.draft_content || '';
       reset({
         title: response.article.draft_title,
         content: revertedContent,
@@ -534,11 +530,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       const tagNames = article.tags ? article.tags
         .map((tag: any) => tag?.name?.toUpperCase())
         .filter((name: string | undefined) => !!name && name !== '') : [];
-      // Detect and convert legacy HTML content to markdown
-      let loadedContent = article.article.draft_content || '';
-      if (loadedContent.startsWith('<') || loadedContent.includes('</p>')) {
-        loadedContent = turndownService.turndown(loadedContent);
-      }
+      const loadedContent = article.article.draft_content || '';
       const newValues = {
         title: article.article.draft_title || '',
         content: loadedContent,
@@ -1881,7 +1873,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             </div>
 
           <form className="flex-1 flex flex-col min-h-0 min-w-0">
-              <div className="flex-1 flex flex-col border border-gray-300 dark:border-gray-600 rounded-md min-h-0 min-w-0 overflow-hidden">
+              <div className="flex-1 flex flex-col border border-gray-300 dark:border-gray-600 rounded-md min-h-0 min-w-0">
                 <EditorTabs
                   content={watchedContent || ''}
                   onChange={onContentChange}
@@ -1957,7 +1949,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                   group={step.toolGroup}
                                   onArtifactAction={(toolId, action) => {
                                     const call = step.toolGroup?.calls.find(c => c.id === toolId);
-                                    if (!call || !editor) return;
+                                    if (!call) return;
                                     const editTools = ['edit_text', 'rewrite_section', 'rewrite_document'];
                                     if (editTools.includes(call.name) && action === 'accept' && call.result) {
                                       const result = call.result;
