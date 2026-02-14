@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"os"
 	"sort"
 	"strings"
-	"time"
 
 	"backend/pkg/database/models"
 
@@ -499,18 +497,11 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 		Reason string `json:"reason"`
 	}
 
-	// #region agent log
-	func() { f, e := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if e != nil { return }; defer f.Close(); preview := params.Input; if len(preview) > 500 { preview = preview[:500] + "..." }; fmt.Fprintf(f, `{"location":"writing.go:edit-raw-input","message":"edit_text raw input","hypothesisId":"A,B,D","data":{"inputLen":%d,"preview":"%s"},"timestamp":%d}`+"\n", len(params.Input), strings.ReplaceAll(strings.ReplaceAll(preview, `"`, `\"`), "\n", "\\n"), time.Now().UnixMilli()) }()
-	// #endregion
-
 	if err := json.Unmarshal([]byte(params.Input), &input); err != nil {
 		return NewTextErrorResponse("Invalid input format"), err
 	}
 
 	if input.OldStr == "" || input.NewStr == "" {
-		// #region agent log
-		func() { f, e := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if e != nil { return }; defer f.Close(); fmt.Fprintf(f, `{"location":"writing.go:edit-empty-params","message":"old_str or new_str empty","hypothesisId":"A,D","data":{"oldStrLen":%d,"newStrLen":%d,"reasonLen":%d},"timestamp":%d}`+"\n", len(input.OldStr), len(input.NewStr), len(input.Reason), time.Now().UnixMilli()) }()
-		// #endregion
 		return NewTextErrorResponse("old_str and new_str are required"), fmt.Errorf("old_str and new_str are required")
 	}
 
