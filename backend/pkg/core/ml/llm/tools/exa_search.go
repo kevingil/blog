@@ -43,11 +43,11 @@ func NewExaSearchTool(exaService ExaSearchService, sourceCreator SourceCreator) 
 func (t *ExaSearchTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        "search_web_sources",
-		Description: "Search the web using Exa's intelligent search engine and automatically create sources from relevant URLs. This tool finds high-quality, recent web content related to your query and makes it available as reference sources for the document.",
+		Description: "Search the web for high-quality sources on a topic. Returns recent content with full text and automatically creates citable sources. Use after ask_question when you need broader coverage, multiple perspectives, or comprehensive source material. Search for the article's specific thesis or claims, not generic keywords.",
 		Parameters: map[string]any{
 			"query": map[string]any{
 				"type":        "string",
-				"description": "The search query to find relevant web content (e.g., topics, concepts, recent developments related to the document)",
+				"description": "A specific search query targeting the article's topic. Be precise: 'HTMX vs React performance benchmarks 2024' not 'web frameworks'. Include technology names, timeframes, or specific aspects.",
 			},
 			"create_sources": map[string]any{
 				"type":        []string{"boolean", "null"},

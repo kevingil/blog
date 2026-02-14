@@ -31,11 +31,11 @@ func NewExaAnswerTool(exaService ExaAnswerService) *ExaAnswerTool {
 func (t *ExaAnswerTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        "ask_question",
-		Description: "Get a direct, factual answer to a specific question with citations. Use this for factual queries like 'What is X?', 'How does Y work?', 'When did Z happen?'. Returns a concise answer with source citations. For exploratory research or finding multiple sources, use search_web_sources instead.",
+		Description: "Ask a specific factual question and get an answer with citations. Use this LIBERALLY -- ask many questions to build comprehensive context before writing. Ask follow-up questions based on earlier answers. Be highly specific: name people, technologies, timeframes, and metrics. Good: 'What performance improvements did Shopify report after migrating to HTMX in 2024?' Bad: 'What are the benefits of HTMX?'",
 		Parameters: map[string]any{
 			"question": map[string]any{
 				"type":        "string",
-				"description": "A specific question to answer. Be clear and specific for best results. Examples: 'What is the current market cap of Apple?', 'How does photosynthesis work?', 'When was the Eiffel Tower built?'",
+				"description": "A specific, detailed question. Include names, dates, metrics, or technologies. Examples: 'What did Carson Gross say about HTMX 2.0 adoption at GopherCon 2024?', 'What is the median TTFB for Go+HTMX apps vs React SPAs in 2024 benchmarks?'",
 			},
 		},
 		Required: []string{"question"},
