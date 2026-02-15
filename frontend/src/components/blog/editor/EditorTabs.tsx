@@ -4,6 +4,7 @@ import { MarkdownEditor } from './MarkdownEditor';
 import { DiffView } from './DiffView';
 import { MarkdownPreview } from './MarkdownPreview';
 import { Code, Eye, ShieldCheck } from 'lucide-react';
+import { EditorView } from '@codemirror/view';
 
 interface EditorTabsProps {
   content: string;
@@ -20,15 +21,75 @@ interface EditorTabsProps {
   tags?: string[];
 }
 
+/* ------------------------------------------------------------------ */
+/* Line-based sync helpers (Edit ↔ Preview)                            */
+/* ------------------------------------------------------------------ */
+
+/** Get the 1-based line number at the top of a CodeMirror viewport */
+function getFirstVisibleLine(view: EditorView): number {
+  const block = view.lineBlockAtHeight(view.scrollDOM.scrollTop);
+  return view.state.doc.lineAt(block.from).number;
+}
+
+/** Scroll CodeMirror so that `lineNumber` sits at the viewport top */
+function scrollEditorToLine(view: EditorView, lineNumber: number): void {
+  const clamped = Math.max(1, Math.min(lineNumber, view.state.doc.lines));
+  const pos = view.state.doc.line(clamped).from;
+  view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: 'start' }) });
+}
+
 /**
- * Find the primary scrollable element inside a container.
- * CodeMirror uses `.cm-scroller`; other panels use the first descendant
- * with overflow-y auto/scroll that has overflowing content.
+ * Find the source line of the first visible `[data-source-line]` element
+ * inside a Preview container.
  */
+function getFirstVisibleSourceLine(container: HTMLElement): number | null {
+  const scrollable = findScrollable(container);
+  if (!scrollable) return null;
+  const viewportTop = scrollable.getBoundingClientRect().top;
+
+  const elements = container.querySelectorAll('[data-source-line]');
+  for (const el of elements) {
+    // First element whose bottom edge is at or below the viewport top
+    if (el.getBoundingClientRect().bottom >= viewportTop) {
+      return parseInt(el.getAttribute('data-source-line')!, 10);
+    }
+  }
+  if (elements.length > 0) {
+    return parseInt(elements[elements.length - 1].getAttribute('data-source-line')!, 10);
+  }
+  return null;
+}
+
+/**
+ * Scroll the Preview panel so the element closest to `targetLine` is at the
+ * top of the viewport.
+ */
+function scrollPreviewToLine(container: HTMLElement, targetLine: number): void {
+  const elements = container.querySelectorAll('[data-source-line]');
+  let bestEl: Element | null = null;
+  let bestDelta = Infinity;
+
+  for (const el of elements) {
+    const line = parseInt(el.getAttribute('data-source-line')!, 10);
+    const delta = Math.abs(line - targetLine);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      bestEl = el;
+    }
+    if (line > targetLine) break;
+  }
+
+  if (bestEl) {
+    bestEl.scrollIntoView({ block: 'start', behavior: 'instant' as ScrollBehavior });
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Percentage-based fallback (Diff tab)                                */
+/* ------------------------------------------------------------------ */
+
 function findScrollable(container: HTMLElement | null): HTMLElement | null {
   if (!container) return null;
-  const cmScroller = container.querySelector('.cm-scroller');
-  if (cmScroller) return cmScroller as HTMLElement;
   const all = container.querySelectorAll('*');
   for (const el of all) {
     const htmlEl = el as HTMLElement;
@@ -44,6 +105,10 @@ function findScrollable(container: HTMLElement | null): HTMLElement | null {
   return null;
 }
 
+/* ------------------------------------------------------------------ */
+/* Component                                                           */
+/* ------------------------------------------------------------------ */
+
 export function EditorTabs({
   content,
   onChange,
@@ -58,29 +123,41 @@ export function EditorTabs({
   imageUrl,
   tags,
 }: EditorTabsProps) {
+  const syncLineRef = useRef(1);
   const scrollFractionRef = useRef(0);
+  const editorViewRef = useRef<EditorView | null>(null);
   const editRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const diffRef = useRef<HTMLDivElement>(null);
   const prevTabRef = useRef(activeTab);
 
-  const getRefForTab = useCallback((tab: string) => {
-    if (tab === 'edit') return editRef;
-    if (tab === 'preview') return previewRef;
-    return diffRef;
-  }, []);
-
-  /** Intercept tab changes to save scroll position before switching */
+  /** Save scroll position from the outgoing tab, then switch */
   const handleTabChange = useCallback((newTab: string) => {
-    const scrollable = findScrollable(getRefForTab(activeTab).current);
-    if (scrollable) {
-      const maxScroll = scrollable.scrollHeight - scrollable.clientHeight;
-      scrollFractionRef.current = maxScroll > 0 ? scrollable.scrollTop / maxScroll : 0;
+    if (activeTab === 'edit' && editorViewRef.current) {
+      syncLineRef.current = getFirstVisibleLine(editorViewRef.current);
+      const s = editorViewRef.current.scrollDOM;
+      const max = s.scrollHeight - s.clientHeight;
+      scrollFractionRef.current = max > 0 ? s.scrollTop / max : 0;
+    } else if (activeTab === 'preview' && previewRef.current) {
+      const line = getFirstVisibleSourceLine(previewRef.current);
+      if (line != null) {
+        syncLineRef.current = line;
+        const total = content.split('\n').length;
+        scrollFractionRef.current = total > 1 ? (line - 1) / (total - 1) : 0;
+      }
+    } else if (activeTab === 'diff' && diffRef.current) {
+      const scrollable = findScrollable(diffRef.current);
+      if (scrollable) {
+        const max = scrollable.scrollHeight - scrollable.clientHeight;
+        scrollFractionRef.current = max > 0 ? scrollable.scrollTop / max : 0;
+        const total = content.split('\n').length;
+        syncLineRef.current = Math.round(scrollFractionRef.current * Math.max(1, total - 1)) + 1;
+      }
     }
     onTabChange(newTab);
-  }, [activeTab, onTabChange, getRefForTab]);
+  }, [activeTab, onTabChange, content]);
 
-  /** Restore scroll position when the active tab changes */
+  /** Restore scroll position in the incoming tab */
   useEffect(() => {
     if (prevTabRef.current !== activeTab) {
       prevTabRef.current = activeTab;
@@ -90,18 +167,22 @@ export function EditorTabs({
         if (cancelled) return;
         requestAnimationFrame(() => {
           if (cancelled) return;
-          const scrollable = findScrollable(getRefForTab(activeTab).current);
-          if (scrollable) {
-            const maxScroll = scrollable.scrollHeight - scrollable.clientHeight;
-            if (maxScroll > 0) {
-              scrollable.scrollTop = scrollFractionRef.current * maxScroll;
+          if (activeTab === 'edit' && editorViewRef.current) {
+            scrollEditorToLine(editorViewRef.current, syncLineRef.current);
+          } else if (activeTab === 'preview' && previewRef.current) {
+            scrollPreviewToLine(previewRef.current, syncLineRef.current);
+          } else if (activeTab === 'diff' && diffRef.current) {
+            const scrollable = findScrollable(diffRef.current);
+            if (scrollable) {
+              const max = scrollable.scrollHeight - scrollable.clientHeight;
+              if (max > 0) scrollable.scrollTop = scrollFractionRef.current * max;
             }
           }
         });
       });
       return () => { cancelled = true; };
     }
-  }, [activeTab, getRefForTab]);
+  }, [activeTab]);
 
   return (
     <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col h-full min-w-0">
@@ -133,7 +214,7 @@ export function EditorTabs({
           className="absolute inset-0"
           style={{ display: activeTab === 'edit' ? 'block' : 'none' }}
         >
-          <MarkdownEditor content={content} onChange={onChange} />
+          <MarkdownEditor content={content} onChange={onChange} editorViewRef={editorViewRef} />
         </div>
 
         {/* Diff/Review tab */}

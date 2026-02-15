@@ -1,15 +1,57 @@
 import { useMemo } from 'react';
-import { marked, Token } from 'marked';
+import { Marked } from 'marked';
 import hljs from 'highlight.js';
 import { Badge } from '@/components/ui/badge';
 
-// Configure marked with highlight.js -- same setup as the published blog page
-marked.use({
+/**
+ * Walk top-level block tokens and stamp each with its 1-based source line
+ * number so the renderer can emit `data-source-line` attributes.
+ */
+function annotateSourceLines(tokens: any[]): void {
+  let lineNum = 1;
+  for (const token of tokens) {
+    if (token.type !== 'space') {
+      token._sourceLine = lineNum;
+    }
+    const raw: string = token.raw ?? '';
+    for (let i = 0; i < raw.length; i++) {
+      if (raw[i] === '\n') lineNum++;
+    }
+  }
+}
+
+/** Helper – returns ` data-source-line="N"` or empty string */
+function lineAttr(token: any): string {
+  return token._sourceLine != null ? ` data-source-line="${token._sourceLine}"` : '';
+}
+
+// Marked instance with source-line annotations + syntax highlighting
+const previewMarked = new Marked({
   renderer: {
-    code(this: unknown, token: Token & { lang?: string; text: string }) {
+    heading(this: any, token: any) {
+      return `<h${token.depth}${lineAttr(token)}>${this.parser.parseInline(token.tokens)}</h${token.depth}>\n`;
+    },
+    paragraph(this: any, token: any) {
+      return `<p${lineAttr(token)}>${this.parser.parseInline(token.tokens)}</p>\n`;
+    },
+    code(_token: any) {
+      const token = _token as any;
       const lang = token.lang && hljs.getLanguage(token.lang) ? token.lang : 'plaintext';
       const highlighted = hljs.highlight(token.text, { language: lang }).value;
-      return `<pre><code class="hljs language-${lang}">${highlighted}</code></pre>`;
+      return `<pre${lineAttr(token)}><code class="hljs language-${lang}">${highlighted}</code></pre>\n`;
+    },
+    list(this: any, token: any) {
+      const tag = token.ordered ? 'ol' : 'ul';
+      const startAttr = token.ordered && token.start !== 1 ? ` start="${token.start}"` : '';
+      const body = token.items.map((item: any) => this.listitem(item)).join('');
+      return `<${tag}${startAttr}${lineAttr(token)}>\n${body}</${tag}>\n`;
+    },
+    blockquote(this: any, token: any) {
+      const body = this.parser.parse(token.tokens);
+      return `<blockquote${lineAttr(token)}>\n${body}</blockquote>\n`;
+    },
+    hr(token: any) {
+      return `<hr${lineAttr(token)}>\n`;
     },
   },
 });
@@ -25,7 +67,9 @@ interface MarkdownPreviewProps {
 export function MarkdownPreview({ content, title, authorName, imageUrl, tags }: MarkdownPreviewProps) {
   const renderedHtml = useMemo(() => {
     if (!content) return '';
-    return marked(content) as string;
+    const tokens = previewMarked.lexer(content);
+    annotateSourceLines(tokens);
+    return previewMarked.parser(tokens);
   }, [content]);
 
   return (

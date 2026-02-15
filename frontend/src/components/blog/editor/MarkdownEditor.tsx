@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, type MutableRefObject } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown } from '@codemirror/lang-markdown';
 import { vscodeDark } from '@uiw/codemirror-theme-vscode';
@@ -10,9 +10,10 @@ interface MarkdownEditorProps {
   content: string;
   onChange: (value: string) => void;
   readOnly?: boolean;
+  editorViewRef?: MutableRefObject<EditorView | null>;
 }
 
-export function MarkdownEditor({ content, onChange, readOnly }: MarkdownEditorProps) {
+export function MarkdownEditor({ content, onChange, readOnly, editorViewRef }: MarkdownEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(400);
 
@@ -36,6 +37,9 @@ export function MarkdownEditor({ content, onChange, readOnly }: MarkdownEditorPr
         extensions={[markdown(), lineWrapping]}
         theme={vscodeDark}
         readOnly={readOnly}
+        onCreateEditor={(view) => {
+          if (editorViewRef) editorViewRef.current = view;
+        }}
         basicSetup={{
           lineNumbers: true,
           foldGutter: true,
