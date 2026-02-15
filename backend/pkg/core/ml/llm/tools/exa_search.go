@@ -43,11 +43,11 @@ func NewExaSearchTool(exaService ExaSearchService, sourceCreator SourceCreator) 
 func (t *ExaSearchTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        "search_web_sources",
-		Description: "Search the web for high-quality sources on a topic. Returns recent content with full text and automatically creates citable sources. Use after ask_question when you need broader coverage, multiple perspectives, or comprehensive source material. Search for the article's specific thesis or claims, not generic keywords.",
+		Description: "Search the web for sources on a topic. Creates citable sources automatically. Be specific in queries.",
 		Parameters: map[string]any{
 			"query": map[string]any{
 				"type":        "string",
-				"description": "A specific search query targeting the article's topic. Be precise: 'HTMX vs React performance benchmarks 2024' not 'web frameworks'. Include technology names, timeframes, or specific aspects.",
+				"description": "A specific search query. Include technology names, timeframes, or specific aspects.",
 			},
 			"create_sources": map[string]any{
 				"type":        []string{"boolean", "null"},
@@ -61,7 +61,7 @@ func (t *ExaSearchTool) Info() ToolInfo {
 func (t *ExaSearchTool) Run(ctx context.Context, params ToolCall) (ToolResponse, error) {
 	var input struct {
 		Query         string `json:"query"`
-		CreateSources bool   `json:"create_sources"`
+		CreateSources *bool  `json:"create_sources"`
 	}
 
 	if err := json.Unmarshal([]byte(params.Input), &input); err != nil {
@@ -74,14 +74,15 @@ func (t *ExaSearchTool) Run(ctx context.Context, params ToolCall) (ToolResponse,
 		return NewTextErrorResponse("query is required"), fmt.Errorf("query is required")
 	}
 
-	// Default to creating sources unless explicitly disabled
-	if !json.Valid([]byte(fmt.Sprintf(`{"create_sources": %t}`, input.CreateSources))) {
-		input.CreateSources = true
+	// Default to creating sources unless explicitly set to false
+	createSources := true
+	if input.CreateSources != nil {
+		createSources = *input.CreateSources
 	}
 
 	log.Printf("🔍 [ExaSearch] Starting web search with Exa")
 	log.Printf("   📝 Query: %q", input.Query)
-	log.Printf("   📂 Create sources: %t", input.CreateSources)
+	log.Printf("   📂 Create sources: %t", createSources)
 
 	// Check if Exa service is configured
 	if !t.exaService.IsConfigured() {
@@ -92,11 +93,11 @@ func (t *ExaSearchTool) Run(ctx context.Context, params ToolCall) (ToolResponse,
 	// Get article ID from context if creating sources
 	var articleID uuid.UUID
 	var err error
-	if input.CreateSources {
+	if createSources {
 		articleIDStr := GetArticleIDFromContext(ctx)
 		if articleIDStr == "" {
 			log.Printf("🔍 [ExaSearch] WARNING: No article ID in context - will return search results but cannot create sources")
-			input.CreateSources = false
+			createSources = false
 		} else {
 			articleID, err = uuid.Parse(articleIDStr)
 			if err != nil {
@@ -184,7 +185,7 @@ func (t *ExaSearchTool) Run(ctx context.Context, params ToolCall) (ToolResponse,
 		searchResults = append(searchResults, searchResult)
 
 		// Attempt to create source if enabled and we have full text content
-		if input.CreateSources && t.sourceCreator != nil && result.Text != "" {
+		if createSources && t.sourceCreator != nil && result.Text != "" {
 			sourcesAttempted++
 			log.Printf("🔍 [ExaSearch] Creating web content source from search result: %s", result.URL)
 
@@ -268,7 +269,7 @@ func (t *ExaSearchTool) Run(ctx context.Context, params ToolCall) (ToolResponse,
 
 	// Create summary message
 	message := fmt.Sprintf("Found %d search results", len(searchResults))
-	if input.CreateSources {
+	if createSources {
 		if sourcesSuccessful > 0 {
 			message += fmt.Sprintf(" and successfully created %d sources", sourcesSuccessful)
 		} else if sourcesAttempted > 0 {
@@ -282,7 +283,7 @@ func (t *ExaSearchTool) Run(ctx context.Context, params ToolCall) (ToolResponse,
 	// Log summary
 	log.Printf("🔍 [ExaSearch] 📊 Summary:")
 	log.Printf("   🔍 Search results: %d (from %d total found)", len(results), len(searchResp.Results))
-	if input.CreateSources {
+	if createSources {
 		log.Printf("   📂 Sources attempted: %d", sourcesAttempted)
 		log.Printf("   ✅ Sources created: %d", sourcesSuccessful)
 		if sourcesAttempted > 0 {
