@@ -735,6 +735,17 @@ func createAgentProvider(agentName config.AgentName, availableTools []string) (p
 				provider.WithAnthropicShouldThinkFn(provider.DefaultShouldThinkFn),
 			),
 		)
+	} else if model.Provider == models.ProviderGemini && model.CanReason {
+		reasoningEffort := agentConfig.ReasoningEffort
+		if reasoningEffort == "" {
+			reasoningEffort = "medium"
+		}
+		opts = append(
+			opts,
+			provider.WithGeminiOptions(
+				provider.WithGeminiThinkingLevel(reasoningEffort),
+			),
+		)
 	}
 	agentProvider, err := provider.NewProvider(
 		model.Provider,

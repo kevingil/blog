@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"os"
 	"sort"
 	"strings"
-	"time"
 
 	"backend/pkg/database/models"
 
@@ -37,19 +35,7 @@ func NewReadDocumentTool() *ReadDocumentTool {
 func (t *ReadDocumentTool) Info() ToolInfo {
 	return ToolInfo{
 		Name: "read_document",
-		Description: `Read the current document content in raw Markdown format.
-
-WHEN TO USE:
-- Once at the start of your turn to see the full content
-- After multiple edits if you need to verify the current state
-
-The content returned is the EXACT markdown of the document.
-You can copy text directly from this output into edit_text old_str.
-Read once, then make multiple edits in sequence without re-reading.
-
-The result includes a "sections" array showing each heading with its line number
-and level, so you can see the document structure at a glance. Use this to find
-where sections start/end and where to append new content (e.g., Sources section).`,
+		Description: `Read the full document as raw markdown. The result includes a "sections" array with each heading's line number and level for navigation. Copy text directly from the content into edit_text old_str.`,
 		Parameters: map[string]any{},
 		Required:   []string{},
 	}
@@ -223,8 +209,8 @@ func (t *GetRelevantSourcesTool) Run(ctx context.Context, params ToolCall) (Tool
 		log.Printf("   📝 Content Preview: %q", contentPreview)
 
 		// Chunk the content and find the most relevant chunks
-		chunks := t.chunkText(source.Content, 1200)                        // 1200 character chunks with overlap for more context
-		relevantChunks := t.findMostRelevantChunks(chunks, input.Query, 2) // Top 2 chunks per source (longer chunks)
+		chunks := chunkText(source.Content, 1200)
+		relevantChunks := findMostRelevantChunks(chunks, input.Query, 2)
 
 		log.Printf("   🧩 Generated %d chunks, selected %d most relevant", len(chunks), len(relevantChunks))
 
@@ -330,7 +316,7 @@ type TextChunk struct {
 }
 
 // chunkText splits text into overlapping chunks for better context preservation
-func (t *GetRelevantSourcesTool) chunkText(text string, chunkSize int) []TextChunk {
+func chunkText(text string, chunkSize int) []TextChunk {
 	if len(text) <= chunkSize {
 		return []TextChunk{{Text: text, Index: 0}}
 	}
@@ -375,16 +361,16 @@ func (t *GetRelevantSourcesTool) chunkText(text string, chunkSize int) []TextChu
 }
 
 // findMostRelevantChunks finds the most relevant chunks using simple text similarity
-func (t *GetRelevantSourcesTool) findMostRelevantChunks(chunks []TextChunk, query string, maxChunks int) []TextChunk {
+func findMostRelevantChunks(chunks []TextChunk, query string, maxChunks int) []TextChunk {
 	if len(chunks) == 0 {
 		return chunks
 	}
 
 	// Score each chunk based on keyword overlap with query
-	queryWords := t.extractKeywords(strings.ToLower(query))
+	queryWords := extractKeywords(strings.ToLower(query))
 
 	for i := range chunks {
-		chunks[i].Score = t.calculateRelevanceScore(chunks[i].Text, queryWords)
+		chunks[i].Score = calculateRelevanceScore(chunks[i].Text, queryWords)
 	}
 
 	// Sort by score (highest first)
@@ -401,7 +387,7 @@ func (t *GetRelevantSourcesTool) findMostRelevantChunks(chunks []TextChunk, quer
 }
 
 // extractKeywords extracts meaningful keywords from a query
-func (t *GetRelevantSourcesTool) extractKeywords(text string) []string {
+func extractKeywords(text string) []string {
 	// Simple keyword extraction - split on spaces and filter common words
 	stopWords := map[string]bool{
 		"the": true, "a": true, "an": true, "and": true, "or": true, "but": true,
@@ -434,7 +420,7 @@ func (t *GetRelevantSourcesTool) extractKeywords(text string) []string {
 }
 
 // calculateRelevanceScore calculates a simple relevance score based on keyword frequency
-func (t *GetRelevantSourcesTool) calculateRelevanceScore(text string, queryKeywords []string) float64 {
+func calculateRelevanceScore(text string, queryKeywords []string) float64 {
 	if len(queryKeywords) == 0 {
 		return 0.0
 	}
@@ -487,25 +473,7 @@ func NewEditTextTool(draftSaver DraftSaver) *EditTextTool {
 func (t *EditTextTool) Info() ToolInfo {
 	return ToolInfo{
 		Name: "edit_text",
-		Description: `Edit specific text in the document using exact string replacement. Best for SMALL, focused changes (1-5 lines).
-
-For replacing an entire section (heading + content), use rewrite_section instead.
-
-CRITICAL REQUIREMENTS:
-1. old_str must EXACTLY match text from read_document output (character-for-character)
-2. old_str should be SHORT: include only 1-2 lines of context before and after the change
-3. Keep old_str under ~200 characters when possible - smaller edits match more reliably
-4. The same surrounding context must appear in new_str, with only the changed part modified
-5. Read the document once, then make multiple edits in sequence
-
-GOOD EXAMPLE:
-  old_str: "page load times.\n\n### Results\n\nAfter running"
-  new_str: "page load times.\n\n### Summary\n\nAfter running"
-
-BAD (too large - use rewrite_section for big changes):
-  old_str: [entire 500-word section]
-
-Write like a human - avoid puffery, hedging, and AI patterns.`,
+		Description: `Small, exact string replacement in the document. Copy old_str exactly from read_document output. Keep old_str short (1-3 lines of context). For large changes, use rewrite_section instead.`,
 		Parameters: map[string]any{
 			"old_str": map[string]any{
 				"type":        "string",
@@ -532,16 +500,12 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 	}
 
 	if err := json.Unmarshal([]byte(params.Input), &input); err != nil {
-		// #region agent log
-		func() { f, e := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if e != nil { return }; defer f.Close(); preview := params.Input; if len(preview) > 300 { preview = preview[:300] }; fmt.Fprintf(f, "{\"location\":\"writing.go:edit-unmarshal-err\",\"message\":\"JSON unmarshal failed\",\"data\":{\"error\":\"%s\",\"inputLen\":%d,\"preview\":\"%s\"},\"timestamp\":%d}\n", strings.ReplaceAll(err.Error(), `"`, `'`), len(params.Input), strings.ReplaceAll(strings.ReplaceAll(preview, `"`, `\"`), "\n", "\\n"), time.Now().UnixMilli()) }()
-		// #endregion
+		log.Printf("   ❌ [EditText] JSON unmarshal failed: %v (input: %d chars)", err, len(params.Input))
 		return NewTextErrorResponse("Invalid input format"), err
 	}
 
 	if input.OldStr == "" || input.NewStr == "" {
-		// #region agent log
-		func() { f, e := os.OpenFile("/Users/kgil/Git/blogs/blog-agent-go/.cursor/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); if e != nil { return }; defer f.Close(); preview := params.Input; if len(preview) > 500 { preview = preview[:500] }; fmt.Fprintf(f, "{\"location\":\"writing.go:edit-empty-params\",\"message\":\"old_str or new_str empty\",\"data\":{\"oldStrLen\":%d,\"newStrLen\":%d,\"reasonLen\":%d,\"inputLen\":%d,\"preview\":\"%s\"},\"timestamp\":%d}\n", len(input.OldStr), len(input.NewStr), len(input.Reason), len(params.Input), strings.ReplaceAll(strings.ReplaceAll(preview, `"`, `\"`), "\n", "\\n"), time.Now().UnixMilli()) }()
-		// #endregion
+		log.Printf("   ❌ [EditText] Empty params: old_str=%d new_str=%d", len(input.OldStr), len(input.NewStr))
 		return NewTextErrorResponse("old_str and new_str are required"), fmt.Errorf("old_str and new_str are required")
 	}
 
@@ -782,26 +746,7 @@ func NewRewriteSectionTool(draftSaver DraftSaver) *RewriteSectionTool {
 func (t *RewriteSectionTool) Info() ToolInfo {
 	return ToolInfo{
 		Name: "rewrite_section",
-		Description: `Replace an entire section of the document identified by its heading.
-
-WHEN TO USE:
-- For replacing, rewriting, or significantly changing a whole section
-- When edit_text fails because old_str is too large to match reliably
-- For adding new content below an existing section heading
-
-HOW IT WORKS:
-- Provide the exact section heading (e.g., "### Best Practices")
-- Provide the new content for that section (including the heading itself)
-- The tool finds the section boundaries (from heading to next heading of same/higher level)
-- Replaces everything in that range with your new content
-
-EXAMPLE:
-  section_heading: "### Best Practices"
-  new_content: "### Best Practices\n\n| Do | Don't |\n|---|---|\n| Use templates | Inline HTML |"
-  reason: "Reformat best practices as a comparison table"
-
-IMPORTANT: new_content MUST start with the section heading.
-Write like a human - avoid puffery, hedging, and AI patterns.`,
+		Description: `Replace an entire section by its heading. Provide the exact heading (e.g., "### Best Practices") and the full new content (must start with the heading). Finds section boundaries automatically.`,
 		Parameters: map[string]any{
 			"section_heading": map[string]any{
 				"type":        "string",
@@ -967,381 +912,6 @@ func (t *RewriteSectionTool) Run(ctx context.Context, params ToolCall) (ToolResp
 				"reason":   input.Reason,
 				"diffs":    diffs,
 			},
-		},
-	}, nil
-}
-
-// AddContextFromSourcesTool finds and adds relevant context from sources to enhance content
-type AddContextFromSourcesTool struct {
-	sourceService ArticleSourceService
-}
-
-func NewAddContextFromSourcesTool(sourceService ArticleSourceService) *AddContextFromSourcesTool {
-	return &AddContextFromSourcesTool{
-		sourceService: sourceService,
-	}
-}
-
-func (t *AddContextFromSourcesTool) Info() ToolInfo {
-	return ToolInfo{
-		Name:        "add_context_from_sources",
-		Description: "Find relevant sources and add contextual information to enhance the current document content",
-		Parameters: map[string]any{
-			"query": map[string]any{
-				"type":        "string",
-				"description": "The search query to find relevant sources (topics, keywords from the document)",
-			},
-			"current_content": map[string]any{
-				"type":        "string",
-				"description": "Current document content to provide context for search",
-			},
-			"limit": map[string]any{
-				"type":        []string{"number", "null"},
-				"description": "Maximum number of relevant sources to return (default: 5)",
-			},
-		},
-		Required: []string{"query", "current_content"},
-	}
-}
-
-func (t *AddContextFromSourcesTool) Run(ctx context.Context, params ToolCall) (ToolResponse, error) {
-	var input struct {
-		Query          string `json:"query"`
-		CurrentContent string `json:"current_content"`
-		Limit          int    `json:"limit"`
-	}
-
-	if err := json.Unmarshal([]byte(params.Input), &input); err != nil {
-		return NewTextErrorResponse("Invalid input format"), err
-	}
-
-	if input.Query == "" || input.CurrentContent == "" {
-		return NewTextErrorResponse("query and current_content are required"), fmt.Errorf("query and current_content are required")
-	}
-
-	if input.Limit <= 0 {
-		input.Limit = 5
-	}
-
-	log.Printf("📚 [AddContextFromSources] Starting context search")
-	log.Printf("   📝 Query: %q", input.Query)
-	log.Printf("   📄 Current content length: %d characters", len(input.CurrentContent))
-	log.Printf("   🎯 Limit: %d", input.Limit)
-
-	// Get article ID from context
-	articleIDStr := GetArticleIDFromContext(ctx)
-	if articleIDStr == "" {
-		log.Printf("📚 [AddContextFromSources] WARNING: No article ID in context")
-		result := map[string]interface{}{
-			"relevant_sources": []map[string]interface{}{},
-			"context_added":    false,
-			"query":            input.Query,
-			"tool_name":        "add_context_from_sources",
-			"warning":          "No article ID available - cannot search for sources",
-		}
-		resultJSON, _ := json.Marshal(result)
-		return NewTextResponse(string(resultJSON)), nil
-	}
-
-	articleID, err := uuid.Parse(articleIDStr)
-	if err != nil {
-		return NewTextErrorResponse("Invalid article ID"), fmt.Errorf("invalid article ID: %w", err)
-	}
-
-	// Search for similar sources
-	sources, err := t.sourceService.SearchSimilarSources(ctx, articleID, input.Query, input.Limit)
-	if err != nil {
-		return NewTextErrorResponse(fmt.Sprintf("Failed to search sources: %v", err)), err
-	}
-
-	log.Printf("📚 [AddContextFromSources] Found %d sources", len(sources))
-
-	// Convert sources to response format with chunking
-	var relevantSources []map[string]interface{}
-	for i, source := range sources {
-		chunks := t.chunkText(source.Content, 1200)
-		relevantChunks := t.findMostRelevantChunks(chunks, input.Query, 2)
-
-		for j, chunk := range relevantChunks {
-			sourceData := map[string]interface{}{
-				"source_title": source.Title,
-				"source_url":   source.URL,
-				"text_chunk":   chunk.Text,
-				"source_type":  source.SourceType,
-				"chunk_score":  chunk.Score,
-				"chunk_index":  j + 1,
-				"source_index": i + 1,
-			}
-			relevantSources = append(relevantSources, sourceData)
-		}
-	}
-
-	result := map[string]interface{}{
-		"relevant_sources": relevantSources,
-		"context_added":    len(relevantSources) > 0,
-		"query":            input.Query,
-		"total_sources":    len(sources),
-		"total_chunks":     len(relevantSources),
-		"tool_name":        "add_context_from_sources",
-	}
-
-	log.Printf("📚 [AddContextFromSources] ✅ Returning %d relevant chunks from %d sources", len(relevantSources), len(sources))
-
-	resultJSON, _ := json.Marshal(result)
-	return NewTextResponse(string(resultJSON)), nil
-}
-
-// chunkText splits text into overlapping chunks for better context preservation
-func (t *AddContextFromSourcesTool) chunkText(text string, chunkSize int) []TextChunk {
-	if len(text) <= chunkSize {
-		return []TextChunk{{Text: text, Index: 0}}
-	}
-
-	var chunks []TextChunk
-	overlap := chunkSize / 3 // 33% overlap for better context preservation
-
-	for i := 0; i < len(text); i += chunkSize - overlap {
-		end := i + chunkSize
-		if end > len(text) {
-			end = len(text)
-		}
-
-		chunk := text[i:end]
-		// Try to break at sentence boundaries to avoid cutting words
-		if end < len(text) {
-			// Look for the last sentence boundary in the last third of the chunk
-			searchStart := len(chunk) * 2 / 3
-			if searchStart < len(chunk) {
-				lastPart := chunk[searchStart:]
-				if lastDot := strings.LastIndex(lastPart, "."); lastDot != -1 {
-					chunk = chunk[:searchStart+lastDot+1]
-				} else if lastQuestion := strings.LastIndex(lastPart, "?"); lastQuestion != -1 {
-					chunk = chunk[:searchStart+lastQuestion+1]
-				} else if lastExclamation := strings.LastIndex(lastPart, "!"); lastExclamation != -1 {
-					chunk = chunk[:searchStart+lastExclamation+1]
-				}
-			}
-		}
-
-		chunks = append(chunks, TextChunk{
-			Text:  strings.TrimSpace(chunk),
-			Index: len(chunks),
-		})
-
-		if end >= len(text) {
-			break
-		}
-	}
-
-	return chunks
-}
-
-// findMostRelevantChunks finds the most relevant chunks using simple text similarity
-func (t *AddContextFromSourcesTool) findMostRelevantChunks(chunks []TextChunk, query string, maxChunks int) []TextChunk {
-	if len(chunks) == 0 {
-		return chunks
-	}
-
-	// Score each chunk based on keyword overlap with query
-	queryWords := t.extractKeywords(strings.ToLower(query))
-
-	for i := range chunks {
-		chunks[i].Score = t.calculateRelevanceScore(chunks[i].Text, queryWords)
-	}
-
-	// Sort by score (highest first)
-	sort.Slice(chunks, func(i, j int) bool {
-		return chunks[i].Score > chunks[j].Score
-	})
-
-	// Return top chunks, but limit to maxChunks
-	if len(chunks) > maxChunks {
-		chunks = chunks[:maxChunks]
-	}
-
-	return chunks
-}
-
-// extractKeywords extracts meaningful keywords from a query
-func (t *AddContextFromSourcesTool) extractKeywords(text string) []string {
-	// Simple keyword extraction - split on spaces and filter common words
-	stopWords := map[string]bool{
-		"the": true, "a": true, "an": true, "and": true, "or": true, "but": true,
-		"in": true, "on": true, "at": true, "to": true, "for": true, "of": true,
-		"with": true, "by": true, "is": true, "are": true, "was": true, "were": true,
-		"be": true, "been": true, "being": true, "have": true, "has": true, "had": true,
-		"do": true, "does": true, "did": true, "will": true, "would": true, "could": true,
-		"should": true, "may": true, "might": true, "must": true, "can": true,
-		"this": true, "that": true, "these": true, "those": true, "i": true, "you": true,
-		"he": true, "she": true, "it": true, "we": true, "they": true, "me": true,
-		"him": true, "her": true, "us": true, "them": true,
-	}
-
-	words := strings.Fields(text)
-	var keywords []string
-
-	for _, word := range words {
-		// Clean the word
-		word = strings.ToLower(strings.Trim(word, ".,!?;:()[]{}\"'"))
-
-		// Skip if empty, too short, or a stop word
-		if len(word) < 3 || stopWords[word] {
-			continue
-		}
-
-		keywords = append(keywords, word)
-	}
-
-	return keywords
-}
-
-// calculateRelevanceScore calculates a simple relevance score based on keyword frequency
-func (t *AddContextFromSourcesTool) calculateRelevanceScore(text string, queryKeywords []string) float64 {
-	if len(queryKeywords) == 0 {
-		return 0.0
-	}
-
-	textLower := strings.ToLower(text)
-	textWords := strings.Fields(textLower)
-	textWordCount := make(map[string]int)
-
-	// Count word frequencies in text
-	for _, word := range textWords {
-		word = strings.Trim(word, ".,!?;:()[]{}\"'")
-		if len(word) > 2 {
-			textWordCount[word]++
-		}
-	}
-
-	// Calculate score based on keyword matches
-	var score float64
-	matchedKeywords := 0
-
-	for _, keyword := range queryKeywords {
-		if count, exists := textWordCount[keyword]; exists {
-			// Use TF-IDF inspired scoring: frequency * log(text_length / keyword_frequency)
-			tf := float64(count) / float64(len(textWords))
-			idf := math.Log(float64(len(textWords)) / float64(count))
-			score += tf * idf
-			matchedKeywords++
-		}
-	}
-
-	// Boost score based on percentage of matched keywords
-	keywordCoverage := float64(matchedKeywords) / float64(len(queryKeywords))
-	score *= (1.0 + keywordCoverage)
-
-	return score
-}
-
-// GenerateTextContentTool generates new text content using LLM
-type GenerateTextContentTool struct {
-	textGenService TextGenerationService
-}
-
-func NewGenerateTextContentTool(textGenService TextGenerationService) *GenerateTextContentTool {
-	return &GenerateTextContentTool{
-		textGenService: textGenService,
-	}
-}
-
-func (t *GenerateTextContentTool) Info() ToolInfo {
-	return ToolInfo{
-		Name:        "generate_text_content",
-		Description: "Generate new text content using an LLM, optionally enhanced with contextual sources",
-		Parameters: map[string]any{
-			"prompt": map[string]any{
-				"type":        "string",
-				"description": "The generation prompt or instructions for the LLM",
-			},
-			"context_sources": map[string]any{
-				"type":        []string{"array", "null"},
-				"description": "Optional: Array of relevant source chunks to provide context",
-				"items": map[string]any{
-					"type": "object",
-				},
-			},
-			"original_content": map[string]any{
-				"type":        []string{"string", "null"},
-				"description": "Optional: Original content for reference",
-			},
-		},
-		Required: []string{"prompt"},
-	}
-}
-
-func (t *GenerateTextContentTool) Run(ctx context.Context, params ToolCall) (ToolResponse, error) {
-	var input struct {
-		Prompt          string                   `json:"prompt"`
-		ContextSources  []map[string]interface{} `json:"context_sources"`
-		OriginalContent string                   `json:"original_content"`
-	}
-
-	if err := json.Unmarshal([]byte(params.Input), &input); err != nil {
-		return NewTextErrorResponse("Invalid input format"), err
-	}
-
-	if input.Prompt == "" {
-		return NewTextErrorResponse("prompt is required"), fmt.Errorf("prompt is required")
-	}
-
-	log.Printf("✍️ [GenerateTextContent] Starting text generation")
-	log.Printf("   📝 Prompt length: %d characters", len(input.Prompt))
-	log.Printf("   📚 Context sources: %d", len(input.ContextSources))
-	log.Printf("   📄 Original content: %d characters", len(input.OriginalContent))
-
-	// Build enhanced prompt with context sources
-	enhancedPrompt := input.Prompt
-
-	if len(input.ContextSources) > 0 {
-		enhancedPrompt += "\n\n--- Relevant Context Sources ---\n"
-		for i, source := range input.ContextSources {
-			if title, ok := source["source_title"].(string); ok {
-				enhancedPrompt += fmt.Sprintf("\n%d. %s", i+1, title)
-			}
-			if url, ok := source["source_url"].(string); ok {
-				enhancedPrompt += fmt.Sprintf(" (%s)", url)
-			}
-			if chunk, ok := source["text_chunk"].(string); ok {
-				enhancedPrompt += fmt.Sprintf("\n%s\n", chunk)
-			}
-		}
-		log.Printf("✍️ [GenerateTextContent] Enhanced prompt with %d context sources", len(input.ContextSources))
-	}
-
-	if input.OriginalContent != "" {
-		enhancedPrompt += "\n\n--- Original Content ---\n" + input.OriginalContent
-		log.Printf("✍️ [GenerateTextContent] Added original content as reference")
-	}
-
-	// For now, we'll return the enhanced prompt as this tool is meant to be a placeholder
-	// In a real implementation, this would call an LLM service
-	result := map[string]interface{}{
-		"generated_content": enhancedPrompt, // This would be LLM-generated content
-		"prompt_used":       input.Prompt,
-		"sources_included":  len(input.ContextSources),
-		"has_original":      input.OriginalContent != "",
-		"tool_name":         "generate_text_content",
-		"generation_method": "enhanced_prompt", // Indicates this is using context enhancement
-	}
-
-	log.Printf("✍️ [GenerateTextContent] ✅ Generated content with context enhancement")
-
-	// Create artifact hint for content generation display
-	artifactData := map[string]interface{}{
-		"generated_content": enhancedPrompt,
-		"prompt":            input.Prompt,
-		"section_type":      "generated",
-	}
-
-	resultJSON, _ := json.Marshal(result)
-	return ToolResponse{
-		Type:    ToolResponseTypeText,
-		Content: string(resultJSON),
-		Result:  result,
-		Artifact: &ArtifactHint{
-			Type: ArtifactHintTypeContent,
-			Data: artifactData,
 		},
 	}, nil
 }

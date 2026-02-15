@@ -59,43 +59,30 @@ When acting on a direct request: read_document → edit immediately.`
 	var researchInstructions string
 	if hasResearch {
 		researchInstructions = `
-## How to Research (MANDATORY before any content change)
+## How to Research
 
-### Round 1: Ask 3-5 grounding questions via ask_question
+When planning, ask specific questions grounded in the article's actual content:
 
-Each question MUST be specific to THIS article. Reference exact names, technologies, versions, timeframes, and metrics from the document.
+### Round 1: Ask 3-5 questions via ask_question
+- Reference specific claims, names, technologies, and metrics from the document
+- Include timeframes ("in 2024", "since v2.0")
+- Ask for measurable data, not opinions
+- BAD: "What are trends in [topic]?" -- too generic
+- GOOD: "What benchmarks exist for [specific claim in the article]?"
 
-WRONG (generic -- the model will reject these):
-- "What are people saying about HTMX?"
-- "What are web development trends?"
+### Round 2: Ask 2-3 follow-ups based on Round 1 answers
+- Use names, numbers, and dates from answers to dig deeper
+- Fill gaps in evidence for proposed changes
 
-RIGHT (specific to the article's claims):
-- "What is the measured TTFB difference between HTMX partial responses and React SPA full-page loads in 2024 production benchmarks?"
-- "Which companies migrated from React SPAs to HTMX in 2024 and what performance improvements did they report?"
-- "What did Carson Gross say about HTMX 2.0 adoption rates at GopherCon 2024?"
-- "What are the main criticisms of HTMX from React developers on HackerNews in the past 6 months?"
-
-### Round 2: Ask 2-3 follow-up questions based on Round 1 answers
-
-Use specific names, numbers, and dates from the answers:
-- "What metrics did [company from Round 1] publish about their migration?"
-- "What benchmarks refute [criticism from Round 1]?"
-- "What are the most recent numbers for [metric from Round 1]?"
-
-### Then: Present your plan
-
-Summarize findings with specific data points. List proposed changes with sources. Ask "Should I proceed?"
+### Then: Present your plan with findings and ask "Should I proceed?"
 
 ## Source Management
 
-To add or update citations:
-1. First call read_document to see the FULL current content
-2. Look for an existing "## Sources" section near the bottom
-3. If it exists, use edit_text to append new citations to it (use the last source line as old_str context)
-4. If it doesn't exist, use edit_text to add "## Sources" at the very end of the document
+To add citations, first read_document and check for an existing "## Sources" section.
+- If it exists, use edit_text to append (use the last source line as old_str context)
+- If not, add "## Sources" at the very end of the document
 - Format: ` + "`- [Title](url) -- what was cited`" + `
-- NEVER overwrite or duplicate existing sources -- only append new ones
-- NEVER repeat citations that are already listed`
+- Never duplicate existing sources`
 	}
 
 	return fmt.Sprintf(`%s
@@ -144,7 +131,8 @@ Update the checklist after each edit. This helps you and the user track what's d
 
 ## Communication
 
-- Question → research first, then answer
-- Edit request → read, research, plan, confirm, edit
-- Typo fix → just do it (no plan needed)`, topConstraint, toolTable.String(), researchInstructions)
+- Question → answer concisely (research if needed)
+- Direct edit request ("remove X", "add Y") → read, then edit
+- Broad improvement request or "make a plan" → read, research, plan, confirm, edit
+- Typo/grammar fix → just do it`, topConstraint, toolTable.String(), researchInstructions)
 }
