@@ -34,10 +34,10 @@ func NewReadDocumentTool() *ReadDocumentTool {
 
 func (t *ReadDocumentTool) Info() ToolInfo {
 	return ToolInfo{
-		Name: "read_document",
+		Name:        "read_document",
 		Description: `Read the full document as raw markdown. The result includes a "sections" array with each heading's line number and level for navigation. Copy text directly from the content into edit_text old_str.`,
-		Parameters: map[string]any{},
-		Required:   []string{},
+		Parameters:  map[string]any{},
+		Required:    []string{},
 	}
 }
 
@@ -472,7 +472,7 @@ func NewEditTextTool(draftSaver DraftSaver) *EditTextTool {
 
 func (t *EditTextTool) Info() ToolInfo {
 	return ToolInfo{
-		Name: "edit_text",
+		Name:        "edit_text",
 		Description: `Small, exact string replacement in the document. Copy old_str exactly from read_document output. Keep old_str short (1-3 lines of context). For large changes, use rewrite_section instead.`,
 		Parameters: map[string]any{
 			"old_str": map[string]any{
@@ -718,7 +718,9 @@ func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, 
 func countTrue(results []bool) int {
 	count := 0
 	for _, r := range results {
-		if r { count++ }
+		if r {
+			count++
+		}
 	}
 	return count
 }
@@ -745,7 +747,7 @@ func NewRewriteSectionTool(draftSaver DraftSaver) *RewriteSectionTool {
 
 func (t *RewriteSectionTool) Info() ToolInfo {
 	return ToolInfo{
-		Name: "rewrite_section",
+		Name:        "rewrite_section",
 		Description: `Replace an entire section by its heading. Provide the exact heading (e.g., "### Best Practices") and the full new content (must start with the heading). Finds section boundaries automatically.`,
 		Parameters: map[string]any{
 			"section_heading": map[string]any{
@@ -988,7 +990,6 @@ func truncateStr(s string, maxLen int) string {
 	}
 	return s[:maxLen] + "..."
 }
-
 
 // min returns the smaller of two integers
 func min(a, b int) int {

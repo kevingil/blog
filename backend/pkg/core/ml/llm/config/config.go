@@ -64,7 +64,7 @@ func initConfig() {
 		ContextPaths: []string{}, // Empty by default for blog agent
 		Agents: map[AgentName]AgentConfig{
 			AgentCopilot: {
-				Model:           models.GptOss120b,
+				Model:           models.Gemini3Pro,
 				MaxTokens:       18192,
 				ReasoningEffort: "medium",
 			},
