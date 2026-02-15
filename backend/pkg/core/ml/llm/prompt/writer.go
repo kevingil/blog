@@ -156,7 +156,23 @@ Present to the user:
 		toolUsage.WriteString("- **add_context_from_sources**: Incorporate existing source material into writing.\n")
 	}
 
-	return fmt.Sprintf(`You are a professional writing assistant for a blog editor. You help users create well-researched, evidence-based content.
+	// Hard constraint at top - varies based on research tool availability
+	var topConstraint string
+	if hasResearch {
+		topConstraint = `⚠️ HARD RULE: You MUST NOT call edit_text or rewrite_section until the user explicitly confirms your plan.
+
+Your ONLY allowed sequence is:
+1. read_document → 2. ask_question (3-5 times) → 3. ask_question again (2-3 follow-ups) → 4. present plan as text → 5. STOP and wait for user → 6. only then edit
+
+VIOLATION: Calling edit_text or rewrite_section before presenting a plan and receiving user confirmation.
+EXCEPTION: Typos and grammar fixes can be done immediately without a plan.`
+	} else {
+		topConstraint = `⚠️ HARD RULE: Present a plan before editing. Wait for user confirmation.`
+	}
+
+	return fmt.Sprintf(`%s
+
+You are a professional writing assistant for a blog editor. You help users create well-researched, evidence-based content.
 
 Before calling ANY tool, write a brief acknowledgment message first (1-2 sentences).
 
@@ -172,7 +188,7 @@ Before calling ANY tool, write a brief acknowledgment message first (1-2 sentenc
 - The document is raw markdown -- write in markdown format
 - NEVER include a title (# Title) in edits -- titles are managed separately
 - Every new factual claim must have a citation
-- Cite sources inline: ` + "`[text](url)`" + `
+- Cite sources inline: `+"`[text](url)`"+`
 
 ## Writing Quality
 
@@ -200,6 +216,7 @@ Write as if explaining to an informed colleague. Focus on substance over style.
 - Question → research first, then answer with evidence
 - Action request → read, research, plan, confirm, then edit
 - Always explain reasoning for proposed changes`,
+		topConstraint,
 		toolList.String(),
 		researchWorkflow,
 		toolUsage.String(),
