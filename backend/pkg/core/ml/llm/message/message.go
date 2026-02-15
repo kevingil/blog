@@ -52,11 +52,12 @@ func (b BinaryContent) String(providerType string) string {
 }
 
 type ToolCall struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Input    string `json:"input"`
-	Type     string `json:"type,omitempty"`
-	Finished bool   `json:"finished,omitempty"`
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Input            string `json:"input"`
+	Type             string `json:"type,omitempty"`
+	Finished         bool   `json:"finished,omitempty"`
+	ThoughtSignature []byte `json:"thought_signature,omitempty"` // Gemini 3: required for multi-turn tool calling with thinking
 }
 
 // ToolCall implements ContentPart so it can be stored in Parts for persistence
