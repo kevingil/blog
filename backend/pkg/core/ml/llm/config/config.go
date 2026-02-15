@@ -87,6 +87,10 @@ func initConfig() {
 				APIKey:   os.Getenv("GROQ_API_KEY"),
 				Disabled: true, // Default disabled unless API key is provided
 			},
+			models.ProviderGemini: {
+				APIKey:   os.Getenv("GEMINI_API_KEY"),
+				Disabled: true, // Default disabled unless API key is provided
+			},
 		},
 		MCPServers: map[string]MCPServer{}, // Empty by default for blog agent
 	}
@@ -103,6 +107,13 @@ func initConfig() {
 		providerConfig := globalConfig.Providers[models.ProviderGROQ]
 		providerConfig.Disabled = false
 		globalConfig.Providers[models.ProviderGROQ] = providerConfig
+	}
+
+	// Enable Gemini if API key is provided
+	if globalConfig.Providers[models.ProviderGemini].APIKey != "" {
+		providerConfig := globalConfig.Providers[models.ProviderGemini]
+		providerConfig.Disabled = false
+		globalConfig.Providers[models.ProviderGemini] = providerConfig
 	}
 }
 

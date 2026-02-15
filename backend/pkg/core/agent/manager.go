@@ -150,7 +150,6 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 		tools.NewEditTextTool(draftSaver),
 		tools.NewRewriteSectionTool(draftSaver),
 		tools.NewGenerateImagePromptTool(textGenService),
-		tools.NewGenerateTextContentTool(textGenService),
 	}
 
 	// Add Exa tools if client is provided
@@ -161,11 +160,10 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 		)
 	}
 
-	// Add source-related tools if source service is available
+	// Add source search tool if source service is available
 	if sourceService != nil {
 		writingTools = append(writingTools,
 			tools.NewGetRelevantSourcesTool(sourceService),
-			tools.NewAddContextFromSourcesTool(sourceService),
 		)
 	}
 
