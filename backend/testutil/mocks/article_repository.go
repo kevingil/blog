@@ -103,3 +103,16 @@ func (m *MockArticleRepository) RevertToVersion(ctx context.Context, articleID, 
 	args := m.Called(ctx, articleID, versionID)
 	return args.Error(0)
 }
+
+func (m *MockArticleRepository) CreateDraftSnapshot(ctx context.Context, articleID uuid.UUID) (*uuid.UUID, error) {
+	args := m.Called(ctx, articleID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*uuid.UUID), args.Error(1)
+}
+
+func (m *MockArticleRepository) UpdateDraftContent(ctx context.Context, articleID uuid.UUID, htmlContent string) error {
+	args := m.Called(ctx, articleID, htmlContent)
+	return args.Error(0)
+}

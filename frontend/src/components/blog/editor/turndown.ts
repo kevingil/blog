@@ -1,4 +1,6 @@
 import TurndownService from 'turndown';
+// @ts-expect-error -- no types available for this package
+import { gfm } from 'turndown-plugin-gfm';
 
 // Module-level singleton: properly configured Turndown instance.
 const turndownService = new TurndownService({
@@ -7,6 +9,9 @@ const turndownService = new TurndownService({
   emDelimiter: '*',
   bulletListMarker: '-',
 });
+
+// Enable GFM extensions (tables, strikethrough, task lists)
+turndownService.use(gfm);
 
 // Custom rule: TipTap's <pre><code> blocks must produce proper fenced code blocks.
 // Without this, Turndown escapes backticks/special chars and flattens code to one line.

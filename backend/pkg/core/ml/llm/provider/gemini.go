@@ -19,7 +19,8 @@ import (
 )
 
 type geminiOptions struct {
-	disableCache bool
+	disableCache  bool
+	thinkingLevel string // "low", "medium", "high" — maps to genai.ThinkingLevel*
 }
 
 type GeminiOption func(*geminiOptions)
@@ -187,6 +188,9 @@ func (g *geminiClient) send(ctx context.Context, messages []message.Message, too
 	if len(tools) > 0 {
 		config.Tools = g.convertTools(tools)
 	}
+	if g.providerOptions.model.CanReason {
+		config.ThinkingConfig = g.buildThinkingConfig()
+	}
 	chat, _ := g.client.Chats.Create(ctx, g.providerOptions.model.APIModel, config, history)
 
 	attempts := 0
@@ -218,10 +222,13 @@ func (g *geminiClient) send(ctx context.Context, messages []message.Message, too
 		}
 
 		content := ""
+		reasoning := ""
 
 		if len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil {
 			for _, part := range resp.Candidates[0].Content.Parts {
 				switch {
+				case part.Thought && part.Text != "":
+					reasoning += string(part.Text)
 				case part.Text != "":
 					content = string(part.Text)
 				case part.FunctionCall != nil:
@@ -247,6 +254,7 @@ func (g *geminiClient) send(ctx context.Context, messages []message.Message, too
 
 		return &ProviderResponse{
 			Content:      content,
+			Reasoning:    reasoning,
 			ToolCalls:    toolCalls,
 			Usage:        g.usage(resp),
 			FinishReason: finishReason,
@@ -275,6 +283,9 @@ func (g *geminiClient) stream(ctx context.Context, messages []message.Message, t
 	if len(tools) > 0 {
 		config.Tools = g.convertTools(tools)
 	}
+	if g.providerOptions.model.CanReason {
+		config.ThinkingConfig = g.buildThinkingConfig()
+	}
 	chat, _ := g.client.Chats.Create(ctx, g.providerOptions.model.APIModel, config, history)
 
 	attempts := 0
@@ -287,6 +298,7 @@ func (g *geminiClient) stream(ctx context.Context, messages []message.Message, t
 			attempts++
 
 			currentContent := ""
+			currentReasoning := ""
 			toolCalls := []message.ToolCall{}
 			var finalResp *genai.GenerateContentResponse
 
@@ -327,6 +339,13 @@ func (g *geminiClient) stream(ctx context.Context, messages []message.Message, t
 				if len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil {
 					for _, part := range resp.Candidates[0].Content.Parts {
 						switch {
+						case part.Thought && part.Text != "":
+							delta := string(part.Text)
+							eventChan <- ProviderEvent{
+								Type:     EventThinkingDelta,
+								Thinking: delta,
+							}
+							currentReasoning += delta
 						case part.Text != "":
 							delta := string(part.Text)
 							if delta != "" {
@@ -366,7 +385,6 @@ func (g *geminiClient) stream(ctx context.Context, messages []message.Message, t
 			eventChan <- ProviderEvent{Type: EventContentStop}
 
 			if finalResp != nil {
-
 				finishReason := message.FinishReasonEndTurn
 				if len(finalResp.Candidates) > 0 {
 					finishReason = g.finishReason(finalResp.Candidates[0].FinishReason)
@@ -378,6 +396,7 @@ func (g *geminiClient) stream(ctx context.Context, messages []message.Message, t
 					Type: EventComplete,
 					Response: &ProviderResponse{
 						Content:      currentContent,
+						Reasoning:    currentReasoning,
 						ToolCalls:    toolCalls,
 						Usage:        g.usage(finalResp),
 						FinishReason: finishReason,
@@ -461,6 +480,32 @@ func (g *geminiClient) usage(resp *genai.GenerateContentResponse) TokenUsage {
 func WithGeminiDisableCache() GeminiOption {
 	return func(options *geminiOptions) {
 		options.disableCache = true
+	}
+}
+
+func WithGeminiThinkingLevel(level string) GeminiOption {
+	return func(options *geminiOptions) {
+		options.thinkingLevel = level
+	}
+}
+
+func (g *geminiClient) buildThinkingConfig() *genai.ThinkingConfig {
+	return &genai.ThinkingConfig{
+		ThinkingLevel:   mapThinkingLevel(g.options.thinkingLevel),
+		IncludeThoughts: true,
+	}
+}
+
+func mapThinkingLevel(level string) genai.ThinkingLevel {
+	switch strings.ToLower(level) {
+	case "low":
+		return genai.ThinkingLevelLow
+	case "medium":
+		return genai.ThinkingLevelMedium
+	case "high":
+		return genai.ThinkingLevelHigh
+	default:
+		return genai.ThinkingLevelMedium
 	}
 }
 

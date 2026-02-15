@@ -148,8 +148,8 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 	writingTools := []tools.BaseTool{
 		tools.NewReadDocumentTool(),
 		tools.NewEditTextTool(draftSaver),
+		tools.NewRewriteSectionTool(draftSaver),
 		tools.NewGenerateImagePromptTool(textGenService),
-		tools.NewGenerateTextContentTool(textGenService),
 	}
 
 	// Add Exa tools if client is provided
@@ -160,11 +160,10 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 		)
 	}
 
-	// Add source-related tools if source service is available
+	// Add source search tool if source service is available
 	if sourceService != nil {
 		writingTools = append(writingTools,
 			tools.NewGetRelevantSourcesTool(sourceService),
-			tools.NewAddContextFromSourcesTool(sourceService),
 		)
 	}
 
@@ -355,7 +354,7 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	}
 
 	log.Printf("[Agent] Loading conversation context from database...")
-	dbMessages, err := m.loadConversationContext(ctx, articleID, 12)
+	dbMessages, err := m.loadConversationContext(ctx, articleID, 30)
 	if err != nil {
 		log.Printf("[Agent] Failed to load conversation context: %v", err)
 		dbMessages = []message.Message{}
@@ -402,8 +401,14 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 		} else {
 			layout = generateHTMLOutline(asyncReq.Request.DocumentContent)
 		}
-		userPrompt += "\n\n--- Document Layout (use read_document to see full content) ---\n" + layout
-		log.Printf("[Agent] Document layout generated (%d headers), content stored in context (markdown: %v)", strings.Count(layout, "\n")+1, asyncReq.Request.DocumentMarkdown != "")
+		docLen := len(asyncReq.Request.DocumentMarkdown)
+		if docLen == 0 {
+			docLen = len(asyncReq.Request.DocumentContent)
+		}
+		lineCount := strings.Count(asyncReq.Request.DocumentMarkdown, "\n") + 1
+		userPrompt += fmt.Sprintf("\n\n--- Document Info: %d chars, %d lines ---\n", docLen, lineCount)
+		userPrompt += layout
+		log.Printf("[Agent] Document layout generated (%d headers, %d chars, %d lines)", strings.Count(layout, "\n")+1, docLen, lineCount)
 	}
 
 	// Create a pre-turn version snapshot so the frontend can "Undo All" agent changes.
@@ -657,11 +662,13 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 
 				for _, toolResult := range toolResults {
 					isSearchTool := false
+					resultToolName := ""
 					if !toolResult.IsError {
 						var resultData map[string]interface{}
 						if err := json.Unmarshal([]byte(toolResult.Content), &resultData); err == nil {
-							if toolName, ok := resultData["tool_name"].(string); ok {
-								isSearchTool = toolName == "search_web_sources" || toolName == "ask_question"
+							if tn, ok := resultData["tool_name"].(string); ok {
+								resultToolName = tn
+								isSearchTool = tn == "search_web_sources" || tn == "ask_question"
 							}
 						}
 					}
@@ -671,11 +678,13 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 						Type:      StreamTypeToolResult,
 						Iteration: asyncReq.iteration,
 						ToolID:    toolResult.ToolCallID,
+						ToolName:  resultToolName,
 						ToolResult: map[string]interface{}{
 							"content":   toolResult.Content,
 							"metadata":  toolResult.Metadata,
 							"is_error":  toolResult.IsError,
 							"is_search": isSearchTool,
+							"tool_name": resultToolName,
 						},
 					}
 				}
@@ -979,8 +988,8 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 		}
 		msgMetadata.WithToolExecution(toolExec)
 
-		if toolName == "edit_text" || toolName == "rewrite_document" {
-			log.Printf("[Agent]       ✏️  ARTIFACT TOOL DETECTED (isError: %v)", isError)
+		if toolName == "edit_text" || toolName == "rewrite_section" || toolName == "rewrite_document" {
+			log.Printf("[Agent]       ✏️  ARTIFACT TOOL DETECTED: %s (isError: %v)", toolName, isError)
 
 			artifactID := uuid.New().String()
 			artifactType := metadata.ArtifactTypeCodeEdit
@@ -992,8 +1001,8 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 			var diffPreview string
 			var description string
 
-			if toolName == "edit_text" {
-				// Support both new field names (old_str/new_str) and legacy (original_text/new_text)
+			if toolName == "edit_text" || toolName == "rewrite_section" {
+				// Both edit_text and rewrite_section use old_str/new_str format
 				if newStr, ok := toolResultData["new_str"].(string); ok {
 					artifactContent = newStr
 				} else if newText, ok := toolResultData["new_text"].(string); ok {

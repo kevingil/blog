@@ -4,6 +4,7 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"log"
 
 	agentTypes "backend/pkg/core/agent"
 
@@ -30,28 +31,33 @@ func HandleAgentStream(ctx context.Context, conn *websocket.Conn, requestID stri
 		}
 		return
 	}
-	
+
+	writeCount := 0
 	for {
 		select {
 		case response, ok := <-responseChan:
 			if !ok {
+				log.Printf("[WS] Channel closed after %d writes", writeCount)
 				return
 			}
 			response.RequestID = requestID
-			
+
 			responseBytes, err := json.Marshal(response)
 			if err != nil {
 				continue
 			}
 			if err := conn.WriteMessage(websocket.TextMessage, responseBytes); err != nil {
+				log.Printf("[WS] Write error after %d writes: %v", writeCount, err)
 				return
 			}
+			writeCount++
 			if response.Done || response.Error != "" {
+				log.Printf("[WS] Stream done (%d writes, type: %s)", writeCount, response.Type)
 				return
 			}
 		case <-ctx.Done():
+			log.Printf("[WS] Context cancelled after %d writes", writeCount)
 			return
 		}
 	}
 }
-

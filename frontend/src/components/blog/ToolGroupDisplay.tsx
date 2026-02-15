@@ -45,7 +45,7 @@ interface ToolGroupDisplayProps {
 /**
  * Tools that should use the full card UI (because they have artifacts)
  */
-const ARTIFACT_TOOLS = new Set(['edit_text', 'rewrite_document']);
+const ARTIFACT_TOOLS = new Set(['edit_text', 'rewrite_section', 'rewrite_document']);
 
 /**
  * Tools that can be expanded to show content (but still use subtle styling)
@@ -516,7 +516,7 @@ export function ToolGroupDisplay({ group, onArtifactAction }: ToolGroupDisplayPr
               </ToolCallTrigger>
               <ToolCallContent>
                 <ToolCallStatusItem status="running">
-                  {call.name === 'edit_text' ? 'Analyzing text selection...' : 'Analyzing document...'}
+                  {call.name === 'edit_text' ? 'Editing text...' : call.name === 'rewrite_section' ? 'Rewriting section...' : 'Analyzing document...'}
                 </ToolCallStatusItem>
               </ToolCallContent>
             </ToolCall>

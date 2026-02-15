@@ -7,17 +7,11 @@ import { format } from "date-fns"
 import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, ArrowUp, Square, Settings, Trash2 } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEditor, EditorContent, type Editor as TiptapEditor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import CodeBlock from '@tiptap/extension-code-block';
-import MarkdownIt from 'markdown-it';
 import { VITE_API_BASE_URL } from "@/services/constants";
 import { apiPost, isAuthError } from '@/services/authenticatedFetch';
-import '@/tiptap.css';
 
-// Extracted editor modules
-import { DiffHighlighter } from './editor/diff-highlighter';
-import { FormattingToolbar } from './editor/FormattingToolbar';
+// Editor modules
+import { EditorTabs } from './editor/EditorTabs';
 import { ImageLoader } from './editor/ImageLoader';
 import { turndownService } from './editor/turndown';
 import { 
@@ -421,17 +415,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       const tagNames = response.tags ? response.tags
         .map((tag: any) => tag?.name?.toUpperCase())
         .filter((name: string | undefined) => !!name && name !== '') : [];
+      const revertedContent = response.article.draft_content || '';
       reset({
         title: response.article.draft_title,
-        content: response.article.draft_content,
+        content: revertedContent,
         image_url: response.article.draft_image_url || '',
         tags: tagNames,
       });
-      
-      // Sync editor content
-      if (editor) {
-        editor.commands.setContent(response.article.draft_content || '');
-      }
       
       setSelectedVersion(null);
       setShowVersions(false);
@@ -443,7 +433,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   });
 
-  const { register, handleSubmit, setValue, formState: { errors }, control, reset } = useForm<ArticleFormData>({
+  const { register, handleSubmit, setValue, getValues, formState: { errors }, control, reset } = useForm<ArticleFormData>({
     resolver: zodResolver(articleSchema),
     defaultValues: {
       title: '',
@@ -453,143 +443,68 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   });
 
-  // Watch only the specific fields that need reactive UI updates (NOT content - that causes re-renders on every keystroke)
+  // Watch reactive form fields for UI updates
   const watchedTags = useWatch({ control, name: 'tags' });
+  const watchedContent = useWatch({ control, name: 'content' });
+  const watchedTitle = useWatch({ control, name: 'title' });
 
   const [imagePrompt, setImagePrompt] = useState<string | null>(DEFAULT_IMAGE_PROMPT[Math.floor(Math.random() * DEFAULT_IMAGE_PROMPT.length)]);
 
   /* --------------------------------------------------------------------- */
-  /* Tiptap Editor Setup                                                   */
+  /* Markdown Editor Setup                                                 */
   /* --------------------------------------------------------------------- */
-  const mdParserRef = useRef<MarkdownIt>();
-  if (!mdParserRef.current) {
-    mdParserRef.current = new MarkdownIt({ typographer: true, html: true });
-  }
-  const mdParser = mdParserRef.current;
-
-  // turndownService is imported from ./editor/turndown (module-level singleton)
-
   const [diffing, setDiffing] = useState(false);
-  const [originalDocument, setOriginalDocument] = useState<string>('');
-  const [pendingNewDocument, setPendingNewDocument] = useState<string>('');
-  const [currentDiffReason, setCurrentDiffReason] = useState<string>('');
-
-  // Turn-level state for "Undo All" across multi-edit agent turns.
-  // turnOriginalDocument captures the editor HTML before the first edit of a turn (set once).
-  // turnSnapshotVersionId is the version ID from the backend's pre-turn snapshot.
-  const [turnOriginalDocument, setTurnOriginalDocument] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<string>('edit');
   const [turnSnapshotVersionId, setTurnSnapshotVersionId] = useState<string>('');
 
+  // Turn-level state: refs so WebSocket handlers always read the latest value
+  const turnOriginalDocRef = useRef<string>('');
+  const pendingNewDocumentRef = useRef<string>('');
 
-  // Inline diff lifecycle helpers
-  // Compares old vs new HTML using character-by-character comparison
-  // to find the exact edit boundaries and show red (removed) / green (added) highlights
-  const enterDiffPreview = (
-    oldHtml: string, 
-    newHtml: string, 
-    reason?: string,
-  ) => {
-    if (!editor) return;
-    
-    // Set the editor content to the new HTML
-    editor.commands.setContent(newHtml);
-    
-    // Store original and new HTML for accept/reject actions
-    setOriginalDocument(oldHtml);
-    setPendingNewDocument(newHtml);
-    setCurrentDiffReason(reason || '');
-    setDiffing(true);
-    
-    // @ts-ignore custom command provided by DiffHighlighter
-    if ((editor as any).commands?.showDiff) {
-      // @ts-ignore
-      (editor as any).commands.showDiff(oldHtml, newHtml);
-    }
-    
-    // Force a tiny transaction to ensure decorations render
-    editor.chain().focus().setTextSelection({ from: 1, to: 1 }).run();
-  };
-
-  const clearDiffDecorations = () => {
-    if (!editor) return;
-    // @ts-ignore
-    if ((editor as any).commands?.clearDiff) {
-      // @ts-ignore
-      (editor as any).commands.clearDiff();
+  // Content update handler -- called by CodeMirror on user edits
+  const onContentChange = (md: string) => {
+    if (!diffing) {
+      setValue('content', md);
     }
   };
 
   const acceptDiff = () => {
-    if (!editor) return;
-    
-    // Apply the pending changes (content is already saved on the backend by the agent)
-    editor.commands.setContent(pendingNewDocument || editor.getHTML());
-    setValue('content', editor.getHTML());
-    clearDiffDecorations();
+    // Content is already set (the agent applied it). Just clear diff state.
     setDiffing(false);
-    setPendingNewDocument('');
-    setCurrentDiffReason('');
-    setTurnOriginalDocument('');
+    setActiveTab('edit');
+    turnOriginalDocRef.current = '';
+    pendingNewDocumentRef.current = '';
     setTurnSnapshotVersionId('');
   };
 
   const rejectDiff = async () => {
-    if (!editor) return;
+    const revertContent = turnOriginalDocRef.current;
+    if (!revertContent) {
+      setDiffing(false);
+      setActiveTab('edit');
+      return;
+    }
 
-    // Determine the content to revert to (prefer turn-level original for multi-edit undo)
-    const revertContent = turnOriginalDocument || originalDocument || editor.getHTML();
-
-    // If we have a backend snapshot, revert the DB too so backend stays in sync
+    // If we have a backend snapshot, revert the DB too
     if (turnSnapshotVersionId && blogSlug) {
       try {
         const reverted = await revertToVersion(blogSlug as string, turnSnapshotVersionId);
-        // Use the reverted draft content from the API response if available
         const revertedContent = reverted.article?.draft_content || revertContent;
-        editor.commands.setContent(revertedContent);
         setValue('content', revertedContent);
       } catch (err) {
         console.error('[Editor] Failed to revert backend to snapshot:', err);
-        // Fallback to local revert
-        editor.commands.setContent(revertContent);
         setValue('content', revertContent);
       }
     } else {
-      // No backend snapshot -- local-only revert
-      editor.commands.setContent(revertContent);
       setValue('content', revertContent);
     }
 
-    clearDiffDecorations();
     setDiffing(false);
-    setPendingNewDocument('');
-    setCurrentDiffReason('');
-    setTurnOriginalDocument('');
+    setActiveTab('edit');
+    turnOriginalDocRef.current = '';
+    pendingNewDocumentRef.current = '';
     setTurnSnapshotVersionId('');
   };
-
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      CodeBlock.configure({
-        HTMLAttributes: {
-          class: 'bg-gray-100 dark:bg-gray-800 p-4 rounded-md border',
-        },
-      }),
-      DiffHighlighter,
-    ],
-    content: '', // Start empty, content is synced when article loads
-    editorProps: {
-      attributes: {
-        class:
-          'w-full p-4 focus:outline-none prose prose-sm max-w-none dark:prose-invert',
-      },
-    },
-    onUpdate({ editor }: { editor: TiptapEditor }) {
-      if (!diffing) {
-        setValue('content', editor.getHTML());
-      }
-    },
-  });
 
   if (!user) {
     return <div>Please log in to edit articles.</div>;
@@ -615,9 +530,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       const tagNames = article.tags ? article.tags
         .map((tag: any) => tag?.name?.toUpperCase())
         .filter((name: string | undefined) => !!name && name !== '') : [];
+      const loadedContent = article.article.draft_content || '';
       const newValues = {
         title: article.article.draft_title || '',
-        content: article.article.draft_content || '',
+        content: loadedContent,
         image_url: article.article.draft_image_url || '',
         tags: tagNames,
       } as ArticleFormData;
@@ -634,10 +550,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         setPreviewImageUrl('');
       }
       
-      // Sync editor with fresh content - load directly as HTML since content is already HTML
-      if (editor) {
-        editor.commands.setContent(newValues.content);
-      }
+      // Content is now markdown -- form value is set via reset() above
     } else if (isNew) {
       const blank: ArticleFormData = {
         title: '',
@@ -649,11 +562,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       setImageVersions([]);
       setCurrentVersionIndex(-1);
       setPreviewImageUrl('');
-      if (editor) {
-        editor.commands.setContent('');
-      }
     }
-  }, [article, isNew, reset, editor]);
+  }, [article, isNew, reset]);
 
   // Load conversation history with artifacts when article is loaded
   useEffect(() => {
@@ -834,7 +744,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       // Use publishArticle() separately to publish
       const updateData = {
         title: data.title,
-        content: data.content, // HTML content from Tiptap editor
+        content: data.content, // Markdown content
         image_url: finalImageUrl || undefined,
         tags: data.tags,
       };
@@ -848,21 +758,16 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   };
 
   const rewriteArticle = async () => {
-    if (!article?.article.id || !editor) return;
+    if (!article?.article.id) return;
     setGeneratingRewrite(true);
     try {
-      const oldHtml = editor.getHTML();
-      
       const result = await updateArticleWithContext(article.article.id);
       
-      if (result.success) {
-        const newHtml = result.content;
-        const reason = 'Full-document rewrite';
-        enterDiffPreview(oldHtml, newHtml, reason);
-        // Add a simple message about the proposed changes
+      if (result.success && result.content) {
+        applyMarkdownEdit(result.content);
         setChatMessages((prev) => [
           ...prev,
-          { role: 'assistant', content: '📋 I\'ve prepared a full-document rewrite. Review the changes in the editor and use "Keep All" or "Reject" below.' }
+          { role: 'assistant', content: '📋 I\'ve prepared a full-document rewrite. Review the changes in the Diff tab.' }
         ]);
       }
     } catch (error) {
@@ -876,57 +781,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   // Apply text edit from AI assistant (markdown-based str_replace)
   // Renders both old and new markdown to HTML, then uses character-by-character
   // comparison in the diff-highlighter to find the exact edit boundaries.
-  const applyTextEdit = (oldStr: string, newStr: string, reason: string, newMarkdown?: string) => {
-    if (!editor) return;
-    
-    const currentHtml = editor.getHTML();
-    
-    let newHtml: string;
-    let oldMd: string;
-    if (newMarkdown) {
-      // Backend applied the edit and returned full new markdown
-      newHtml = mdParser.render(newMarkdown);
-      // Reconstruct old markdown by reversing the edit
-      const newStrIdx = newMarkdown.indexOf(newStr);
-      if (newStrIdx !== -1) {
-        oldMd = newMarkdown.substring(0, newStrIdx) + oldStr + newMarkdown.substring(newStrIdx + newStr.length);
-      } else {
-        oldMd = turndownService.turndown(currentHtml);
-      }
-    } else {
-      // Fallback: apply the edit locally on markdown
-      oldMd = turndownService.turndown(currentHtml);
-      const index = oldMd.indexOf(oldStr);
-      if (index === -1) {
-        toast({
-          title: 'Edit Warning',
-          description: 'Could not locate the text to edit in the document markdown. The document may have changed.',
-          variant: 'destructive'
-        });
-        return;
-      }
-      newHtml = mdParser.render(oldMd.substring(0, index) + newStr + oldMd.substring(index + oldStr.length));
-    }
-    
-    // Render old markdown to HTML through the same renderer so both sides are consistent
-    const oldHtml = mdParser.render(oldMd);
-
-    // The diff-highlighter compares old vs new text character-by-character
-    // to find the exact edit boundaries -- no position mapping needed
-    enterDiffPreview(oldHtml, newHtml, reason);
-  };
-
-  // Apply document rewrite from AI assistant
-  const applyDocumentRewrite = (newContent: string, reason: string, originalContent?: string) => {
-    if (!editor) return;
-    
-    const oldHtml = editor.getHTML();
-    
-    // Convert markdown to HTML for the new content
-    const newHtml = mdParser.render(newContent);
-    
-    // Create diff preview
-    enterDiffPreview(oldHtml, newHtml, reason);
+  // Apply a markdown edit from an artifact action (user clicks "Apply" on a tool result card)
+  const applyMarkdownEdit = (newMarkdown: string) => {
+    turnOriginalDocRef.current = getValues('content') || '';
+    setValue('content', newMarkdown);
+    pendingNewDocumentRef.current = newMarkdown;
+    setDiffing(true);
+    setActiveTab('diff');
   };
 
   const sendChatWithMessage = async (message: string) => {
@@ -937,8 +798,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
 
     // Get current document content in both HTML and markdown formats
-    const currentContent = editor?.getHTML() || '';
-    const currentMarkdown = currentContent ? turndownService.turndown(currentContent) : '';
+    // Content is now markdown -- no HTML-to-markdown conversion needed
+    const currentContent = getValues('content') || '';
+    const currentMarkdown = currentContent;
 
     // Check if this looks like an edit request
     const isEditRequest = /\b(rewrite|edit|improve|change|update|fix|enhance|modify)\b/i.test(text);
@@ -1037,9 +899,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       let currentAssistantContent = '';
       let hasInitialContent = false;
 
+
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
+
           
           if (msg.error) {
             console.error('Stream error:', msg.error);
@@ -1058,13 +922,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           if (msg.type) {
             switch (msg.type) {
               case 'turn_started':
-                // Backend created a pre-turn version snapshot for "Undo All".
-                // Capture the current editor content as the turn baseline.
+                // Capture the current markdown content as the turn baseline for diff.
+                // Uses a ref (not state) so the done handler always reads the latest value.
+                turnOriginalDocRef.current = getValues('content') || '';
+                pendingNewDocumentRef.current = '';
                 if (msg.data?.snapshot_version_id) {
                   setTurnSnapshotVersionId(msg.data.snapshot_version_id);
-                  if (editor) {
-                    setTurnOriginalDocument(editor.getHTML());
-                  }
                 }
                 break;
 
@@ -1203,240 +1066,137 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 break;
                 
               case 'tool_use':
-                // Hide thinking state on tool use
                 setIsThinking(false);
-                
-                // Display tool usage feedback using tool_context for all tools
                 if (msg.tool_name) {
-                  // Also add tool step to the current assistant message's steps array
+                  const toolId = msg.tool_id || `tool-${Date.now()}`;
+                  console.debug('[Agent] tool_use:', msg.tool_name, toolId);
                   setChatMessages((prev) => {
                     const updated = [...prev];
-                    if (updated[assistantIndex]) {
-                      const currentMsg = updated[assistantIndex];
-                      const steps = [...(currentMsg.steps || [])];
-                      
-                      // Mark any previous reasoning steps as done
-                      steps.forEach((step, idx) => {
-                        if (step.type === 'reasoning' && step.isStreaming) {
-                          steps[idx] = { ...step, isStreaming: false };
-                        }
-                      });
-                      
-                      // Add tool step
-                      steps.push({
-                        type: 'tool_group',
-                        toolGroup: {
-                          group_id: msg.tool_id || `tool-${Date.now()}`,
-                          status: 'running',
-                          calls: [{
-                            id: msg.tool_id || `call-${Date.now()}`,
-                            name: msg.tool_name,
-                            input: msg.tool_input as Record<string, unknown> || {},
-                            status: 'running',
-                            started_at: new Date().toISOString(),
-                          }],
-                        },
-                      });
-                      
-                      updated[assistantIndex] = {
-                        ...currentMsg,
-                        steps,
-                        isReasoningStreaming: false,
-                      };
+                    if (!updated[assistantIndex]) return updated;
+                    const steps = [...(updated[assistantIndex].steps || [])];
+                    // Mark prior reasoning as done
+                    for (let i = 0; i < steps.length; i++) {
+                      if (steps[i].type === 'reasoning' && steps[i].isStreaming) {
+                        steps[i] = { ...steps[i], isStreaming: false };
+                      }
                     }
+                    // Push new tool step with tool_id for later matching
+                    steps.push({
+                      type: 'tool_group',
+                      toolGroup: {
+                        group_id: toolId,
+                        status: 'running',
+                        calls: [{
+                          id: toolId,
+                          name: msg.tool_name,
+                          input: msg.tool_input as Record<string, unknown> || {},
+                          status: 'running',
+                          started_at: new Date().toISOString(),
+                        }],
+                      },
+                    });
+                    updated[assistantIndex] = { ...updated[assistantIndex], steps, isReasoningStreaming: false };
                     return updated;
                   });
                 }
                 break;
                 
               case 'tool_result':
-                // Hide thinking state on tool result
                 setIsThinking(false);
-                
-                // Handle tool results with structured data
                 if (msg.tool_result) {
-                  // Create a unique identifier for this tool message
-                  const toolMessageId = `${requestId}-${Date.now()}-tool-result`;
+                  const toolId = msg.tool_id;
+                  const toolMessageId = `${requestId}-${toolId || Date.now()}-tool-result`;
                   const isNewMessage = !processedToolMessages.has(toolMessageId);
-                  
+
                   try {
-                    if (msg.tool_result.content) {
-                      const toolResult = JSON.parse(msg.tool_result.content);
-                      
-                      // Update tool steps in the assistant message
-                      setChatMessages((prev) => {
-                        const updated = [...prev];
-                        if (updated[assistantIndex] && updated[assistantIndex].steps) {
-                          const steps = [...updated[assistantIndex].steps!];
-                          // Find and update the matching tool step
-                          for (let i = steps.length - 1; i >= 0; i--) {
-                            if (steps[i].type === 'tool_group' && steps[i].toolGroup) {
-                              const calls = steps[i].toolGroup!.calls;
-                              for (let j = 0; j < calls.length; j++) {
-                                if (calls[j].name === toolResult.tool_name && calls[j].status === 'running') {
-                                  const toolStatus = toolResult.is_error ? 'error' : 'completed';
-                                  calls[j] = {
-                                    ...calls[j],
-                                    status: toolStatus,
-                                    result: toolResult,
-                                    error: toolResult.is_error ? (toolResult.error || 'Edit failed') : undefined,
-                                    completed_at: new Date().toISOString(),
-                                  };
-                                  // Group status is error if any call errored
-                                  const groupStatus = calls.some((c: any) => c.status === 'error') ? 'error' : 'completed';
-                                  steps[i] = {
-                                    ...steps[i],
-                                    toolGroup: {
-                                      ...steps[i].toolGroup!,
-                                      status: groupStatus,
-                                      calls: [...calls],
-                                    },
-                                  };
-                                  break;
-                                }
-                              }
-                              break;
-                            }
-                          }
-                          updated[assistantIndex] = {
-                            ...updated[assistantIndex],
-                            steps,
-                          };
-                        }
-                        return updated;
-                      });
-                      
-                      // For edit tools, also apply the diff preview (only for successful results)
-                      if (toolResult.tool_name === 'edit_text' && isNewMessage && !toolResult.is_error) {
-                        applyTextEdit(toolResult.old_str || toolResult.original_text, toolResult.new_str || toolResult.new_text, toolResult.reason, toolResult.new_markdown);
-                        setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
-                      } else if (toolResult.tool_name === 'rewrite_document' && isNewMessage && !toolResult.is_error) {
-                        applyDocumentRewrite(toolResult.new_content, toolResult.reason, toolResult.original_content);
-                        setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
-                      }
-                    }
-                  } catch (error) {
-                    console.error('[Editor] Failed to parse tool result:', error);
-                    // Update tool step to error state
+                    const toolResult = msg.tool_result.content ? JSON.parse(msg.tool_result.content) : {};
+                    const toolName = msg.tool_name || toolResult.tool_name || '';
+                    const isError = toolResult.is_error || msg.tool_result.is_error;
+
+                    console.debug('[Agent] tool_result:', toolName, toolId, isError ? 'ERROR' : 'OK');
+
+                    // Match by tool_id (not name), scan ALL steps, no status filter
                     setChatMessages((prev) => {
                       const updated = [...prev];
-                      if (updated[assistantIndex] && updated[assistantIndex].steps) {
-                        const steps = [...updated[assistantIndex].steps!];
-                        // Find and mark last running tool step as error
-                        for (let i = steps.length - 1; i >= 0; i--) {
-                          if (steps[i].type === 'tool_group' && steps[i].toolGroup?.status === 'running') {
-                            steps[i] = {
-                              ...steps[i],
-                              toolGroup: {
-                                ...steps[i].toolGroup!,
-                                status: 'error',
-                              },
+                      if (!updated[assistantIndex]?.steps) return updated;
+                      const steps = [...updated[assistantIndex].steps!];
+                      for (let i = 0; i < steps.length; i++) {
+                        if (steps[i].type !== 'tool_group' || !steps[i].toolGroup) continue;
+                        const calls = [...steps[i].toolGroup!.calls];
+                        let found = false;
+                        for (let j = 0; j < calls.length; j++) {
+                          if (calls[j].id === toolId) {
+                            calls[j] = {
+                              ...calls[j],
+                              status: isError ? 'error' : 'completed',
+                              result: toolResult,
+                              error: isError ? (toolResult.error || 'Failed') : undefined,
+                              completed_at: new Date().toISOString(),
                             };
+                            found = true;
                             break;
                           }
                         }
-                        updated[assistantIndex] = { ...updated[assistantIndex], steps };
+                        if (found) {
+                          const groupStatus = calls.some((c: any) => c.status === 'error') ? 'error' :
+                                              calls.every((c: any) => c.status === 'completed' || c.status === 'error') ? 'completed' : 'running';
+                          steps[i] = {
+                            ...steps[i],
+                            toolGroup: { ...steps[i].toolGroup!, status: groupStatus, calls },
+                          };
+                          break;
+                        }
                       }
+                      updated[assistantIndex] = { ...updated[assistantIndex], steps };
                       return updated;
                     });
+
+                    // Silently apply edits -- content is markdown, set directly via form
+                    if ((toolName === 'edit_text' || toolName === 'rewrite_section') && isNewMessage && !isError) {
+                      if (toolResult.new_markdown) {
+                        setValue('content', toolResult.new_markdown);
+                        pendingNewDocumentRef.current = toolResult.new_markdown;
+                      }
+                      setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
+                    } else if (toolName === 'rewrite_document' && isNewMessage && !isError) {
+                      if (toolResult.new_content) {
+                        setValue('content', toolResult.new_content);
+                        pendingNewDocumentRef.current = toolResult.new_content;
+                      }
+                      setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
+                    }
+                  } catch (e) {
+                    console.error('[Editor] Failed to parse tool result:', e);
                   }
                 }
                 break;
 
+              case 'tool_group_complete':
+                // No-op: tool_result is the source of truth for call status.
+                // This event arrives BEFORE tool_result from the backend,
+                // so we must NOT mark calls as completed here (that would
+                // prevent tool_result from attaching result data).
+                setIsThinking(false);
+                break;
+
               case 'full_message':
-                // Handle full message with complete meta_data - merge with streaming state
+                // Only merge metadata -- never overwrite streaming steps
                 setIsThinking(false);
                 if (msg.full_message) {
-                  const fullMsg = msg.full_message;
-                  
                   setChatMessages((prev) => {
                     const updated = [...prev];
-                    if (updated[assistantIndex]) {
-                      const existingMsg = updated[assistantIndex];
-                      
-                      // Get steps: prefer existing streaming steps, fall back to meta_data.steps
-                      let finalSteps = existingMsg.steps || [];
-                      
-                      // If meta_data has steps and we don't have streaming steps, convert them
-                      if (fullMsg.meta_data?.steps && fullMsg.meta_data.steps.length > 0 && finalSteps.length === 0) {
-                        finalSteps = fullMsg.meta_data.steps.map((step: any) => {
-                          const turnStep: TurnStep = { type: step.type };
-                          if (step.type === 'reasoning' && step.reasoning) {
-                            turnStep.thinking = {
-                              content: step.reasoning.content || '',
-                              duration_ms: step.reasoning.duration_ms,
-                              visible: step.reasoning.visible ?? true,
-                            };
-                          } else if (step.type === 'tool' && step.tool) {
-                            turnStep.toolGroup = {
-                              group_id: step.tool.tool_id,
-                              status: step.tool.status === 'completed' ? 'completed' : 
-                                      step.tool.status === 'error' ? 'error' : 'running',
-                              calls: [{
-                                id: step.tool.tool_id,
-                                name: step.tool.tool_name,
-                                input: step.tool.input || {},
-                                status: step.tool.status === 'completed' ? 'completed' : 
-                                        step.tool.status === 'error' ? 'error' : 'running',
-                                result: step.tool.output,
-                                error: step.tool.error,
-                                started_at: step.tool.started_at || '',
-                                completed_at: step.tool.completed_at,
-                                duration_ms: step.tool.duration_ms,
-                              }],
-                            };
-                            turnStep.type = 'tool_group';
-                          } else if (step.type === 'content' && step.content) {
-                            turnStep.content = step.content;
-                          }
-                          return turnStep;
-                        });
-                      }
-                      
-                      // Clear streaming flags on all steps
-                      finalSteps = finalSteps.map(step => ({
-                        ...step,
-                        isStreaming: false,
-                      }));
-                      
-                      // Build tool_group from tool_execution if present
-                      let toolGroup = existingMsg.tool_group;
-                      if (fullMsg.meta_data?.tool_execution) {
-                        const toolExec = fullMsg.meta_data.tool_execution;
-                        const output = toolExec.output;
-                        toolGroup = {
-                          group_id: toolExec.tool_id || `group-${fullMsg.id}`,
-                          status: toolExec.success !== false ? 'completed' : 'error',
-                          calls: [{
-                            id: toolExec.tool_id || `call-${fullMsg.id}`,
-                            name: toolExec.tool_name,
-                            input: typeof toolExec.input === 'object' ? toolExec.input : {},
-                            status: toolExec.success !== false ? 'completed' : 'error',
-                            result: typeof output === 'object' ? output : undefined,
-                            error: toolExec.error,
-                            started_at: toolExec.executed_at || fullMsg.created_at,
-                            duration_ms: toolExec.duration_ms,
-                          }],
-                        };
-                      }
-                      
-                      // Merge full_message data with existing streaming state
-                      updated[assistantIndex] = {
-                        ...existingMsg,
-                        id: fullMsg.id,
-                        content: fullMsg.content || existingMsg.content,
-                        meta_data: fullMsg.meta_data,
-                        created_at: fullMsg.created_at,
-                        steps: finalSteps,
-                        tool_group: toolGroup,
-                        isReasoningStreaming: false,
-                      };
-                    }
+                    if (!updated[assistantIndex]) return updated;
+                    const existing = updated[assistantIndex];
+                    updated[assistantIndex] = {
+                      ...existing,
+                      id: msg.full_message.id,
+                      meta_data: msg.full_message.meta_data,
+                      created_at: msg.full_message.created_at,
+                      // Keep streaming steps -- do NOT overwrite
+                      isReasoningStreaming: false,
+                    };
                     return updated;
                   });
-                  
-                  // Don't apply diff here -- the tool_result handler already applied it.
-                  // Applying again from full_message would overwrite the diff decorations.
                 }
                 break;
                 
@@ -1464,17 +1224,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 
                 ws.close();
                 
-                // After response is complete, check if we should show a document edit option
-                if (isEditRequest && currentAssistantContent.length > 100) {
-                  const codeBlockMatch = currentAssistantContent.match(/```(?:markdown|md)?\n([\s\S]*?)\n```/);
-                  if (codeBlockMatch) {
-                    const suggestedContent = codeBlockMatch[1].trim();
-                    if (suggestedContent.length > 50) {
-                      const oldHtml = editor?.getHTML() || '';
-                      const newHtml = mdParser.render(suggestedContent);
-                      const reason = 'AI-suggested content from code block';
-                      enterDiffPreview(oldHtml, newHtml, reason);
-                    }
+                // Auto-switch to Diff tab if agent made edits during this turn
+                if (turnOriginalDocRef.current && pendingNewDocumentRef.current) {
+                  if (pendingNewDocumentRef.current !== turnOriginalDocRef.current) {
+                    setDiffing(true);
+                    setActiveTab('diff');
+                    console.debug('[Agent] done: switching to diff tab');
                   }
                 }
                 
@@ -1492,38 +1247,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 ws.close();
                 reject(new Error(msg.error));
                 break;
-            }
-          }
-          
-          // Backward compatibility: Handle legacy role-based messages
-          else if (msg.role === 'tool' && msg.content) {
-            // Create a unique identifier for this tool message
-            const toolMessageId = `${requestId}-${Date.now()}-${msg.content.slice(0, 50)}`;
-            const isNewMessage = !processedToolMessages.has(toolMessageId);
-            
-            try {
-              // Parse the tool result content to extract artifacts
-              const toolResult = JSON.parse(msg.content);
-              
-              // Handle edit_text tool specifically - only for new messages (skip error results)
-              if (toolResult.tool_name === 'edit_text' && isNewMessage && !toolResult.is_error) {
-                applyTextEdit(toolResult.old_str || toolResult.original_text, toolResult.new_str || toolResult.new_text, toolResult.reason, toolResult.new_markdown);
-                
-                // Mark this tool message as processed
-                setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
-              } else if (toolResult.tool_name === 'rewrite_document' && isNewMessage && !toolResult.is_error) {
-                // Handle document rewrite with diff preview
-                applyDocumentRewrite(toolResult.new_content, toolResult.reason, toolResult.original_content);
-                
-                // Mark this tool message as processed
-                setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
-              }
-            } catch (error) {
-              // Add error message
-              setChatMessages((prev) => [
-                ...prev,
-                { role: 'assistant', content: '⚠️ Tool execution completed with warnings' }
-              ]);
             }
           }
           
@@ -1554,19 +1277,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           else if (msg.done) {
             ws.close();
             
-            // After response is complete, check if we should show a document edit option
-            if (isEditRequest && currentAssistantContent.length > 100) {
-              const codeBlockMatch = currentAssistantContent.match(/```(?:markdown|md)?\n([\s\S]*?)\n```/);
-              if (codeBlockMatch) {
-                const suggestedContent = codeBlockMatch[1].trim();
-                if (suggestedContent.length > 50) {
-                  const oldHtml = editor?.getHTML() || '';
-                  const newHtml = mdParser.render(suggestedContent);
-                  const reason = 'AI-suggested content from code block (legacy)';
-                  enterDiffPreview(oldHtml, newHtml, reason);
-                }
-              }
-            }
+            // Legacy done signal -- no diff handling needed
             
             resolve();
           }
@@ -1626,7 +1337,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
   return (
     <section className="flex gap-4 p-0 md:p-4 h-[calc(100vh-60px)]">
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Article Metadata Card */}
         
             {/* Article Title Section with Image and Save */}
@@ -2160,17 +1871,24 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               )}
             </div>
 
-          <form className="flex-1 flex flex-col min-h-0">
-
-              <div className="flex-1 flex flex-col border border-gray-300 dark:border-gray-600 rounded-md min-h-0">
-                <FormattingToolbar editor={editor} />
-                <EditorContent
-                  editor={editor}
-                  className="tiptap w-full border-none rounded-b-md flex-1 overflow-y-auto focus:outline-none"
+          <form className="flex-1 flex flex-col min-h-0 min-w-0">
+              <div className="flex-1 flex flex-col border border-gray-300 dark:border-gray-600 rounded-md min-h-0 min-w-0">
+                <EditorTabs
+                  content={watchedContent || ''}
+                  onChange={onContentChange}
+                  originalContent={turnOriginalDocRef.current}
+                  diffing={diffing}
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
+                  onAccept={acceptDiff}
+                  onReject={rejectDiff}
+                  title={watchedTitle}
+                  authorName={user?.name}
+                  imageUrl={previewImageUrl}
+                  tags={watchedTags}
                 />
                 {errors.content && <p className="text-red-500">{errors.content.message}</p>}
               </div>
-
           </form>
 
       </div>
@@ -2179,272 +1897,18 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       <div className="hidden xl:flex flex-col w-[26rem] border rounded-md">
         <div ref={chatMessagesRef} className="flex-1 overflow-y-auto p-2 space-y-3">
           {chatMessages.map((m, i) => {
-            // Helper function to render tool messages with unified UI
-            const renderToolMessage = () => {
-              // NEW: Use ToolGroupDisplay for tool_group (new architecture)
-              if (m.tool_group) {
-                return (
-                  <ToolGroupDisplay 
-                    key={i} 
-                    group={m.tool_group}
-                    onArtifactAction={(toolId, action) => {
-                      // Handle artifact action for tools like edit_text
-                      const call = m.tool_group?.calls.find(c => c.id === toolId);
-                      if (call && (call.name === 'edit_text' || call.name === 'rewrite_document')) {
-                        const result = call.result;
-                        if (action === 'accept' && result && editor) {
-                          const oldContent = (result.old_str || result.original_text || result.original_content) as string;
-                          const newContent = (result.new_str || result.new_text || result.new_content) as string;
-                          const newMarkdown = (result.new_markdown) as string | undefined;
-                          const reason = (result.reason as string) || '';
-                          
-                          if (newContent) {
-                            if (call.name === 'edit_text' && oldContent) {
-                              // edit_text: markdown str_replace
-                              applyTextEdit(oldContent, newContent, reason, newMarkdown);
-                            } else {
-                              // rewrite_document: replace entire document
-                              const currentHtml = editor.getHTML();
-                              const newHtml = mdParser.render(newContent);
-                              enterDiffPreview(currentHtml, newHtml, reason);
-                            }
-                          }
-                        }
-                      }
-                    }}
-                  />
-                );
-              }
-              
-              // Legacy: Use tool_context for backward compatibility
-              if (!m.tool_context) return null;
-              
-              const { tool_name, status, reason } = m.tool_context;
-              const toolStatus = status === 'starting' ? 'pending' : status;
-              
-              // Tools with custom UI use ToolCall component
-              const customUITools = ['search_web_sources', 'ask_question', 'edit_text', 'rewrite_document'];
-              
-              if (customUITools.includes(tool_name)) {
-                // Web search tool
-                if (tool_name === 'search_web_sources') {
-                  return <WebSearchSteps key={i} tool_context={m.tool_context as WebSearchToolContext} />;
-                }
-                
-                // Ask question tool - use similar display to web search
-                if (tool_name === 'ask_question') {
-                  const { answer, citations } = m.tool_context;
-                  return (
-                    <ToolCall key={i} status={toolStatus === 'running' ? 'running' : 'completed'} defaultOpen={true}>
-                      <ToolCallTrigger icon={<FileSearch className="h-4 w-4" />}>
-                        Ask question
-                      </ToolCallTrigger>
-                      <ToolCallContent>
-                        {toolStatus === 'running' ? (
-                          <ToolCallStatusItem status="running">
-                            Finding answer...
-                          </ToolCallStatusItem>
-                        ) : (
-                          <div className="space-y-2">
-                            <ToolCallStatusItem status="completed">
-                              Answer found with {citations?.length || 0} citations
-                            </ToolCallStatusItem>
-                            {answer && (
-                              <div className="text-sm text-muted-foreground bg-muted/50 rounded-md p-2">
-                                {answer}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </ToolCallContent>
-                    </ToolCall>
-                  );
-                }
-                
-                // Edit/rewrite tools - use DiffArtifact for unified diff display
-                const displayName = tool_name === 'edit_text' ? 'Text edit' : 'Document rewrite';
-                
-                // While running, show a loading state
-                if (toolStatus === 'running') {
-                  return (
-                    <ToolCall key={i} status="running" defaultOpen={true}>
-                      <ToolCallTrigger icon={<FileDiff className="h-4 w-4" />}>
-                        {displayName}{reason ? `: ${reason}` : ''}
-                      </ToolCallTrigger>
-                      <ToolCallContent>
-                        <ToolCallStatusItem status="running">
-                          {tool_name === 'edit_text' ? 'Analyzing text selection...' : 'Analyzing document...'}
-                        </ToolCallStatusItem>
-                      </ToolCallContent>
-                    </ToolCall>
-                  );
-                }
-                
-                // Get diff data from tool_context.output - handle both edit_text and rewrite_document formats
-                const toolOutput = m.tool_context?.output as { 
-                  old_str?: string;          // new edit_text format
-                  new_str?: string;          // new edit_text format
-                  new_markdown?: string;     // new edit_text format
-                  original_text?: string;    // legacy edit_text format
-                  new_text?: string;         // legacy edit_text format
-                  original_content?: string; // rewrite_document format
-                  new_content?: string;      // rewrite_document format
-                } | undefined;
-                
-                // edit_text uses old_str/new_str (or legacy original_text/new_text), rewrite_document uses original_content/new_content
-                const oldText = toolOutput?.old_str || toolOutput?.original_text || toolOutput?.original_content || '';
-                const newText = toolOutput?.new_str || toolOutput?.new_text || toolOutput?.new_content || '';
-                const newMarkdown = toolOutput?.new_markdown;
-                const isEditText = tool_name === 'edit_text';
-                
-                // Show DiffArtifact with diff preview and Apply button
-                return (
-                  <DiffArtifact
-                    key={i}
-                    title={`${displayName}${reason ? `: ${reason}` : ''}`}
-                    description={reason}
-                    oldText={oldText}
-                    newText={newText}
-                    onApply={() => {
-                      if (!editor || !newText) return;
-                      
-                      if (isEditText && oldText) {
-                        // edit_text: markdown str_replace
-                        applyTextEdit(oldText, newText, reason || '', newMarkdown);
-                      } else {
-                        // rewrite_document: replace entire document
-                        const currentHtml = editor.getHTML();
-                        const newHtml = mdParser.render(newText);
-                        enterDiffPreview(currentHtml, newHtml, reason || '');
-                      }
-                    }}
-                  />
-                );
-              }
-              
-              // Simple tools use Steps component
-              const getToolIcon = () => {
-                switch (tool_name) {
-                  case 'analyze_document': return <BookOpen className="h-4 w-4" />;
-                  case 'get_relevant_sources': return <FileSearch className="h-4 w-4" />;
-                  case 'add_context_from_sources': return <PlusCircle className="h-4 w-4" />;
-                  case 'generate_text_content': return <FileText className="h-4 w-4" />;
-                  case 'generate_image_prompt': return <ImageIcon className="h-4 w-4" />;
-                  default: return <Wrench className="h-4 w-4" />;
-                }
-              };
-              
-              const displayName = getToolDisplayName(tool_name);
-              
-              return (
-                <Steps key={i} defaultOpen={false}>
-                  <StepsTrigger icon={getToolIcon()}>
-                    {displayName}
-                  </StepsTrigger>
-                  <StepsContent>
-                    <StepsItem status={toolStatus === 'running' ? 'running' : toolStatus === 'error' ? 'error' : 'completed'}>
-                      {toolStatus === 'running' ? 'Processing...' : toolStatus === 'error' ? (m.tool_context.message || 'Failed') : 'Completed'}
-                    </StepsItem>
-                  </StepsContent>
-                </Steps>
-              );
-            };
-            
             switch (m.role) {
               case 'tool': {
-                // Legacy tool messages - render as simple Steps
-                try {
-                  const toolResult = JSON.parse(m.content);
-                  const displayName = getToolDisplayName(toolResult.tool_name || 'unknown');
-                  
-                  return (
-                    <Steps key={i} defaultOpen={false}>
-                      <StepsTrigger icon={<Wrench className="h-4 w-4" />}>
-                        {displayName}
-                      </StepsTrigger>
-                      <StepsContent>
-                        <StepsItem status="completed">
-                          Completed
-                        </StepsItem>
-                      </StepsContent>
-                    </Steps>
-                  );
-                } catch (_e) {
-                  return (
-                    <Steps key={i} defaultOpen={false}>
-                      <StepsTrigger icon={<Wrench className="h-4 w-4" />}>
-                        Tool executed
-                      </StepsTrigger>
-                      <StepsContent>
-                        <StepsItem status="completed">
-                          Completed
-                        </StepsItem>
-                      </StepsContent>
-                    </Steps>
-                  );
-                }
+                // Tool-role messages are not rendered directly (handled via steps on assistant message)
+                return null;
               }
               case 'assistant': {
-                // NEW: Render tool group messages (new architecture)
-                if (m.tool_group) {
-                  return renderToolMessage();
-                }
-                
-                // Render tool messages with unified UI (legacy)
-                if (m.tool_context) {
-                  return renderToolMessage();
-                }
-                
-                // Render artifacts from metadata using unified DiffArtifact component
-                if (m.meta_data?.artifact) {
-                  const artifact = m.meta_data.artifact;
-                  const toolExec = m.meta_data?.tool_execution;
-                  const toolOutput = toolExec?.output as { 
-                    old_str?: string;          // new edit_text format
-                    new_str?: string;          // new edit_text format
-                    new_markdown?: string;     // new edit_text format
-                    original_text?: string;    // legacy edit_text format
-                    new_text?: string;         // legacy edit_text format
-                    original_content?: string; // rewrite_document format
-                    new_content?: string;      // rewrite_document format
-                  } | undefined;
-                  
-                  // Get diff data - handle both edit_text and rewrite_document formats
-                  const oldText = toolOutput?.old_str || toolOutput?.original_text || toolOutput?.original_content || '';
-                  const newText = toolOutput?.new_str || toolOutput?.new_text || toolOutput?.new_content || artifact.content || '';
-                  const newMarkdown = toolOutput?.new_markdown;
-                  const isEditText = toolExec?.tool_name === 'edit_text';
-                  
-                  return (
-                    <DiffArtifact
-                      key={i}
-                      title={artifact.title || 'Document changes'}
-                      description={artifact.description}
-                      oldText={oldText}
-                      newText={newText}
-                      onApply={() => {
-                        if (!editor || !newText) return;
-                        
-                        if (isEditText && oldText) {
-                          // edit_text: markdown str_replace
-                          applyTextEdit(oldText, newText, artifact.description || '', newMarkdown);
-                        } else {
-                          // rewrite_document: replace entire document
-                          const currentHtml = editor.getHTML();
-                          const newHtml = mdParser.render(newText);
-                          enterDiffPreview(currentHtml, newHtml, artifact.description || '');
-                        }
-                      }}
-                    />
-                  );
-                }
-                
-                // Skip __DIFF_ACTIONS__ messages - diff actions are now handled by the sticky DiffActionBar
+                // Skip __DIFF_ACTIONS__ messages
                 if (m.content === '__DIFF_ACTIONS__') {
                   return null;
                 }
                 
-                // NEW: Use chain of thought steps if available
+                // Render chain of thought steps (the ONLY rendering path for tool display)
                 if (m.steps && m.steps.length > 0) {
                   return (
                     <div key={i} className="w-full space-y-2">
@@ -2472,34 +1936,25 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                           }
                           
                           if (step.type === 'tool_group' && step.toolGroup) {
+                            const groupStatus = step.toolGroup.status === 'running' ? 'running' : 'completed';
                             return (
                               <ChainOfThoughtStep 
                                 key={stepIdx} 
                                 type="tool" 
-                                status="completed" 
+                                status={groupStatus}
                                 isLast={isLastStep}
                               >
                                 <ToolGroupDisplay 
                                   group={step.toolGroup}
                                   onArtifactAction={(toolId, action) => {
                                     const call = step.toolGroup?.calls.find(c => c.id === toolId);
-                                    if (call && (call.name === 'edit_text' || call.name === 'rewrite_document')) {
+                                    if (!call) return;
+                                    const editTools = ['edit_text', 'rewrite_section', 'rewrite_document'];
+                                    if (editTools.includes(call.name) && action === 'accept' && call.result) {
                                       const result = call.result;
-                                      if (action === 'accept' && result && editor) {
-                                        const oldContent = (result.old_str || result.original_text || result.original_content) as string;
-                                        const newContent = (result.new_str || result.new_text || result.new_content) as string;
-                                        const newMarkdown = (result.new_markdown) as string | undefined;
-                                        const reason = (result.reason as string) || '';
-                                        
-                                        if (newContent) {
-                                          if (call.name === 'edit_text' && oldContent) {
-                                            applyTextEdit(oldContent, newContent, reason, newMarkdown);
-                                          } else {
-                                            const currentHtml = editor.getHTML();
-                                            const newHtml = mdParser.render(newContent);
-                                            enterDiffPreview(currentHtml, newHtml, reason);
-                                          }
-                                        }
+                                      const newMd = (result.new_markdown || result.new_content) as string;
+                                      if (newMd) {
+                                        applyMarkdownEdit(newMd);
                                       }
                                     }
                                   }}
@@ -2600,12 +2055,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               <ThinkShimmerBlock message={thinkingMessage} />
             )}
           </div>
-          {diffing && !chatLoading && (
-            <DiffActionBar 
-              onKeepAll={acceptDiff}
-              onReject={rejectDiff}
-            />
-          )}
         <div className="p-4 border-t space-y-2">
           <PromptInput
             value={chatInput}

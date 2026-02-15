@@ -31,11 +31,11 @@ func NewExaAnswerTool(exaService ExaAnswerService) *ExaAnswerTool {
 func (t *ExaAnswerTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        "ask_question",
-		Description: "Get a direct, factual answer to a specific question with citations. Use this for factual queries like 'What is X?', 'How does Y work?', 'When did Z happen?'. Returns a concise answer with source citations. For exploratory research or finding multiple sources, use search_web_sources instead.",
+		Description: "Ask a factual question and get an answer with citations. Be specific: include names, dates, metrics. Use liberally for research.",
 		Parameters: map[string]any{
 			"question": map[string]any{
 				"type":        "string",
-				"description": "A specific question to answer. Be clear and specific for best results. Examples: 'What is the current market cap of Apple?', 'How does photosynthesis work?', 'When was the Eiffel Tower built?'",
+				"description": "A specific question with names, dates, or metrics for best results.",
 			},
 		},
 		Required: []string{"question"},
