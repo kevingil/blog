@@ -356,7 +356,7 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	}
 
 	log.Printf("[Agent] Loading conversation context from database...")
-	dbMessages, err := m.loadConversationContext(ctx, articleID, 12)
+	dbMessages, err := m.loadConversationContext(ctx, articleID, 30)
 	if err != nil {
 		log.Printf("[Agent] Failed to load conversation context: %v", err)
 		dbMessages = []message.Message{}
@@ -403,8 +403,14 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 		} else {
 			layout = generateHTMLOutline(asyncReq.Request.DocumentContent)
 		}
-		userPrompt += "\n\n--- Document Layout (use read_document to see full content) ---\n" + layout
-		log.Printf("[Agent] Document layout generated (%d headers), content stored in context (markdown: %v)", strings.Count(layout, "\n")+1, asyncReq.Request.DocumentMarkdown != "")
+		docLen := len(asyncReq.Request.DocumentMarkdown)
+		if docLen == 0 {
+			docLen = len(asyncReq.Request.DocumentContent)
+		}
+		lineCount := strings.Count(asyncReq.Request.DocumentMarkdown, "\n") + 1
+		userPrompt += fmt.Sprintf("\n\n--- Document Info: %d chars, %d lines ---\n", docLen, lineCount)
+		userPrompt += layout
+		log.Printf("[Agent] Document layout generated (%d headers, %d chars, %d lines)", strings.Count(layout, "\n")+1, docLen, lineCount)
 	}
 
 	// Create a pre-turn version snapshot so the frontend can "Undo All" agent changes.

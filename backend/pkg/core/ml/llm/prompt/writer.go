@@ -110,10 +110,14 @@ Present to the user:
 
 ### Step 6: Update Sources Section
 
-- After editing, append new citations to a "## Sources" section at the document bottom
+To add or update citations:
+1. Call read_document to see the FULL current content
+2. Look for an existing "## Sources" section near the bottom
+3. If it exists, use edit_text to append new citations (use the last source line as old_str context)
+4. If it doesn't exist, use edit_text to add "## Sources" at the very end
 - Format: ` + "`- [Title](url) -- what was cited from this source`" + `
-- NEVER overwrite existing sources -- only append new ones
-- If no "## Sources" section exists, create one at the very end
+- NEVER overwrite or duplicate existing sources
+- NEVER repeat citations already listed
 
 ## Confirmation Rules
 

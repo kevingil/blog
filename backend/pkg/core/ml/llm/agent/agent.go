@@ -195,7 +195,7 @@ func (a *agent) processGenerationWithEvents(ctx context.Context, sessionID, cont
 
 	msgHistory := append(msgs, userMsg)
 
-	const maxIterations = 15 // Prevent runaway agent loops
+	const maxIterations = 25 // Allow room for research-first workflow
 
 	iteration := 0
 	for {
