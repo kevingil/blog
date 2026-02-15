@@ -45,7 +45,11 @@ WHEN TO USE:
 
 The content returned is the EXACT markdown of the document.
 You can copy text directly from this output into edit_text old_str.
-Read once, then make multiple edits in sequence without re-reading.`,
+Read once, then make multiple edits in sequence without re-reading.
+
+The result includes a "sections" array showing each heading with its line number
+and level, so you can see the document structure at a glance. Use this to find
+where sections start/end and where to append new content (e.g., Sources section).`,
 		Parameters: map[string]any{},
 		Required:   []string{},
 	}
@@ -62,12 +66,40 @@ func (t *ReadDocumentTool) Run(ctx context.Context, params ToolCall) (ToolRespon
 		return NewTextErrorResponse("No document content available. The document may be empty or not loaded."), nil
 	}
 
-	totalLines := len(strings.Split(docContent, "\n"))
-	log.Printf("📖 [ReadDocument] Returning full document (%d lines, %d chars)", totalLines, len(docContent))
+	lines := strings.Split(docContent, "\n")
+	totalLines := len(lines)
+
+	// Build section map from headings
+	type sectionInfo struct {
+		Heading string `json:"heading"`
+		Line    int    `json:"line"`
+		Level   int    `json:"level"`
+	}
+	var sections []sectionInfo
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") {
+			level := 0
+			for _, ch := range trimmed {
+				if ch == '#' {
+					level++
+				} else {
+					break
+				}
+			}
+			if level > 0 {
+				sections = append(sections, sectionInfo{Heading: trimmed, Line: i + 1, Level: level})
+			}
+		}
+	}
+
+	log.Printf("📖 [ReadDocument] Returning full document (%d lines, %d chars, %d sections)", totalLines, len(docContent), len(sections))
 
 	result := map[string]interface{}{
 		"content":     docContent,
 		"total_lines": totalLines,
+		"total_chars": len(docContent),
+		"sections":    sections,
 		"tool_name":   "read_document",
 	}
 

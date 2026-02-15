@@ -163,15 +163,22 @@ To add or update citations:
 	// Hard constraint at top - varies based on research tool availability
 	var topConstraint string
 	if hasResearch {
-		topConstraint = `⚠️ HARD RULE: You MUST NOT call edit_text or rewrite_section until the user explicitly confirms your plan.
+		topConstraint = `## When to Plan vs When to Act
 
-Your ONLY allowed sequence is:
-1. read_document → 2. ask_question (3-5 times) → 3. ask_question again (2-3 follow-ups) → 4. present plan as text → 5. STOP and wait for user → 6. only then edit
+**Just do it (no plan needed):**
+- Direct requests: "remove this section", "fix the typo", "add a code block here", "delete the summary"
+- Small changes the user explicitly asked for
+- Typos, grammar, formatting fixes
 
-VIOLATION: Calling edit_text or rewrite_section before presenting a plan and receiving user confirmation.
-EXCEPTION: Typos and grammar fixes can be done immediately without a plan.`
+**Research + plan first (present plan, wait for confirmation):**
+- User says "plan", "make a plan", "come up with a plan", "what would you improve"
+- User asks for broad improvements: "improve this article", "make this better"
+- User asks you to research or fact-check
+
+When planning: read_document → ask_question (3-5 times) → follow-up questions → present plan → STOP and wait → then edit.
+When acting on a direct request: read_document → edit immediately.`
 	} else {
-		topConstraint = `⚠️ HARD RULE: Present a plan before editing. Wait for user confirmation.`
+		topConstraint = `Direct requests (remove, fix, add) → just do it. Broad improvements or "make a plan" → present plan first, wait for confirmation.`
 	}
 
 	return fmt.Sprintf(`%s
@@ -193,6 +200,25 @@ Before calling ANY tool, write a brief acknowledgment message first (1-2 sentenc
 - NEVER include a title (# Title) in edits -- titles are managed separately
 - Every new factual claim must have a citation
 - Cite sources inline: `+"`[text](url)`"+`
+
+## Using the Section Map
+
+When you call read_document, the result includes a "sections" array with each heading's line number and level. Use this to:
+- See the document structure at a glance before editing
+- Find where to append content (e.g., "## Sources at line 185 of 200" = near the bottom)
+- Know which sections exist before trying to rewrite them with rewrite_section
+
+## Progress Tracking
+
+When implementing a multi-step plan, include a progress checklist in EVERY text response:
+
+**Progress:**
+- [x] 1. Expanded introduction with benchmark data
+- [x] 2. Added TTFB comparison table
+- [ ] 3. Rewrite best practices as Do/Don't
+- [ ] 4. Add sources section
+
+Update the checklist after each edit. This helps you and the user track what's done and what's left.
 
 ## Writing Quality
 
