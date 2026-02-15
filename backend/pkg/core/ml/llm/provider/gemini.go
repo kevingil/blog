@@ -80,12 +80,16 @@ func (g *geminiClient) convertMessages(messages []message.Message) []*genai.Cont
 			if len(msg.ToolCalls()) > 0 {
 				for _, call := range msg.ToolCalls() {
 					args, _ := parseJsonToMap(call.Input)
-					assistantParts = append(assistantParts, &genai.Part{
+					part := &genai.Part{
 						FunctionCall: &genai.FunctionCall{
 							Name: call.Name,
 							Args: args,
 						},
-					})
+					}
+					if len(call.ThoughtSignature) > 0 {
+						part.ThoughtSignature = call.ThoughtSignature
+					}
+					assistantParts = append(assistantParts, part)
 				}
 			}
 
@@ -125,7 +129,7 @@ func (g *geminiClient) convertMessages(messages []message.Message) []*genai.Cont
 							},
 						},
 					},
-					Role: "function",
+					Role: "user",
 				})
 			}
 		}
@@ -191,7 +195,10 @@ func (g *geminiClient) send(ctx context.Context, messages []message.Message, too
 	if g.providerOptions.model.CanReason {
 		config.ThinkingConfig = g.buildThinkingConfig()
 	}
-	chat, _ := g.client.Chats.Create(ctx, g.providerOptions.model.APIModel, config, history)
+	chat, err := g.client.Chats.Create(ctx, g.providerOptions.model.APIModel, config, history)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Gemini chat: %w", err)
+	}
 
 	attempts := 0
 	for {
@@ -235,11 +242,12 @@ func (g *geminiClient) send(ctx context.Context, messages []message.Message, too
 					id := "call_" + uuid.New().String()
 					args, _ := json.Marshal(part.FunctionCall.Args)
 					toolCalls = append(toolCalls, message.ToolCall{
-						ID:       id,
-						Name:     part.FunctionCall.Name,
-						Input:    string(args),
-						Type:     "function",
-						Finished: true,
+						ID:               id,
+						Name:             part.FunctionCall.Name,
+						Input:            string(args),
+						Type:             "function",
+						Finished:         true,
+						ThoughtSignature: part.ThoughtSignature,
 					})
 				}
 			}
@@ -286,7 +294,13 @@ func (g *geminiClient) stream(ctx context.Context, messages []message.Message, t
 	if g.providerOptions.model.CanReason {
 		config.ThinkingConfig = g.buildThinkingConfig()
 	}
-	chat, _ := g.client.Chats.Create(ctx, g.providerOptions.model.APIModel, config, history)
+	chat, err := g.client.Chats.Create(ctx, g.providerOptions.model.APIModel, config, history)
+	if err != nil {
+		eventChan := make(chan ProviderEvent, 1)
+		eventChan <- ProviderEvent{Type: EventError, Error: fmt.Errorf("failed to create Gemini chat: %w", err)}
+		close(eventChan)
+		return eventChan
+	}
 
 	attempts := 0
 	eventChan := make(chan ProviderEvent)
@@ -359,11 +373,12 @@ func (g *geminiClient) stream(ctx context.Context, messages []message.Message, t
 							id := "call_" + uuid.New().String()
 							args, _ := json.Marshal(part.FunctionCall.Args)
 							newCall := message.ToolCall{
-								ID:       id,
-								Name:     part.FunctionCall.Name,
-								Input:    string(args),
-								Type:     "function",
-								Finished: true,
+								ID:               id,
+								Name:             part.FunctionCall.Name,
+								Input:            string(args),
+								Type:             "function",
+								Finished:         true,
+								ThoughtSignature: part.ThoughtSignature,
 							}
 
 							isNew := true
@@ -490,22 +505,26 @@ func WithGeminiThinkingLevel(level string) GeminiOption {
 }
 
 func (g *geminiClient) buildThinkingConfig() *genai.ThinkingConfig {
-	return &genai.ThinkingConfig{
-		ThinkingLevel:   mapThinkingLevel(g.options.thinkingLevel),
+	cfg := &genai.ThinkingConfig{
 		IncludeThoughts: true,
 	}
+	// Only set an explicit level for low/high — Gemini 3 models use dynamic
+	// thinking by default and don't support MEDIUM as an explicit level.
+	if lvl := mapThinkingLevel(g.options.thinkingLevel); lvl != "" {
+		cfg.ThinkingLevel = lvl
+	}
+	return cfg
 }
 
 func mapThinkingLevel(level string) genai.ThinkingLevel {
 	switch strings.ToLower(level) {
 	case "low":
 		return genai.ThinkingLevelLow
-	case "medium":
-		return genai.ThinkingLevelMedium
 	case "high":
 		return genai.ThinkingLevelHigh
 	default:
-		return genai.ThinkingLevelMedium
+		// Return empty to let the model use its default dynamic thinking
+		return ""
 	}
 }
 
