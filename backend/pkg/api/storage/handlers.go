@@ -2,6 +2,7 @@ package storage
 
 import (
 	"io"
+	"log"
 
 	"backend/pkg/api/dto"
 	"backend/pkg/api/response"
@@ -25,11 +26,14 @@ import (
 // @Router /storage/files [get]
 func ListFiles(c *fiber.Ctx) error {
 	prefix := c.Query("prefix", "")
+	log.Printf("[Storage] ListFiles: prefix=%q", prefix)
 
 	result, err := coreStorage.ListFiles(c.Context(), prefix)
 	if err != nil {
+		log.Printf("[Storage] ListFiles: error: %v", err)
 		return response.Error(c, err)
 	}
+	log.Printf("[Storage] ListFiles: prefix=%q files=%d folders=%d", prefix, len(result.Files), len(result.Folders))
 	return response.Success(c, result)
 }
 
@@ -48,21 +52,29 @@ func ListFiles(c *fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /storage/upload [post]
 func UploadFile(c *fiber.Ctx) error {
+	contentType := c.Get("Content-Type")
+	log.Printf("[Storage] UploadFile: content-type=%q method=%s", contentType, c.Method())
+
 	// Get the key from form data
 	key := c.FormValue("key")
+	log.Printf("[Storage] UploadFile: key=%q", key)
 	if key == "" {
+		log.Printf("[Storage] UploadFile: key is empty, returning 400")
 		return response.Error(c, core.InvalidInputError("File key is required"))
 	}
 
 	// Get the file from form data
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
+		log.Printf("[Storage] UploadFile: failed to get file from form: %v", err)
 		return response.Error(c, core.InvalidInputError("File is required"))
 	}
+	log.Printf("[Storage] UploadFile: file=%q size=%d", fileHeader.Filename, fileHeader.Size)
 
 	// Open the file
 	file, err := fileHeader.Open()
 	if err != nil {
+		log.Printf("[Storage] UploadFile: failed to open file: %v", err)
 		return response.Error(c, err)
 	}
 	defer file.Close()
@@ -70,16 +82,20 @@ func UploadFile(c *fiber.Ctx) error {
 	// Read file contents
 	data, err := io.ReadAll(file)
 	if err != nil {
+		log.Printf("[Storage] UploadFile: failed to read file: %v", err)
 		return response.Error(c, err)
 	}
 
 	// Upload to storage
+	log.Printf("[Storage] UploadFile: uploading key=%q (%d bytes)", key, len(data))
 	if err := coreStorage.UploadFile(c.Context(), key, data); err != nil {
+		log.Printf("[Storage] UploadFile: storage upload failed: %v", err)
 		return response.Error(c, err)
 	}
 
 	// Return the URL of the uploaded file
 	url := coreStorage.GetURLPrefix() + "/" + key
+	log.Printf("[Storage] UploadFile: success key=%q url=%q", key, url)
 	return response.Success(c, fiber.Map{
 		"success": true,
 		"url":     url,
@@ -102,13 +118,16 @@ func UploadFile(c *fiber.Ctx) error {
 // @Router /storage/{key} [delete]
 func DeleteFile(c *fiber.Ctx) error {
 	key := c.Params("key")
+	log.Printf("[Storage] DeleteFile: key=%q", key)
 	if key == "" {
 		return response.Error(c, core.InvalidInputError("File key is required"))
 	}
 
 	if err := coreStorage.DeleteFile(c.Context(), key); err != nil {
+		log.Printf("[Storage] DeleteFile: error key=%q: %v", key, err)
 		return response.Error(c, err)
 	}
+	log.Printf("[Storage] DeleteFile: success key=%q", key)
 	return response.Success(c, fiber.Map{"success": true})
 }
 
@@ -128,15 +147,20 @@ func DeleteFile(c *fiber.Ctx) error {
 func CreateFolder(c *fiber.Ctx) error {
 	var req dto.CreateFolderRequest
 	if err := c.BodyParser(&req); err != nil {
+		log.Printf("[Storage] CreateFolder: failed to parse body: %v", err)
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
 	if err := validation.ValidateStruct(req); err != nil {
+		log.Printf("[Storage] CreateFolder: validation error: %v", err)
 		return response.Error(c, err)
 	}
 
+	log.Printf("[Storage] CreateFolder: path=%q", req.Path)
 	if err := coreStorage.CreateFolder(c.Context(), req.Path); err != nil {
+		log.Printf("[Storage] CreateFolder: error path=%q: %v", req.Path, err)
 		return response.Error(c, err)
 	}
+	log.Printf("[Storage] CreateFolder: success path=%q", req.Path)
 	return response.Success(c, fiber.Map{"success": true})
 }
 
