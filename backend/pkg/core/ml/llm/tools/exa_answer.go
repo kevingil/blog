@@ -31,7 +31,7 @@ func NewExaAnswerTool(exaService ExaAnswerService) *ExaAnswerTool {
 func (t *ExaAnswerTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        "ask_question",
-		Description: "Ask a factual question and get an answer with citations. Be specific: include names, dates, metrics. Use liberally for research.",
+		Description: "PRIMARY research tool. Ask a factual question and get a web-sourced answer with citations. Use before search_web_sources. Be specific: include names, dates, metrics.",
 		Parameters: map[string]any{
 			"question": map[string]any{
 				"type":        "string",

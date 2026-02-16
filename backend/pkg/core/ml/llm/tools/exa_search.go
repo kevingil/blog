@@ -43,7 +43,7 @@ func NewExaSearchTool(exaService ExaSearchService, sourceCreator SourceCreator) 
 func (t *ExaSearchTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        "search_web_sources",
-		Description: "Search the web for sources on a topic. Creates citable sources automatically. Be specific in queries.",
+		Description: "Broad web search returning multiple source documents. Use ONLY when ask_question doesn't cover the topic broadly enough. Creates citable sources automatically.",
 		Parameters: map[string]any{
 			"query": map[string]any{
 				"type":        "string",
