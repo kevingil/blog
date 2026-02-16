@@ -25,9 +25,11 @@ import (
 	coreAgent "backend/pkg/core/agent"
 	"backend/pkg/config"
 	"backend/pkg/core/chat"
+	"backend/pkg/core/source"
 	"backend/pkg/core/worker"
 	"backend/pkg/database"
 	"backend/pkg/database/repository"
+	"backend/pkg/integrations/exa"
 	"fmt"
 	"log"
 	"log/slog"
@@ -47,11 +49,27 @@ func main() {
 	// Initialize database (makes it available via database.DB())
 	database.Init()
 
-	// Initialize Agent-powered copilot manager with chat + draft services
+	// Initialize Agent-powered copilot manager with all services
 	chatService := chat.NewMessageService(database.New())
 	articleRepo := repository.NewArticleRepository(database.DB())
+	sourceRepo := repository.NewSourceRepository(database.DB())
 	draftService := coreAgent.NewArticleDraftService(articleRepo)
-	if err := coreAgent.InitializeWithDefaults(chatService, draftService); err != nil {
+	sourceService := source.NewService(sourceRepo, articleRepo)
+
+	// Initialize Exa client for web research (ask_question, search_web_sources)
+	exaClient := exa.NewClient(cfg.Worker.ExaAPIKey)
+	if exaClient.IsConfigured() {
+		log.Printf("Exa client configured -- research tools (ask_question, search_web_sources) enabled")
+	} else {
+		log.Printf("Warning: EXA_API_KEY not set -- research tools will be disabled")
+	}
+
+	// Pass all services: sourceService for source lookup, exaClient for research, sourceService for source creation
+	var exaArg coreAgent.ExaClient
+	if exaClient.IsConfigured() {
+		exaArg = exaClient
+	}
+	if err := coreAgent.InitializeAgentCopilotManager(nil, chatService, exaArg, sourceService, draftService); err != nil {
 		log.Printf("Warning: Failed to initialize AgentCopilotManager: %v", err)
 	}
 	log.Printf("Initialized Agent Services")

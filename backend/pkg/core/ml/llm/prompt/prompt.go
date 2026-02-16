@@ -10,15 +10,13 @@ import (
 	"backend/pkg/core/ml/llm/models"
 )
 
-func GetAgentPrompt(agentName config.AgentName, provider models.ModelProvider) string {
+func GetAgentPrompt(agentName config.AgentName, provider models.ModelProvider, availableTools []string) string {
 	basePrompt := ""
 	switch agentName {
-	case config.AgentCopilot:
-		basePrompt = CopilotPrompt(provider)
-	case config.AgentWriter:
-		basePrompt = WriterPrompt(provider)
+	case config.AgentCopilot, config.AgentWriter:
+		basePrompt = CopilotPrompt(provider, availableTools)
 	default:
-		basePrompt = CopilotPrompt(provider)
+		basePrompt = CopilotPrompt(provider, availableTools)
 	}
 
 	return basePrompt

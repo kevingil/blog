@@ -138,7 +138,7 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 	// Create text generation service for tools that need it
 	textGenService := text.NewGenerationService()
 
-	// Create a DraftSaver adapter for the EditTextTool (bridges string articleID to UUID-based ArticleDraftService)
+	// Create a DraftSaver adapter for editing tools (bridges string articleID to UUID-based ArticleDraftService)
 	var draftSaver tools.DraftSaver
 	if draftService != nil {
 		draftSaver = &draftSaverAdapter{draftService: draftService}
@@ -147,9 +147,8 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 	// Create writing tools for the agent
 	writingTools := []tools.BaseTool{
 		tools.NewReadDocumentTool(),
-		tools.NewEditTextTool(draftSaver),
+		tools.NewReplaceLinesTool(draftSaver),
 		tools.NewGenerateImagePromptTool(textGenService),
-		tools.NewGenerateTextContentTool(textGenService),
 	}
 
 	// Add Exa tools if client is provided
@@ -160,11 +159,10 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 		)
 	}
 
-	// Add source-related tools if source service is available
+	// Add source search tool if source service is available
 	if sourceService != nil {
 		writingTools = append(writingTools,
 			tools.NewGetRelevantSourcesTool(sourceService),
-			tools.NewAddContextFromSourcesTool(sourceService),
 		)
 	}
 
@@ -355,14 +353,41 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	}
 
 	log.Printf("[Agent] Loading conversation context from database...")
-	dbMessages, err := m.loadConversationContext(ctx, articleID, 12)
+	dbMessages, err := m.loadConversationContext(ctx, articleID, 30)
 	if err != nil {
 		log.Printf("[Agent] Failed to load conversation context: %v", err)
 		dbMessages = []message.Message{}
 	}
 	log.Printf("[Agent] ✅ Loaded %d messages from database as context", len(dbMessages))
 
+	// Sanitize message ordering for Gemini compatibility:
+	// Gemini requires strict alternation: user -> assistant(+tool_call) -> tool -> assistant -> user
+	// Merge consecutive same-role messages and drop orphaned tool results.
+	sanitized := make([]message.Message, 0, len(dbMessages))
 	for _, msg := range dbMessages {
+		if len(sanitized) > 0 {
+			prev := sanitized[len(sanitized)-1]
+			// Skip consecutive messages of the same role (merge by dropping the duplicate)
+			if msg.Role == prev.Role && msg.Role != message.Tool {
+				// Replace previous with this one (keep the later message)
+				sanitized[len(sanitized)-1] = msg
+				continue
+			}
+			// Tool messages must follow an assistant message with tool calls
+			if msg.Role == message.Tool && prev.Role != message.Assistant {
+				log.Printf("[Agent] Skipping orphaned tool message in history")
+				continue
+			}
+		}
+		sanitized = append(sanitized, msg)
+	}
+	// Ensure history starts with a user message (Gemini requirement)
+	for len(sanitized) > 0 && sanitized[0].Role != message.User {
+		sanitized = sanitized[1:]
+	}
+	log.Printf("[Agent] Sanitized history: %d -> %d messages", len(dbMessages), len(sanitized))
+
+	for _, msg := range sanitized {
 		_, err := m.messageSvc.Create(ctx, sess.ID, message.CreateMessageParams{
 			Role:  msg.Role,
 			Parts: msg.Parts,
@@ -395,15 +420,15 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	if asyncReq.Request.DocumentContent != "" || asyncReq.Request.DocumentMarkdown != "" {
 		ctx = tools.WithDocumentContent(ctx, asyncReq.Request.DocumentContent, asyncReq.Request.DocumentMarkdown)
 
-		// Generate outline from markdown if available, otherwise fall back to HTML
-		var layout string
+		// Generate rich document context with section boundaries and sizes
+		var docContext string
 		if asyncReq.Request.DocumentMarkdown != "" {
-			layout = generateMarkdownOutline(asyncReq.Request.DocumentMarkdown)
+			docContext = generateDocumentContext(asyncReq.Request.DocumentMarkdown)
 		} else {
-			layout = generateHTMLOutline(asyncReq.Request.DocumentContent)
+			docContext = generateDocumentContext(asyncReq.Request.DocumentContent)
 		}
-		userPrompt += "\n\n--- Document Layout (use read_document to see full content) ---\n" + layout
-		log.Printf("[Agent] Document layout generated (%d headers), content stored in context (markdown: %v)", strings.Count(layout, "\n")+1, asyncReq.Request.DocumentMarkdown != "")
+		userPrompt += "\n\n" + docContext
+		log.Printf("[Agent] %s", strings.SplitN(docContext, "\n", 2)[0])
 	}
 
 	// Create a pre-turn version snapshot so the frontend can "Undo All" agent changes.
@@ -657,11 +682,13 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 
 				for _, toolResult := range toolResults {
 					isSearchTool := false
+					resultToolName := ""
 					if !toolResult.IsError {
 						var resultData map[string]interface{}
 						if err := json.Unmarshal([]byte(toolResult.Content), &resultData); err == nil {
-							if toolName, ok := resultData["tool_name"].(string); ok {
-								isSearchTool = toolName == "search_web_sources" || toolName == "ask_question"
+							if tn, ok := resultData["tool_name"].(string); ok {
+								resultToolName = tn
+								isSearchTool = tn == "search_web_sources" || tn == "ask_question"
 							}
 						}
 					}
@@ -671,11 +698,13 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 						Type:      StreamTypeToolResult,
 						Iteration: asyncReq.iteration,
 						ToolID:    toolResult.ToolCallID,
+						ToolName:  resultToolName,
 						ToolResult: map[string]interface{}{
 							"content":   toolResult.Content,
 							"metadata":  toolResult.Metadata,
 							"is_error":  toolResult.IsError,
 							"is_search": isSearchTool,
+							"tool_name": resultToolName,
 						},
 					}
 				}
@@ -979,8 +1008,8 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 		}
 		msgMetadata.WithToolExecution(toolExec)
 
-		if toolName == "edit_text" || toolName == "rewrite_document" {
-			log.Printf("[Agent]       ✏️  ARTIFACT TOOL DETECTED (isError: %v)", isError)
+		if toolName == "edit_text" || toolName == "replace_lines" || toolName == "rewrite_section" || toolName == "rewrite_document" {
+			log.Printf("[Agent]       ✏️  ARTIFACT TOOL DETECTED: %s (isError: %v)", toolName, isError)
 
 			artifactID := uuid.New().String()
 			artifactType := metadata.ArtifactTypeCodeEdit
@@ -992,8 +1021,8 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 			var diffPreview string
 			var description string
 
-			if toolName == "edit_text" {
-				// Support both new field names (old_str/new_str) and legacy (original_text/new_text)
+			if toolName == "edit_text" || toolName == "replace_lines" || toolName == "rewrite_section" {
+				// All editing tools use old_str/new_str format for diff display
 				if newStr, ok := toolResultData["new_str"].(string); ok {
 					artifactContent = newStr
 				} else if newText, ok := toolResultData["new_text"].(string); ok {
@@ -1040,7 +1069,7 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 
 			msgMetadata.WithArtifact(artifact)
 
-			content := fmt.Sprintf("📋 %s: %s", toolName, description)
+			content := "" // Tool card in UI shows the result; no visible text needed
 			savedMsg, err := m.chatService.SaveMessage(ctx, articleID, "assistant", content, msgMetadata)
 			if err != nil {
 				log.Printf("[Agent] ❌ Failed to save tool result message with artifact: %v", err)
@@ -1112,19 +1141,34 @@ func convertHTMLToMarkdown(html string) (string, error) {
 }
 
 // generateMarkdownOutline extracts headings from markdown to show document structure
-func generateMarkdownOutline(markdown string) string {
+func generateDocumentContext(markdown string) string {
 	lines := strings.Split(markdown, "\n")
-	var outline []string
+	totalLines := len(lines)
+	totalChars := len(markdown)
 
+	// Count paragraphs (non-empty text blocks after empty lines)
+	paragraphs := 0
+	prevEmpty := true
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" && prevEmpty {
+			paragraphs++
+		}
+		prevEmpty = trimmed == ""
+	}
+
+	// Collect sections with line numbers and heading levels
+	type section struct {
+		heading string
+		line    int
+		level   int
+	}
+	var sections []section
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-
-		// Match markdown headings (## Heading, ### Heading, etc.)
 		if !strings.HasPrefix(trimmed, "#") {
 			continue
 		}
-
-		// Count the heading level
 		level := 0
 		for _, ch := range trimmed {
 			if ch == '#' {
@@ -1136,25 +1180,37 @@ func generateMarkdownOutline(markdown string) string {
 		if level < 1 || level > 6 {
 			continue
 		}
-
-		headerText := strings.TrimSpace(trimmed[level:])
-		if headerText == "" {
+		if strings.TrimSpace(trimmed[level:]) == "" {
 			continue
 		}
+		sections = append(sections, section{heading: trimmed, line: i + 1, level: level})
+	}
 
-		indent := ""
-		if level > 2 {
-			indent = strings.Repeat("  ", level-2)
+	// Build outline with line counts per section
+	var outline strings.Builder
+	for i, s := range sections {
+		nextLine := totalLines + 1
+		if i+1 < len(sections) {
+			nextLine = sections[i+1].line
 		}
-
-		outline = append(outline, fmt.Sprintf("%s- %s (line %d)", indent, headerText, i+1))
+		sectionLines := nextLine - s.line
+		indent := ""
+		if s.level > 2 {
+			indent = strings.Repeat("  ", s.level-2)
+		}
+		outline.WriteString(fmt.Sprintf("%s%4d| %s (%d lines)\n", indent, s.line, s.heading, sectionLines))
 	}
 
-	if len(outline) == 0 {
-		return "(empty document)"
+	if len(sections) == 0 {
+		return fmt.Sprintf("--- Document Context ---\nTotal: %d lines, %d chars, %d paragraphs\n(no headings found)\n---", totalLines, totalChars, paragraphs)
 	}
 
-	return strings.Join(outline, "\n")
+	return fmt.Sprintf("--- Document Context ---\nTotal: %d lines, %d chars, %d paragraphs\nSections:\n%s---", totalLines, totalChars, paragraphs, outline.String())
+}
+
+// Keep old name as alias for backward compatibility
+func generateMarkdownOutline(markdown string) string {
+	return generateDocumentContext(markdown)
 }
 
 // generateHTMLOutline extracts only headers from HTML to show document structure

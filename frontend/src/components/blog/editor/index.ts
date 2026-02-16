@@ -1,8 +1,8 @@
 // Barrel file for the editor module
-// Re-exports all extracted editor components and utilities
-
-export { DiffHighlighter } from './diff-highlighter';
-export { FormattingToolbar } from './FormattingToolbar';
+export { EditorTabs } from './EditorTabs';
+export { MarkdownEditor } from './MarkdownEditor';
+export { DiffView } from './DiffView';
+export { MarkdownPreview } from './MarkdownPreview';
 export { ImageLoader } from './ImageLoader';
 export { 
   DEFAULT_IMAGE_PROMPT, 

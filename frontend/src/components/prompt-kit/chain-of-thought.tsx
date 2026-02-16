@@ -136,10 +136,10 @@ export function ChainOfThoughtTrigger({
     <button
       onClick={toggleOpen}
       className={cn(
-        "flex w-full items-center gap-2 py-1 text-left text-sm",
+        "flex w-full items-center gap-2 py-1 text-left text-xs",
         "hover:text-foreground transition-colors",
         "focus:outline-none",
-        "text-muted-foreground",
+        "text-muted-foreground/70 dark:text-muted-foreground/60",
         className
       )}
     >
@@ -177,12 +177,12 @@ export function ChainOfThoughtContent({ children, className }: ChainOfThoughtCon
 
   return (
     <div className={cn(
-      "pl-3 border-l border-border/50 text-sm text-muted-foreground",
+      "pl-4 pr-2 border-l border-border/50 text-xs text-muted-foreground/70 dark:text-muted-foreground/60",
       "animate-in fade-in-0 slide-in-from-top-1 duration-200",
       "max-h-48 overflow-y-auto",
       className
     )}>
-      <div className="py-1.5 whitespace-pre-wrap leading-relaxed">
+      <div className="py-2 whitespace-pre-wrap leading-relaxed">
         {children}
       </div>
     </div>

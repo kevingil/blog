@@ -22,6 +22,7 @@ import (
 	"github.com/openai/openai-go/shared"
 )
 
+
 type openaiOptions struct {
 	baseURL         string
 	disableCache    bool
@@ -331,14 +332,17 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 
 		for {
 			attempts++
+
+			log.Printf("[OpenAI] Stream attempt %d (msgs: %d, model: %s)", attempts, len(messages), string(o.providerOptions.model.APIModel))
+
 			stream := o.client.Responses.NewStreaming(ctx, params)
 
 			var currentContent string
 			var currentReasoning string
 			var toolCalls []message.ToolCall
-			// Map of ItemID -> ToolCall for tracking in-progress tool calls
 			toolCallMap := make(map[string]*message.ToolCall)
 			var finalResponse *responses.Response
+			var streamError error
 
 			for stream.Next() {
 				event := stream.Current()
@@ -458,17 +462,63 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 					completed := event.AsResponseCompleted()
 					finalResponse = &completed.Response
 
-			case "error":
-				// Handle error event
-				log.Printf("Stream error event: %s", event.RawJSON())
+		case "response.failed":
+			// The API returned a failed response (e.g., tool_use_failed, Groq internal error).
+			// Capture the error and break to the retry logic instead of returning immediately.
+			rawJSON := event.RawJSON()
+			log.Printf("[OpenAI Provider] ⚠️ response.failed: %s", rawJSON)
+			var failedEvent struct {
+				Response struct {
+					Status string `json:"status"`
+					Error  struct {
+						Code    string `json:"code"`
+						Message string `json:"message"`
+					} `json:"error"`
+				} `json:"response"`
+			}
+			errMsg := "LLM response failed"
+			if err := json.Unmarshal([]byte(rawJSON), &failedEvent); err == nil {
+				if failedEvent.Response.Error.Message != "" {
+					errMsg = failedEvent.Response.Error.Message
+				} else if failedEvent.Response.Error.Code != "" {
+					errMsg = "LLM error: " + failedEvent.Response.Error.Code
+				}
+			}
+			streamError = fmt.Errorf("%s", errMsg)
 
-			default:
-				// Log unhandled event types to debug Groq reasoning and other providers
-				log.Printf("[OpenAI Provider] Unhandled event type: %s, raw: %s", event.Type, event.RawJSON())
+		case "error":
+			// Handle error event from the stream
+			rawJSON := event.RawJSON()
+			log.Printf("[OpenAI Provider] ⚠️ error event: %s", rawJSON)
+			var errorEvent struct {
+				Code    string `json:"code"`
+				Message string `json:"message"`
+			}
+			errMsg := "stream error"
+			if err := json.Unmarshal([]byte(rawJSON), &errorEvent); err == nil {
+				if errorEvent.Message != "" {
+					errMsg = errorEvent.Message
+				}
+			}
+			// Don't return immediately - let response.failed handle the termination
+			log.Printf("[OpenAI Provider] Error event: %s", errMsg)
+
+		default:
+			// Log unhandled event types for debugging
+			log.Printf("[OpenAI Provider] Unhandled event type: %s, raw: %s", event.Type, event.RawJSON())
 			}
 			}
 
-			err := stream.Err()
+			// Use streamError (from response.failed) if set, otherwise check stream.Err()
+			err := streamError
+			if err == nil {
+				err = stream.Err()
+			}
+
+			if err != nil && !errors.Is(err, io.EOF) {
+				log.Printf("[OpenAI] Stream error: %v", err)
+			}
+
 			if err == nil || errors.Is(err, io.EOF) {
 				// Stream completed successfully
 				finishReason := message.FinishReasonEndTurn
@@ -489,6 +539,8 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 					}
 				}
 
+				log.Printf("[OpenAI] Complete: %s (tools: %d, content: %d chars, tokens: %d→%d)", finishReason, len(toolCalls), len(currentContent), usage.InputTokens, usage.OutputTokens)
+
 				eventChan <- ProviderEvent{
 					Type: EventComplete,
 					Response: &ProviderResponse{
@@ -504,6 +556,9 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 
 			// Handle retry logic
 			retry, after, retryErr := o.shouldRetry(attempts, err)
+			if retry {
+				log.Printf("[OpenAI] Retrying (attempt %d, wait %dms)", attempts, after)
+			}
 			if retryErr != nil {
 				eventChan <- ProviderEvent{Type: EventError, Error: retryErr}
 				return

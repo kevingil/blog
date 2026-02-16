@@ -4,6 +4,7 @@ const (
 	ProviderGemini ModelProvider = "gemini"
 
 	// Models
+	Gemini3Pro        ModelID = "gemini-3-pro"
 	Gemini25Flash     ModelID = "gemini-2.5-flash"
 	Gemini25          ModelID = "gemini-2.5"
 	Gemini20Flash     ModelID = "gemini-2.0-flash"
@@ -11,6 +12,20 @@ const (
 )
 
 var GeminiModels = map[ModelID]Model{
+	Gemini3Pro: {
+		ID:                  Gemini3Pro,
+		Name:                "Gemini 3 Pro",
+		Provider:            ProviderGemini,
+		APIModel:            "gemini-3-pro-preview",
+		CostPer1MIn:         2.0,
+		CostPer1MInCached:   0,
+		CostPer1MOutCached:  0,
+		CostPer1MOut:        12.0,
+		ContextWindow:       1000000,
+		DefaultMaxTokens:    65536,
+		CanReason:           true,
+		SupportsAttachments: true,
+	},
 	Gemini25Flash: {
 		ID:                  Gemini25Flash,
 		Name:                "Gemini 2.5 Flash",
