@@ -7,7 +7,7 @@ import { Link } from '@tanstack/react-router';
 import { createFileRoute } from '@tanstack/react-router';
 import { format } from 'date-fns';
 import { cn } from "@/lib/utils";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import GithubIcon from "@/components/icons/github-icon";
 import LinkedInIcon from "@/components/icons/linkedin-icon";
 
@@ -163,7 +163,7 @@ function MainArticleCard({ article, index }: { article: ArticleListItem; index: 
         visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
       )}
     >
-      <div className="relative w-32 shrink-0 self-stretch min-h-0 overflow-hidden rounded-lg">
+      <div className="relative w-64 shrink-0 self-stretch min-h-0 overflow-hidden rounded-lg">
         {imageUrl ? (
           <img src={imageUrl} alt="" className="w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-105" loading="eager" />
         ) : (
@@ -223,59 +223,37 @@ function CompactArticleCard({ article, index }: { article: ArticleListItem; inde
   );
 }
 
-/* ─── 3D tilt on mouse (respects reduced motion) ─── */
-function useTilt() {
-  const ref = useRef<HTMLAnchorElement>(null);
-  const [transform, setTransform] = useState("");
-
-  const handleMove = useCallback((e: React.MouseEvent) => {
-    const el = ref.current;
-    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const rect = el.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
-    const tilt = 6;
-    const rotateX = (y - 0.5) * -tilt;
-    const rotateY = (x - 0.5) * tilt;
-    setTransform(`perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(8px)`);
-  }, []);
-
-  const handleLeave = useCallback(() => setTransform(""), []);
-
-  return { ref, style: { transform } as React.CSSProperties, onMouseMove: handleMove, onMouseLeave: handleLeave };
-}
-
 /* ════════════════════════════════════════
    PROJECTS SECTION — book cards
    ════════════════════════════════════════ */
 function ProjectsSection() {
   const { data, isLoading } = useQuery({
     queryKey: ['home-projects'],
-    queryFn: () => listProjects(1, 6),
+    queryFn: () => listProjects(1, 8),
   });
 
   const projects = data?.projects ?? [];
 
   return (
     <section className="mt-16 px-2 sm:px-0">
-      <SectionHeader label="Projects" seeAllHref="/projects" seeAllLabel="View all" />
+      <SectionHeader label="Hackathon Projects & Experiments" seeAllHref="/projects" seeAllLabel="View all" />
 
       {isLoading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
+        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-4 gap-1.5 w-full">
+          {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="overflow-hidden bg-white/[0.03] border border-white/[0.05] animate-pulse">
-              <div className="aspect-[16/9] bg-white/[0.06]" />
-              <div className="p-2 space-y-1">
-                <div className="h-3 w-3/4 bg-white/[0.06] rounded" />
-                <div className="h-2.5 w-full bg-white/[0.04] rounded" />
+              <div className="aspect-[2/1] bg-white/[0.06]" />
+              <div className="p-1 h-11 flex flex-col gap-1">
+                <div className="h-3 w-4/5 bg-white/[0.06]" />
+                <div className="h-2.5 w-full bg-white/[0.04]" />
               </div>
             </div>
           ))}
         </div>
       ) : projects.length === 0 ? (
-        <div className="text-center py-12 text-white/30 text-sm">No projects yet.</div>
+        <div className="text-center py-12 text-white/30 text-sm">No hackathon projects or experiments yet.</div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-4 gap-1.5 w-full">
           {projects.map((project, i) => (
             <ProjectBookCard key={project.id} project={project} index={i} />
           ))}
@@ -287,51 +265,42 @@ function ProjectsSection() {
 
 function ProjectBookCard({ project, index }: { project: Project; index: number }) {
   const visible = useEntrance(index);
-  const tilt = useTilt();
 
   return (
     <Link
-      ref={tilt.ref}
       to="/projects/$projectId"
       params={{ projectId: project.id }}
-      onMouseMove={tilt.onMouseMove}
-      onMouseLeave={tilt.onMouseLeave}
-      style={{ ...tilt.style, transition: "transform 0.2s ease-out" }}
       className={cn(
         "group relative flex flex-col overflow-hidden",
         "bg-black/40 backdrop-blur-md border border-white/[0.08]",
-        "hover:border-primary/40 hover:shadow-[0_0_20px_-6px_rgba(0,200,200,0.12)] hover:-translate-y-0.5",
-        visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+        "hover:border-primary hover:shadow-[0_0_25px_rgba(0,200,200,0.5)]",
+        "transition-all duration-200",
+        visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
       )}
     >
-      <div className="relative aspect-[16/9] w-full overflow-hidden">
+      <div className="relative aspect-[2/1] w-full overflow-hidden shrink-0">
         {project.image_url ? (
-          <img src={project.image_url} alt={project.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          <img src={project.image_url} alt={project.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
         ) : (
           <div className="w-full h-full bg-white/[0.04] flex items-center justify-center">
-            <svg className="w-8 h-8 text-white/15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-6 h-6 text-white/15" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
             </svg>
           </div>
         )}
         {project.url && (
-          <div className="absolute top-2 right-2 w-5 h-5 rounded bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="absolute top-1 right-1 w-4 h-4 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <svg className="w-1.5 h-1.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
           </div>
         )}
       </div>
-      <div className="p-3 flex flex-col flex-1 min-w-0">
-        <span className="text-xs font-mono text-primary/60 tabular-nums">{String(index + 1).padStart(2, "0")}</span>
-        <h3 className="text-sm font-semibold tracking-tight text-white mt-1 group-hover:text-primary transition-colors">{project.title}</h3>
-        <p className="text-xs text-white/40 leading-relaxed mt-1 flex-1">{project.description}</p>
-        <span className="mt-2 text-xs text-primary/80 font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-          View
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </span>
+      <div className="p-1 flex flex-col min-w-0 h-11">
+        <h3 className="text-xs font-semibold tracking-tight text-white truncate group-hover:text-primary transition-colors">{project.title}</h3>
+        {project.description && (
+          <p className="text-[10px] text-white/50 line-clamp-1 mt-0.5 flex-shrink-0">{project.description}</p>
+        )}
       </div>
     </Link>
   );
@@ -383,7 +352,7 @@ function ArticlesSkeleton() {
       <div className="grid grid-cols-1 lg:grid-cols-3 lg:grid-rows-2 gap-2">
         {/* Main article placeholder - 2 cols, 2 rows */}
         <div className="lg:col-span-2 lg:row-span-2 rounded-xl bg-white/[0.03] border border-white/[0.05] overflow-hidden animate-pulse flex flex-row p-2.5 gap-3">
-          <div className="w-32 shrink-0 self-stretch min-h-0 rounded-lg bg-white/[0.06]" />
+          <div className="w-64 shrink-0 self-stretch min-h-0 rounded-lg bg-white/[0.06]" />
           <div className="flex-1 space-y-1.5">
             <div className="h-3 w-3/4 bg-white/[0.06] rounded" />
             <div className="h-2.5 w-full bg-white/[0.04] rounded" />

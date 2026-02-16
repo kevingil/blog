@@ -10,7 +10,7 @@ export const Route = createFileRoute('/_publicLayout/projects/')({
   component: ProjectsPage,
 });
 
-const projectCardBase = "group flex overflow-hidden border-l-2 border-l-transparent hover:border-l-primary/60 bg-black/30 dark:bg-black/40 backdrop-blur-md border border-white/[0.08] rounded-lg hover:border-primary/30 hover:shadow-[0_0_15px_-5px_rgba(0,200,200,0.12)] transition-all duration-300";
+const projectCardBase = "group flex flex-row-reverse overflow-hidden bg-black/40 backdrop-blur-md border border-white/[0.08] hover:border-primary hover:shadow-[0_0_25px_rgba(0,200,200,0.5)] transition-all duration-200";
 
 function ProjectsPage() {
   const router = useRouter();
@@ -19,12 +19,12 @@ function ProjectsPage() {
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ['public-projects', page],
-    queryFn: () => listProjects(page, 5),
+    queryFn: () => listProjects(page, 8),
   });
 
   const projects = data?.projects ?? [];
   const total = data?.total ?? 0;
-  const perPage = data?.per_page ?? 5;
+  const perPage = data?.per_page ?? 8;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
 
   useEffect(() => {
@@ -48,13 +48,13 @@ function ProjectsPage() {
           </div>
 
           {isLoading || (isFetching && !data) ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="rounded-lg bg-white/[0.03] border border-white/[0.05] overflow-hidden animate-pulse flex">
-                  <div className="w-24 aspect-square shrink-0 bg-white/[0.06]" />
-                  <div className="flex-1 p-3 space-y-2">
-                    <div className="h-4 w-2/3 bg-white/[0.06] rounded" />
-                    <div className="h-3 w-full bg-white/[0.04] rounded" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="bg-white/[0.03] border border-white/[0.05] overflow-hidden animate-pulse flex flex-row-reverse">
+                  <div className="w-44 aspect-[4/3] shrink-0 bg-white/[0.06]" />
+                  <div className="flex-1 p-5 space-y-2">
+                    <div className="h-6 w-2/3 bg-white/[0.06]" />
+                    <div className="h-4 w-full bg-white/[0.04]" />
                   </div>
                 </div>
               ))}
@@ -70,7 +70,7 @@ function ProjectsPage() {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {projects.map((project) => (
                 <ProjectCard key={project.id} project={project} />
               ))}
@@ -137,7 +137,7 @@ function ProjectCard({ project }: { project: Project }) {
       params={{ projectId: project.id }}
       className={projectCardBase}
     >
-      <div className="relative w-24 sm:w-28 shrink-0 aspect-square overflow-hidden">
+      <div className="relative w-44 shrink-0 aspect-[4/3] overflow-hidden">
         {project.image_url ? (
           <img
             src={project.image_url}
@@ -146,30 +146,24 @@ function ProjectCard({ project }: { project: Project }) {
           />
         ) : (
           <div className="w-full h-full bg-white/[0.04] flex items-center justify-center">
-            <Sparkles className="w-6 h-6 text-white/15" />
+            <Sparkles className="w-10 h-10 text-white/15" />
           </div>
         )}
         {project.url && (
-          <div className="absolute bottom-1.5 right-1.5 w-6 h-6 rounded bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="absolute top-0.5 right-0.5 w-4 h-4 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <svg className="w-1.5 h-1.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
           </div>
         )}
       </div>
-      <div className="flex-1 p-3 flex flex-col min-w-0">
-        <h3 className="text-sm font-semibold tracking-tight text-white group-hover:text-primary transition-colors line-clamp-1">
+      <div className="flex-1 p-5 flex flex-col min-w-0">
+        <h3 className="text-xl font-semibold tracking-tight text-white group-hover:text-primary transition-colors line-clamp-1">
           {project.title}
         </h3>
-        <p className="text-xs text-white/40 line-clamp-2 leading-relaxed mt-0.5 flex-1">
+        <p className="text-base text-white/50 line-clamp-2 leading-relaxed mt-2">
           {project.description}
         </p>
-        <span className="mt-2 text-[11px] text-primary/80 font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-          View
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </span>
       </div>
     </Link>
   );
