@@ -272,6 +272,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [generatingRewrite, setGeneratingRewrite] = useState(false);
   const [sourcesManagerOpen, setSourcesManagerOpen] = useState(false);
+  const [publishDrawerOpen, setPublishDrawerOpen] = useState(false);
   const [sourcesRefreshTrigger] = useState(0);
   
   // Image versioning state
@@ -662,18 +663,16 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     return <div>Please log in to edit articles.</div>;
   }
 
-  // Consume from ImageLoader and sync with versioning
+  // Sync stagedImageUrl to form; add new URLs to versions
   useEffect(() => {
-    if (stagedImageUrl) {
-      setValue('image_url', stagedImageUrl);
-      setPreviewImageUrl(stagedImageUrl);
-      
-      // Add to versions if it's a new URL
-      if (!imageVersions.some(v => v.url === stagedImageUrl)) {
+    if (stagedImageUrl !== undefined) {
+      setValue('image_url', stagedImageUrl ?? '');
+      setPreviewImageUrl(stagedImageUrl ?? '');
+      if (stagedImageUrl && !imageVersions.some(v => v.url === stagedImageUrl)) {
         addImageVersion(stagedImageUrl);
       }
     }
-  }, [stagedImageUrl, setValue]);
+  }, [stagedImageUrl, setValue, imageVersions]);
 
   // Populate form when article data is loaded (always load draft_* fields for editing)
   useEffect(() => {
@@ -691,15 +690,17 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       } as ArticleFormData;
       reset(newValues);
       
-      // Initialize image versions if there's an existing image
+      // Initialize image versions and staged state if there's an existing image
       if (article.article.draft_image_url) {
         setImageVersions([{ url: article.article.draft_image_url, timestamp: Date.now() }]);
         setCurrentVersionIndex(0);
         setPreviewImageUrl(article.article.draft_image_url);
+        setStagedImageUrl(article.article.draft_image_url);
       } else {
         setImageVersions([]);
         setCurrentVersionIndex(-1);
         setPreviewImageUrl('');
+        setStagedImageUrl(undefined);
       }
       
       // Content is now markdown -- form value is set via reset() above
@@ -877,8 +878,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       return;
     }
 
-    // Ensure staged image URL is synced to form data before saving
-    const finalImageUrl = stagedImageUrl !== undefined ? stagedImageUrl : data.image_url;
+    // Ensure image_url is captured at submit time - prefer stagedImageUrl when set, else form value
+    const formImageUrl = getValues('image_url') ?? data.image_url ?? '';
+    const finalImageUrl = (stagedImageUrl !== undefined && stagedImageUrl !== null)
+      ? stagedImageUrl
+      : formImageUrl;
 
     if (isNew) {
       // New articles are created as drafts by default
@@ -1743,6 +1747,19 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title.message}</p>}
                 </div>
 
+                {/* Publish button when unpublished changes */}
+                {!isNew && isPublished(article?.article) && hasDraftChanges(article?.article) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPublishDrawerOpen(true)}
+                    className="flex-shrink-0"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-1" />
+                    Update Published
+                  </Button>
+                )}
+
                 {/* Save Button */}
                 <Button
                   type="button"
@@ -1760,6 +1777,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     'Save'
                   }
                 </Button>
+
               </div>
             </div>
 
@@ -1816,7 +1834,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               </Drawer>
 
               {/* Publish Button */}
-              <Drawer direction="right">
+              <Drawer direction="right" open={publishDrawerOpen} onOpenChange={setPublishDrawerOpen}>
                 <DrawerTrigger asChild>
                   <Button variant="outline" size="sm">
                     {isPublished(article?.article) ? (
