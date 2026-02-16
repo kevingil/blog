@@ -45,12 +45,12 @@ interface ToolGroupDisplayProps {
 /**
  * Tools that should use the full card UI (because they have artifacts)
  */
-const ARTIFACT_TOOLS = new Set(['edit_text', 'replace_lines', 'rewrite_section', 'rewrite_document']);
+const ARTIFACT_TOOLS = new Set(['edit_text', 'rewrite_section', 'rewrite_document']);
 
 /**
  * Tools that can be expanded to show content (but still use subtle styling)
  */
-const EXPANDABLE_TOOLS = new Set(['read_document', 'search_web_sources', 'ask_question']);
+const EXPANDABLE_TOOLS = new Set(['read_document', 'search_web_sources', 'ask_question', 'replace_lines']);
 
 /**
  * Check if a tool should use the full card UI
@@ -99,6 +99,7 @@ function getToolIcon(toolName: string) {
       return <Link2 className="h-4 w-4" />;
     case 'rewrite_document':
     case 'edit_text':
+    case 'replace_lines':
       return <FileDiff className="h-4 w-4" />;
     case 'analyze_document':
     case 'read_document':
@@ -394,8 +395,31 @@ function getExpandableContent(call: ToolCallRecord): React.ReactNode | null {
       const answer = call.result.answer as string;
       if (!answer) return null;
       return (
-        <div className="text-sm text-muted-foreground">
+        <div className="text-xs text-muted-foreground/70 dark:text-muted-foreground/60">
           {answer}
+        </div>
+      );
+    }
+    case 'replace_lines': {
+      const oldStr = (call.result.old_str || call.result.original_text || '') as string;
+      const newStr = (call.result.new_str || call.result.new_text || call.result.new_markdown || '') as string;
+      const reason = call.result.reason as string;
+      if (!oldStr && !newStr) return null;
+      return (
+        <div className="space-y-1.5">
+          {reason && (
+            <div className="text-xs text-muted-foreground/70 dark:text-muted-foreground/60">{reason}</div>
+          )}
+          {oldStr && (
+            <pre className="text-xs font-mono whitespace-pre-wrap text-red-400/80 dark:text-red-400/60 line-clamp-4">
+              {oldStr}
+            </pre>
+          )}
+          {newStr && (
+            <pre className="text-xs font-mono whitespace-pre-wrap text-green-500/80 dark:text-green-400/60 line-clamp-4">
+              {newStr}
+            </pre>
+          )}
         </div>
       );
     }
@@ -439,7 +463,7 @@ function SubtleToolDisplay({ call }: { call: ToolCallRecord }) {
         onClick={handleClick}
         disabled={!hasContent}
         className={cn(
-          "flex w-full items-center gap-2 py-1 text-sm text-muted-foreground text-left",
+          "flex w-full items-center gap-2 py-1 text-xs text-muted-foreground/70 dark:text-muted-foreground/60 text-left",
           hasContent && "hover:text-foreground cursor-pointer",
           !hasContent && "cursor-default"
         )}
@@ -463,8 +487,8 @@ function SubtleToolDisplay({ call }: { call: ToolCallRecord }) {
       </button>
       
       {isOpen && hasContent && (
-        <div className="pl-3 border-l border-border/50 mt-1 max-h-48 overflow-y-auto">
-          <div className="py-1.5">
+        <div className="pl-4 pr-2 border-l border-border/50 mt-1 max-h-48 overflow-y-auto text-xs text-muted-foreground/70 dark:text-muted-foreground/60">
+          <div className="py-2">
             {expandableContent}
           </div>
         </div>
@@ -516,7 +540,7 @@ export function ToolGroupDisplay({ group, onArtifactAction }: ToolGroupDisplayPr
               </ToolCallTrigger>
               <ToolCallContent>
                 <ToolCallStatusItem status="running">
-                  {call.name === 'edit_text' || call.name === 'replace_lines' ? 'Replacing lines...' : call.name === 'rewrite_section' ? 'Rewriting section...' : 'Analyzing document...'}
+                  {call.name === 'edit_text' ? 'Replacing text...' : call.name === 'rewrite_section' ? 'Rewriting section...' : 'Analyzing document...'}
                 </ToolCallStatusItem>
               </ToolCallContent>
             </ToolCall>
