@@ -17,7 +17,7 @@ func CoderAgentTools(
 	return append(
 		[]tools.BaseTool{
 			tools.NewFetchTool(),
-			tools.NewEditTextTool(nil), // no draft persistence for coder agent
+			tools.NewReplaceLinesTool(nil), // no draft persistence for coder agent
 			NewAgentTool(sessions, messages),
 		}, otherTools...,
 	)
@@ -26,6 +26,6 @@ func CoderAgentTools(
 func TaskAgentTools() []tools.BaseTool {
 	return []tools.BaseTool{
 		tools.NewFetchTool(),
-		tools.NewEditTextTool(nil), // no draft persistence for task agent
+		tools.NewReplaceLinesTool(nil), // no draft persistence for task agent
 	}
 }

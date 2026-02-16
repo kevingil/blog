@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { ToolCallStatusItem } from "@/components/prompt-kit/tool-call"
 
 interface DiffPreviewContentProps {
-  toolName: 'edit_text' | 'rewrite_document'
+  toolName: 'replace_lines' | 'rewrite_document'
   status: 'running' | 'completed' | 'error'
   reason?: string
   diffPreview?: {
@@ -26,7 +26,7 @@ export function DiffPreviewContent({
 }: DiffPreviewContentProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   
-  const isEditText = toolName === 'edit_text'
+  const isReplaceLines = toolName === 'replace_lines'
 
   // Check if content needs truncation
   const oldLines = diffPreview?.oldText.split('\n') || []
@@ -44,12 +44,12 @@ export function DiffPreviewContent({
       {/* Progress steps */}
       <div className="space-y-1">
         <ToolCallStatusItem status={status === 'running' ? 'running' : 'completed'}>
-          {isEditText ? 'Analyzing text selection...' : 'Analyzing document...'}
+          {isReplaceLines ? 'Analyzing text selection...' : 'Analyzing document...'}
         </ToolCallStatusItem>
         
         {status !== 'running' && (
           <ToolCallStatusItem status="completed">
-            {isEditText ? 'Generated text edit' : 'Generated document rewrite'}
+            {isReplaceLines ? 'Generated text edit' : 'Generated document rewrite'}
           </ToolCallStatusItem>
         )}
       </div>
@@ -141,14 +141,14 @@ export function DiffPreviewContent({
 }
 
 // Helper to get the appropriate icon for diff tools
-export function getDiffToolIcon(toolName: 'edit_text' | 'rewrite_document') {
-  return toolName === 'edit_text' 
+export function getDiffToolIcon(toolName: 'replace_lines' | 'rewrite_document') {
+  return toolName === 'replace_lines' 
     ? <FileEdit className="h-4 w-4" />
     : <FileDiff className="h-4 w-4" />
 }
 
 // Helper to get display name for diff tools
-export function getDiffToolDisplayName(toolName: 'edit_text' | 'rewrite_document', reason?: string) {
-  const baseName = toolName === 'edit_text' ? 'Text edit' : 'Document rewrite'
+export function getDiffToolDisplayName(toolName: 'replace_lines' | 'rewrite_document', reason?: string) {
+  const baseName = toolName === 'replace_lines' ? 'Text edit' : 'Document rewrite'
   return reason ? `${baseName}: ${reason}` : baseName
 }

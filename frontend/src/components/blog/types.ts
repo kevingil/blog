@@ -303,7 +303,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   analyze_document: 'analysis',
   add_context_from_sources: 'analysis',
   rewrite_document: 'editing',
-  edit_text: 'editing',
+  replace_lines: 'editing',
   generate_text_content: 'generation',
   generate_image_prompt: 'generation',
 };
@@ -322,7 +322,7 @@ export const ARTIFACT_TOOLS = new Set([
   'ask_question',
   'get_relevant_sources',
   'rewrite_document',
-  'edit_text',
+  'replace_lines',
   'generate_text_content',
   'generate_image_prompt',
 ]);
@@ -339,7 +339,7 @@ export const TOOL_DISPLAY_NAMES: Record<string, string> = {
   analyze_document: 'Analyze Document',
   add_context_from_sources: 'Add Context',
   rewrite_document: 'Rewrite Document',
-  edit_text: 'Edit Text',
+  replace_lines: 'Replace Lines',
   generate_text_content: 'Generate Content',
   generate_image_prompt: 'Generate Image Prompt',
 };

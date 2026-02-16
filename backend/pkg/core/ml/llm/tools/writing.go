@@ -35,7 +35,7 @@ func NewReadDocumentTool() *ReadDocumentTool {
 func (t *ReadDocumentTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        "read_document",
-		Description: `Read the full document with line numbers. Use line numbers to reference content for replace_lines and to identify sections for rewrite_section. The "sections" array shows each heading with its line number.`,
+		Description: `Read the full document with line numbers. Use line numbers to reference content for replace_lines. The "sections" array shows each heading with its line number.`,
 		Parameters:  map[string]any{},
 		Required:    []string{},
 	}
@@ -474,11 +474,6 @@ func NewReplaceLinesTool(draftSaver DraftSaver) *ReplaceLinesTool {
 	return &ReplaceLinesTool{draftSaver: draftSaver}
 }
 
-// Keep old constructor name as alias for backward compatibility during transition
-func NewEditTextTool(draftSaver DraftSaver) *ReplaceLinesTool {
-	return NewReplaceLinesTool(draftSaver)
-}
-
 func (t *ReplaceLinesTool) Info() ToolInfo {
 	return ToolInfo{
 		Name: "replace_lines",
@@ -617,12 +612,6 @@ func countDiffType(diffs []diffmatchpatch.Diff, diffType diffmatchpatch.Operatio
 		}
 	}
 	return count
-}
-
-// DELETED: RewriteSectionTool -- consolidated into ReplaceLinesTool
-// Keep constructor stub so manager.go compiles during transition
-func NewRewriteSectionTool(draftSaver DraftSaver) *ReplaceLinesTool {
-	return NewReplaceLinesTool(draftSaver)
 }
 
 // GenerateImagePromptTool generates image prompts from content
