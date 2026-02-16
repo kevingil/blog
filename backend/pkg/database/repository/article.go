@@ -35,7 +35,7 @@ type ArticleRepository interface {
 
 	// Version management operations
 	SaveDraft(ctx context.Context, article *types.Article) error
-	Publish(ctx context.Context, article *types.Article) error
+	Publish(ctx context.Context, article *types.Article, publishedAt *time.Time) error
 	Unpublish(ctx context.Context, article *types.Article) error
 	ListVersions(ctx context.Context, articleID uuid.UUID) ([]types.ArticleVersion, error)
 	GetVersion(ctx context.Context, versionID uuid.UUID) (*types.ArticleVersion, error)
@@ -413,8 +413,12 @@ func (r *articleRepository) SaveDraft(ctx context.Context, a *types.Article) err
 }
 
 // Publish copies draft to published and creates version asynchronously
-func (r *articleRepository) Publish(ctx context.Context, a *types.Article) error {
+func (r *articleRepository) Publish(ctx context.Context, a *types.Article, publishedAt *time.Time) error {
 	now := time.Now()
+	pubTime := now
+	if publishedAt != nil {
+		pubTime = *publishedAt
+	}
 
 	// 1. Copy draft fields to published fields synchronously
 	err := r.db.WithContext(ctx).Model(&models.Article{}).
@@ -429,7 +433,7 @@ func (r *articleRepository) Publish(ctx context.Context, a *types.Article) error
 				}
 				return nil
 			}(),
-			"published_at": now,
+			"published_at": pubTime,
 			"updated_at":   now,
 		}).Error
 	if err != nil {
@@ -441,7 +445,7 @@ func (r *articleRepository) Publish(ctx context.Context, a *types.Article) error
 	a.PublishedContent = &a.DraftContent
 	a.PublishedImageURL = &a.DraftImageURL
 	a.PublishedEmbedding = a.DraftEmbedding
-	a.PublishedAt = &now
+	a.PublishedAt = &pubTime
 	a.UpdatedAt = now
 
 	// 2. Create published version asynchronously

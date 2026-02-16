@@ -98,7 +98,152 @@ import { Dialog, DialogTitle, DialogContent, DialogTrigger, DialogDescription, D
 import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerClose } from '@/components/ui/drawer';
 import { SourcesManager } from './SourcesManager';
 import { SourcesPreview } from './SourcesPreview';
+import type { UseMutationResult } from '@tanstack/react-query';
 
+function PublishDrawerContent({
+  article,
+  isNew = false,
+  publishMutation,
+  unpublishMutation,
+}: {
+  article: ArticleListItem | null | undefined;
+  isNew?: boolean;
+  publishMutation: UseMutationResult<ArticleListItem, Error, Date | undefined, unknown>;
+  unpublishMutation: UseMutationResult<ArticleListItem, Error, void, unknown>;
+}) {
+  const currentPublishedAt = article?.article.published_at
+    ? new Date(article.article.published_at)
+    : undefined;
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(currentPublishedAt);
+  const [datePopoverOpen, setDatePopoverOpen] = useState(false);
+
+  // Sync when the article's published_at changes externally
+  useEffect(() => {
+    if (article?.article.published_at) {
+      setSelectedDate(new Date(article.article.published_at));
+    }
+  }, [article?.article.published_at]);
+
+  const handlePublish = () => {
+    // Pass the selected date if it differs from the current published_at,
+    // or if the article isn't published yet and a date was picked.
+    const dateOverride = selectedDate && (
+      !currentPublishedAt ||
+      selectedDate.getTime() !== currentPublishedAt.getTime()
+    ) ? selectedDate : undefined;
+    publishMutation.mutate(dateOverride);
+  };
+
+  return (
+    <DrawerContent className="w-full sm:max-w-sm ml-auto">
+      <DrawerHeader>
+        <DrawerTitle>Publishing Settings</DrawerTitle>
+        <DrawerDescription>Manage article publication status.</DrawerDescription>
+      </DrawerHeader>
+      <div className="space-y-4 px-4">
+        {/* Status Display */}
+        <div className="flex items-center gap-2 mb-4">
+          <Badge variant={isPublished(article?.article) ? "default" : "secondary"}>
+            {isPublished(article?.article) ? "Published" : "Draft Only"}
+          </Badge>
+        </div>
+
+        {/* Published At Date Picker */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">Published date</label>
+          <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal",
+                  !selectedDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {selectedDate ? format(selectedDate, 'PPP') : 'Pick a date'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(day) => {
+                  if (day) {
+                    // Preserve time from existing date or use current time
+                    const base = selectedDate || new Date();
+                    day.setHours(base.getHours(), base.getMinutes(), base.getSeconds());
+                  }
+                  setSelectedDate(day);
+                  setDatePopoverOpen(false);
+                }}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+          <p className="text-xs text-muted-foreground">
+            {isPublished(article?.article)
+              ? "Change the published date for this article."
+              : "Optionally set a custom publish date."}
+          </p>
+        </div>
+
+        {/* Show if draft differs from published */}
+        {isPublished(article?.article) && hasDraftChanges(article?.article) && (
+          <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded text-sm text-amber-800 dark:text-amber-200">
+            Draft has unpublished changes
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="space-y-2">
+          {!isPublished(article?.article) ? (
+            <Button
+              onClick={handlePublish}
+              disabled={publishMutation.isPending || isNew}
+              className="w-full"
+            >
+              <Globe className="mr-2 h-4 w-4" />
+              {publishMutation.isPending ? 'Publishing...' : 'Publish'}
+            </Button>
+          ) : (
+            <>
+              <Button
+                onClick={handlePublish}
+                variant="outline"
+                disabled={publishMutation.isPending}
+                className="w-full"
+              >
+                <RefreshCw className={cn("mr-2 h-4 w-4", publishMutation.isPending && "animate-spin")} />
+                {publishMutation.isPending ? 'Updating...' : 'Update Published'}
+              </Button>
+              <Button
+                onClick={() => unpublishMutation.mutate()}
+                variant="destructive"
+                disabled={unpublishMutation.isPending}
+                className="w-full"
+              >
+                <EyeOff className="mr-2 h-4 w-4" />
+                {unpublishMutation.isPending ? 'Unpublishing...' : 'Unpublish'}
+              </Button>
+            </>
+          )}
+        </div>
+
+        {isNew && (
+          <p className="text-xs text-muted-foreground">
+            Save the article first before publishing.
+          </p>
+        )}
+      </div>
+      <DrawerFooter>
+        <DrawerClose asChild>
+          <Button variant="outline" className="w-full">Done</Button>
+        </DrawerClose>
+      </DrawerFooter>
+    </DrawerContent>
+  );
+}
 
 export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const { toast } = useToast()
@@ -361,7 +506,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
   // Mutation for publishing an article (copies draft to published)
   const publishMutation = useMutation({
-    mutationFn: () => publishArticle(blogSlug as string),
+    mutationFn: (publishedAt?: Date) => publishArticle(blogSlug as string, publishedAt),
     onSuccess: (response) => {
       toast({ title: "Success", description: "Article published successfully." });
       queryClient.setQueryData(['article', blogSlug], response);
@@ -1680,78 +1825,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 </DrawerTrigger>
 
                 {/* Drawer content for publishing settings */}
-                <DrawerContent className="w-full sm:max-w-sm ml-auto">
-                  <DrawerHeader>
-                    <DrawerTitle>Publishing Settings</DrawerTitle>
-                    <DrawerDescription>Manage article publication status.</DrawerDescription>
-                  </DrawerHeader>
-                  <div className="space-y-4 px-4">
-                    {/* Status Display */}
-                    <div className="flex items-center gap-2 mb-4">
-                      <Badge variant={isPublished(article?.article) ? "default" : "secondary"}>
-                        {isPublished(article?.article) ? "Published" : "Draft Only"}
-                      </Badge>
-                      {article?.article.published_at && (
-                        <span className="text-xs text-muted-foreground">
-                          Published {format(new Date(article.article.published_at), 'PPP')}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Show if draft differs from published */}
-                    {isPublished(article?.article) && hasDraftChanges(article?.article) && (
-                      <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded text-sm text-amber-800 dark:text-amber-200">
-                        Draft has unpublished changes
-                      </div>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="space-y-2">
-                      {!isPublished(article?.article) ? (
-                        <Button 
-                          onClick={() => publishMutation.mutate()} 
-                          disabled={publishMutation.isPending || isNew}
-                          className="w-full"
-                        >
-                          <Globe className="mr-2 h-4 w-4" />
-                          {publishMutation.isPending ? 'Publishing...' : 'Publish'}
-                        </Button>
-                      ) : (
-                        <>
-                          <Button 
-                            onClick={() => publishMutation.mutate()} 
-                            variant="outline" 
-                            disabled={publishMutation.isPending}
-                            className="w-full"
-                          >
-                            <RefreshCw className={cn("mr-2 h-4 w-4", publishMutation.isPending && "animate-spin")} />
-                            {publishMutation.isPending ? 'Updating...' : 'Update Published'}
-                          </Button>
-                          <Button 
-                            onClick={() => unpublishMutation.mutate()} 
-                            variant="destructive" 
-                            disabled={unpublishMutation.isPending}
-                            className="w-full"
-                          >
-                            <EyeOff className="mr-2 h-4 w-4" />
-                            {unpublishMutation.isPending ? 'Unpublishing...' : 'Unpublish'}
-                          </Button>
-                        </>
-                      )}
-                    </div>
-
-                    {isNew && (
-                      <p className="text-xs text-muted-foreground">
-                        Save the article first before publishing.
-                      </p>
-                    )}
-                  </div>
-                  <DrawerFooter>
-                    <DrawerClose asChild>
-                      <Button variant="outline" className="w-full">Done</Button>
-                    </DrawerClose>
-                  </DrawerFooter>
-                </DrawerContent>
+                <PublishDrawerContent
+                  article={article}
+                  isNew={isNew}
+                  publishMutation={publishMutation}
+                  unpublishMutation={unpublishMutation}
+                />
               </Drawer>
 
               {/* View Article Button */}
