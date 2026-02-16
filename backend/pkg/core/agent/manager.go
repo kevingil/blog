@@ -420,21 +420,15 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	if asyncReq.Request.DocumentContent != "" || asyncReq.Request.DocumentMarkdown != "" {
 		ctx = tools.WithDocumentContent(ctx, asyncReq.Request.DocumentContent, asyncReq.Request.DocumentMarkdown)
 
-		// Generate outline from markdown if available, otherwise fall back to HTML
-		var layout string
+		// Generate rich document context with section boundaries and sizes
+		var docContext string
 		if asyncReq.Request.DocumentMarkdown != "" {
-			layout = generateMarkdownOutline(asyncReq.Request.DocumentMarkdown)
+			docContext = generateDocumentContext(asyncReq.Request.DocumentMarkdown)
 		} else {
-			layout = generateHTMLOutline(asyncReq.Request.DocumentContent)
+			docContext = generateDocumentContext(asyncReq.Request.DocumentContent)
 		}
-		docLen := len(asyncReq.Request.DocumentMarkdown)
-		if docLen == 0 {
-			docLen = len(asyncReq.Request.DocumentContent)
-		}
-		lineCount := strings.Count(asyncReq.Request.DocumentMarkdown, "\n") + 1
-		userPrompt += fmt.Sprintf("\n\n--- Document Info: %d chars, %d lines ---\n", docLen, lineCount)
-		userPrompt += layout
-		log.Printf("[Agent] Document layout generated (%d headers, %d chars, %d lines)", strings.Count(layout, "\n")+1, docLen, lineCount)
+		userPrompt += "\n\n" + docContext
+		log.Printf("[Agent] %s", strings.SplitN(docContext, "\n", 2)[0])
 	}
 
 	// Create a pre-turn version snapshot so the frontend can "Undo All" agent changes.
@@ -1147,19 +1141,34 @@ func convertHTMLToMarkdown(html string) (string, error) {
 }
 
 // generateMarkdownOutline extracts headings from markdown to show document structure
-func generateMarkdownOutline(markdown string) string {
+func generateDocumentContext(markdown string) string {
 	lines := strings.Split(markdown, "\n")
-	var outline []string
+	totalLines := len(lines)
+	totalChars := len(markdown)
 
+	// Count paragraphs (non-empty text blocks after empty lines)
+	paragraphs := 0
+	prevEmpty := true
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" && prevEmpty {
+			paragraphs++
+		}
+		prevEmpty = trimmed == ""
+	}
+
+	// Collect sections with line numbers and heading levels
+	type section struct {
+		heading string
+		line    int
+		level   int
+	}
+	var sections []section
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-
-		// Match markdown headings (## Heading, ### Heading, etc.)
 		if !strings.HasPrefix(trimmed, "#") {
 			continue
 		}
-
-		// Count the heading level
 		level := 0
 		for _, ch := range trimmed {
 			if ch == '#' {
@@ -1171,25 +1180,37 @@ func generateMarkdownOutline(markdown string) string {
 		if level < 1 || level > 6 {
 			continue
 		}
-
-		headerText := strings.TrimSpace(trimmed[level:])
-		if headerText == "" {
+		if strings.TrimSpace(trimmed[level:]) == "" {
 			continue
 		}
+		sections = append(sections, section{heading: trimmed, line: i + 1, level: level})
+	}
 
-		indent := ""
-		if level > 2 {
-			indent = strings.Repeat("  ", level-2)
+	// Build outline with line counts per section
+	var outline strings.Builder
+	for i, s := range sections {
+		nextLine := totalLines + 1
+		if i+1 < len(sections) {
+			nextLine = sections[i+1].line
 		}
-
-		outline = append(outline, fmt.Sprintf("%s- %s (line %d)", indent, headerText, i+1))
+		sectionLines := nextLine - s.line
+		indent := ""
+		if s.level > 2 {
+			indent = strings.Repeat("  ", s.level-2)
+		}
+		outline.WriteString(fmt.Sprintf("%s%4d| %s (%d lines)\n", indent, s.line, s.heading, sectionLines))
 	}
 
-	if len(outline) == 0 {
-		return "(empty document)"
+	if len(sections) == 0 {
+		return fmt.Sprintf("--- Document Context ---\nTotal: %d lines, %d chars, %d paragraphs\n(no headings found)\n---", totalLines, totalChars, paragraphs)
 	}
 
-	return strings.Join(outline, "\n")
+	return fmt.Sprintf("--- Document Context ---\nTotal: %d lines, %d chars, %d paragraphs\nSections:\n%s---", totalLines, totalChars, paragraphs, outline.String())
+}
+
+// Keep old name as alias for backward compatibility
+func generateMarkdownOutline(markdown string) string {
+	return generateDocumentContext(markdown)
 }
 
 // generateHTMLOutline extracts only headers from HTML to show document structure
