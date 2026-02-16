@@ -482,26 +482,26 @@ func NewEditTextTool(draftSaver DraftSaver) *ReplaceLinesTool {
 func (t *ReplaceLinesTool) Info() ToolInfo {
 	return ToolInfo{
 		Name: "replace_lines",
-		Description: `Replace specific lines in the document by line number. Use read_document to see line numbers. For small fixes (typos, rewording 1-5 lines). For larger section changes, use rewrite_section.`,
+		Description: `Replace lines in the document by line number. Use read_document to see line numbers and section boundaries. Works for any change: rewriting sections, fixing typos, adding content, deleting lines. For deletions, omit new_content or set to empty string.`,
 		Parameters: map[string]any{
 			"start_line": map[string]any{
 				"type":        "number",
-				"description": "First line to replace (1-indexed, from read_document output)",
+				"description": "First line to replace (1-indexed, from read_document)",
 			},
 			"end_line": map[string]any{
 				"type":        "number",
-				"description": "Last line to replace (inclusive). Same as start_line to replace a single line.",
+				"description": "Last line to replace (inclusive)",
 			},
 			"new_content": map[string]any{
 				"type":        "string",
-				"description": "The replacement markdown text. Can be more or fewer lines than the original.",
+				"description": "Replacement text. Can be more or fewer lines. Omit or empty to delete lines.",
 			},
 			"reason": map[string]any{
 				"type":        "string",
-				"description": "Brief explanation of the change",
+				"description": "Brief explanation",
 			},
 		},
-		Required: []string{"start_line", "end_line", "new_content", "reason"},
+		Required: []string{"start_line", "end_line", "reason"},
 	}
 }
 
@@ -619,187 +619,10 @@ func countDiffType(diffs []diffmatchpatch.Diff, diffType diffmatchpatch.Operatio
 	return count
 }
 
-// RewriteSectionTool replaces an entire document section identified by its heading.
-// More reliable than edit_text for large changes because it only requires matching the heading.
-type RewriteSectionTool struct {
-	draftSaver DraftSaver
-}
-
-func NewRewriteSectionTool(draftSaver DraftSaver) *RewriteSectionTool {
-	return &RewriteSectionTool{draftSaver: draftSaver}
-}
-
-func (t *RewriteSectionTool) Info() ToolInfo {
-	return ToolInfo{
-		Name:        "rewrite_section",
-		Description: `DEFAULT tool for content changes. Replace an entire section by heading. Use for: rewriting paragraphs, adding content, restructuring, deleting sections. Provide the heading and full new content (must start with the heading). Always generates a before/after diff.`,
-		Parameters: map[string]any{
-			"section_heading": map[string]any{
-				"type":        "string",
-				"description": "The exact heading text of the section to replace (e.g., '### Best Practices')",
-			},
-			"new_content": map[string]any{
-				"type":        "string",
-				"description": "The new markdown content for this section, starting with the heading",
-			},
-			"reason": map[string]any{
-				"type":        "string",
-				"description": "Brief explanation of the change",
-			},
-		},
-		Required: []string{"section_heading", "new_content", "reason"},
-	}
-}
-
-func (t *RewriteSectionTool) Run(ctx context.Context, params ToolCall) (ToolResponse, error) {
-	var input struct {
-		SectionHeading string `json:"section_heading"`
-		NewContent     string `json:"new_content"`
-		Reason         string `json:"reason"`
-	}
-
-	if err := json.Unmarshal([]byte(params.Input), &input); err != nil {
-		return NewTextErrorResponse("Invalid input format"), err
-	}
-
-	if input.SectionHeading == "" || input.NewContent == "" {
-		return NewTextErrorResponse("section_heading and new_content are required"), fmt.Errorf("section_heading and new_content are required")
-	}
-
-	log.Printf("📝 [RewriteSection] Processing section rewrite")
-	log.Printf("   📄 Heading: %q", input.SectionHeading)
-	log.Printf("   📝 Reason: %q", input.Reason)
-
-	documentMarkdown := GetDocumentMarkdownFromContext(ctx)
-	if documentMarkdown == "" {
-		return NewTextErrorResponse("No document content available"), nil
-	}
-
-	// Determine the heading level (count leading #)
-	headingLevel := 0
-	for _, ch := range input.SectionHeading {
-		if ch == '#' {
-			headingLevel++
-		} else {
-			break
-		}
-	}
-	if headingLevel == 0 {
-		return NewTextErrorResponse("section_heading must start with # (e.g., '## Section' or '### Subsection')"), nil
-	}
-
-	// Find the section heading in the document
-	lines := strings.Split(documentMarkdown, "\n")
-	sectionStart := -1
-	for i, line := range lines {
-		if strings.TrimSpace(line) == strings.TrimSpace(input.SectionHeading) {
-			sectionStart = i
-			break
-		}
-	}
-
-	if sectionStart == -1 {
-		// Collect available headings for the error message
-		var headings []string
-		for _, line := range lines {
-			trimmed := strings.TrimSpace(line)
-			if strings.HasPrefix(trimmed, "## ") || strings.HasPrefix(trimmed, "### ") || strings.HasPrefix(trimmed, "#### ") {
-				headings = append(headings, trimmed)
-			}
-		}
-		headingList := strings.Join(headings, ", ")
-		if len(headingList) > 300 {
-			headingList = headingList[:300] + "..."
-		}
-
-		errMsg := fmt.Sprintf("Section heading %q not found. Use read_document to see current headings. Available: [%s]", input.SectionHeading, headingList)
-		return NewTextErrorResponse(errMsg), nil
-	}
-
-	// Find the end of the section (next heading of same or higher level, or end of doc)
-	sectionEnd := len(lines)
-	for i := sectionStart + 1; i < len(lines); i++ {
-		trimmed := strings.TrimSpace(lines[i])
-		if strings.HasPrefix(trimmed, "#") {
-			// Count the heading level
-			level := 0
-			for _, ch := range trimmed {
-				if ch == '#' {
-					level++
-				} else {
-					break
-				}
-			}
-			if level > 0 && level <= headingLevel {
-				sectionEnd = i
-				break
-			}
-		}
-	}
-
-	// Build old section content for diff display
-	oldSection := strings.Join(lines[sectionStart:sectionEnd], "\n")
-
-	// Build new document: before section + new content + after section
-	before := strings.Join(lines[:sectionStart], "\n")
-	after := ""
-	if sectionEnd < len(lines) {
-		after = strings.Join(lines[sectionEnd:], "\n")
-	}
-
-	var newMarkdown string
-	if before != "" && after != "" {
-		newMarkdown = before + "\n" + input.NewContent + "\n" + after
-	} else if before != "" {
-		newMarkdown = before + "\n" + input.NewContent
-	} else if after != "" {
-		newMarkdown = input.NewContent + "\n" + after
-	} else {
-		newMarkdown = input.NewContent
-	}
-
-	log.Printf("   ✅ Section replaced: lines %d-%d (%d chars -> %d chars)", sectionStart+1, sectionEnd, len(oldSection), len(input.NewContent))
-
-	// Update mutable document state and persist
-	UpdateDocumentMarkdown(ctx, newMarkdown)
-	if t.draftSaver != nil {
-		articleID := GetArticleIDFromContext(ctx)
-		if articleID != "" {
-			if err := t.draftSaver.UpdateDraftContent(ctx, articleID, newMarkdown); err != nil {
-				log.Printf("   ⚠️ [RewriteSection] Failed to persist draft: %v", err)
-			} else {
-				log.Printf("   💾 [RewriteSection] Draft persisted to DB")
-			}
-		}
-	}
-
-	// Generate diff
-	dmp := diffmatchpatch.New()
-	diffs := dmp.DiffMain(oldSection, input.NewContent, false)
-
-	result := map[string]interface{}{
-		"old_str":      oldSection,
-		"new_str":      input.NewContent,
-		"reason":       input.Reason,
-		"tool_name":    "rewrite_section",
-		"new_markdown": newMarkdown,
-	}
-	resultJSON, _ := json.Marshal(result)
-
-	return ToolResponse{
-		Type:    ToolResponseTypeText,
-		Content: string(resultJSON),
-		Result:  result,
-		Artifact: &ArtifactHint{
-			Type: ArtifactHintTypeDiff,
-			Data: map[string]interface{}{
-				"original": oldSection,
-				"proposed": input.NewContent,
-				"reason":   input.Reason,
-				"diffs":    diffs,
-			},
-		},
-	}, nil
+// DELETED: RewriteSectionTool -- consolidated into ReplaceLinesTool
+// Keep constructor stub so manager.go compiles during transition
+func NewRewriteSectionTool(draftSaver DraftSaver) *ReplaceLinesTool {
+	return NewReplaceLinesTool(draftSaver)
 }
 
 // GenerateImagePromptTool generates image prompts from content

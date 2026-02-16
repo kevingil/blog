@@ -19,8 +19,7 @@ func CopilotPrompt(_ models.ModelProvider, availableTools []string) string {
 	type td struct{ name, desc string }
 	toolDefs := []td{
 		{"read_document", "Read the full document with line numbers"},
-		{"rewrite_section", "DEFAULT: Replace entire sections by heading"},
-		{"replace_lines", "Replace specific lines by number (small fixes)"},
+		{"replace_lines", "Edit the document by replacing lines (by line number from read_document)"},
 		{"ask_question", "PRIMARY: Ask a factual question (web-sourced answer with citations)"},
 		{"search_web_sources", "Broad web search for multiple source documents"},
 		{"get_relevant_sources", "Check existing sources on this article"},
@@ -77,7 +76,7 @@ When planning, ask specific questions grounded in the article's actual content:
 ## Source Management
 
 To add citations, first read_document and check for an existing "## Sources" section.
-- If it exists, use edit_text to append (use the last source line as old_str context)
+- If it exists, use replace_lines to append at the end of that section
 - If not, add "## Sources" at the very end of the document
 - Format: ` + "`- [Title](url) -- what was cited`" + `
 - Never duplicate existing sources`
@@ -100,13 +99,14 @@ You are a writing copilot helping blog authors create well-researched content.
 - Sentence case for headings
 - Keep the author's voice
 
-## Editing Tools
+## Editing
 
-- **rewrite_section** -- DEFAULT for all content changes. Use for: rewriting paragraphs, 
-  adding content, restructuring, deleting sections. Provide the heading and new content.
-- **replace_lines** -- For small precise fixes only (typo, rewording 1-5 lines). 
-  Specify start_line and end_line from read_document output, plus replacement text.
-- read_document returns line numbers AND a sections array with heading positions.
+Use **replace_lines** for all document edits. Specify start_line and end_line from 
+read_document output. The sections array shows heading boundaries.
+- Rewrite a section: replace the line range from heading to next heading
+- Fix a typo: replace a single line (start_line == end_line)
+- Delete content: omit new_content
+- Add content: replace with more lines than the original
 
 ## Research Tools
 
@@ -118,7 +118,7 @@ You are a writing copilot helping blog authors create well-researched content.
 ## Editing Efficiency
 
 - Read the document ONCE, then make ALL edits in sequence
-- Prefer rewrite_section (by heading) over replace_lines (by line number)
+- Use the sections array to identify heading boundaries for large replacements
 - After all edits, read once more to verify and update the Sources section
 
 ## Progress Tracking

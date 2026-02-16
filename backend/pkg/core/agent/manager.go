@@ -147,8 +147,7 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 	// Create writing tools for the agent
 	writingTools := []tools.BaseTool{
 		tools.NewReadDocumentTool(),
-		tools.NewEditTextTool(draftSaver),
-		tools.NewRewriteSectionTool(draftSaver),
+		tools.NewReplaceLinesTool(draftSaver),
 		tools.NewGenerateImagePromptTool(textGenService),
 	}
 
@@ -361,7 +360,34 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	}
 	log.Printf("[Agent] ✅ Loaded %d messages from database as context", len(dbMessages))
 
+	// Sanitize message ordering for Gemini compatibility:
+	// Gemini requires strict alternation: user -> assistant(+tool_call) -> tool -> assistant -> user
+	// Merge consecutive same-role messages and drop orphaned tool results.
+	sanitized := make([]message.Message, 0, len(dbMessages))
 	for _, msg := range dbMessages {
+		if len(sanitized) > 0 {
+			prev := sanitized[len(sanitized)-1]
+			// Skip consecutive messages of the same role (merge by dropping the duplicate)
+			if msg.Role == prev.Role && msg.Role != message.Tool {
+				// Replace previous with this one (keep the later message)
+				sanitized[len(sanitized)-1] = msg
+				continue
+			}
+			// Tool messages must follow an assistant message with tool calls
+			if msg.Role == message.Tool && prev.Role != message.Assistant {
+				log.Printf("[Agent] Skipping orphaned tool message in history")
+				continue
+			}
+		}
+		sanitized = append(sanitized, msg)
+	}
+	// Ensure history starts with a user message (Gemini requirement)
+	for len(sanitized) > 0 && sanitized[0].Role != message.User {
+		sanitized = sanitized[1:]
+	}
+	log.Printf("[Agent] Sanitized history: %d -> %d messages", len(dbMessages), len(sanitized))
+
+	for _, msg := range sanitized {
 		_, err := m.messageSvc.Create(ctx, sess.ID, message.CreateMessageParams{
 			Role:  msg.Role,
 			Parts: msg.Parts,
