@@ -35,14 +35,13 @@ func NewReadDocumentTool() *ReadDocumentTool {
 func (t *ReadDocumentTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        "read_document",
-		Description: `Read the full document as raw markdown. The result includes a "sections" array with each heading's line number and level for navigation. Copy text directly from the content into edit_text old_str.`,
+		Description: `Read the full document with line numbers. Use line numbers to reference content for replace_lines and to identify sections for rewrite_section. The "sections" array shows each heading with its line number.`,
 		Parameters:  map[string]any{},
 		Required:    []string{},
 	}
 }
 
 func (t *ReadDocumentTool) Run(ctx context.Context, params ToolCall) (ToolResponse, error) {
-	// Get markdown content (preferred) or fall back to HTML
 	docContent := GetDocumentMarkdownFromContext(ctx)
 	if docContent == "" {
 		docContent = GetDocumentHTMLFromContext(ctx)
@@ -54,6 +53,13 @@ func (t *ReadDocumentTool) Run(ctx context.Context, params ToolCall) (ToolRespon
 
 	lines := strings.Split(docContent, "\n")
 	totalLines := len(lines)
+
+	// Build numbered content (line numbers for LLM reference)
+	numbered := make([]string, totalLines)
+	for i, line := range lines {
+		numbered[i] = fmt.Sprintf("%4d| %s", i+1, line)
+	}
+	numberedContent := strings.Join(numbered, "\n")
 
 	// Build section map from headings
 	type sectionInfo struct {
@@ -82,7 +88,7 @@ func (t *ReadDocumentTool) Run(ctx context.Context, params ToolCall) (ToolRespon
 	log.Printf("📖 [ReadDocument] Returning full document (%d lines, %d chars, %d sections)", totalLines, len(docContent), len(sections))
 
 	result := map[string]interface{}{
-		"content":     docContent,
+		"content":     numberedContent,
 		"total_lines": totalLines,
 		"total_chars": len(docContent),
 		"sections":    sections,
@@ -458,258 +464,136 @@ func calculateRelevanceScore(text string, queryKeywords []string) float64 {
 	return score
 }
 
-// EditTextTool edits specific text in the document.
-// It updates the mutable DocumentState in context so subsequent read_document calls
-// return the post-edit content. If a DraftSaver is provided, it also persists the
-// edit to the database immediately (making the backend the source of truth).
-type EditTextTool struct {
-	draftSaver DraftSaver // nil-safe: skips DB persistence if nil
+// ReplaceLinesTool replaces specific lines in the document by line number.
+// Line numbers come from read_document's numbered output.
+type ReplaceLinesTool struct {
+	draftSaver DraftSaver
 }
 
-func NewEditTextTool(draftSaver DraftSaver) *EditTextTool {
-	return &EditTextTool{draftSaver: draftSaver}
+func NewReplaceLinesTool(draftSaver DraftSaver) *ReplaceLinesTool {
+	return &ReplaceLinesTool{draftSaver: draftSaver}
 }
 
-func (t *EditTextTool) Info() ToolInfo {
+// Keep old constructor name as alias for backward compatibility during transition
+func NewEditTextTool(draftSaver DraftSaver) *ReplaceLinesTool {
+	return NewReplaceLinesTool(draftSaver)
+}
+
+func (t *ReplaceLinesTool) Info() ToolInfo {
 	return ToolInfo{
-		Name:        "edit_text",
-		Description: `Small, exact string replacement in the document. Copy old_str exactly from read_document output. Keep old_str short (1-3 lines of context). For large changes, use rewrite_section instead.`,
+		Name: "replace_lines",
+		Description: `Replace specific lines in the document by line number. Use read_document to see line numbers. For small fixes (typos, rewording 1-5 lines). For larger section changes, use rewrite_section.`,
 		Parameters: map[string]any{
-			"old_str": map[string]any{
-				"type":        "string",
-				"description": "The exact markdown text to find and replace. MUST include 1-2 lines of context before and after the change for uniqueness.",
+			"start_line": map[string]any{
+				"type":        "number",
+				"description": "First line to replace (1-indexed, from read_document output)",
 			},
-			"new_str": map[string]any{
+			"end_line": map[string]any{
+				"type":        "number",
+				"description": "Last line to replace (inclusive). Same as start_line to replace a single line.",
+			},
+			"new_content": map[string]any{
 				"type":        "string",
-				"description": "The replacement markdown text. Must include the same surrounding context as old_str, with only the changed part modified.",
+				"description": "The replacement markdown text. Can be more or fewer lines than the original.",
 			},
 			"reason": map[string]any{
 				"type":        "string",
-				"description": "Brief explanation of the edit",
+				"description": "Brief explanation of the change",
 			},
 		},
-		Required: []string{"old_str", "new_str", "reason"},
+		Required: []string{"start_line", "end_line", "new_content", "reason"},
 	}
 }
 
-func (t *EditTextTool) Run(ctx context.Context, params ToolCall) (ToolResponse, error) {
+func (t *ReplaceLinesTool) Run(ctx context.Context, params ToolCall) (ToolResponse, error) {
 	var input struct {
-		OldStr string `json:"old_str"`
-		NewStr string `json:"new_str"`
-		Reason string `json:"reason"`
+		StartLine  int    `json:"start_line"`
+		EndLine    int    `json:"end_line"`
+		NewContent string `json:"new_content"`
+		Reason     string `json:"reason"`
 	}
 
 	if err := json.Unmarshal([]byte(params.Input), &input); err != nil {
-		log.Printf("   ❌ [EditText] JSON unmarshal failed: %v (input: %d chars)", err, len(params.Input))
+		log.Printf("   ❌ [ReplaceLines] JSON unmarshal failed: %v", err)
 		return NewTextErrorResponse("Invalid input format"), err
 	}
 
-	if input.OldStr == "" || input.NewStr == "" {
-		log.Printf("   ❌ [EditText] Empty params: old_str=%d new_str=%d", len(input.OldStr), len(input.NewStr))
-		return NewTextErrorResponse("old_str and new_str are required"), fmt.Errorf("old_str and new_str are required")
+	if input.StartLine < 1 || input.EndLine < input.StartLine {
+		return NewTextErrorResponse(fmt.Sprintf("Invalid line range: start_line=%d, end_line=%d. Lines are 1-indexed and end_line must be >= start_line.", input.StartLine, input.EndLine)), nil
 	}
 
-	log.Printf("✏️ [EditText] Processing markdown edit")
+	log.Printf("✏️ [ReplaceLines] Replacing lines %d-%d", input.StartLine, input.EndLine)
 	log.Printf("   📝 Reason: %q", input.Reason)
-	log.Printf("   📄 old_str length: %d chars", len(input.OldStr))
-	log.Printf("   📄 new_str length: %d chars", len(input.NewStr))
 
-	// Get the document markdown from context to validate the edit
 	documentMarkdown := GetDocumentMarkdownFromContext(ctx)
-
-	var newMarkdown string
-	matchStage := "none"
-	if documentMarkdown != "" {
-		// Stage 1: Exact match
-		index := strings.Index(documentMarkdown, input.OldStr)
-		if index != -1 {
-			matchStage = "exact"
-		}
-
-		// Stage 2: Combined normalization (markdown escapes + unicode + whitespace)
-		if index == -1 {
-			normalize := func(s string) string {
-				// Markdown backslash escapes + JSON unicode escapes
-				n := strings.NewReplacer(
-					`\*`, `*`, `\_`, `_`, `\[`, `[`, `\]`, `]`, `\#`, `#`, "\\`", "`", `\&`, `&`,
-					`\u0026`, `&`, `\u003c`, `<`, `\u003e`, `>`, `\u0022`, `"`, `\u0027`, `'`,
-					"\u2014", "-", "\u2013", "-", // em/en dash -> hyphen
-					"\u2018", "'", "\u2019", "'", // smart single quotes
-					"\u201C", `"`, "\u201D", `"`, // smart double quotes
-					"\u2026", "...", "\u00A0", " ", // ellipsis, NBSP
-				).Replace(s)
-				// Collapse runs of spaces/tabs (preserve newlines)
-				var b strings.Builder
-				prevSpace := false
-				for _, r := range n {
-					if r == ' ' || r == '\t' {
-						if !prevSpace {
-							b.WriteRune(' ')
-						}
-						prevSpace = true
-					} else {
-						b.WriteRune(r)
-						prevSpace = false
-					}
-				}
-				return b.String()
-			}
-			normOld := normalize(input.OldStr)
-			normDoc := normalize(documentMarkdown)
-			index = strings.Index(normDoc, normOld)
-			if index != -1 {
-				documentMarkdown = normDoc
-				input.OldStr = normOld
-				input.NewStr = normalize(input.NewStr)
-				matchStage = "normalized"
-				log.Printf("   🔄 Matched after combined normalization")
-			}
-		}
-
-		// Stage 3: Fuzzy patch matching using diffmatchpatch
-		if index == -1 {
-			log.Printf("   🔄 Trying fuzzy patch match...")
-			fuzzyDmp := diffmatchpatch.New()
-			fuzzyDmp.MatchThreshold = 0.3
-			fuzzyDmp.MatchDistance = 1000
-			fuzzyDmp.PatchDeleteThreshold = 0.4
-			patches := fuzzyDmp.PatchMake(input.OldStr, input.NewStr)
-			applied, results := fuzzyDmp.PatchApply(patches, documentMarkdown)
-			anyApplied := false
-			for _, r := range results {
-				if r {
-					anyApplied = true
-					break
-				}
-			}
-			if anyApplied && applied != documentMarkdown {
-				newMarkdown = applied
-				matchStage = "fuzzy"
-				log.Printf("   🔄 Fuzzy patch applied (%d/%d hunks)", countTrue(results), len(results))
-				index = 0 // sentinel so we skip error path
-			}
-		}
-
-		if matchStage != "exact" {
-			log.Printf("   🔍 Match stage: %s (oldStr: %d chars, doc: %d chars)", matchStage, len(input.OldStr), len(documentMarkdown))
-		}
-
-		if index == -1 {
-			log.Printf("   ❌ old_str not found in document")
-
-			// Build actionable error with document headings
-			var headings []string
-			for _, line := range strings.Split(documentMarkdown, "\n") {
-				trimmed := strings.TrimSpace(line)
-				if strings.HasPrefix(trimmed, "## ") || strings.HasPrefix(trimmed, "### ") {
-					headings = append(headings, trimmed)
-				}
-			}
-			headingList := strings.Join(headings, ", ")
-			if len(headingList) > 300 {
-				headingList = headingList[:300] + "..."
-			}
-			errMsg := fmt.Sprintf("Could not find old_str in the document. "+
-				"TIPS: 1) Call read_document to see CURRENT content -- it returns raw markdown you can copy exactly. "+
-				"2) Use smaller edits (2-4 lines of context). 3) For large section changes, use rewrite_section instead. "+
-				"Document headings: [%s]", headingList)
-
-			result := map[string]interface{}{
-				"old_str":   input.OldStr,
-				"new_str":   input.NewStr,
-				"reason":    input.Reason,
-				"tool_name": "edit_text",
-				"is_error":  true,
-				"error":     errMsg,
-			}
-			resultJSON, _ := json.Marshal(result)
-			return ToolResponse{
-				Type:    ToolResponseTypeText,
-				Content: string(resultJSON),
-				Result:  result,
-				IsError: true,
-				Artifact: &ArtifactHint{
-					Type: ArtifactHintTypeDiff,
-					Data: map[string]interface{}{
-						"original": input.OldStr,
-						"proposed": input.NewStr,
-						"reason":   input.Reason,
-					},
-				},
-			}, nil
-		}
-
-		if index != -1 && newMarkdown == "" {
-			// Exact/normalized match succeeded -- apply via string replacement
-			// (fuzzy path already set newMarkdown, so skip this if newMarkdown is set)
-			lastIndex := strings.LastIndex(documentMarkdown, input.OldStr)
-			if index != lastIndex {
-				log.Printf("   ❌ old_str appears multiple times in document")
-				return NewTextErrorResponse("old_str appears multiple times in the document. Include more surrounding context to make it unique."), nil
-			}
-
-			newMarkdown = documentMarkdown[:index] + input.NewStr + documentMarkdown[index+len(input.OldStr):]
-			log.Printf("   ✅ Edit applied to document markdown (new length: %d)", len(newMarkdown))
-		}
-	} else {
-		log.Printf("   ⚠️ No document markdown in context, returning edit without validation")
+	if documentMarkdown == "" {
+		return NewTextErrorResponse("No document content available"), nil
 	}
 
-	// Update the mutable document state so subsequent read_document calls return the
-	// post-edit content (solves stale-read during multi-edit turns).
-	// Also persist to DB so the backend is the source of truth for draft content.
-	if newMarkdown != "" {
-		UpdateDocumentMarkdown(ctx, newMarkdown)
+	lines := strings.Split(documentMarkdown, "\n")
+	totalLines := len(lines)
 
-		if t.draftSaver != nil {
-			articleID := GetArticleIDFromContext(ctx)
-			if articleID != "" {
-				if err := t.draftSaver.UpdateDraftContent(ctx, articleID, newMarkdown); err != nil {
-					log.Printf("   ⚠️ [EditText] Failed to persist draft to DB: %v", err)
-				} else {
-					log.Printf("   💾 [EditText] Draft content persisted to DB")
-				}
+	if input.StartLine > totalLines {
+		return NewTextErrorResponse(fmt.Sprintf("start_line %d exceeds document length (%d lines). Call read_document to see current line numbers.", input.StartLine, totalLines)), nil
+	}
+	if input.EndLine > totalLines {
+		input.EndLine = totalLines
+	}
+
+	// Extract old content (for before/after diff)
+	oldLines := lines[input.StartLine-1 : input.EndLine]
+	oldContent := strings.Join(oldLines, "\n")
+
+	// Build new document: before + new_content + after
+	before := lines[:input.StartLine-1]
+	after := lines[input.EndLine:]
+
+	var newDocLines []string
+	newDocLines = append(newDocLines, before...)
+	if input.NewContent != "" {
+		newDocLines = append(newDocLines, strings.Split(input.NewContent, "\n")...)
+	}
+	newDocLines = append(newDocLines, after...)
+
+	newMarkdown := strings.Join(newDocLines, "\n")
+
+	log.Printf("   ✅ Replaced lines %d-%d (%d chars -> %d chars)", input.StartLine, input.EndLine, len(oldContent), len(input.NewContent))
+
+	// Update mutable document state and persist
+	UpdateDocumentMarkdown(ctx, newMarkdown)
+	if t.draftSaver != nil {
+		articleID := GetArticleIDFromContext(ctx)
+		if articleID != "" {
+			if err := t.draftSaver.UpdateDraftContent(ctx, articleID, newMarkdown); err != nil {
+				log.Printf("   ⚠️ [ReplaceLines] Failed to persist draft: %v", err)
+			} else {
+				log.Printf("   💾 [ReplaceLines] Draft persisted to DB")
 			}
 		}
 	}
 
-	// Generate diff for display
-	dmp := diffmatchpatch.New()
-	diffs := dmp.DiffMain(input.OldStr, input.NewStr, false)
-
-	// Prepare the result -- includes new_markdown so the frontend can update the editor
 	result := map[string]interface{}{
-		"old_str":      input.OldStr,
-		"new_str":      input.NewStr,
-		"reason":       input.Reason,
-		"tool_name":    "edit_text",
+		"old_str":      oldContent,
+		"new_str":      input.NewContent,
 		"new_markdown": newMarkdown,
-	}
-
-	result["patch"] = map[string]interface{}{
-		"summary": map[string]interface{}{
-			"additions": countDiffType(diffs, diffmatchpatch.DiffInsert),
-			"deletions": countDiffType(diffs, diffmatchpatch.DiffDelete),
-			"unchanged": countDiffType(diffs, diffmatchpatch.DiffEqual),
-		},
-	}
-
-	// Create artifact hint for diff display
-	artifactData := map[string]interface{}{
-		"original": input.OldStr,
-		"proposed": input.NewStr,
-		"reason":   input.Reason,
+		"reason":       input.Reason,
+		"tool_name":    "replace_lines",
+		"start_line":   input.StartLine,
+		"end_line":     input.EndLine,
 	}
 
 	resultJSON, _ := json.Marshal(result)
-
 	return ToolResponse{
 		Type:    ToolResponseTypeText,
 		Content: string(resultJSON),
 		Result:  result,
 		Artifact: &ArtifactHint{
 			Type: ArtifactHintTypeDiff,
-			Data: artifactData,
+			Data: map[string]interface{}{
+				"original": oldContent,
+				"proposed": input.NewContent,
+				"reason":   input.Reason,
+			},
 		},
 	}, nil
 }
@@ -748,7 +632,7 @@ func NewRewriteSectionTool(draftSaver DraftSaver) *RewriteSectionTool {
 func (t *RewriteSectionTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        "rewrite_section",
-		Description: `Replace an entire section by its heading. Provide the exact heading (e.g., "### Best Practices") and the full new content (must start with the heading). Finds section boundaries automatically.`,
+		Description: `DEFAULT tool for content changes. Replace an entire section by heading. Use for: rewriting paragraphs, adding content, restructuring, deleting sections. Provide the heading and full new content (must start with the heading). Always generates a before/after diff.`,
 		Parameters: map[string]any{
 			"section_heading": map[string]any{
 				"type":        "string",

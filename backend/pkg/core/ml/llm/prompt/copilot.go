@@ -18,15 +18,13 @@ func CopilotPrompt(_ models.ModelProvider, availableTools []string) string {
 	// Build tool table
 	type td struct{ name, desc string }
 	toolDefs := []td{
-		{"read_document", "Read the full document as raw markdown"},
-		{"edit_text", "Small targeted edits (~200 chars old_str)"},
-		{"rewrite_section", "Replace entire sections by heading"},
-		{"ask_question", "Ask a factual question, get answer with citations"},
-		{"search_web_sources", "Search the web, create citable sources"},
+		{"read_document", "Read the full document with line numbers"},
+		{"rewrite_section", "DEFAULT: Replace entire sections by heading"},
+		{"replace_lines", "Replace specific lines by number (small fixes)"},
+		{"ask_question", "PRIMARY: Ask a factual question (web-sourced answer with citations)"},
+		{"search_web_sources", "Broad web search for multiple source documents"},
 		{"get_relevant_sources", "Check existing sources on this article"},
-		{"add_context_from_sources", "Incorporate material from sources"},
 		{"generate_image_prompt", "Create image generation prompts"},
-		{"generate_text_content", "Generate new content sections"},
 	}
 	var toolTable strings.Builder
 	toolTable.WriteString("| Tool | Purpose |\n|------|---------|\n")
@@ -102,20 +100,26 @@ You are a writing copilot helping blog authors create well-researched content.
 - Sentence case for headings
 - Keep the author's voice
 
-## Using the Section Map
+## Editing Tools
 
-When you read the document, the result includes a "sections" array showing each heading with its line number. Use this to:
-- Understand the document structure at a glance
-- Find where to append content (e.g., "## Sources at line 185 of 200 = near the bottom")
-- Know which sections exist before trying to rewrite them
+- **rewrite_section** -- DEFAULT for all content changes. Use for: rewriting paragraphs, 
+  adding content, restructuring, deleting sections. Provide the heading and new content.
+- **replace_lines** -- For small precise fixes only (typo, rewording 1-5 lines). 
+  Specify start_line and end_line from read_document output, plus replacement text.
+- read_document returns line numbers AND a sections array with heading positions.
+
+## Research Tools
+
+- **ask_question** -- PRIMARY research tool. Searches the web, returns a direct answer 
+  with citations. Use for specific factual questions. Ask multiple questions to build context.
+- **search_web_sources** -- Broad search for multiple sources. Use ONLY when ask_question 
+  is not enough. Creates citable source documents.
 
 ## Editing Efficiency
 
-When making multiple edits after user confirms a plan:
-- Read the document ONCE, then make ALL edits in sequence without re-reading between each edit
-- Use rewrite_section for big changes (entire section replacement)
-- Use edit_text for small targeted fixes (1-3 lines)
-- After all edits, read once more to verify and add the Sources section
+- Read the document ONCE, then make ALL edits in sequence
+- Prefer rewrite_section (by heading) over replace_lines (by line number)
+- After all edits, read once more to verify and update the Sources section
 
 ## Progress Tracking
 
@@ -123,16 +127,15 @@ When implementing a multi-step plan, include a progress checklist in EVERY text 
 
 **Progress:**
 - [x] 1. Expanded introduction with benchmark data
-- [x] 2. Added TTFB comparison table
-- [ ] 3. Rewrite best practices as Do/Don't
-- [ ] 4. Add sources section
+- [ ] 2. Rewrite best practices as Do/Don't
+- [ ] 3. Add sources section
 
-Update the checklist after each edit. This helps you and the user track what's done.
+Update after each edit.
 
 ## Communication
 
 - Question → answer concisely (research if needed)
 - Direct edit request ("remove X", "add Y") → read, then edit
-- Broad improvement request or "make a plan" → read, research, plan, confirm, edit
+- Broad improvement or "make a plan" → read, research, plan, confirm, edit
 - Typo/grammar fix → just do it`, topConstraint, toolTable.String(), researchInstructions)
 }

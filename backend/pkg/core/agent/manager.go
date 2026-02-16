@@ -138,7 +138,7 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 	// Create text generation service for tools that need it
 	textGenService := text.NewGenerationService()
 
-	// Create a DraftSaver adapter for the EditTextTool (bridges string articleID to UUID-based ArticleDraftService)
+	// Create a DraftSaver adapter for editing tools (bridges string articleID to UUID-based ArticleDraftService)
 	var draftSaver tools.DraftSaver
 	if draftService != nil {
 		draftSaver = &draftSaverAdapter{draftService: draftService}
@@ -988,7 +988,7 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 		}
 		msgMetadata.WithToolExecution(toolExec)
 
-		if toolName == "edit_text" || toolName == "rewrite_section" || toolName == "rewrite_document" {
+		if toolName == "edit_text" || toolName == "replace_lines" || toolName == "rewrite_section" || toolName == "rewrite_document" {
 			log.Printf("[Agent]       ✏️  ARTIFACT TOOL DETECTED: %s (isError: %v)", toolName, isError)
 
 			artifactID := uuid.New().String()
@@ -1001,8 +1001,8 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 			var diffPreview string
 			var description string
 
-			if toolName == "edit_text" || toolName == "rewrite_section" {
-				// Both edit_text and rewrite_section use old_str/new_str format
+			if toolName == "edit_text" || toolName == "replace_lines" || toolName == "rewrite_section" {
+				// All editing tools use old_str/new_str format for diff display
 				if newStr, ok := toolResultData["new_str"].(string); ok {
 					artifactContent = newStr
 				} else if newText, ok := toolResultData["new_text"].(string); ok {
@@ -1049,7 +1049,7 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 
 			msgMetadata.WithArtifact(artifact)
 
-			content := fmt.Sprintf("📋 %s: %s", toolName, description)
+			content := "" // Tool card in UI shows the result; no visible text needed
 			savedMsg, err := m.chatService.SaveMessage(ctx, articleID, "assistant", content, msgMetadata)
 			if err != nil {
 				log.Printf("[Agent] ❌ Failed to save tool result message with artifact: %v", err)
