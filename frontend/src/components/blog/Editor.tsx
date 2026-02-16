@@ -1152,7 +1152,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     });
 
                     // Silently apply edits -- content is markdown, set directly via form
-                    if ((toolName === 'edit_text' || toolName === 'rewrite_section') && isNewMessage && !isError) {
+                    if ((toolName === 'edit_text' || toolName === 'replace_lines' || toolName === 'rewrite_section') && isNewMessage && !isError) {
                       if (toolResult.new_markdown) {
                         setValue('content', toolResult.new_markdown);
                         pendingNewDocumentRef.current = toolResult.new_markdown;
@@ -1949,7 +1949,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                   onArtifactAction={(toolId, action) => {
                                     const call = step.toolGroup?.calls.find(c => c.id === toolId);
                                     if (!call) return;
-                                    const editTools = ['edit_text', 'rewrite_section', 'rewrite_document'];
+                                    const editTools = ['edit_text', 'replace_lines', 'rewrite_section', 'rewrite_document'];
                                     if (editTools.includes(call.name) && action === 'accept' && call.result) {
                                       const result = call.result;
                                       const newMd = (result.new_markdown || result.new_content) as string;
