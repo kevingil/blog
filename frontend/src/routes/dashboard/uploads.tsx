@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Card, CardContent } from '../../components/ui/card';
 import { listFiles, uploadFile, deleteFile, createFolder, FileData, FolderData } from '../../services/storage';
 import { createFileRoute } from '@tanstack/react-router';
@@ -6,10 +6,16 @@ import { useAdminDashboard } from '@/services/dashboard/dashboard';
 import { SortingState } from '@tanstack/react-table';
 import { DataTable } from '@/components/uploads/data-table/data-table';
 import { createColumns, UploadItem } from '@/components/uploads/data-table/columns';
+import { FileGrid } from '@/components/uploads/file-grid';
+import { ViewMode } from '@/components/uploads/data-table/data-table-toolbar';
+import { useToast } from '@/hooks/use-toast';
+import { Upload } from 'lucide-react';
 
 export const Route = createFileRoute('/dashboard/uploads')({
   component: UploadsPage,
 });
+
+const LOG_PREFIX = '[Uploads]';
 
 function UploadsPage() {
   const [files, setFiles] = useState<FileData[]>([]);
@@ -22,7 +28,13 @@ function UploadsPage() {
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'name', desc: false }
   ]);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const dragCounterRef = useRef(0);
+
   const { setPageTitle } = useAdminDashboard();
+  const { toast } = useToast();
 
   useEffect(() => {
     setPageTitle("Uploads");
@@ -33,45 +45,45 @@ function UploadsPage() {
     const timer = setTimeout(() => {
       setDebouncedSearchQuery(searchQuery);
     }, 300);
-
     return () => clearTimeout(timer);
   }, [searchQuery]);
-  
-  const fetchFiles = async () => {
+
+  const fetchFiles = useCallback(async () => {
+    console.log(`${LOG_PREFIX} fetchFiles called, currentPath="${currentPath}"`);
     setIsLoading(true);
     try {
-      const { files, folders } = await listFiles(currentPath);
-      setFiles(files);
-      setFolders(folders);
+      const result = await listFiles(currentPath);
+      console.log(`${LOG_PREFIX} fetchFiles success: ${result.files.length} files, ${result.folders.length} folders`);
+      setFiles(result.files);
+      setFolders(result.folders);
       setFetchingError(null);
     } catch (error: any) {
       const errorMessage = error?.message ?? 'An unknown error occurred';
+      console.error(`${LOG_PREFIX} fetchFiles error:`, errorMessage, error);
       setFetchingError(errorMessage);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentPath]);
 
   useEffect(() => {
     fetchFiles();
-  }, [currentPath]); 
+  }, [fetchFiles]);
 
-  // Combine files and folders into a single array for the table
   const combinedData: UploadItem[] = useMemo(() => {
     const folderItems: UploadItem[] = folders.map(folder => ({
       ...folder,
       type: 'folder' as const,
     }));
-    
+
     const fileItems: UploadItem[] = files.map(file => ({
       ...file,
       type: 'file' as const,
     }));
 
-    // Filter based on search query
     const filteredItems = [...folderItems, ...fileItems].filter(item => {
       if (!debouncedSearchQuery) return true;
-      
+
       const searchLower = debouncedSearchQuery.toLowerCase();
       if (item.type === 'folder') {
         return item.name.toLowerCase().includes(searchLower);
@@ -84,59 +96,178 @@ function UploadsPage() {
     return filteredItems;
   }, [files, folders, debouncedSearchQuery]);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      try {
-        await uploadFile(`${currentPath}${file.name}`, file);
-        fetchFiles();
-      } catch (error) {
-        console.error('Error uploading file:', error);
-      }
-      // Reset the input
-      event.target.value = '';
-    }
-  };
+  // ── Multi-file upload with logging ──
 
-  const handleDeleteFile = async (key: string) => {
+  const uploadFiles = useCallback(async (fileList: File[], source: string) => {
+    if (fileList.length === 0) {
+      console.warn(`${LOG_PREFIX} uploadFiles called with empty list from ${source}`);
+      return;
+    }
+
+    console.log(`${LOG_PREFIX} uploadFiles start: ${fileList.length} file(s) from ${source}, targetPath="${currentPath}"`);
+    fileList.forEach((f, i) => {
+      console.log(`${LOG_PREFIX}   [${i}] name="${f.name}" type="${f.type}" size=${f.size}`);
+    });
+
+    setIsUploading(true);
+
+    toast({
+      title: `Uploading ${fileList.length} file${fileList.length > 1 ? 's' : ''}...`,
+      description: `To ${currentPath || '/'}`,
+    });
+
+    const results = await Promise.allSettled(
+      fileList.map(async (file) => {
+        const key = `${currentPath}${file.name}`;
+        console.log(`${LOG_PREFIX} uploading "${file.name}" as key="${key}" (${file.size} bytes)`);
+        try {
+          const result = await uploadFile(key, file);
+          console.log(`${LOG_PREFIX} upload success: "${file.name}" -> key="${key}"`, result);
+          return { name: file.name, key };
+        } catch (err) {
+          console.error(`${LOG_PREFIX} upload failed: "${file.name}" -> key="${key}"`, err);
+          throw err;
+        }
+      })
+    );
+
+    const succeeded = results.filter(r => r.status === 'fulfilled');
+    const failed = results.filter(r => r.status === 'rejected');
+
+    console.log(`${LOG_PREFIX} uploadFiles done: ${succeeded.length} succeeded, ${failed.length} failed`);
+
+    if (failed.length === 0) {
+      toast({
+        title: `Uploaded ${succeeded.length} file${succeeded.length > 1 ? 's' : ''}`,
+        description: succeeded.length === 1
+          ? (succeeded[0] as PromiseFulfilledResult<{ name: string }>).value.name
+          : `All files uploaded to ${currentPath || '/'}`,
+      });
+    } else if (succeeded.length === 0) {
+      toast({
+        title: `Upload failed`,
+        description: `All ${failed.length} file${failed.length > 1 ? 's' : ''} failed to upload`,
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: `Upload partially completed`,
+        description: `${succeeded.length} succeeded, ${failed.length} failed`,
+        variant: 'destructive',
+      });
+    }
+
+    setIsUploading(false);
+    fetchFiles();
+  }, [currentPath, toast, fetchFiles]);
+
+  // ── Input-based upload (now supports multiple) ──
+
+  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const inputFiles = event.target.files;
+    if (!inputFiles || inputFiles.length === 0) {
+      console.log(`${LOG_PREFIX} handleFileUpload: no files selected`);
+      return;
+    }
+    console.log(`${LOG_PREFIX} handleFileUpload: ${inputFiles.length} file(s) selected via input`);
+    await uploadFiles(Array.from(inputFiles), 'file-input');
+    event.target.value = '';
+  }, [uploadFiles]);
+
+  // ── Drag and drop handlers ──
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current += 1;
+    console.log(`${LOG_PREFIX} dragEnter, counter=${dragCounterRef.current}, types=`, e.dataTransfer.types);
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDraggingOver(true);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current -= 1;
+    console.log(`${LOG_PREFIX} dragLeave, counter=${dragCounterRef.current}`);
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDraggingOver(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDraggingOver(false);
+
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    console.log(`${LOG_PREFIX} drop: ${droppedFiles.length} file(s) dropped`);
+
+    if (droppedFiles.length === 0) {
+      console.warn(`${LOG_PREFIX} drop: dataTransfer had no files`);
+      return;
+    }
+
+    await uploadFiles(droppedFiles, 'drag-and-drop');
+  }, [uploadFiles]);
+
+  // ── CRUD operations ──
+
+  const handleDeleteFile = useCallback(async (key: string) => {
+    console.log(`${LOG_PREFIX} deleteFile: key="${key}"`);
     try {
       await deleteFile(key);
+      console.log(`${LOG_PREFIX} deleteFile success: key="${key}"`);
       fetchFiles();
     } catch (error) {
-      console.error('Error deleting file:', error);
+      console.error(`${LOG_PREFIX} deleteFile error: key="${key}"`, error);
     }
-  };
+  }, [fetchFiles]);
 
-  const handleCreateFolder = async (folderName: string) => {
-    if (folderName) {
-      try {
-        await createFolder(`${currentPath}${folderName}/`);
-        fetchFiles();
-      } catch (error) {
-        console.error('Error creating folder:', error);
-      }
+  const handleCreateFolder = useCallback(async (folderName: string) => {
+    if (!folderName) return;
+    const path = `${currentPath}${folderName}/`;
+    console.log(`${LOG_PREFIX} createFolder: path="${path}"`);
+    try {
+      await createFolder(path);
+      console.log(`${LOG_PREFIX} createFolder success: path="${path}"`);
+      fetchFiles();
+    } catch (error) {
+      console.error(`${LOG_PREFIX} createFolder error: path="${path}"`, error);
     }
-  };
+  }, [currentPath, fetchFiles]);
 
-  const navigateToFolder = (path: string) => {
+  const navigateToPath = useCallback((path: string) => {
+    console.log(`${LOG_PREFIX} navigateToPath: "${path}"`);
     setCurrentPath(path);
-  };
-
-  const navigateUp = () => {
-    const newPath = currentPath.split('/').slice(0, -2).join('/') + '/';
-    setCurrentPath(newPath === '/' ? '' : newPath);
-  };
+  }, []);
 
   const columns = useMemo(
     () => createColumns({
       onDelete: handleDeleteFile,
-      onFolderClick: navigateToFolder,
+      onFolderClick: navigateToPath,
     }),
-    []
+    [handleDeleteFile, navigateToPath]
   );
 
+  const isEmpty = !isLoading && combinedData.length === 0;
+
   return (
-    <div className="flex flex-col flex-1 p-0 md:p-4 mb-4 h-full overflow-hidden">
+    <div
+      className="flex flex-col flex-1 p-0 md:p-4 mb-4 h-full overflow-hidden relative"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {fetchingError && (
         <Card className='border-red-200 dark:border-red-700 p-2 text-gray-800 dark:text-white mb-4'>
           <CardContent>
@@ -147,19 +278,52 @@ function UploadsPage() {
         </Card>
       )}
 
-          <DataTable
-            columns={columns}
-            data={combinedData}
-            onSortingChange={setSorting}
-            sorting={sorting}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            isLoading={isLoading}
-            currentPath={currentPath}
-            onNavigateUp={navigateUp}
-            onFileUpload={handleFileUpload}
-            onCreateFolder={handleCreateFolder}
-          />
+      <DataTable
+        columns={columns}
+        data={combinedData}
+        onSortingChange={setSorting}
+        sorting={sorting}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        isLoading={isLoading}
+        currentPath={currentPath}
+        onNavigateToPath={navigateToPath}
+        onFileUpload={handleFileUpload}
+        onCreateFolder={handleCreateFolder}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        gridView={
+          isEmpty ? (
+            <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-3 border rounded-md border-dashed">
+              <Upload className="h-10 w-10" />
+              <p className="text-sm">Drop files here or click Upload</p>
+              <p className="text-xs">Files will be uploaded to <span className="font-mono">{currentPath || '/'}</span></p>
+            </div>
+          ) : (
+            <FileGrid
+              data={combinedData}
+              onDelete={handleDeleteFile}
+              onFolderClick={navigateToPath}
+              isLoading={isLoading}
+            />
+          )
+        }
+      />
+
+      {/* Drag overlay */}
+      {isDraggingOver && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-primary rounded-lg pointer-events-none">
+          <div className="flex flex-col items-center gap-3 text-primary">
+            <Upload className="h-16 w-16 animate-bounce" />
+            <p className="text-lg font-medium">
+              Drop to upload to <span className="font-mono">{currentPath || '/'}</span>
+            </p>
+            {isUploading && (
+              <p className="text-sm text-muted-foreground">Uploading...</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

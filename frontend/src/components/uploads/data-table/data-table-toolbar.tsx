@@ -10,36 +10,115 @@ import {
   DialogClose,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { X, Upload, FolderPlus, ChevronUp } from "lucide-react";
-import { useState } from "react";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { X, Upload, FolderPlus, LayoutGrid, List, Home } from "lucide-react";
+import { useState, Fragment } from "react";
+
+export type ViewMode = "grid" | "list";
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
   searchQuery: string;
   onSearchChange: (value: string) => void;
   currentPath: string;
-  onNavigateUp: () => void;
+  onNavigateToPath: (path: string) => void;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onCreateFolder: (name: string) => void;
+  viewMode: ViewMode;
+  onViewModeChange: (mode: ViewMode) => void;
+}
+
+function PathBreadcrumb({
+  currentPath,
+  onNavigateToPath,
+}: {
+  currentPath: string;
+  onNavigateToPath: (path: string) => void;
+}) {
+  const segments = currentPath
+    .split("/")
+    .filter((s) => s.length > 0);
+
+  return (
+    <Breadcrumb>
+      <BreadcrumbList>
+        <BreadcrumbItem>
+          {segments.length === 0 ? (
+            <BreadcrumbPage className="flex items-center gap-1.5">
+              <Home className="h-3.5 w-3.5" />
+              Files
+            </BreadcrumbPage>
+          ) : (
+            <BreadcrumbLink
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigateToPath("");
+              }}
+              className="flex items-center gap-1.5"
+            >
+              <Home className="h-3.5 w-3.5" />
+              Files
+            </BreadcrumbLink>
+          )}
+        </BreadcrumbItem>
+
+        {segments.map((segment, index) => {
+          const pathUpToHere =
+            segments.slice(0, index + 1).join("/") + "/";
+          const isLast = index === segments.length - 1;
+
+          return (
+            <Fragment key={pathUpToHere}>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                {isLast ? (
+                  <BreadcrumbPage>{segment}</BreadcrumbPage>
+                ) : (
+                  <BreadcrumbLink
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onNavigateToPath(pathUpToHere);
+                    }}
+                  >
+                    {segment}
+                  </BreadcrumbLink>
+                )}
+              </BreadcrumbItem>
+            </Fragment>
+          );
+        })}
+      </BreadcrumbList>
+    </Breadcrumb>
+  );
 }
 
 export function DataTableToolbar<TData>({
-  table,
   searchQuery,
   onSearchChange,
   currentPath,
-  onNavigateUp,
+  onNavigateToPath,
   onFileUpload,
   onCreateFolder,
+  viewMode,
+  onViewModeChange,
 }: DataTableToolbarProps<TData>) {
-  const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderName, setNewFolderName] = useState("");
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
   const isFiltered = searchQuery.length > 0;
 
   const handleCreateFolder = () => {
     if (newFolderName.trim()) {
       onCreateFolder(newFolderName.trim());
-      setNewFolderName('');
+      setNewFolderName("");
       setIsCreateFolderOpen(false);
     }
   };
@@ -47,24 +126,13 @@ export function DataTableToolbar<TData>({
   return (
     <div className="space-y-4 py-4">
       {/* Breadcrumb Navigation */}
-      <div className="flex items-center gap-2">
-        <Button 
-          onClick={onNavigateUp} 
-          disabled={currentPath === ''}
-          variant="outline"
-          size="sm"
-          className="h-9"
-        >
-          <ChevronUp className="mr-2 h-4 w-4" />
-          Up
-        </Button>
-        <span className="text-sm text-muted-foreground">
-          {currentPath || '/'}
-        </span>
-      </div>
+      <PathBreadcrumb
+        currentPath={currentPath}
+        onNavigateToPath={onNavigateToPath}
+      />
 
       {/* Search and Actions */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex flex-1 items-center space-x-2">
           <Input
             placeholder="Search files and folders..."
@@ -83,25 +151,49 @@ export function DataTableToolbar<TData>({
             </Button>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          {/* View Toggle */}
+          <div className="flex items-center border rounded-md">
+            <Button
+              variant={viewMode === "grid" ? "secondary" : "ghost"}
+              size="icon"
+              className="h-9 w-9 rounded-r-none"
+              onClick={() => onViewModeChange("grid")}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === "list" ? "secondary" : "ghost"}
+              size="icon"
+              className="h-9 w-9 rounded-l-none"
+              onClick={() => onViewModeChange("list")}
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
+
           {/* Upload File */}
           <div>
             <Input
               id="file-upload"
               type="file"
+              multiple
               onChange={onFileUpload}
               className="hidden"
             />
             <Button asChild variant="outline" size="sm" className="h-9">
               <label htmlFor="file-upload" className="cursor-pointer">
                 <Upload className="mr-2 h-4 w-4" />
-                Upload File
+                Upload
               </label>
             </Button>
           </div>
 
           {/* Create Folder Dialog */}
-          <Dialog open={isCreateFolderOpen} onOpenChange={setIsCreateFolderOpen}>
+          <Dialog
+            open={isCreateFolderOpen}
+            onOpenChange={setIsCreateFolderOpen}
+          >
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" className="h-9">
                 <FolderPlus className="mr-2 h-4 w-4" />
@@ -118,7 +210,7 @@ export function DataTableToolbar<TData>({
                   value={newFolderName}
                   onChange={(e) => setNewFolderName(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
+                    if (e.key === "Enter") {
                       handleCreateFolder();
                     }
                   }}
@@ -137,4 +229,3 @@ export function DataTableToolbar<TData>({
     </div>
   );
 }
-
