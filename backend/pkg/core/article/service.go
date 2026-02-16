@@ -197,6 +197,8 @@ func (s *Service) List(ctx context.Context, page int, tagName string, status str
 		PerPage:       articlesPerPage,
 		PublishedOnly: publishedOnly && status != "all",
 		TagID:         tagID,
+		SortBy:        sortBy,
+		SortOrder:     sortOrder,
 	}
 
 	articles, totalCount, err := s.articleRepo.List(ctx, opts)

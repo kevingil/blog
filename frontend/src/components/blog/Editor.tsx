@@ -115,7 +115,7 @@ function PublishDrawerContent({
     ? new Date(article.article.published_at)
     : undefined;
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(currentPublishedAt);
-  const [datePopoverOpen, setDatePopoverOpen] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
 
   // Sync when the article's published_at changes externally
   useEffect(() => {
@@ -151,42 +151,49 @@ function PublishDrawerContent({
         {/* Published At Date Picker */}
         <div className="space-y-1.5">
           <label className="text-sm font-medium">Published date</label>
-          <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-full justify-start text-left font-normal",
-                  !selectedDate && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {selectedDate ? format(selectedDate, 'PPP') : 'Pick a date'}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
+          <Button
+            variant="outline"
+            className={cn(
+              "w-full justify-start text-left font-normal",
+              !selectedDate && "text-muted-foreground"
+            )}
+            onClick={() => setShowCalendar((v) => !v)}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {selectedDate ? format(selectedDate, 'PPP') : 'Pick a date'}
+          </Button>
+          {showCalendar && (
+            <div className="rounded-md border p-0">
               <Calendar
                 mode="single"
                 selected={selectedDate}
                 onSelect={(day) => {
                   if (day) {
-                    // Preserve time from existing date or use current time
                     const base = selectedDate || new Date();
                     day.setHours(base.getHours(), base.getMinutes(), base.getSeconds());
                   }
                   setSelectedDate(day);
-                  setDatePopoverOpen(false);
+                  setShowCalendar(false);
                 }}
-                initialFocus
               />
-            </PopoverContent>
-          </Popover>
+            </div>
+          )}
           <p className="text-xs text-muted-foreground">
             {isPublished(article?.article)
               ? "Change the published date for this article."
               : "Optionally set a custom publish date."}
           </p>
         </div>
+
+        {/* Created At (read-only) */}
+        {article?.article.created_at && (
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Created</label>
+            <p className="text-sm text-muted-foreground">
+              {format(new Date(article.article.created_at), 'PPP p')}
+            </p>
+          </div>
+        )}
 
         {/* Show if draft differs from published */}
         {isPublished(article?.article) && hasDraftChanges(article?.article) && (

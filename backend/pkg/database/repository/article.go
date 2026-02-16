@@ -187,6 +187,35 @@ func (r *articleRepository) FindBySlug(ctx context.Context, slug string) (*types
 }
 
 // List retrieves articles with pagination and filtering
+// buildOrderClause returns a safe ORDER BY clause from the given sort options.
+// Defaults to "published_at DESC NULLS LAST" when no valid sort is specified.
+func buildOrderClause(sortBy, sortOrder string) string {
+	allowedColumns := map[string]bool{
+		"published_at": true,
+		"created_at":   true,
+		"updated_at":   true,
+	}
+	allowedOrders := map[string]bool{
+		"asc":  true,
+		"desc": true,
+	}
+
+	col := "published_at"
+	dir := "desc"
+	if allowedColumns[sortBy] {
+		col = sortBy
+	}
+	if allowedOrders[sortOrder] {
+		dir = sortOrder
+	}
+
+	clause := col + " " + dir
+	if col == "published_at" {
+		clause += " NULLS LAST"
+	}
+	return clause
+}
+
 func (r *articleRepository) List(ctx context.Context, opts types.ArticleListOptions) ([]types.Article, int64, error) {
 	var articleModels []models.Article
 	var total int64
@@ -209,9 +238,10 @@ func (r *articleRepository) List(ctx context.Context, opts types.ArticleListOpti
 		return nil, 0, err
 	}
 
-	// Apply pagination
+	// Apply pagination and sorting
+	orderClause := buildOrderClause(opts.SortBy, opts.SortOrder)
 	offset := (opts.Page - 1) * opts.PerPage
-	if err := query.Offset(offset).Limit(opts.PerPage).Order("created_at DESC").Find(&articleModels).Error; err != nil {
+	if err := query.Offset(offset).Limit(opts.PerPage).Order(orderClause).Find(&articleModels).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -250,9 +280,9 @@ func (r *articleRepository) Search(ctx context.Context, opts types.ArticleSearch
 		return nil, 0, err
 	}
 
-	// Apply pagination
+	// Apply pagination and sorting (search uses published_at desc by default)
 	offset := (opts.Page - 1) * opts.PerPage
-	if err := query.Offset(offset).Limit(opts.PerPage).Order("created_at DESC").Find(&articleModels).Error; err != nil {
+	if err := query.Offset(offset).Limit(opts.PerPage).Order("published_at DESC NULLS LAST").Find(&articleModels).Error; err != nil {
 		return nil, 0, err
 	}
 
