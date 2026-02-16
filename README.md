@@ -2,10 +2,10 @@
 
 An agentic blog editor.
 
-![frontend/public/screenshot-image.png](frontend/public/screenshot-image.png)
+![frontend/public/screenshot-image.png](frontend/public/IMG_2718.png)
 
 
-![frontend/public/Xnip2025-06-29_15-58-49.jpg](frontend/public/Xnip2025-06-29_15-58-49.jpg)
+
 
 
 ## Getting Started
