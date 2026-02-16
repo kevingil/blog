@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Card, CardContent } from '../../components/ui/card';
 import { listFiles, uploadFile, deleteFile, createFolder, FileData, FolderData } from '../../services/storage';
+import { isApiError } from '../../services/authenticatedFetch';
 import { createFileRoute } from '@tanstack/react-router';
 import { useAdminDashboard } from '@/services/dashboard/dashboard';
 import { SortingState } from '@tanstack/react-table';
@@ -132,9 +133,15 @@ function UploadsPage() {
     );
 
     const succeeded = results.filter(r => r.status === 'fulfilled');
-    const failed = results.filter(r => r.status === 'rejected');
+    const failed = results.filter(r => r.status === 'rejected') as PromiseRejectedResult[];
 
-    console.log(`${LOG_PREFIX} uploadFiles done: ${succeeded.length} succeeded, ${failed.length} failed`);
+    const getErrorMessage = (err: unknown): string =>
+      isApiError(err) ? err.message : err instanceof Error ? err.message : 'Unknown error';
+
+    const failedMessages = failed.map(f => getErrorMessage(f.reason));
+    const errorDetail = failedMessages.length > 0 ? failedMessages[0] : '';
+
+    console.log(`${LOG_PREFIX} uploadFiles done: ${succeeded.length} succeeded, ${failed.length} failed`, failedMessages);
 
     if (failed.length === 0) {
       toast({
@@ -146,13 +153,13 @@ function UploadsPage() {
     } else if (succeeded.length === 0) {
       toast({
         title: `Upload failed`,
-        description: `All ${failed.length} file${failed.length > 1 ? 's' : ''} failed to upload`,
+        description: errorDetail || `All ${failed.length} file${failed.length > 1 ? 's' : ''} failed to upload`,
         variant: 'destructive',
       });
     } else {
       toast({
         title: `Upload partially completed`,
-        description: `${succeeded.length} succeeded, ${failed.length} failed`,
+        description: `${succeeded.length} succeeded, ${failed.length} failed${errorDetail ? `: ${errorDetail}` : ''}`,
         variant: 'destructive',
       });
     }
@@ -228,9 +235,11 @@ function UploadsPage() {
       console.log(`${LOG_PREFIX} deleteFile success: key="${key}"`);
       fetchFiles();
     } catch (error) {
+      const msg = isApiError(error) ? error.message : error instanceof Error ? error.message : 'Failed to delete file';
       console.error(`${LOG_PREFIX} deleteFile error: key="${key}"`, error);
+      toast({ title: 'Delete failed', description: msg, variant: 'destructive' });
     }
-  }, [fetchFiles]);
+  }, [fetchFiles, toast]);
 
   const handleCreateFolder = useCallback(async (folderName: string) => {
     if (!folderName) return;
@@ -241,9 +250,11 @@ function UploadsPage() {
       console.log(`${LOG_PREFIX} createFolder success: path="${path}"`);
       fetchFiles();
     } catch (error) {
+      const msg = isApiError(error) ? error.message : error instanceof Error ? error.message : 'Failed to create folder';
       console.error(`${LOG_PREFIX} createFolder error: path="${path}"`, error);
+      toast({ title: 'Create folder failed', description: msg, variant: 'destructive' });
     }
-  }, [currentPath, fetchFiles]);
+  }, [currentPath, fetchFiles, toast]);
 
   const navigateToPath = useCallback((path: string) => {
     console.log(`${LOG_PREFIX} navigateToPath: "${path}"`);

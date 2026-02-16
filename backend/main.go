@@ -116,6 +116,7 @@ func main() {
 
 	// Create Fiber app and register routes
 	app := fiber.New(fiber.Config{
+		BodyLimit: 50 * 1024 * 1024, // 50 MB for file uploads (e.g. photos)
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
