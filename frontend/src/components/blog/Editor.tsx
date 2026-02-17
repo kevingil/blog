@@ -1566,7 +1566,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                   className={cn(
                                     "aspect-video rounded-md border-2 cursor-pointer overflow-hidden",
                                     index === currentVersionIndex 
-                                      ? "border-indigo-500 ring-2 ring-indigo-200" 
+                                      ? "border-primary ring-2 ring-primary/30" 
                                       : "border-gray-200 hover:border-gray-300"
                                   )}
                                   onClick={() => selectImageVersion(index)}
@@ -1607,7 +1607,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                             <Dialog open={generateImageOpen} onOpenChange={setGenerateImageOpen}>
                               <DialogTrigger asChild>
                                 <Button variant="outline" className="flex-1">
-                                  <PencilIcon className="w-4 h-4 mr-2 text-indigo-500" /> 
+                                  <PencilIcon className="w-4 h-4 mr-2 text-primary" /> 
                                   Custom Prompt
                                 </Button>
                               </DialogTrigger>
@@ -1683,7 +1683,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                 setGeneratingImage(false);
                               }}
                             >
-                              <SparklesIcon className={cn('w-4 h-4 text-indigo-500', generatingImage && 'animate-spin')} />
+                              <SparklesIcon className={cn('w-4 h-4 text-primary', generatingImage && 'animate-spin')} />
                             </Button>
                           </div>
                         </div>
@@ -2154,7 +2154,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 default: {
                   return (
                     <div key={i} className="w-full flex justify-end">
-                      <div className="max-w-xs whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-sm bg-indigo-500 text-white">
+                      <div className="max-w-xs whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-sm bg-primary text-primary-foreground">
                         {m.content}
                       </div>
                     </div>

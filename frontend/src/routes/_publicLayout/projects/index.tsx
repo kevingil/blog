@@ -10,7 +10,7 @@ export const Route = createFileRoute('/_publicLayout/projects/')({
   component: ProjectsPage,
 });
 
-const projectCardBase = "group flex flex-row-reverse overflow-hidden bg-black/40 backdrop-blur-md border border-white/[0.08] hover:border-primary hover:shadow-[0_0_25px_rgba(0,200,200,0.5)] transition-all duration-200";
+const projectCardBase = "group flex flex-row-reverse overflow-hidden bg-black/40 backdrop-blur-md border border-white/[0.08] hover:border-primary hover:shadow-[0_0_25px_rgba(249,115,22,0.5)] transition-all duration-200";
 
 function ProjectsPage() {
   const router = useRouter();

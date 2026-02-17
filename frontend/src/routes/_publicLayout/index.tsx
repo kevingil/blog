@@ -67,7 +67,7 @@ function articleMeta(article: ArticleListItem) {
   return { title, imageUrl, dateStr, plain, slug: article.article.slug as string, author: article.author?.name };
 }
 
-const glassCard = "bg-black/30 dark:bg-black/40 backdrop-blur-md border border-white/[0.08] rounded-2xl hover:border-primary/30 hover:shadow-[0_0_20px_-5px_rgba(0,200,200,0.1)] transition-all duration-500";
+const glassCard = "bg-black/30 dark:bg-black/40 backdrop-blur-md border border-white/[0.08] rounded-2xl hover:border-primary/30 hover:shadow-[0_0_20px_-5px_rgba(249,115,22,0.1)] transition-all duration-500";
 
 /* ════════════════════════════════════════
    ARTICLES SECTION
@@ -273,7 +273,7 @@ function ProjectBookCard({ project, index }: { project: Project; index: number }
       className={cn(
         "group relative flex flex-col overflow-hidden",
         "bg-black/40 backdrop-blur-md border border-white/[0.08]",
-        "hover:border-primary hover:shadow-[0_0_25px_rgba(0,200,200,0.5)]",
+        "hover:border-primary hover:shadow-[0_0_25px_rgba(249,115,22,0.5)]",
         "transition-all duration-200",
         visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
       )}
@@ -320,7 +320,7 @@ function ConnectSection() {
           className={cn(
             "group inline-flex items-center gap-2.5 px-5 py-3 rounded-xl",
             "bg-black/30 dark:bg-black/40 backdrop-blur-md border border-white/[0.08]",
-            "hover:border-primary/30 hover:shadow-[0_0_15px_-5px_rgba(0,200,200,0.12)] hover:scale-[1.02]",
+            "hover:border-primary/30 hover:shadow-[0_0_15px_-5px_rgba(249,115,22,0.12)] hover:scale-[1.02]",
             "transition-all duration-300"
           )}
         >
@@ -333,7 +333,7 @@ function ConnectSection() {
           className={cn(
             "group inline-flex items-center gap-2.5 px-5 py-3 rounded-xl",
             "bg-black/30 dark:bg-black/40 backdrop-blur-md border border-white/[0.08]",
-            "hover:border-primary/30 hover:shadow-[0_0_15px_-5px_rgba(0,200,200,0.12)] hover:scale-[1.02]",
+            "hover:border-primary/30 hover:shadow-[0_0_15px_-5px_rgba(249,115,22,0.12)] hover:scale-[1.02]",
             "transition-all duration-300"
           )}
         >

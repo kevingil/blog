@@ -22,7 +22,7 @@ const config: Config = {
 			},
 			boxShadow: {
 				'card': '0 0px 40px -15px rgba(0, 0, 0, 0.1)',
-				'nav': '0 4px 30px -10px rgba(0, 200, 200, 0.1)',
+				'nav': '0 4px 30px -10px rgba(249, 115, 22, 0.1)',
 			},
 			colors: {
 				background: 'hsl(var(--background))',
