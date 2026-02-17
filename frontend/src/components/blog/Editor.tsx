@@ -1492,19 +1492,19 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   }
 
   return (
-    <section className="flex gap-4 p-0 md:p-4 h-[calc(100vh-60px)]">
+    <section className="flex gap-2 p-0 md:p-2 h-[calc(100vh-60px)]">
       <div className="flex-1 flex flex-col min-w-0">
         {/* Article Metadata Card */}
         
             {/* Article Title Section with Image and Save */}
-            <div className="mb-6">
-              <div className="flex flex-row items-center gap-3">
+            <div className="mb-2">
+              <div className="flex flex-row items-center gap-2">
                 {/* Edit Image Trigger */}
                 <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
                   <DialogTrigger asChild>
                     <button
                       type="button"
-                      className="w-12 h-10 flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex-shrink-0"
+                      className="w-10 h-8 flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex-shrink-0"
                     >
                       {(stagedImageUrl || article?.article.draft_image_url) ? (
                         <img 
@@ -1782,7 +1782,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             </div>
 
             {/* Article Tools Section */}
-            <div className="flex flex-wrap items-center gap-2 mb-4">
+            <div className="flex flex-wrap items-center gap-1.5 mb-2">
               {/* Sources Button */}
               <SourcesPreview
                 articleId={article?.article.id}
@@ -1976,7 +1976,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             </div>
 
           <form className="flex-1 flex flex-col min-h-0 min-w-0">
-              <div className="flex-1 flex flex-col border border-gray-300 dark:border-gray-600 rounded-md min-h-0 min-w-0">
+              <div className="flex-1 flex flex-col border border-gray-300 dark:border-gray-600 rounded-sm min-h-0 min-w-0">
                 <EditorTabs
                   content={watchedContent || ''}
                   onChange={onContentChange}
@@ -1998,8 +1998,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       </div>
 
       {/* Chat side-panel */}
-      <div className="hidden xl:flex flex-col w-[26rem] border rounded-md">
-        <div ref={chatMessagesRef} className="flex-1 overflow-y-auto p-2 space-y-3">
+      <div className="hidden xl:flex flex-col w-[26rem] border rounded-sm">
+        <div ref={chatMessagesRef} className="flex-1 overflow-y-auto p-1.5 space-y-2">
           {chatMessages.map((m, i) => {
             switch (m.role) {
               case 'tool': {
@@ -2145,7 +2145,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 default: {
                   return (
                     <div key={i} className="w-full flex justify-end">
-                      <div className="max-w-xs whitespace-pre-wrap rounded-lg px-3 py-2 text-sm bg-indigo-500 text-white">
+                      <div className="max-w-xs whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-sm bg-indigo-500 text-white">
                         {m.content}
                       </div>
                     </div>
@@ -2159,7 +2159,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               <ThinkShimmerBlock message={thinkingMessage} />
             )}
           </div>
-        <div className="p-4 border-t space-y-2">
+        <div className="p-2 space-y-1.5">
           <PromptInput
             value={chatInput}
             onValueChange={setChatInput}
@@ -2169,7 +2169,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           >
             <PromptInputTextarea
               placeholder="Ask the assistant or click a quick action above…"
-              className="min-h-[60px]"
+              className="min-h-[44px]"
             />
             <PromptInputActions className="justify-end pt-2">
               <PromptInputAction
