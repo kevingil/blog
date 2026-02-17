@@ -10,7 +10,7 @@ export const Route = createFileRoute('/_publicLayout/projects/')({
   component: ProjectsPage,
 });
 
-const projectCardBase = "group flex flex-row-reverse overflow-hidden bg-black/40 backdrop-blur-md border border-white/[0.08] hover:border-primary hover:shadow-[0_0_25px_rgba(0,200,200,0.5)] transition-all duration-200";
+const projectCardBase = "group flex flex-row-reverse overflow-hidden bg-black/40 backdrop-blur-md border border-white/[0.08] hover:border-primary hover:shadow-[0_0_25px_rgba(249,115,22,0.5)] transition-all duration-200";
 
 function ProjectsPage() {
   const router = useRouter();
@@ -44,7 +44,7 @@ function ProjectsPage() {
           </Link>
           <div className="mb-10">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">Projects</h1>
-            <p className="mt-1 text-sm text-white/40">Things I&apos;ve built and experiments I&apos;ve run</p>
+            <p className="mt-1 text-sm text-white/40">Fun experiments, hackathon projects, and other stuff</p>
           </div>
 
           {isLoading || (isFetching && !data) ? (

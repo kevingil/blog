@@ -285,7 +285,7 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
               <Card
                 key={article.article.id}
                 animationDelay={index * 80}
-                className="group relative overflow-hidden hover:border-primary/30 hover:shadow-[0_0_20px_-5px_rgba(0,200,200,0.1)] transition-all duration-500"
+                className="group relative overflow-hidden hover:border-primary/30 hover:shadow-[0_0_20px_-5px_rgba(249,115,22,0.1)] transition-all duration-500"
               >
                 <CardContent className="p-0">
                   <Link

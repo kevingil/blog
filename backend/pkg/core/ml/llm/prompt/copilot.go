@@ -45,6 +45,7 @@ func CopilotPrompt(_ models.ModelProvider, availableTools []string) string {
 **Plan first (present plan, wait for confirmation — do NOT edit yet):**
 - User says: plan, brainstorm, ideas, explore, discuss, consider, think through
 - User says: "don't make changes", "no edits", "plan only", "just plan", "without editing"
+- User says: "update plan", "revise plan", "adjust plan", "change the plan", "revised plan"
 - User says: "make a plan", "come up with a plan", "what would you improve", "how could this be better"
 - User asks for broad improvements: "improve this article", "make this better"
 - User asks you to research or fact-check

@@ -67,7 +67,7 @@ function articleMeta(article: ArticleListItem) {
   return { title, imageUrl, dateStr, plain, slug: article.article.slug as string, author: article.author?.name };
 }
 
-const glassCard = "bg-black/30 dark:bg-black/40 backdrop-blur-md border border-white/[0.08] rounded-2xl hover:border-primary/30 hover:shadow-[0_0_20px_-5px_rgba(0,200,200,0.1)] transition-all duration-500";
+const glassCard = "bg-black/30 dark:bg-black/40 backdrop-blur-md border border-white/[0.08] rounded-2xl hover:border-primary/30 hover:shadow-[0_0_20px_-5px_rgba(249,115,22,0.1)] transition-all duration-500";
 
 /* ════════════════════════════════════════
    ARTICLES SECTION
@@ -84,7 +84,7 @@ function ArticlesSection() {
   const listArticles = articles.slice(3);
 
   return (
-    <section className="mt-40 px-2 sm:px-0">
+    <section className="mt-28 px-2 sm:px-0">
       <SectionHeader label="Articles" seeAllHref="/blog" />
 
       {isLoading ? (
@@ -163,7 +163,7 @@ function MainArticleCard({ article, index }: { article: ArticleListItem; index: 
         visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
       )}
     >
-      <div className="relative w-64 shrink-0 self-stretch min-h-0 overflow-hidden rounded-lg">
+      <div className="relative w-20 shrink-0 aspect-[3/2] lg:w-64 lg:self-stretch lg:min-h-0 lg:aspect-auto overflow-hidden rounded-lg">
         {imageUrl ? (
           <img src={imageUrl} alt="" className="w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-105" loading="eager" />
         ) : (
@@ -239,7 +239,7 @@ function ProjectsSection() {
       <SectionHeader label="Hackathon Projects & Experiments" seeAllHref="/projects" seeAllLabel="View all" />
 
       {isLoading ? (
-        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-4 gap-1.5 w-full">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 gap-1.5 w-full">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="overflow-hidden bg-white/[0.03] border border-white/[0.05] animate-pulse">
               <div className="aspect-[2/1] bg-white/[0.06]" />
@@ -253,7 +253,7 @@ function ProjectsSection() {
       ) : projects.length === 0 ? (
         <div className="text-center py-12 text-white/30 text-sm">No hackathon projects or experiments yet.</div>
       ) : (
-        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-4 gap-1.5 w-full">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 gap-1.5 w-full">
           {projects.map((project, i) => (
             <ProjectBookCard key={project.id} project={project} index={i} />
           ))}
@@ -273,7 +273,7 @@ function ProjectBookCard({ project, index }: { project: Project; index: number }
       className={cn(
         "group relative flex flex-col overflow-hidden",
         "bg-black/40 backdrop-blur-md border border-white/[0.08]",
-        "hover:border-primary hover:shadow-[0_0_25px_rgba(0,200,200,0.5)]",
+        "hover:border-primary hover:shadow-[0_0_25px_rgba(249,115,22,0.5)]",
         "transition-all duration-200",
         visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
       )}
@@ -320,7 +320,7 @@ function ConnectSection() {
           className={cn(
             "group inline-flex items-center gap-2.5 px-5 py-3 rounded-xl",
             "bg-black/30 dark:bg-black/40 backdrop-blur-md border border-white/[0.08]",
-            "hover:border-primary/30 hover:shadow-[0_0_15px_-5px_rgba(0,200,200,0.12)] hover:scale-[1.02]",
+            "hover:border-primary/30 hover:shadow-[0_0_15px_-5px_rgba(249,115,22,0.12)] hover:scale-[1.02]",
             "transition-all duration-300"
           )}
         >
@@ -333,7 +333,7 @@ function ConnectSection() {
           className={cn(
             "group inline-flex items-center gap-2.5 px-5 py-3 rounded-xl",
             "bg-black/30 dark:bg-black/40 backdrop-blur-md border border-white/[0.08]",
-            "hover:border-primary/30 hover:shadow-[0_0_15px_-5px_rgba(0,200,200,0.12)] hover:scale-[1.02]",
+            "hover:border-primary/30 hover:shadow-[0_0_15px_-5px_rgba(249,115,22,0.12)] hover:scale-[1.02]",
             "transition-all duration-300"
           )}
         >
@@ -350,9 +350,9 @@ function ArticlesSkeleton() {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 lg:grid-cols-3 lg:grid-rows-2 gap-2">
-        {/* Main article placeholder - 2 cols, 2 rows */}
+        {/* Main article placeholder - 2 cols, 2 rows on desktop; compact on mobile */}
         <div className="lg:col-span-2 lg:row-span-2 rounded-xl bg-white/[0.03] border border-white/[0.05] overflow-hidden animate-pulse flex flex-row p-2.5 gap-3">
-          <div className="w-64 shrink-0 self-stretch min-h-0 rounded-lg bg-white/[0.06]" />
+          <div className="w-20 aspect-[3/2] shrink-0 lg:w-64 lg:self-stretch lg:min-h-0 lg:aspect-auto rounded-lg bg-white/[0.06]" />
           <div className="flex-1 space-y-1.5">
             <div className="h-3 w-3/4 bg-white/[0.06] rounded" />
             <div className="h-2.5 w-full bg-white/[0.04] rounded" />

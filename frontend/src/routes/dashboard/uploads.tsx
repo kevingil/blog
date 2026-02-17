@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Card, CardContent } from '../../components/ui/card';
-import { listFiles, uploadFile, deleteFile, createFolder, FileData, FolderData } from '../../services/storage';
 import { isApiError } from '../../services/authenticatedFetch';
 import { createFileRoute } from '@tanstack/react-router';
 import { useAdminDashboard } from '@/services/dashboard/dashboard';
@@ -10,6 +9,12 @@ import { createColumns, UploadItem } from '@/components/uploads/data-table/colum
 import { FileGrid } from '@/components/uploads/file-grid';
 import { ViewMode } from '@/components/uploads/data-table/data-table-toolbar';
 import { useToast } from '@/hooks/use-toast';
+import {
+  useStorageFiles,
+  useStorageUploadMutation,
+  useStorageDeleteMutation,
+  useStorageCreateFolderMutation,
+} from '@/hooks/use-storage-files';
 import { Upload } from 'lucide-react';
 
 export const Route = createFileRoute('/dashboard/uploads')({
@@ -19,23 +24,28 @@ export const Route = createFileRoute('/dashboard/uploads')({
 const LOG_PREFIX = '[Uploads]';
 
 function UploadsPage() {
-  const [files, setFiles] = useState<FileData[]>([]);
-  const [folders, setFolders] = useState<FolderData[]>([]);
   const [currentPath, setCurrentPath] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
-  const [fetchingError, setFetchingError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'name', desc: false }
   ]);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [isDraggingOver, setIsDraggingOver] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
   const dragCounterRef = useRef(0);
 
   const { setPageTitle } = useAdminDashboard();
   const { toast } = useToast();
+
+  const { data, isLoading, error } = useStorageFiles(currentPath);
+  const uploadMutation = useStorageUploadMutation();
+  const deleteMutation = useStorageDeleteMutation();
+  const createFolderMutation = useStorageCreateFolderMutation();
+
+  const files = data?.files ?? [];
+  const folders = data?.folders ?? [];
+  const fetchingError = error ? (error instanceof Error ? error.message : 'An unknown error occurred') : null;
+  const isUploading = uploadMutation.isPending;
 
   useEffect(() => {
     setPageTitle("Uploads");
@@ -48,28 +58,6 @@ function UploadsPage() {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
-
-  const fetchFiles = useCallback(async () => {
-    console.log(`${LOG_PREFIX} fetchFiles called, currentPath="${currentPath}"`);
-    setIsLoading(true);
-    try {
-      const result = await listFiles(currentPath);
-      console.log(`${LOG_PREFIX} fetchFiles success: ${result.files.length} files, ${result.folders.length} folders`);
-      setFiles(result.files);
-      setFolders(result.folders);
-      setFetchingError(null);
-    } catch (error: any) {
-      const errorMessage = error?.message ?? 'An unknown error occurred';
-      console.error(`${LOG_PREFIX} fetchFiles error:`, errorMessage, error);
-      setFetchingError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentPath]);
-
-  useEffect(() => {
-    fetchFiles();
-  }, [fetchFiles]);
 
   const combinedData: UploadItem[] = useMemo(() => {
     const folderItems: UploadItem[] = folders.map(folder => ({
@@ -110,8 +98,6 @@ function UploadsPage() {
       console.log(`${LOG_PREFIX}   [${i}] name="${f.name}" type="${f.type}" size=${f.size}`);
     });
 
-    setIsUploading(true);
-
     toast({
       title: `Uploading ${fileList.length} file${fileList.length > 1 ? 's' : ''}...`,
       description: `To ${currentPath || '/'}`,
@@ -122,8 +108,8 @@ function UploadsPage() {
         const key = `${currentPath}${file.name}`;
         console.log(`${LOG_PREFIX} uploading "${file.name}" as key="${key}" (${file.size} bytes)`);
         try {
-          const result = await uploadFile(key, file);
-          console.log(`${LOG_PREFIX} upload success: "${file.name}" -> key="${key}"`, result);
+          await uploadMutation.mutateAsync({ key, file });
+          console.log(`${LOG_PREFIX} upload success: "${file.name}" -> key="${key}"`);
           return { name: file.name, key };
         } catch (err) {
           console.error(`${LOG_PREFIX} upload failed: "${file.name}" -> key="${key}"`, err);
@@ -163,10 +149,7 @@ function UploadsPage() {
         variant: 'destructive',
       });
     }
-
-    setIsUploading(false);
-    fetchFiles();
-  }, [currentPath, toast, fetchFiles]);
+  }, [currentPath, toast, uploadMutation]);
 
   // ── Input-based upload (now supports multiple) ──
 
@@ -231,30 +214,28 @@ function UploadsPage() {
   const handleDeleteFile = useCallback(async (key: string) => {
     console.log(`${LOG_PREFIX} deleteFile: key="${key}"`);
     try {
-      await deleteFile(key);
+      await deleteMutation.mutateAsync(key);
       console.log(`${LOG_PREFIX} deleteFile success: key="${key}"`);
-      fetchFiles();
     } catch (error) {
       const msg = isApiError(error) ? error.message : error instanceof Error ? error.message : 'Failed to delete file';
       console.error(`${LOG_PREFIX} deleteFile error: key="${key}"`, error);
       toast({ title: 'Delete failed', description: msg, variant: 'destructive' });
     }
-  }, [fetchFiles, toast]);
+  }, [deleteMutation, toast]);
 
   const handleCreateFolder = useCallback(async (folderName: string) => {
     if (!folderName) return;
     const path = `${currentPath}${folderName}/`;
     console.log(`${LOG_PREFIX} createFolder: path="${path}"`);
     try {
-      await createFolder(path);
+      await createFolderMutation.mutateAsync(path);
       console.log(`${LOG_PREFIX} createFolder success: path="${path}"`);
-      fetchFiles();
     } catch (error) {
       const msg = isApiError(error) ? error.message : error instanceof Error ? error.message : 'Failed to create folder';
       console.error(`${LOG_PREFIX} createFolder error: path="${path}"`, error);
       toast({ title: 'Create folder failed', description: msg, variant: 'destructive' });
     }
-  }, [currentPath, fetchFiles, toast]);
+  }, [currentPath, createFolderMutation, toast]);
 
   const navigateToPath = useCallback((path: string) => {
     console.log(`${LOG_PREFIX} navigateToPath: "${path}"`);

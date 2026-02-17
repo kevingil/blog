@@ -13,6 +13,7 @@ import { apiPost, isAuthError } from '@/services/authenticatedFetch';
 // Editor modules
 import { EditorTabs } from './editor/EditorTabs';
 import { ImageLoader } from './editor/ImageLoader';
+import { ImagePickerFromUploads } from './editor/ImagePickerFromUploads';
 import { turndownService } from './editor/turndown';
 import { 
   DEFAULT_IMAGE_PROMPT, 
@@ -95,6 +96,7 @@ import { ArticleListItem, ArticleVersion, ArticleVersionListResponse, isPublishe
 import { Badge } from '@/components/ui/badge';
 import { Globe, EyeOff, History, Tag } from 'lucide-react';
 import { Dialog, DialogTitle, DialogContent, DialogTrigger, DialogDescription, DialogFooter, DialogHeader, DialogClose } from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerClose } from '@/components/ui/drawer';
 import { SourcesManager } from './SourcesManager';
 import { SourcesPreview } from './SourcesPreview';
@@ -125,13 +127,12 @@ function PublishDrawerContent({
   }, [article?.article.published_at]);
 
   const handlePublish = () => {
-    // Pass the selected date if it differs from the current published_at,
-    // or if the article isn't published yet and a date was picked.
-    const dateOverride = selectedDate && (
-      !currentPublishedAt ||
-      selectedDate.getTime() !== currentPublishedAt.getTime()
-    ) ? selectedDate : undefined;
-    publishMutation.mutate(dateOverride);
+    // When already published: always send the date so backend preserves it (it defaults to "now" when omitted).
+    // When not published: only send if user picked a custom date.
+    const dateToSend = isPublished(article?.article)
+      ? (selectedDate ?? currentPublishedAt ?? undefined)
+      : (selectedDate ?? undefined);
+    publishMutation.mutate(dateToSend);
   };
 
   return (
@@ -388,6 +389,15 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     },
     td: function ChatTdComponent({ children, ...props }: any) {
       return <td className="px-2 py-1 border-b" {...props}>{children}</td>;
+    },
+    ul: function ChatUlComponent({ children, ...props }: any) {
+      return <ul className="my-2 space-y-1.5 list-disc pl-6" {...props}>{children}</ul>;
+    },
+    ol: function ChatOlComponent({ children, ...props }: any) {
+      return <ol className="my-2 space-y-1.5 list-decimal pl-6" {...props}>{children}</ol>;
+    },
+    li: function ChatLiComponent({ children, ...props }: any) {
+      return <li className="leading-relaxed" {...props}>{children}</li>;
     },
   };
   
@@ -1557,7 +1567,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                   className={cn(
                                     "aspect-video rounded-md border-2 cursor-pointer overflow-hidden",
                                     index === currentVersionIndex 
-                                      ? "border-indigo-500 ring-2 ring-indigo-200" 
+                                      ? "border-primary ring-2 ring-primary/30" 
                                       : "border-gray-200 hover:border-gray-300"
                                   )}
                                   onClick={() => selectImageVersion(index)}
@@ -1576,108 +1586,122 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       
                       {/* Controls Section */}
                       <div className="space-y-4">
-                        <div className="space-y-2">
-                          <label className="block text-sm font-medium">Image URL</label>
-                          <Input
-                            className="w-full"
-                            value={previewImageUrl}
-                            onChange={(e) => {
-                              setPreviewImageUrl(e.target.value);
-                              if (e.target.value) {
-                                addImageVersion(e.target.value);
-                              }
-                            }}
-                            placeholder="Enter image URL..."
-                          />
-                          {errors.image_url && <p className="text-red-500 text-sm">{errors.image_url.message}</p>}
-                        </div>
-                        
-                        <div className="space-y-3">
-                          <div className="text-sm font-medium">Generate New Image</div>
-                          <div className="flex items-center gap-2">
-                            <Dialog open={generateImageOpen} onOpenChange={setGenerateImageOpen}>
-                              <DialogTrigger asChild>
-                                <Button variant="outline" className="flex-1">
-                                  <PencilIcon className="w-4 h-4 mr-2 text-indigo-500" /> 
-                                  Custom Prompt
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="sm:max-w-[600px]">
-                                <DialogHeader>
-                                  <DialogTitle>Generate New Image</DialogTitle>
-                                  <DialogDescription>
-                                    Generate a new image for your article header.
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <div className="flex flex-col items-start gap-4 w-full">
-                                  <Textarea
-                                    value={imagePrompt || ''}
-                                    onChange={(e) => setImagePrompt(e.target.value)}
-                                    placeholder="Prompt"
-                                    className="h-[300px] w-full"
-                                  />
-                                </div>
-                                <DialogFooter>
-                                  <div className="flex justify-end gap-2 w-full">
-                                    <DialogClose asChild>
-                                      <Button variant="outline">Cancel</Button>
-                                    </DialogClose>
-                                    <Button
-                                      type="submit"
-                                      onClick={async () => {
-                                        const result = await generateArticleImage(imagePrompt || '', article?.article.id || '');
-                                        if (result.success) {
-                                          setNewImageGenerationRequestId(result.generationRequestId);
-                                          // Add to versions when image is generated
-                                          if (result.generationRequestId) {
-                                            setTimeout(async () => {
-                                              const status = await getImageGenerationStatus(result.generationRequestId);
-                                              if (status.outputUrl) {
-                                                addImageVersion(status.outputUrl, imagePrompt || '');
-                                              }
-                                            }, 3000);
-                                          }
-                                          toast({ title: 'Success', description: 'Image generated successfully.' });
-                                          setGenerateImageOpen(false);
-                                        } else {
-                                          toast({ title: 'Error', description: 'Failed to generate image. Please try again.' });
-                                        }
-                                      }}
-                                    >Generate</Button>
-                                  </div>
-                                </DialogFooter>
-                              </DialogContent>
-                            </Dialog>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              disabled={generatingImage}
-                              onClick={async (e) => {
-                                setGeneratingImage(true);
-                                e.preventDefault();
-                                const result = await generateArticleImage(article?.article.draft_title || '', article?.article.id || '');
-                                if (result.success) {
-                                  setNewImageGenerationRequestId(result.generationRequestId);
-                                  // Add to versions when image is generated
-                                  if (result.generationRequestId) {
-                                    setTimeout(async () => {
-                                      const status = await getImageGenerationStatus(result.generationRequestId);
-                                      if (status.outputUrl) {
-                                        addImageVersion(status.outputUrl, article?.article.draft_title || '');
-                                      }
-                                    }, 3000);
-                                  }
-                                  toast({ title: 'Success', description: 'Image generated successfully.' });
-                                } else {
-                                  toast({ title: 'Error', description: 'Failed to generate image. Please try again.' });
+                        <Tabs defaultValue="url" className="w-full">
+                          <TabsList className="grid w-full grid-cols-3">
+                            <TabsTrigger value="url">URL</TabsTrigger>
+                            <TabsTrigger value="generate">Generate</TabsTrigger>
+                            <TabsTrigger value="uploads">From Uploads</TabsTrigger>
+                          </TabsList>
+                          <TabsContent value="url" className="space-y-2 mt-3">
+                            <label className="block text-sm font-medium">Image URL</label>
+                            <Input
+                              className="w-full"
+                              value={previewImageUrl}
+                              onChange={(e) => {
+                                setPreviewImageUrl(e.target.value);
+                                if (e.target.value) {
+                                  addImageVersion(e.target.value);
                                 }
-                                setGeneratingImage(false);
                               }}
-                            >
-                              <SparklesIcon className={cn('w-4 h-4 text-indigo-500', generatingImage && 'animate-spin')} />
-                            </Button>
-                          </div>
-                        </div>
+                              placeholder="Enter image URL..."
+                            />
+                            {errors.image_url && <p className="text-red-500 text-sm">{errors.image_url.message}</p>}
+                          </TabsContent>
+                          <TabsContent value="generate" className="space-y-3 mt-3">
+                            <div className="text-sm font-medium">Generate New Image</div>
+                            <div className="flex items-center gap-2">
+                              <Dialog open={generateImageOpen} onOpenChange={setGenerateImageOpen}>
+                                <DialogTrigger asChild>
+                                  <Button variant="outline" className="flex-1">
+                                    <PencilIcon className="w-4 h-4 mr-2 text-primary" /> 
+                                    Custom Prompt
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-[600px]">
+                                  <DialogHeader>
+                                    <DialogTitle>Generate New Image</DialogTitle>
+                                    <DialogDescription>
+                                      Generate a new image for your article header.
+                                    </DialogDescription>
+                                  </DialogHeader>
+                                  <div className="flex flex-col items-start gap-4 w-full">
+                                    <Textarea
+                                      value={imagePrompt || ''}
+                                      onChange={(e) => setImagePrompt(e.target.value)}
+                                      placeholder="Prompt"
+                                      className="h-[300px] w-full"
+                                    />
+                                  </div>
+                                  <DialogFooter>
+                                    <div className="flex justify-end gap-2 w-full">
+                                      <DialogClose asChild>
+                                        <Button variant="outline">Cancel</Button>
+                                      </DialogClose>
+                                      <Button
+                                        type="submit"
+                                        onClick={async () => {
+                                          const result = await generateArticleImage(imagePrompt || '', article?.article.id || '');
+                                          if (result.success) {
+                                            setNewImageGenerationRequestId(result.generationRequestId);
+                                            // Add to versions when image is generated
+                                            if (result.generationRequestId) {
+                                              setTimeout(async () => {
+                                                const status = await getImageGenerationStatus(result.generationRequestId);
+                                                if (status.outputUrl) {
+                                                  addImageVersion(status.outputUrl, imagePrompt || '');
+                                                }
+                                              }, 3000);
+                                            }
+                                            toast({ title: 'Success', description: 'Image generated successfully.' });
+                                            setGenerateImageOpen(false);
+                                          } else {
+                                            toast({ title: 'Error', description: 'Failed to generate image. Please try again.' });
+                                          }
+                                        }}
+                                      >Generate</Button>
+                                    </div>
+                                  </DialogFooter>
+                                </DialogContent>
+                              </Dialog>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                disabled={generatingImage}
+                                onClick={async (e) => {
+                                  setGeneratingImage(true);
+                                  e.preventDefault();
+                                  const result = await generateArticleImage(article?.article.draft_title || '', article?.article.id || '');
+                                  if (result.success) {
+                                    setNewImageGenerationRequestId(result.generationRequestId);
+                                    // Add to versions when image is generated
+                                    if (result.generationRequestId) {
+                                      setTimeout(async () => {
+                                        const status = await getImageGenerationStatus(result.generationRequestId);
+                                        if (status.outputUrl) {
+                                          addImageVersion(status.outputUrl, article?.article.draft_title || '');
+                                        }
+                                      }, 3000);
+                                    }
+                                    toast({ title: 'Success', description: 'Image generated successfully.' });
+                                  } else {
+                                    toast({ title: 'Error', description: 'Failed to generate image. Please try again.' });
+                                  }
+                                  setGeneratingImage(false);
+                                }}
+                              >
+                                <SparklesIcon className={cn('w-4 h-4 text-primary', generatingImage && 'animate-spin')} />
+                              </Button>
+                            </div>
+                          </TabsContent>
+                          <TabsContent value="uploads" className="mt-3">
+                            <ImagePickerFromUploads
+                              onSelect={(url) => {
+                                addImageVersion(url);
+                                setImageModalOpen(false);
+                              }}
+                            />
+                          </TabsContent>
+                        </Tabs>
                         
                         {/* Version Controls */}
                         {imageVersions.length > 0 && (
@@ -2145,7 +2169,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 default: {
                   return (
                     <div key={i} className="w-full flex justify-end">
-                      <div className="max-w-xs whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-sm bg-indigo-500 text-white">
+                      <div className="max-w-xs whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-sm bg-primary text-primary-foreground">
                         {m.content}
                       </div>
                     </div>
