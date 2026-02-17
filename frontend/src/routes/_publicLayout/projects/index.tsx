@@ -44,7 +44,7 @@ function ProjectsPage() {
           </Link>
           <div className="mb-10">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">Projects</h1>
-            <p className="mt-1 text-sm text-white/40">Things I&apos;ve built and experiments I&apos;ve run</p>
+            <p className="mt-1 text-sm text-white/40">Fun experiments, hackathon projects, and other stuff</p>
           </div>
 
           {isLoading || (isFetching && !data) ? (
