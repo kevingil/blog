@@ -78,7 +78,7 @@ function EditProjectPage() {
   };
 
   return (
-    <section className="flex-1 p-0 md:p-4">
+    <section className="flex-1 min-h-0 overflow-auto p-0 md:p-4">
       <h1 className="text-lg lg:text-2xl font-medium text-gray-900 dark:text-white mb-6">Edit Project</h1>
       {isLoading ? (
         <div>Loading project...</div>
