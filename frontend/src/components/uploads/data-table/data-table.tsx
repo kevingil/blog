@@ -21,7 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-import { DataTableToolbar } from "./data-table-toolbar";
+import { DataTableToolbar, ViewMode } from "./data-table-toolbar";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -32,9 +32,12 @@ interface DataTableProps<TData, TValue> {
   onSearchChange: (value: string) => void;
   isLoading?: boolean;
   currentPath: string;
-  onNavigateUp: () => void;
+  onNavigateToPath: (path: string) => void;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onCreateFolder: (name: string) => void;
+  viewMode: ViewMode;
+  onViewModeChange: (mode: ViewMode) => void;
+  gridView?: React.ReactNode;
 }
 
 export function DataTable<TData, TValue>({
@@ -46,9 +49,12 @@ export function DataTable<TData, TValue>({
   onSearchChange,
   isLoading = false,
   currentPath,
-  onNavigateUp,
+  onNavigateToPath,
   onFileUpload,
   onCreateFolder,
+  viewMode,
+  onViewModeChange,
+  gridView,
 }: DataTableProps<TData, TValue>) {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     []
@@ -84,70 +90,78 @@ export function DataTable<TData, TValue>({
         searchQuery={searchQuery}
         onSearchChange={onSearchChange}
         currentPath={currentPath}
-        onNavigateUp={onNavigateUp}
+        onNavigateToPath={onNavigateToPath}
         onFileUpload={onFileUpload}
         onCreateFolder={onCreateFolder}
+        viewMode={viewMode}
+        onViewModeChange={onViewModeChange}
       />
-      <div className="flex-1 rounded-md border overflow-auto relative">
-        <Table noWrapper>
-          <TableHeader className="sticky top-0 bg-background z-10 border-b">
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead key={header.id} className="bg-background">
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </TableHead>
-                  );
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  Loading...
-                </TableCell>
-              </TableRow>
-            ) : table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
+
+      {viewMode === "grid" ? (
+        <div className="flex-1 overflow-auto">
+          {gridView}
+        </div>
+      ) : (
+        <div className="flex-1 rounded-md border overflow-auto relative">
+          <Table noWrapper>
+            <TableHeader className="sticky top-0 bg-background z-10 border-b">
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => {
+                    return (
+                      <TableHead key={header.id} className="bg-background">
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                      </TableHead>
+                    );
+                  })}
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  No files or folders.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-24 text-center"
+                  >
+                    Loading...
+                  </TableCell>
+                </TableRow>
+              ) : table.getRowModel().rows?.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() && "selected"}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-24 text-center"
+                  >
+                    No files or folders.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </div>
   );
 }
-

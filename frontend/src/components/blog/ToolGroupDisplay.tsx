@@ -45,7 +45,7 @@ interface ToolGroupDisplayProps {
 /**
  * Tools that should use the full card UI (because they have artifacts)
  */
-const ARTIFACT_TOOLS = new Set(['edit_text', 'rewrite_section', 'rewrite_document']);
+const ARTIFACT_TOOLS = new Set(['replace_lines', 'rewrite_document']);
 
 /**
  * Tools that can be expanded to show content (but still use subtle styling)
@@ -98,7 +98,6 @@ function getToolIcon(toolName: string) {
     case 'fetch_url':
       return <Link2 className="h-4 w-4" />;
     case 'rewrite_document':
-    case 'edit_text':
     case 'replace_lines':
       return <FileDiff className="h-4 w-4" />;
     case 'analyze_document':
@@ -161,7 +160,7 @@ function ToolResultContent({ call }: { call: ToolCallRecord }) {
       return <AnswerResultContent result={result} />;
     
     case 'rewrite_document':
-    case 'edit_text':
+    case 'replace_lines':
       return <DiffResultContent result={result} />;
     
     case 'analyze_document':
@@ -507,9 +506,9 @@ export function ToolGroupDisplay({ group, onArtifactAction }: ToolGroupDisplayPr
         // Use DiffArtifact for edit tools (both completed and errored -- show whatever data is available)
         if (isArtifactTool(call.name) && (call.status === 'completed' || call.status === 'error') && (call.result || call.error)) {
           const result = call.result || {};
-          // edit_text uses old_str/new_str (new) or original_text/new_text (legacy), rewrite_document uses original_content/new_content
-          const oldText = (result.old_str || result.original_text || result.original_content || '') as string;
-          const newText = (result.new_str || result.new_text || result.new_content || '') as string;
+          // replace_lines uses old_str/new_str, rewrite_document uses original_content/new_content
+          const oldText = (result.old_str || result.original_content || '') as string;
+          const newText = (result.new_str || result.new_content || '') as string;
           const reason = (result.reason || '') as string;
           const errorMsg = call.error || (result.error as string) || (result.is_error ? 'Edit failed' : '');
           
@@ -540,7 +539,7 @@ export function ToolGroupDisplay({ group, onArtifactAction }: ToolGroupDisplayPr
               </ToolCallTrigger>
               <ToolCallContent>
                 <ToolCallStatusItem status="running">
-                  {call.name === 'edit_text' ? 'Replacing text...' : call.name === 'rewrite_section' ? 'Rewriting section...' : 'Analyzing document...'}
+                  {call.name === 'replace_lines' ? 'Replacing text...' : 'Analyzing document...'}
                 </ToolCallStatusItem>
               </ToolCallContent>
             </ToolCall>

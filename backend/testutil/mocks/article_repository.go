@@ -3,6 +3,7 @@ package mocks
 
 import (
 	"context"
+	"time"
 
 	"backend/pkg/types"
 
@@ -73,8 +74,8 @@ func (m *MockArticleRepository) SaveDraft(ctx context.Context, a *types.Article)
 	return args.Error(0)
 }
 
-func (m *MockArticleRepository) Publish(ctx context.Context, a *types.Article) error {
-	args := m.Called(ctx, a)
+func (m *MockArticleRepository) Publish(ctx context.Context, a *types.Article, publishedAt *time.Time) error {
+	args := m.Called(ctx, a, publishedAt)
 	return args.Error(0)
 }
 

@@ -17,7 +17,6 @@ import (
 	"backend/pkg/core/ml/llm/tools"
 )
 
-
 // Common errors
 var (
 	ErrRequestCancelled = errors.New("request cancelled by user")
@@ -490,18 +489,18 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 						Content:    fmt.Sprintf("Tool execution error: %v", toolErr),
 						IsError:    true,
 					}
-			} else {
-				toolResults[i] = message.ToolResult{
-					ToolCallID: toolCall.ID,
-					Content:    toolResult.Content,
-					Metadata:   toolResult.Metadata,
-					IsError:    toolResult.IsError,
+				} else {
+					toolResults[i] = message.ToolResult{
+						ToolCallID: toolCall.ID,
+						Content:    toolResult.Content,
+						Metadata:   toolResult.Metadata,
+						IsError:    toolResult.IsError,
+					}
+					log.Printf("│   Tool %q → %d chars (error: %v)", toolCall.Name, len(toolResult.Content), toolResult.IsError)
 				}
-				log.Printf("│   Tool %q → %d chars (error: %v)", toolCall.Name, len(toolResult.Content), toolResult.IsError)
 			}
 		}
 	}
-}
 out:
 	if len(toolResults) == 0 {
 		return assistantMsg, nil, nil

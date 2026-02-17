@@ -1008,7 +1008,7 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 		}
 		msgMetadata.WithToolExecution(toolExec)
 
-		if toolName == "edit_text" || toolName == "replace_lines" || toolName == "rewrite_section" || toolName == "rewrite_document" {
+		if toolName == "replace_lines" || toolName == "rewrite_document" {
 			log.Printf("[Agent]       ✏️  ARTIFACT TOOL DETECTED: %s (isError: %v)", toolName, isError)
 
 			artifactID := uuid.New().String()
@@ -1021,7 +1021,7 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 			var diffPreview string
 			var description string
 
-			if toolName == "edit_text" || toolName == "replace_lines" || toolName == "rewrite_section" {
+			if toolName == "replace_lines" {
 				// All editing tools use old_str/new_str format for diff display
 				if newStr, ok := toolResultData["new_str"].(string); ok {
 					artifactContent = newStr

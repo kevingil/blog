@@ -35,7 +35,7 @@ type ArticleRepository interface {
 
 	// Version management operations
 	SaveDraft(ctx context.Context, article *types.Article) error
-	Publish(ctx context.Context, article *types.Article) error
+	Publish(ctx context.Context, article *types.Article, publishedAt *time.Time) error
 	Unpublish(ctx context.Context, article *types.Article) error
 	ListVersions(ctx context.Context, articleID uuid.UUID) ([]types.ArticleVersion, error)
 	GetVersion(ctx context.Context, versionID uuid.UUID) (*types.ArticleVersion, error)
@@ -187,6 +187,35 @@ func (r *articleRepository) FindBySlug(ctx context.Context, slug string) (*types
 }
 
 // List retrieves articles with pagination and filtering
+// buildOrderClause returns a safe ORDER BY clause from the given sort options.
+// Defaults to "published_at DESC NULLS LAST" when no valid sort is specified.
+func buildOrderClause(sortBy, sortOrder string) string {
+	allowedColumns := map[string]bool{
+		"published_at": true,
+		"created_at":   true,
+		"updated_at":   true,
+	}
+	allowedOrders := map[string]bool{
+		"asc":  true,
+		"desc": true,
+	}
+
+	col := "published_at"
+	dir := "desc"
+	if allowedColumns[sortBy] {
+		col = sortBy
+	}
+	if allowedOrders[sortOrder] {
+		dir = sortOrder
+	}
+
+	clause := col + " " + dir
+	if col == "published_at" {
+		clause += " NULLS LAST"
+	}
+	return clause
+}
+
 func (r *articleRepository) List(ctx context.Context, opts types.ArticleListOptions) ([]types.Article, int64, error) {
 	var articleModels []models.Article
 	var total int64
@@ -209,9 +238,10 @@ func (r *articleRepository) List(ctx context.Context, opts types.ArticleListOpti
 		return nil, 0, err
 	}
 
-	// Apply pagination
+	// Apply pagination and sorting
+	orderClause := buildOrderClause(opts.SortBy, opts.SortOrder)
 	offset := (opts.Page - 1) * opts.PerPage
-	if err := query.Offset(offset).Limit(opts.PerPage).Order("created_at DESC").Find(&articleModels).Error; err != nil {
+	if err := query.Offset(offset).Limit(opts.PerPage).Order(orderClause).Find(&articleModels).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -250,9 +280,9 @@ func (r *articleRepository) Search(ctx context.Context, opts types.ArticleSearch
 		return nil, 0, err
 	}
 
-	// Apply pagination
+	// Apply pagination and sorting (search uses published_at desc by default)
 	offset := (opts.Page - 1) * opts.PerPage
-	if err := query.Offset(offset).Limit(opts.PerPage).Order("created_at DESC").Find(&articleModels).Error; err != nil {
+	if err := query.Offset(offset).Limit(opts.PerPage).Order("published_at DESC NULLS LAST").Find(&articleModels).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -413,8 +443,12 @@ func (r *articleRepository) SaveDraft(ctx context.Context, a *types.Article) err
 }
 
 // Publish copies draft to published and creates version asynchronously
-func (r *articleRepository) Publish(ctx context.Context, a *types.Article) error {
+func (r *articleRepository) Publish(ctx context.Context, a *types.Article, publishedAt *time.Time) error {
 	now := time.Now()
+	pubTime := now
+	if publishedAt != nil {
+		pubTime = *publishedAt
+	}
 
 	// 1. Copy draft fields to published fields synchronously
 	err := r.db.WithContext(ctx).Model(&models.Article{}).
@@ -429,7 +463,7 @@ func (r *articleRepository) Publish(ctx context.Context, a *types.Article) error
 				}
 				return nil
 			}(),
-			"published_at": now,
+			"published_at": pubTime,
 			"updated_at":   now,
 		}).Error
 	if err != nil {
@@ -441,7 +475,7 @@ func (r *articleRepository) Publish(ctx context.Context, a *types.Article) error
 	a.PublishedContent = &a.DraftContent
 	a.PublishedImageURL = &a.DraftImageURL
 	a.PublishedEmbedding = a.DraftEmbedding
-	a.PublishedAt = &now
+	a.PublishedAt = &pubTime
 	a.UpdatedAt = now
 
 	// 2. Create published version asynchronously

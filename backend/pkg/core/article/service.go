@@ -197,6 +197,8 @@ func (s *Service) List(ctx context.Context, page int, tagName string, status str
 		PerPage:       articlesPerPage,
 		PublishedOnly: publishedOnly && status != "all",
 		TagID:         tagID,
+		SortBy:        sortBy,
+		SortOrder:     sortOrder,
 	}
 
 	articles, totalCount, err := s.articleRepo.List(ctx, opts)
@@ -515,14 +517,15 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	return s.articleRepo.Delete(ctx, id)
 }
 
-// Publish publishes the current draft
-func (s *Service) Publish(ctx context.Context, articleID uuid.UUID) (*ArticleListItem, error) {
+// Publish publishes the current draft. If publishedAt is non-nil, that timestamp
+// is used instead of the current time.
+func (s *Service) Publish(ctx context.Context, articleID uuid.UUID, publishedAt *time.Time) (*ArticleListItem, error) {
 	article, err := s.articleRepo.FindByID(ctx, articleID)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := s.articleRepo.Publish(ctx, article); err != nil {
+	if err := s.articleRepo.Publish(ctx, article, publishedAt); err != nil {
 		return nil, fmt.Errorf("failed to publish article: %w", err)
 	}
 

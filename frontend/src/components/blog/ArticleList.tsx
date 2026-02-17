@@ -262,18 +262,7 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
 
     <div ref={containerRef}>
 
-      {!pagination && (
-        <div className="flex justify-between p-4 items-center">
-          <h2 className="font-semibold text-muted-foreground">
-            Recent Articles
-          </h2>
-          <Link to="/blog" search={{ page: undefined, tag: undefined, search: undefined }} 
-            className="flex items-center font-medium text-primary transition-colors duration-200 
-            border border-gray-300 dark:border-gray-800 bg-card hover:border-primary dark:hover:border-primary rounded-lg px-4 py-2 shadow-sm">
-            <p className="text-md text-muted-foreground">See all</p>
-          </Link>
-        </div>
-      )}
+      {!pagination && null}
 
       {loading ? (
         <ArticlesSkeleton />
@@ -295,8 +284,8 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
             return (
               <Card
                 key={article.article.id}
-                animationDelay={index * 100}
-                className="group relative overflow-hidden hover:shadow-2xl transition-all duration-500 hover:border-primary/50"
+                animationDelay={index * 80}
+                className="group relative overflow-hidden hover:border-primary/30 hover:shadow-[0_0_20px_-5px_rgba(0,200,200,0.1)] transition-all duration-500"
               >
                 <CardContent className="p-0">
                   <Link
@@ -305,29 +294,29 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
                     search={{ page: undefined, tag: undefined, search: undefined }}
                     className="flex items-stretch gap-4"
                   >
-                    {/* Text */}
                     <div className="flex-1 p-4 sm:p-5">
-                      <h2 className="text-lg sm:text-xl font-semibold mb-1 line-clamp-2 group-hover:text-primary transition-colors">
+                      <h2 className="text-lg sm:text-xl font-semibold tracking-tight mb-1.5 line-clamp-2 group-hover:text-primary transition-colors">
                         {displayTitle}
                       </h2>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs sm:text-sm text-muted-foreground">{article.author?.name}</span>
-                        <span className="text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 mb-2 text-xs text-white/40">
+                        <span className="font-medium">{article.author?.name}</span>
+                        <span>·</span>
+                        <span>
                           {(() => {
                             const date = article.article.published_at ? new Date(article.article.published_at) : null;
                             return date && !isNaN(date.getTime()) ? format(date, 'MMM d, yyyy') : 'Unknown';
                           })()}
                         </span>
                       </div>
-                      <p className="text-sm text-muted-foreground line-clamp-2">
+                      <p className="text-sm text-white/40 line-clamp-2 leading-relaxed">
                         {markdownToPlainText(displayContent?.replace(/<[^>]*>/g, '').substring(0, 200) || '')}
                       </p>
                       {article.tags && article.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-3">
+                        <div className="flex flex-wrap gap-1.5 mt-3">
                           {article.tags.slice(0, 3).map((tag) => (
                             tag.name ? (
-                              <Badge key={tag.tag_id} variant="secondary" className="text-primary">
-                                {tag.name.toUpperCase()}
+                              <Badge key={tag.tag_id} variant="secondary" className="text-xs font-normal text-primary/80 bg-primary/10 border-0">
+                                {tag.name.toLowerCase()}
                               </Badge>
                             ) : null
                           ))}
@@ -335,20 +324,19 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
                       )}
                     </div>
 
-                    {/* Image */}
-                    <div className="relative w-36 sm:w-48 md:w-56 flex-shrink-0 overflow-hidden rounded-md my-4 mr-4">
+                    <div className="relative w-36 sm:w-48 md:w-56 flex-shrink-0 overflow-hidden rounded-lg my-4 mr-4">
                       {displayImageUrl ? (
                         <>
                           <img
                             src={displayImageUrl}
                             alt={displayTitle || ''}
-                            className="w-full h-full object-cover aspect-video transition-transform duration-300 group-hover:scale-110"
+                            className="w-full h-full object-cover aspect-video transition-transform duration-300 group-hover:scale-105"
                           />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent" />
                         </>
                       ) : (
-                        <div className="w-full h-full aspect-video bg-muted flex items-center justify-center">
-                          <ImageIcon className="w-10 h-10 text-muted-foreground" />
+                        <div className="w-full h-full aspect-video bg-white/[0.03] flex items-center justify-center">
+                          <ImageIcon className="w-10 h-10 text-white/20" />
                         </div>
                       )}
                     </div>

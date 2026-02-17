@@ -98,7 +98,159 @@ import { Dialog, DialogTitle, DialogContent, DialogTrigger, DialogDescription, D
 import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerClose } from '@/components/ui/drawer';
 import { SourcesManager } from './SourcesManager';
 import { SourcesPreview } from './SourcesPreview';
+import type { UseMutationResult } from '@tanstack/react-query';
 
+function PublishDrawerContent({
+  article,
+  isNew = false,
+  publishMutation,
+  unpublishMutation,
+}: {
+  article: ArticleListItem | null | undefined;
+  isNew?: boolean;
+  publishMutation: UseMutationResult<ArticleListItem, Error, Date | undefined, unknown>;
+  unpublishMutation: UseMutationResult<ArticleListItem, Error, void, unknown>;
+}) {
+  const currentPublishedAt = article?.article.published_at
+    ? new Date(article.article.published_at)
+    : undefined;
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(currentPublishedAt);
+  const [showCalendar, setShowCalendar] = useState(false);
+
+  // Sync when the article's published_at changes externally
+  useEffect(() => {
+    if (article?.article.published_at) {
+      setSelectedDate(new Date(article.article.published_at));
+    }
+  }, [article?.article.published_at]);
+
+  const handlePublish = () => {
+    // Pass the selected date if it differs from the current published_at,
+    // or if the article isn't published yet and a date was picked.
+    const dateOverride = selectedDate && (
+      !currentPublishedAt ||
+      selectedDate.getTime() !== currentPublishedAt.getTime()
+    ) ? selectedDate : undefined;
+    publishMutation.mutate(dateOverride);
+  };
+
+  return (
+    <DrawerContent className="w-full sm:max-w-sm ml-auto">
+      <DrawerHeader>
+        <DrawerTitle>Publishing Settings</DrawerTitle>
+        <DrawerDescription>Manage article publication status.</DrawerDescription>
+      </DrawerHeader>
+      <div className="space-y-4 px-4">
+        {/* Status Display */}
+        <div className="flex items-center gap-2 mb-4">
+          <Badge variant={isPublished(article?.article) ? "default" : "secondary"}>
+            {isPublished(article?.article) ? "Published" : "Draft Only"}
+          </Badge>
+        </div>
+
+        {/* Published At Date Picker */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">Published date</label>
+          <Button
+            variant="outline"
+            className={cn(
+              "w-full justify-start text-left font-normal",
+              !selectedDate && "text-muted-foreground"
+            )}
+            onClick={() => setShowCalendar((v) => !v)}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {selectedDate ? format(selectedDate, 'PPP') : 'Pick a date'}
+          </Button>
+          {showCalendar && (
+            <div className="rounded-md border p-0">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(day) => {
+                  if (day) {
+                    const base = selectedDate || new Date();
+                    day.setHours(base.getHours(), base.getMinutes(), base.getSeconds());
+                  }
+                  setSelectedDate(day);
+                  setShowCalendar(false);
+                }}
+              />
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            {isPublished(article?.article)
+              ? "Change the published date for this article."
+              : "Optionally set a custom publish date."}
+          </p>
+        </div>
+
+        {/* Created At (read-only) */}
+        {article?.article.created_at && (
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Created</label>
+            <p className="text-sm text-muted-foreground">
+              {format(new Date(article.article.created_at), 'PPP p')}
+            </p>
+          </div>
+        )}
+
+        {/* Show if draft differs from published */}
+        {isPublished(article?.article) && hasDraftChanges(article?.article) && (
+          <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded text-sm text-amber-800 dark:text-amber-200">
+            Draft has unpublished changes
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="space-y-2">
+          {!isPublished(article?.article) ? (
+            <Button
+              onClick={handlePublish}
+              disabled={publishMutation.isPending || isNew}
+              className="w-full"
+            >
+              <Globe className="mr-2 h-4 w-4" />
+              {publishMutation.isPending ? 'Publishing...' : 'Publish'}
+            </Button>
+          ) : (
+            <>
+              <Button
+                onClick={handlePublish}
+                variant="outline"
+                disabled={publishMutation.isPending}
+                className="w-full"
+              >
+                <RefreshCw className={cn("mr-2 h-4 w-4", publishMutation.isPending && "animate-spin")} />
+                {publishMutation.isPending ? 'Updating...' : 'Update Published'}
+              </Button>
+              <Button
+                onClick={() => unpublishMutation.mutate()}
+                variant="destructive"
+                disabled={unpublishMutation.isPending}
+                className="w-full"
+              >
+                <EyeOff className="mr-2 h-4 w-4" />
+                {unpublishMutation.isPending ? 'Unpublishing...' : 'Unpublish'}
+              </Button>
+            </>
+          )}
+        </div>
+
+        {isNew && (
+          <p className="text-xs text-muted-foreground">
+            Save the article first before publishing.
+          </p>
+        )}
+      </div>
+      <DrawerFooter>
+        <DrawerClose asChild>
+          <Button variant="outline" className="w-full">Done</Button>
+        </DrawerClose>
+      </DrawerFooter>
+    </DrawerContent>
+  );
+}
 
 export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const { toast } = useToast()
@@ -120,6 +272,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [generatingRewrite, setGeneratingRewrite] = useState(false);
   const [sourcesManagerOpen, setSourcesManagerOpen] = useState(false);
+  const [publishDrawerOpen, setPublishDrawerOpen] = useState(false);
   const [sourcesRefreshTrigger] = useState(0);
   
   // Image versioning state
@@ -361,7 +514,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
   // Mutation for publishing an article (copies draft to published)
   const publishMutation = useMutation({
-    mutationFn: () => publishArticle(blogSlug as string),
+    mutationFn: (publishedAt?: Date) => publishArticle(blogSlug as string, publishedAt),
     onSuccess: (response) => {
       toast({ title: "Success", description: "Article published successfully." });
       queryClient.setQueryData(['article', blogSlug], response);
@@ -510,18 +663,16 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     return <div>Please log in to edit articles.</div>;
   }
 
-  // Consume from ImageLoader and sync with versioning
+  // Sync stagedImageUrl to form; add new URLs to versions
   useEffect(() => {
-    if (stagedImageUrl) {
-      setValue('image_url', stagedImageUrl);
-      setPreviewImageUrl(stagedImageUrl);
-      
-      // Add to versions if it's a new URL
-      if (!imageVersions.some(v => v.url === stagedImageUrl)) {
+    if (stagedImageUrl !== undefined) {
+      setValue('image_url', stagedImageUrl ?? '');
+      setPreviewImageUrl(stagedImageUrl ?? '');
+      if (stagedImageUrl && !imageVersions.some(v => v.url === stagedImageUrl)) {
         addImageVersion(stagedImageUrl);
       }
     }
-  }, [stagedImageUrl, setValue]);
+  }, [stagedImageUrl, setValue, imageVersions]);
 
   // Populate form when article data is loaded (always load draft_* fields for editing)
   useEffect(() => {
@@ -539,15 +690,17 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       } as ArticleFormData;
       reset(newValues);
       
-      // Initialize image versions if there's an existing image
+      // Initialize image versions and staged state if there's an existing image
       if (article.article.draft_image_url) {
         setImageVersions([{ url: article.article.draft_image_url, timestamp: Date.now() }]);
         setCurrentVersionIndex(0);
         setPreviewImageUrl(article.article.draft_image_url);
+        setStagedImageUrl(article.article.draft_image_url);
       } else {
         setImageVersions([]);
         setCurrentVersionIndex(-1);
         setPreviewImageUrl('');
+        setStagedImageUrl(undefined);
       }
       
       // Content is now markdown -- form value is set via reset() above
@@ -725,8 +878,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       return;
     }
 
-    // Ensure staged image URL is synced to form data before saving
-    const finalImageUrl = stagedImageUrl !== undefined ? stagedImageUrl : data.image_url;
+    // Ensure image_url is captured at submit time - prefer stagedImageUrl when set, else form value
+    const formImageUrl = getValues('image_url') ?? data.image_url ?? '';
+    const finalImageUrl = (stagedImageUrl !== undefined && stagedImageUrl !== null)
+      ? stagedImageUrl
+      : formImageUrl;
 
     if (isNew) {
       // New articles are created as drafts by default
@@ -1152,7 +1308,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     });
 
                     // Silently apply edits -- content is markdown, set directly via form
-                    if ((toolName === 'edit_text' || toolName === 'replace_lines' || toolName === 'rewrite_section') && isNewMessage && !isError) {
+                    if (toolName === 'replace_lines' && isNewMessage && !isError) {
                       if (toolResult.new_markdown) {
                         setValue('content', toolResult.new_markdown);
                         pendingNewDocumentRef.current = toolResult.new_markdown;
@@ -1336,19 +1492,19 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   }
 
   return (
-    <section className="flex gap-4 p-0 md:p-4 h-[calc(100vh-60px)]">
+    <section className="flex gap-2 p-0 md:p-2 h-[calc(100vh-60px)]">
       <div className="flex-1 flex flex-col min-w-0">
         {/* Article Metadata Card */}
         
             {/* Article Title Section with Image and Save */}
-            <div className="mb-6">
-              <div className="flex flex-row items-center gap-3">
+            <div className="mb-2">
+              <div className="flex flex-row items-center gap-2">
                 {/* Edit Image Trigger */}
                 <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
                   <DialogTrigger asChild>
                     <button
                       type="button"
-                      className="w-12 h-10 flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex-shrink-0"
+                      className="w-10 h-8 flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex-shrink-0"
                     >
                       {(stagedImageUrl || article?.article.draft_image_url) ? (
                         <img 
@@ -1591,6 +1747,19 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title.message}</p>}
                 </div>
 
+                {/* Publish button when unpublished changes */}
+                {!isNew && isPublished(article?.article) && hasDraftChanges(article?.article) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPublishDrawerOpen(true)}
+                    className="flex-shrink-0"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-1" />
+                    Update Published
+                  </Button>
+                )}
+
                 {/* Save Button */}
                 <Button
                   type="button"
@@ -1608,11 +1777,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     'Save'
                   }
                 </Button>
+
               </div>
             </div>
 
             {/* Article Tools Section */}
-            <div className="flex flex-wrap items-center gap-2 mb-4">
+            <div className="flex flex-wrap items-center gap-1.5 mb-2">
               {/* Sources Button */}
               <SourcesPreview
                 articleId={article?.article.id}
@@ -1664,7 +1834,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               </Drawer>
 
               {/* Publish Button */}
-              <Drawer direction="right">
+              <Drawer direction="right" open={publishDrawerOpen} onOpenChange={setPublishDrawerOpen}>
                 <DrawerTrigger asChild>
                   <Button variant="outline" size="sm">
                     {isPublished(article?.article) ? (
@@ -1680,78 +1850,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 </DrawerTrigger>
 
                 {/* Drawer content for publishing settings */}
-                <DrawerContent className="w-full sm:max-w-sm ml-auto">
-                  <DrawerHeader>
-                    <DrawerTitle>Publishing Settings</DrawerTitle>
-                    <DrawerDescription>Manage article publication status.</DrawerDescription>
-                  </DrawerHeader>
-                  <div className="space-y-4 px-4">
-                    {/* Status Display */}
-                    <div className="flex items-center gap-2 mb-4">
-                      <Badge variant={isPublished(article?.article) ? "default" : "secondary"}>
-                        {isPublished(article?.article) ? "Published" : "Draft Only"}
-                      </Badge>
-                      {article?.article.published_at && (
-                        <span className="text-xs text-muted-foreground">
-                          Published {format(new Date(article.article.published_at), 'PPP')}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Show if draft differs from published */}
-                    {isPublished(article?.article) && hasDraftChanges(article?.article) && (
-                      <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded text-sm text-amber-800 dark:text-amber-200">
-                        Draft has unpublished changes
-                      </div>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="space-y-2">
-                      {!isPublished(article?.article) ? (
-                        <Button 
-                          onClick={() => publishMutation.mutate()} 
-                          disabled={publishMutation.isPending || isNew}
-                          className="w-full"
-                        >
-                          <Globe className="mr-2 h-4 w-4" />
-                          {publishMutation.isPending ? 'Publishing...' : 'Publish'}
-                        </Button>
-                      ) : (
-                        <>
-                          <Button 
-                            onClick={() => publishMutation.mutate()} 
-                            variant="outline" 
-                            disabled={publishMutation.isPending}
-                            className="w-full"
-                          >
-                            <RefreshCw className={cn("mr-2 h-4 w-4", publishMutation.isPending && "animate-spin")} />
-                            {publishMutation.isPending ? 'Updating...' : 'Update Published'}
-                          </Button>
-                          <Button 
-                            onClick={() => unpublishMutation.mutate()} 
-                            variant="destructive" 
-                            disabled={unpublishMutation.isPending}
-                            className="w-full"
-                          >
-                            <EyeOff className="mr-2 h-4 w-4" />
-                            {unpublishMutation.isPending ? 'Unpublishing...' : 'Unpublish'}
-                          </Button>
-                        </>
-                      )}
-                    </div>
-
-                    {isNew && (
-                      <p className="text-xs text-muted-foreground">
-                        Save the article first before publishing.
-                      </p>
-                    )}
-                  </div>
-                  <DrawerFooter>
-                    <DrawerClose asChild>
-                      <Button variant="outline" className="w-full">Done</Button>
-                    </DrawerClose>
-                  </DrawerFooter>
-                </DrawerContent>
+                <PublishDrawerContent
+                  article={article}
+                  isNew={isNew}
+                  publishMutation={publishMutation}
+                  unpublishMutation={unpublishMutation}
+                />
               </Drawer>
 
               {/* View Article Button */}
@@ -1872,7 +1976,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             </div>
 
           <form className="flex-1 flex flex-col min-h-0 min-w-0">
-              <div className="flex-1 flex flex-col border border-gray-300 dark:border-gray-600 rounded-md min-h-0 min-w-0">
+              <div className="flex-1 flex flex-col border border-gray-300 dark:border-gray-600 rounded-sm min-h-0 min-w-0">
                 <EditorTabs
                   content={watchedContent || ''}
                   onChange={onContentChange}
@@ -1894,8 +1998,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       </div>
 
       {/* Chat side-panel */}
-      <div className="hidden xl:flex flex-col w-[26rem] border rounded-md">
-        <div ref={chatMessagesRef} className="flex-1 overflow-y-auto p-2 space-y-3">
+      <div className="hidden xl:flex flex-col w-[26rem] border rounded-sm">
+        <div ref={chatMessagesRef} className="flex-1 overflow-y-auto p-1.5 space-y-2">
           {chatMessages.map((m, i) => {
             switch (m.role) {
               case 'tool': {
@@ -1949,7 +2053,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                   onArtifactAction={(toolId, action) => {
                                     const call = step.toolGroup?.calls.find(c => c.id === toolId);
                                     if (!call) return;
-                                    const editTools = ['edit_text', 'replace_lines', 'rewrite_section', 'rewrite_document'];
+                                    const editTools = ['replace_lines', 'rewrite_document'];
                                     if (editTools.includes(call.name) && action === 'accept' && call.result) {
                                       const result = call.result;
                                       const newMd = (result.new_markdown || result.new_content) as string;
@@ -2041,7 +2145,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 default: {
                   return (
                     <div key={i} className="w-full flex justify-end">
-                      <div className="max-w-xs whitespace-pre-wrap rounded-lg px-3 py-2 text-sm bg-indigo-500 text-white">
+                      <div className="max-w-xs whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-sm bg-indigo-500 text-white">
                         {m.content}
                       </div>
                     </div>
@@ -2055,7 +2159,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               <ThinkShimmerBlock message={thinkingMessage} />
             )}
           </div>
-        <div className="p-4 border-t space-y-2">
+        <div className="p-2 space-y-1.5">
           <PromptInput
             value={chatInput}
             onValueChange={setChatInput}
@@ -2065,7 +2169,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           >
             <PromptInputTextarea
               placeholder="Ask the assistant or click a quick action above…"
-              className="min-h-[60px]"
+              className="min-h-[44px]"
             />
             <PromptInputActions className="justify-end pt-2">
               <PromptInputAction

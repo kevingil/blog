@@ -25,6 +25,15 @@ import {
 } from "@/components/ui/sidebar"
 import { Link, useLocation, useNavigate } from "@tanstack/react-router"
 import { ArticleListItem, isPublished } from "@/services/types"
+
+function formatArticleMeta(article: ArticleListItem["article"]): string {
+  const fmt = (s: string) =>
+    new Date(s).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+  if (isPublished(article)) {
+    return `Published ${fmt(article.published_at!)}`
+  }
+  return article.created_at ? `Created ${fmt(article.created_at)} · Draft` : "Draft"
+}
 import { useEffect, useRef } from "react"
 import { FetchNextPageOptions, InfiniteQueryObserverResult, InfiniteData, useQueryClient } from "@tanstack/react-query"
 import { GetArticlesResponse } from "@/routes/dashboard/blog/index"
@@ -129,29 +138,26 @@ export function NavDocuments({
               const editUrl = `/dashboard/blog/edit/${articleItem.article.slug || ''}`
               return (
                 <SidebarMenuItem key={articleItem.article.id}>
-                  <SidebarMenuButton isActive={location.pathname === editUrl} asChild>
+                  <SidebarMenuButton isActive={location.pathname === editUrl} asChild className="!h-auto !min-h-10">
                     <Link 
                       to={editUrl} 
-                      className="flex flex-col items-start gap-1 p-2"
+                      className="flex flex-col items-start gap-0.5 px-2 py-2"
                       onClick={() => {
                         queryClient.invalidateQueries({ queryKey: ['article', articleItem.article.slug] })
                       }}
                     >
-                      <div className="flex items-center gap-2 w-full">
+                      <div className="flex items-center gap-2 w-full min-w-0">
                         <span 
-                          className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                             isPublished(articleItem.article) 
                               ? "bg-green-500" 
                               : "bg-indigo-400"
                           }`}
                         />
-                        <span className="text-sm font-medium truncate flex-1">{articleItem.article.draft_title}</span>
+                        <span className="text-xs font-medium truncate flex-1">{articleItem.article.draft_title}</span>
                       </div>
-                      <span className="text-xs text-muted-foreground">
-                        {isPublished(articleItem.article) 
-                          ? `Published ${new Date(articleItem.article.published_at!).toLocaleDateString()}`
-                          : 'Draft'
-                        }
+                      <span className="text-[10px] text-muted-foreground leading-tight truncate w-full pl-3.5">
+                        {formatArticleMeta(articleItem.article)}
                       </span>
                     </Link>
                   </SidebarMenuButton>

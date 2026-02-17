@@ -15,7 +15,7 @@ const Card = React.forwardRef<HTMLDivElement, React.ComponentProps<"div"> & { an
         ref={ref}
         data-slot="card"
         className={cn(
-          "bg-card/20 text-card-foreground flex flex-col gap-6 rounded-xl border border-gray-200/10 py-6 shadow-lg",
+          "bg-black/30 dark:bg-black/40 backdrop-blur-md text-card-foreground flex flex-col gap-6 rounded-2xl border border-white/[0.08] py-6",
           isAnimated ? "card-animated" : "card-hidden",
           className
         )}

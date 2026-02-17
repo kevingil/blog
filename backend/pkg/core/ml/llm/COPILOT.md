@@ -196,19 +196,22 @@ function handleCompletion() {
 
 ## Available Tools
 
-### 1. edit_text
-Edits specific text in the document while preserving the rest. Ideal for targeted improvements and live editing.
+### 1. replace_lines
+Replaces lines in the document by line number. Use `read_document` to see line numbers and section boundaries. Works for any change: rewriting sections, fixing typos, adding content, deleting lines.
 
 **Parameters:**
-- `original_text` (string): The exact text to find and replace in the document
-- `new_text` (string): The new text to replace the original text with
+- `start_line` (number): First line to replace (1-indexed, from read_document)
+- `end_line` (number): Last line to replace (inclusive)
+- `new_content` (string): Replacement text. Can be more or fewer lines. Omit or empty to delete lines.
 - `reason` (string): Brief explanation of why this edit is being made
 
 **Result:**
-- `original_text` (string): The text that was replaced
-- `new_text` (string): The replacement text
+- `old_str` (string): The text that was replaced
+- `new_str` (string): The replacement text
+- `new_markdown` (string): The full updated document
 - `reason` (string): Explanation of the edit
-- `edit_type` (string): Type of edit performed
+- `start_line` (number): Start line of the replacement
+- `end_line` (number): End line of the replacement
 
 **Frontend Behavior:**
 - Shows live progress in chat with status updates
@@ -355,40 +358,40 @@ ws.onclose = (event) => {
 
 ## Live Text Editing
 
-The `edit_text` tool provides a Cursor-like agentic editing experience with real-time updates:
+The `replace_lines` tool provides a Cursor-like agentic editing experience with real-time updates:
 
 ### Frontend Integration
 
 ```javascript
-// Handle edit_text artifacts specifically
-if (artifact.tool_name === 'edit_text') {
+// Handle replace_lines artifacts specifically
+if (artifact.tool_name === 'replace_lines') {
   if (artifact.status === 'starting') {
     // Show starting feedback in chat
     showChatMessage(`🔧 Starting text edit: ${artifact.message}`);
   } else if (artifact.status === 'completed' && artifact.result) {
     const editResult = artifact.result;
-    // Apply the edit to the TipTap editor
-    applyTextEdit(editResult.original_text, editResult.new_text, editResult.reason);
+    // Apply the edit to the TipTap editor using the new markdown
+    applyLineEdit(editResult.old_str, editResult.new_str, editResult.reason);
     
     // Show completion feedback in chat
     showChatMessage(`✅ Text edited: ${editResult.reason}`);
   }
 }
 
-// Apply text edit to TipTap editor
-function applyTextEdit(originalText, newText, reason) {
+// Apply line edit to TipTap editor
+function applyLineEdit(oldStr, newStr, reason) {
   const currentText = editor.getText();
-  const index = currentText.indexOf(originalText);
+  const index = currentText.indexOf(oldStr);
   
   if (index !== -1) {
     const from = index;
-    const to = index + originalText.length;
+    const to = index + oldStr.length;
     
     // Replace the text in the editor
     editor.chain()
       .focus()
       .setTextSelection({ from, to })
-      .insertContent(newText)
+      .insertContent(newStr)
       .run();
     
     // Show success feedback

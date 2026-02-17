@@ -34,8 +34,8 @@ const (
 )
 
 // DocumentState holds the mutable working copy of the document during an agent turn.
-// Stored as a pointer in context so both read_document and edit_text share the same state.
-// After edit_text produces new content, it updates this state so subsequent read_document
+// Stored as a pointer in context so both read_document and replace_lines share the same state.
+// After replace_lines produces new content, it updates this state so subsequent read_document
 // calls return the latest version (solving the stale-read problem for multi-edit turns).
 type DocumentState struct {
 	mu       sync.RWMutex
@@ -43,7 +43,7 @@ type DocumentState struct {
 	Markdown string
 }
 
-// DraftSaver is the interface that edit_text uses to persist draft content to the DB
+// DraftSaver is the interface that replace_lines uses to persist draft content to the DB
 // after each successful edit. This makes the backend the source of truth for draft content.
 type DraftSaver interface {
 	UpdateDraftContent(ctx context.Context, articleID string, htmlContent string) error
@@ -160,7 +160,7 @@ func WithArticleID(ctx context.Context, articleID string) context.Context {
 }
 
 // WithDocumentContent creates a mutable DocumentState and stores a pointer in context.
-// Both read_document and edit_text operate on this shared state so the agent always
+// Both read_document and replace_lines operate on this shared state so the agent always
 // sees the latest content during multi-edit turns.
 // The markdown is unescaped before storing so the LLM sees clean content that it can reproduce.
 func WithDocumentContent(ctx context.Context, html, markdown string) context.Context {

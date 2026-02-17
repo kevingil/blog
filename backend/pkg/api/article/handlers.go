@@ -2,6 +2,7 @@ package article
 
 import (
 	"sync"
+	"time"
 
 	"backend/pkg/api/middleware"
 	"backend/pkg/api/response"
@@ -356,13 +357,31 @@ func PublishArticle(c *fiber.Ctx) error {
 		return response.Error(c, core.InvalidInputError("Article slug is required"))
 	}
 
+	// Optional body with published_at override (unix timestamp in seconds or ms)
+	var body struct {
+		PublishedAt *int64 `json:"published_at"`
+	}
+	// Ignore parse errors -- body is optional
+	_ = c.BodyParser(&body)
+
+	var publishedAt *time.Time
+	if body.PublishedAt != nil {
+		var t time.Time
+		if *body.PublishedAt > 1e12 {
+			t = time.Unix(0, *body.PublishedAt*int64(time.Millisecond))
+		} else {
+			t = time.Unix(*body.PublishedAt, 0)
+		}
+		publishedAt = &t
+	}
+
 	svc := getService()
 	articleID, err := svc.GetIDBySlug(c.Context(), slug)
 	if err != nil {
 		return response.Error(c, err)
 	}
 
-	article, err := svc.Publish(c.Context(), articleID)
+	article, err := svc.Publish(c.Context(), articleID, publishedAt)
 	if err != nil {
 		return response.Error(c, err)
 	}

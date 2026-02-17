@@ -68,7 +68,7 @@ type StreamResponse struct {
 	// NEW: Chain of thought content
 	ThinkingContent string `json:"thinking_content,omitempty"`
 
-	// Full message for artifact tools (edit_text, rewrite_document, search_web_sources)
+	// Full message for artifact tools (replace_lines, rewrite_document, search_web_sources)
 	// Contains complete meta_data structure matching database format
 	FullMessage *FullMessagePayload `json:"full_message,omitempty"`
 

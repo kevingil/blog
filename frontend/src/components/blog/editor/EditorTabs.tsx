@@ -186,7 +186,7 @@ export function EditorTabs({
 
   return (
     <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col h-full min-w-0">
-      <TabsList className="w-full justify-between rounded-none border-b bg-transparent px-2 shrink-0">
+      <TabsList className="w-full justify-between rounded-none border-b bg-transparent px-1.5 shrink-0">
         <div className="flex">
           <TabsTrigger value="edit" className="gap-1.5 data-[state=active]:bg-muted">
             <Code className="h-3.5 w-3.5" />

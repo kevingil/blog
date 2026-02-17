@@ -71,4 +71,6 @@ type ArticleListOptions struct {
 	PublishedOnly bool
 	AuthorID      *uuid.UUID
 	TagID         *int
+	SortBy        string
+	SortOrder     string
 }

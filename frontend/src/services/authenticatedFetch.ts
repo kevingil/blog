@@ -81,9 +81,11 @@ export async function authenticatedFetch<T>(
 ): Promise<T> {
   const { skipAuth = false, headers = {}, ...restOptions } = options;
   
-  // Build headers
+  // Build headers -- skip Content-Type for FormData so the browser
+  // can set multipart/form-data with the correct boundary automatically
+  const isFormData = restOptions.body instanceof FormData;
   const finalHeaders: HeadersInit = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...headers,
     ...(skipAuth ? {} : getAuthHeaders()),
   };

@@ -180,11 +180,14 @@ export async function deleteArticle(id: string): Promise<{ success: boolean }> {
 // Version management operations
 
 /**
- * Publish the current draft - copies draft_* fields to published_* fields
+ * Publish the current draft - copies draft_* fields to published_* fields.
+ * Optionally pass a publishedAt date to override the default (now).
  */
-export async function publishArticle(slug: string): Promise<ArticleListItem> {
-  // Protected endpoint - requires auth
-  return apiPost<ArticleListItem>(`/blog/articles/${slug}/publish`);
+export async function publishArticle(slug: string, publishedAt?: Date): Promise<ArticleListItem> {
+  const body = publishedAt
+    ? { published_at: Math.floor(publishedAt.getTime() / 1000) }
+    : undefined;
+  return apiPost<ArticleListItem>(`/blog/articles/${slug}/publish`, body);
 }
 
 /**

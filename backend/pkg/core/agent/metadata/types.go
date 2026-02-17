@@ -270,7 +270,7 @@ var ToolCategories = map[string]ToolCategory{
 	"get_relevant_sources":     ToolCategoryResearch,
 	"fetch_url":                ToolCategoryResearch,
 	"add_context_from_sources": ToolCategoryAnalysis,
-	"edit_text":                ToolCategoryEditing,
+	"replace_lines":            ToolCategoryEditing,
 	"generate_text_content":    ToolCategoryGeneration,
 	"generate_image_prompt":    ToolCategoryGeneration,
 }
@@ -293,7 +293,7 @@ func HasArtifact(toolName string) bool {
 		"search_web_sources":    true,
 		"ask_question":          true,
 		"get_relevant_sources":  true,
-		"edit_text":             true,
+		"replace_lines":         true,
 		"generate_text_content": true,
 		"generate_image_prompt": true,
 	}
