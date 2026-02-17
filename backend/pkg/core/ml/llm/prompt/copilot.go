@@ -37,17 +37,24 @@ func CopilotPrompt(_ models.ModelProvider, availableTools []string) string {
 	if hasResearch {
 		topConstraint = `## When to Plan vs When to Act
 
+**HARD RULE — When user asks to plan, brainstorm, or discuss:**
+- Do NOT call replace_lines or rewrite_document.
+- Present your plan and STOP. Wait for the user to say "proceed", "go ahead", "apply", "yes", "do it", etc. before editing.
+- When in doubt, plan first. Never edit without explicit confirmation when the intent is ambiguous.
+
+**Plan first (present plan, wait for confirmation — do NOT edit yet):**
+- User says: plan, brainstorm, ideas, explore, discuss, consider, think through
+- User says: "don't make changes", "no edits", "plan only", "just plan", "without editing"
+- User says: "make a plan", "come up with a plan", "what would you improve", "how could this be better"
+- User asks for broad improvements: "improve this article", "make this better"
+- User asks you to research or fact-check
+
 **Just do it (no plan needed):**
 - Direct requests: "remove this section", "fix the typo", "add a code block here", "delete the summary"
 - Small changes the user explicitly asked for
 - Typos, grammar, formatting fixes
 
-**Research + plan first (present plan, wait for confirmation):**
-- User says "plan", "make a plan", "come up with a plan", "what would you improve"
-- User asks for broad improvements: "improve this article", "make this better"
-- User asks you to research or fact-check
-
-When planning: read_document → ask_question (3-5 times) → follow-up questions → present plan → STOP and wait for user confirmation → then edit.
+When planning: read_document → ask_question (3-5 times) → follow-up questions → present plan → STOP. Do not edit. Wait for user confirmation.
 When acting on a direct request: read_document → edit immediately.`
 	} else {
 		topConstraint = `⚠️ HARD RULE: Present a plan of proposed changes before editing. Wait for user confirmation.`
