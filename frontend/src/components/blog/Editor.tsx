@@ -389,6 +389,15 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     td: function ChatTdComponent({ children, ...props }: any) {
       return <td className="px-2 py-1 border-b" {...props}>{children}</td>;
     },
+    ul: function ChatUlComponent({ children, ...props }: any) {
+      return <ul className="my-2 space-y-1.5 list-disc pl-6" {...props}>{children}</ul>;
+    },
+    ol: function ChatOlComponent({ children, ...props }: any) {
+      return <ol className="my-2 space-y-1.5 list-decimal pl-6" {...props}>{children}</ol>;
+    },
+    li: function ChatLiComponent({ children, ...props }: any) {
+      return <li className="leading-relaxed" {...props}>{children}</li>;
+    },
   };
   
   // (deprecated) pending edit/patch state removed in favor of inline diffs
