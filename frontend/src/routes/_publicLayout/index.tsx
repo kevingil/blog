@@ -84,7 +84,7 @@ function ArticlesSection() {
   const listArticles = articles.slice(3);
 
   return (
-    <section className="mt-40 px-2 sm:px-0">
+    <section className="mt-28 px-2 sm:px-0">
       <SectionHeader label="Articles" seeAllHref="/blog" />
 
       {isLoading ? (
