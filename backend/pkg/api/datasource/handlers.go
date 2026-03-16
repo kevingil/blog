@@ -11,14 +11,17 @@ import (
 	coreDS "backend/pkg/core/datasource"
 	"backend/pkg/database"
 	"backend/pkg/database/repository"
+	"backend/pkg/integrations/exa"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
 
 var (
-	serviceInstance *coreDS.Service
-	serviceOnce     sync.Once
+	serviceInstance               *coreDS.Service
+	serviceOnce                   sync.Once
+	recommendationServiceInstance *coreDS.RecommendationService
+	recommendationServiceOnce     sync.Once
 )
 
 // getService returns the data source service instance (lazily initialized)
@@ -30,6 +33,15 @@ func getService() *coreDS.Service {
 		serviceInstance = coreDS.NewService(dataSourceRepo, crawledContentRepo)
 	})
 	return serviceInstance
+}
+
+func getRecommendationService() *coreDS.RecommendationService {
+	recommendationServiceOnce.Do(func() {
+		db := database.DB()
+		dataSourceRepo := repository.NewDataSourceRepository(db)
+		recommendationServiceInstance = coreDS.NewRecommendationService(dataSourceRepo, exa.NewClient())
+	})
+	return recommendationServiceInstance
 }
 
 // ListDataSources handles GET /data-sources
@@ -138,6 +150,46 @@ func CreateDataSource(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 	return response.Created(c, ds)
+}
+
+// RecommendDataSources handles POST /data-sources/recommendations
+// @Summary Recommend data sources
+// @Description Recommend websites to monitor for a freeform topic or request
+// @Tags data-sources
+// @Accept json
+// @Produce json
+// @Param request body dto.DataSourceRecommendationRequest true "Recommendation search"
+// @Success 200 {object} response.SuccessResponse{data=dto.DataSourceRecommendationsResponse}
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 502 {object} response.ErrorResponse
+// @Security BearerAuth
+// @Router /data-sources/recommendations [post]
+func RecommendDataSources(c *fiber.Ctx) error {
+	svc := getRecommendationService()
+	var req dto.DataSourceRecommendationRequest
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, core.InvalidInputError("Invalid request body"))
+	}
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
+	}
+
+	orgID := middleware.GetOrgID(c)
+	var userID *uuid.UUID
+	if orgID == nil {
+		uid, err := middleware.GetUserID(c)
+		if err != nil {
+			return response.Error(c, err)
+		}
+		userID = &uid
+	}
+
+	recommendations, err := svc.Recommend(c.Context(), orgID, userID, req)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	return response.Success(c, recommendations)
 }
 
 // UpdateDataSource handles PUT /data-sources/:id
