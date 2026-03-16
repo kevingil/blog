@@ -5,6 +5,11 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+
+	"backend/pkg/core/taskrun"
+	"backend/pkg/types"
+
+	"github.com/google/uuid"
 )
 
 const PipelineWorkerName = "pipeline"
@@ -35,21 +40,42 @@ func (w *PipelineWorker) Name() string {
 }
 
 // Run executes the crawl worker and then the insight worker.
-func (w *PipelineWorker) Run(ctx context.Context) error {
+func (w *PipelineWorker) Run(ctx context.Context) (*WorkerResult, error) {
 	if w.manager == nil {
-		return fmt.Errorf("worker manager not configured")
+		return nil, fmt.Errorf("worker manager not configured")
 	}
 
-	if err := w.runStep(ctx, "crawl", "Crawling sources", 0, 50); err != nil {
-		return fmt.Errorf("crawl step failed: %w", err)
+	crawlStatus, err := w.runStep(ctx, "crawl", "Crawling sources", 0, 50)
+	if err != nil {
+		return nil, fmt.Errorf("crawl step failed: %w", err)
 	}
 
-	if err := w.runStep(ctx, "insight", "Generating insights", 50, 50); err != nil {
-		return fmt.Errorf("insight step failed: %w", err)
+	insightStatus, err := w.runStep(ctx, "insight", "Generating insights", 50, 50)
+	if err != nil {
+		return nil, fmt.Errorf("insight step failed: %w", err)
 	}
 
 	w.statusService.UpdateStatus(w.Name(), StateRunning, 100, "Pipeline complete")
-	return nil
+	status := ResultStatusCompleted
+	warnings := []string{}
+	if crawlStatus == types.TaskRunStatusWarning {
+		status = ResultStatusWarning
+		warnings = append(warnings, "Crawl completed with warnings")
+	}
+	if insightStatus == types.TaskRunStatusWarning {
+		status = ResultStatusWarning
+		warnings = append(warnings, "Insight generation completed with warnings")
+	}
+	summary := "Pipeline completed successfully"
+	if status == ResultStatusWarning {
+		summary = "Pipeline completed with warnings"
+	}
+	return &WorkerResult{
+		Status:   status,
+		Summary:  summary,
+		Metrics:  map[string]interface{}{"crawl_status": crawlStatus, "insight_status": insightStatus},
+		Warnings: warnings,
+	}, nil
 }
 
 func (w *PipelineWorker) runStep(
@@ -58,15 +84,44 @@ func (w *PipelineWorker) runStep(
 	label string,
 	baseProgress int,
 	progressSpan int,
-) error {
+) (types.TaskRunStatus, error) {
 	w.statusService.UpdateStatus(w.Name(), StateRunning, baseProgress, label)
 	launchedAt := time.Now()
-
-	if err := w.manager.RunWorkerNow(workerName); err != nil {
-		return err
+	tracker := taskrun.FromContext(ctx)
+	if tracker != nil {
+		_ = tracker.StartStep(ctx, workerName, workerName, strPtr(label))
+	}
+	metadata := RunMetadata{
+		TriggerSource: "workflow",
+	}
+	if tracker != nil {
+		runID := tracker.RunID()
+		metadata.ParentRunID = &runID
 	}
 
-	return w.waitForStep(ctx, workerName, label, baseProgress, progressSpan, launchedAt)
+	childRunID, err := w.manager.RunWorkerNowWithMetadata(workerName, metadata)
+	if err != nil {
+		if tracker != nil {
+			errMessage := err.Error()
+			_ = tracker.FinishStep(ctx, workerName, "failed", strPtr(label+" failed"), &errMessage, nil)
+		}
+		return types.TaskRunStatusFailed, err
+	}
+
+	status, err := w.waitForStep(ctx, workerName, label, baseProgress, progressSpan, launchedAt, childRunID)
+	if tracker != nil {
+		summary := label + " complete"
+		if status == types.TaskRunStatusWarning {
+			summary = label + " completed with warnings"
+		}
+		if err != nil {
+			errMessage := err.Error()
+			_ = tracker.FinishStep(ctx, workerName, "failed", strPtr(label+" failed"), &errMessage, nil)
+		} else {
+			_ = tracker.FinishStep(ctx, workerName, string(status), &summary, nil, map[string]interface{}{"child_run_id": childRunID})
+		}
+	}
+	return status, err
 }
 
 func (w *PipelineWorker) waitForStep(
@@ -76,16 +131,17 @@ func (w *PipelineWorker) waitForStep(
 	baseProgress int,
 	progressSpan int,
 	launchedAt time.Time,
-) error {
+	childRunID string,
+) (types.TaskRunStatus, error) {
 	subscriber := w.statusService.Subscribe()
 	defer w.statusService.Unsubscribe(subscriber)
 
-	done, err := w.handleStepStatus(ctx, workerName, label, baseProgress, progressSpan, launchedAt)
+	done, err := w.handleStepStatus(ctx, workerName, label, baseProgress, progressSpan, launchedAt, childRunID)
 	if err != nil {
-		return err
+		return types.TaskRunStatusFailed, err
 	}
 	if done {
-		return nil
+		return w.lookupRunStatus(ctx, childRunID), nil
 	}
 
 	for {
@@ -94,7 +150,7 @@ func (w *PipelineWorker) waitForStep(
 			if stopErr := w.manager.StopWorker(workerName); stopErr != nil && stopErr != ErrWorkerNotRunning {
 				w.logger.Warn("failed to stop pipeline step after cancellation", "worker", workerName, "error", stopErr)
 			}
-			return ctx.Err()
+			return types.TaskRunStatusCancelled, ctx.Err()
 		case update, ok := <-subscriber:
 			if !ok || update.WorkerName != workerName {
 				continue
@@ -102,10 +158,10 @@ func (w *PipelineWorker) waitForStep(
 
 			done, err := w.handleStepStatusFromValue(workerName, label, baseProgress, progressSpan, launchedAt, update.Status)
 			if err != nil {
-				return err
+				return types.TaskRunStatusFailed, err
 			}
 			if done {
-				return nil
+				return w.lookupRunStatus(ctx, childRunID), nil
 			}
 		}
 	}
@@ -118,6 +174,7 @@ func (w *PipelineWorker) handleStepStatus(
 	baseProgress int,
 	progressSpan int,
 	launchedAt time.Time,
+	childRunID string,
 ) (bool, error) {
 	select {
 	case <-ctx.Done():
@@ -131,6 +188,21 @@ func (w *PipelineWorker) handleStepStatus(
 	}
 
 	return w.handleStepStatusFromValue(workerName, label, baseProgress, progressSpan, launchedAt, *status)
+}
+
+func (w *PipelineWorker) lookupRunStatus(ctx context.Context, childRunID string) types.TaskRunStatus {
+	if childRunID == "" || w.manager.taskRunService == nil {
+		return types.TaskRunStatusCompleted
+	}
+	runUUID, err := uuid.Parse(childRunID)
+	if err != nil {
+		return types.TaskRunStatusCompleted
+	}
+	run, err := w.manager.taskRunService.GetRun(ctx, runUUID)
+	if err != nil {
+		return types.TaskRunStatusCompleted
+	}
+	return run.Status
 }
 
 func (w *PipelineWorker) handleStepStatusFromValue(
@@ -182,4 +254,8 @@ func isFreshStepStatus(status WorkerStatus, launchedAt time.Time) bool {
 	}
 
 	return !status.StartedAt.Before(launchedAt)
+}
+
+func strPtr(value string) *string {
+	return &value
 }

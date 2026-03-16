@@ -3,6 +3,8 @@ package worker
 import (
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // WorkerState represents the current state of a worker
@@ -19,6 +21,7 @@ const (
 type WorkerStatus struct {
 	Name        string      `json:"name"`
 	State       WorkerState `json:"state"`
+	TaskRunID   *uuid.UUID  `json:"task_run_id"`
 	Progress    int         `json:"progress"`     // 0-100
 	Message     string      `json:"message"`      // Current operation description
 	StartedAt   *time.Time  `json:"started_at"`   // When the current/last run started
@@ -145,7 +148,7 @@ func (s *StatusService) SetError(name string, err string) {
 }
 
 // StartWorker marks a worker as starting
-func (s *StatusService) StartWorker(name string) {
+func (s *StatusService) StartWorker(name string, taskRunID *uuid.UUID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -157,6 +160,7 @@ func (s *StatusService) StartWorker(name string) {
 
 	now := time.Now()
 	status.State = StateRunning
+	status.TaskRunID = taskRunID
 	status.StartedAt = &now
 	status.CompletedAt = nil
 	status.Progress = 0

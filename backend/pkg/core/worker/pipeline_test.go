@@ -11,18 +11,18 @@ import (
 
 type stubWorker struct {
 	name  string
-	runFn func(ctx context.Context) error
+	runFn func(ctx context.Context) (*WorkerResult, error)
 }
 
 func (w *stubWorker) Name() string {
 	return w.name
 }
 
-func (w *stubWorker) Run(ctx context.Context) error {
+func (w *stubWorker) Run(ctx context.Context) (*WorkerResult, error) {
 	if w.runFn != nil {
 		return w.runFn(ctx)
 	}
-	return nil
+	return &WorkerResult{Status: ResultStatusCompleted, Summary: "ok"}, nil
 }
 
 func TestPipelineWorkerRunsCrawlThenInsight(t *testing.T) {
@@ -38,18 +38,18 @@ func TestPipelineWorkerRunsCrawlThenInsight(t *testing.T) {
 
 	manager.RegisterWorker(&stubWorker{
 		name: "crawl",
-		runFn: func(ctx context.Context) error {
+		runFn: func(ctx context.Context) (*WorkerResult, error) {
 			runOrder <- "crawl"
 			time.Sleep(20 * time.Millisecond)
-			return nil
+			return &WorkerResult{Status: ResultStatusCompleted, Summary: "crawl ok"}, nil
 		},
 	})
 	manager.RegisterWorker(&stubWorker{
 		name: "insight",
-		runFn: func(ctx context.Context) error {
+		runFn: func(ctx context.Context) (*WorkerResult, error) {
 			runOrder <- "insight"
 			time.Sleep(20 * time.Millisecond)
-			return nil
+			return &WorkerResult{Status: ResultStatusCompleted, Summary: "insight ok"}, nil
 		},
 	})
 
@@ -82,16 +82,16 @@ func TestPipelineWorkerStopsAfterFailedCrawl(t *testing.T) {
 
 	manager.RegisterWorker(&stubWorker{
 		name: "crawl",
-		runFn: func(ctx context.Context) error {
+		runFn: func(ctx context.Context) (*WorkerResult, error) {
 			time.Sleep(20 * time.Millisecond)
-			return errors.New("crawl exploded")
+			return nil, errors.New("crawl exploded")
 		},
 	})
 	manager.RegisterWorker(&stubWorker{
 		name: "insight",
-		runFn: func(ctx context.Context) error {
+		runFn: func(ctx context.Context) (*WorkerResult, error) {
 			insightStarted <- struct{}{}
-			return nil
+			return &WorkerResult{Status: ResultStatusCompleted, Summary: "insight ok"}, nil
 		},
 	})
 

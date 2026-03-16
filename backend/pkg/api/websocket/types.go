@@ -28,6 +28,7 @@ type WorkerStatusMessage struct {
 type WorkerStatusData struct {
 	Name        string  `json:"name"`
 	State       string  `json:"state"`
+	TaskRunID   *string `json:"task_run_id,omitempty"`
 	Progress    int     `json:"progress"`
 	Message     string  `json:"message"`
 	StartedAt   *string `json:"started_at,omitempty"`
@@ -41,4 +42,3 @@ type WorkerStatusData struct {
 const (
 	ChannelWorkerStatus = "worker-status"
 )
-

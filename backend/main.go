@@ -26,6 +26,7 @@ import (
 	coreAgent "backend/pkg/core/agent"
 	"backend/pkg/core/chat"
 	"backend/pkg/core/source"
+	"backend/pkg/core/taskrun"
 	"backend/pkg/core/worker"
 	"backend/pkg/database"
 	"backend/pkg/database/repository"
@@ -77,6 +78,8 @@ func main() {
 	// Initialize Worker Manager
 	workerLogger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	workerManager := worker.NewWorkerManager(workerLogger)
+	taskRunService := taskrun.NewService(repository.NewTaskRunRepository(database.DB()))
+	workerManager.SetTaskRunService(taskRunService)
 
 	// Create and register workers
 	crawlWorker := worker.NewCrawlWorker(workerLogger, cfg.Worker.ExaAPIKey)
