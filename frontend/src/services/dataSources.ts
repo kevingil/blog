@@ -41,6 +41,29 @@ export interface UpdateDataSourceRequest {
   is_enabled?: boolean;
 }
 
+export interface DataSourceRecommendation {
+  name: string;
+  url: string;
+  domain: string;
+  summary?: string;
+  reason?: string;
+  source_type: string;
+  score?: number;
+  favicon?: string;
+  sample_url?: string;
+  sample_title?: string;
+}
+
+export interface RecommendDataSourcesRequest {
+  query: string;
+  limit?: number;
+}
+
+export interface RecommendDataSourcesResponse {
+  query: string;
+  recommendations: DataSourceRecommendation[];
+}
+
 // API calls
 
 export interface ListDataSourcesResponse {
@@ -65,6 +88,12 @@ export async function getDataSource(id: string): Promise<DataSource> {
 
 export async function createDataSource(request: CreateDataSourceRequest): Promise<DataSource> {
   return apiPost<DataSource>('/data-sources', request);
+}
+
+export async function recommendDataSources(
+  request: RecommendDataSourcesRequest
+): Promise<RecommendDataSourcesResponse> {
+  return apiPost<RecommendDataSourcesResponse>('/data-sources/recommendations', request);
 }
 
 export async function updateDataSource(id: string, request: UpdateDataSourceRequest): Promise<DataSource> {

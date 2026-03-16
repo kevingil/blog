@@ -22,8 +22,8 @@ package main
 
 import (
 	"backend/pkg/api"
-	coreAgent "backend/pkg/core/agent"
 	"backend/pkg/config"
+	coreAgent "backend/pkg/core/agent"
 	"backend/pkg/core/chat"
 	"backend/pkg/core/source"
 	"backend/pkg/core/worker"
@@ -69,7 +69,7 @@ func main() {
 	if exaClient.IsConfigured() {
 		exaArg = exaClient
 	}
-	if err := coreAgent.InitializeAgentCopilotManager(nil, chatService, exaArg, sourceService, draftService); err != nil {
+	if err := coreAgent.InitializeAgentCopilotManager(sourceService, chatService, exaArg, sourceService, draftService); err != nil {
 		log.Printf("Warning: Failed to initialize AgentCopilotManager: %v", err)
 	}
 	log.Printf("Initialized Agent Services")
