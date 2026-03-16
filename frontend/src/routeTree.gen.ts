@@ -23,6 +23,7 @@ import { Route as DashboardProfileImport } from './routes/dashboard/profile'
 import { Route as PublicLayoutSignupImport } from './routes/_publicLayout/signup'
 import { Route as PublicLayoutLoginImport } from './routes/_publicLayout/login'
 import { Route as PublicLayoutAboutImport } from './routes/_publicLayout/about'
+import { Route as DashboardTasksIndexImport } from './routes/dashboard/tasks/index'
 import { Route as DashboardSourcesIndexImport } from './routes/dashboard/sources/index'
 import { Route as DashboardProjectsIndexImport } from './routes/dashboard/projects/index'
 import { Route as DashboardPagesIndexImport } from './routes/dashboard/pages/index'
@@ -30,6 +31,7 @@ import { Route as DashboardInsightsIndexImport } from './routes/dashboard/insigh
 import { Route as DashboardBlogIndexImport } from './routes/dashboard/blog/index'
 import { Route as PublicLayoutProjectsIndexImport } from './routes/_publicLayout/projects/index'
 import { Route as PublicLayoutBlogIndexImport } from './routes/_publicLayout/blog/index'
+import { Route as DashboardTasksTaskRunIdImport } from './routes/dashboard/tasks/$taskRunId'
 import { Route as DashboardProjectsNewImport } from './routes/dashboard/projects/new'
 import { Route as DashboardPagesNewImport } from './routes/dashboard/pages/new'
 import { Route as DashboardInsightsTopicsImport } from './routes/dashboard/insights/topics'
@@ -115,6 +117,12 @@ const PublicLayoutAboutRoute = PublicLayoutAboutImport.update({
   getParentRoute: () => PublicLayoutRoute,
 } as any)
 
+const DashboardTasksIndexRoute = DashboardTasksIndexImport.update({
+  id: '/tasks/',
+  path: '/tasks/',
+  getParentRoute: () => DashboardRoute,
+} as any)
+
 const DashboardSourcesIndexRoute = DashboardSourcesIndexImport.update({
   id: '/sources/',
   path: '/sources/',
@@ -155,6 +163,12 @@ const PublicLayoutBlogIndexRoute = PublicLayoutBlogIndexImport.update({
   id: '/blog/',
   path: '/blog/',
   getParentRoute: () => PublicLayoutRoute,
+} as any)
+
+const DashboardTasksTaskRunIdRoute = DashboardTasksTaskRunIdImport.update({
+  id: '/tasks/$taskRunId',
+  path: '/tasks/$taskRunId',
+  getParentRoute: () => DashboardRoute,
 } as any)
 
 const DashboardProjectsNewRoute = DashboardProjectsNewImport.update({
@@ -371,6 +385,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardProjectsNewImport
       parentRoute: typeof DashboardImport
     }
+    '/dashboard/tasks/$taskRunId': {
+      id: '/dashboard/tasks/$taskRunId'
+      path: '/tasks/$taskRunId'
+      fullPath: '/dashboard/tasks/$taskRunId'
+      preLoaderRoute: typeof DashboardTasksTaskRunIdImport
+      parentRoute: typeof DashboardImport
+    }
     '/_publicLayout/blog/': {
       id: '/_publicLayout/blog/'
       path: '/blog'
@@ -418,6 +439,13 @@ declare module '@tanstack/react-router' {
       path: '/sources'
       fullPath: '/dashboard/sources'
       preLoaderRoute: typeof DashboardSourcesIndexImport
+      parentRoute: typeof DashboardImport
+    }
+    '/dashboard/tasks/': {
+      id: '/dashboard/tasks/'
+      path: '/tasks'
+      fullPath: '/dashboard/tasks'
+      preLoaderRoute: typeof DashboardTasksIndexImport
       parentRoute: typeof DashboardImport
     }
     '/dashboard/blog/edit/$blogSlug': {
@@ -484,11 +512,13 @@ interface DashboardRouteChildren {
   DashboardInsightsTopicsRoute: typeof DashboardInsightsTopicsRoute
   DashboardPagesNewRoute: typeof DashboardPagesNewRoute
   DashboardProjectsNewRoute: typeof DashboardProjectsNewRoute
+  DashboardTasksTaskRunIdRoute: typeof DashboardTasksTaskRunIdRoute
   DashboardBlogIndexRoute: typeof DashboardBlogIndexRoute
   DashboardInsightsIndexRoute: typeof DashboardInsightsIndexRoute
   DashboardPagesIndexRoute: typeof DashboardPagesIndexRoute
   DashboardProjectsIndexRoute: typeof DashboardProjectsIndexRoute
   DashboardSourcesIndexRoute: typeof DashboardSourcesIndexRoute
+  DashboardTasksIndexRoute: typeof DashboardTasksIndexRoute
   DashboardBlogEditBlogSlugRoute: typeof DashboardBlogEditBlogSlugRoute
   DashboardPagesEditPageIdRoute: typeof DashboardPagesEditPageIdRoute
   DashboardProjectsEditProjectIdRoute: typeof DashboardProjectsEditProjectIdRoute
@@ -506,11 +536,13 @@ const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardInsightsTopicsRoute: DashboardInsightsTopicsRoute,
   DashboardPagesNewRoute: DashboardPagesNewRoute,
   DashboardProjectsNewRoute: DashboardProjectsNewRoute,
+  DashboardTasksTaskRunIdRoute: DashboardTasksTaskRunIdRoute,
   DashboardBlogIndexRoute: DashboardBlogIndexRoute,
   DashboardInsightsIndexRoute: DashboardInsightsIndexRoute,
   DashboardPagesIndexRoute: DashboardPagesIndexRoute,
   DashboardProjectsIndexRoute: DashboardProjectsIndexRoute,
   DashboardSourcesIndexRoute: DashboardSourcesIndexRoute,
+  DashboardTasksIndexRoute: DashboardTasksIndexRoute,
   DashboardBlogEditBlogSlugRoute: DashboardBlogEditBlogSlugRoute,
   DashboardPagesEditPageIdRoute: DashboardPagesEditPageIdRoute,
   DashboardProjectsEditProjectIdRoute: DashboardProjectsEditProjectIdRoute,
@@ -541,6 +573,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/insights/topics': typeof DashboardInsightsTopicsRoute
   '/dashboard/pages/new': typeof DashboardPagesNewRoute
   '/dashboard/projects/new': typeof DashboardProjectsNewRoute
+  '/dashboard/tasks/$taskRunId': typeof DashboardTasksTaskRunIdRoute
   '/blog': typeof PublicLayoutBlogIndexRoute
   '/projects': typeof PublicLayoutProjectsIndexRoute
   '/dashboard/blog': typeof DashboardBlogIndexRoute
@@ -548,6 +581,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/pages': typeof DashboardPagesIndexRoute
   '/dashboard/projects': typeof DashboardProjectsIndexRoute
   '/dashboard/sources': typeof DashboardSourcesIndexRoute
+  '/dashboard/tasks': typeof DashboardTasksIndexRoute
   '/dashboard/blog/edit/$blogSlug': typeof DashboardBlogEditBlogSlugRoute
   '/dashboard/pages/edit/$pageId': typeof DashboardPagesEditPageIdRoute
   '/dashboard/projects/edit/$projectId': typeof DashboardProjectsEditProjectIdRoute
@@ -572,6 +606,7 @@ export interface FileRoutesByTo {
   '/dashboard/insights/topics': typeof DashboardInsightsTopicsRoute
   '/dashboard/pages/new': typeof DashboardPagesNewRoute
   '/dashboard/projects/new': typeof DashboardProjectsNewRoute
+  '/dashboard/tasks/$taskRunId': typeof DashboardTasksTaskRunIdRoute
   '/blog': typeof PublicLayoutBlogIndexRoute
   '/projects': typeof PublicLayoutProjectsIndexRoute
   '/dashboard/blog': typeof DashboardBlogIndexRoute
@@ -579,6 +614,7 @@ export interface FileRoutesByTo {
   '/dashboard/pages': typeof DashboardPagesIndexRoute
   '/dashboard/projects': typeof DashboardProjectsIndexRoute
   '/dashboard/sources': typeof DashboardSourcesIndexRoute
+  '/dashboard/tasks': typeof DashboardTasksIndexRoute
   '/dashboard/blog/edit/$blogSlug': typeof DashboardBlogEditBlogSlugRoute
   '/dashboard/pages/edit/$pageId': typeof DashboardPagesEditPageIdRoute
   '/dashboard/projects/edit/$projectId': typeof DashboardProjectsEditProjectIdRoute
@@ -606,6 +642,7 @@ export interface FileRoutesById {
   '/dashboard/insights/topics': typeof DashboardInsightsTopicsRoute
   '/dashboard/pages/new': typeof DashboardPagesNewRoute
   '/dashboard/projects/new': typeof DashboardProjectsNewRoute
+  '/dashboard/tasks/$taskRunId': typeof DashboardTasksTaskRunIdRoute
   '/_publicLayout/blog/': typeof PublicLayoutBlogIndexRoute
   '/_publicLayout/projects/': typeof PublicLayoutProjectsIndexRoute
   '/dashboard/blog/': typeof DashboardBlogIndexRoute
@@ -613,6 +650,7 @@ export interface FileRoutesById {
   '/dashboard/pages/': typeof DashboardPagesIndexRoute
   '/dashboard/projects/': typeof DashboardProjectsIndexRoute
   '/dashboard/sources/': typeof DashboardSourcesIndexRoute
+  '/dashboard/tasks/': typeof DashboardTasksIndexRoute
   '/dashboard/blog/edit/$blogSlug': typeof DashboardBlogEditBlogSlugRoute
   '/dashboard/pages/edit/$pageId': typeof DashboardPagesEditPageIdRoute
   '/dashboard/projects/edit/$projectId': typeof DashboardProjectsEditProjectIdRoute
@@ -641,6 +679,7 @@ export interface FileRouteTypes {
     | '/dashboard/insights/topics'
     | '/dashboard/pages/new'
     | '/dashboard/projects/new'
+    | '/dashboard/tasks/$taskRunId'
     | '/blog'
     | '/projects'
     | '/dashboard/blog'
@@ -648,6 +687,7 @@ export interface FileRouteTypes {
     | '/dashboard/pages'
     | '/dashboard/projects'
     | '/dashboard/sources'
+    | '/dashboard/tasks'
     | '/dashboard/blog/edit/$blogSlug'
     | '/dashboard/pages/edit/$pageId'
     | '/dashboard/projects/edit/$projectId'
@@ -671,6 +711,7 @@ export interface FileRouteTypes {
     | '/dashboard/insights/topics'
     | '/dashboard/pages/new'
     | '/dashboard/projects/new'
+    | '/dashboard/tasks/$taskRunId'
     | '/blog'
     | '/projects'
     | '/dashboard/blog'
@@ -678,6 +719,7 @@ export interface FileRouteTypes {
     | '/dashboard/pages'
     | '/dashboard/projects'
     | '/dashboard/sources'
+    | '/dashboard/tasks'
     | '/dashboard/blog/edit/$blogSlug'
     | '/dashboard/pages/edit/$pageId'
     | '/dashboard/projects/edit/$projectId'
@@ -703,6 +745,7 @@ export interface FileRouteTypes {
     | '/dashboard/insights/topics'
     | '/dashboard/pages/new'
     | '/dashboard/projects/new'
+    | '/dashboard/tasks/$taskRunId'
     | '/_publicLayout/blog/'
     | '/_publicLayout/projects/'
     | '/dashboard/blog/'
@@ -710,6 +753,7 @@ export interface FileRouteTypes {
     | '/dashboard/pages/'
     | '/dashboard/projects/'
     | '/dashboard/sources/'
+    | '/dashboard/tasks/'
     | '/dashboard/blog/edit/$blogSlug'
     | '/dashboard/pages/edit/$pageId'
     | '/dashboard/projects/edit/$projectId'
@@ -770,11 +814,13 @@ export const routeTree = rootRoute
         "/dashboard/insights/topics",
         "/dashboard/pages/new",
         "/dashboard/projects/new",
+        "/dashboard/tasks/$taskRunId",
         "/dashboard/blog/",
         "/dashboard/insights/",
         "/dashboard/pages/",
         "/dashboard/projects/",
         "/dashboard/sources/",
+        "/dashboard/tasks/",
         "/dashboard/blog/edit/$blogSlug",
         "/dashboard/pages/edit/$pageId",
         "/dashboard/projects/edit/$projectId"
@@ -851,6 +897,10 @@ export const routeTree = rootRoute
       "filePath": "dashboard/projects/new.tsx",
       "parent": "/dashboard"
     },
+    "/dashboard/tasks/$taskRunId": {
+      "filePath": "dashboard/tasks/$taskRunId.tsx",
+      "parent": "/dashboard"
+    },
     "/_publicLayout/blog/": {
       "filePath": "_publicLayout/blog/index.tsx",
       "parent": "/_publicLayout"
@@ -877,6 +927,10 @@ export const routeTree = rootRoute
     },
     "/dashboard/sources/": {
       "filePath": "dashboard/sources/index.tsx",
+      "parent": "/dashboard"
+    },
+    "/dashboard/tasks/": {
+      "filePath": "dashboard/tasks/index.tsx",
       "parent": "/dashboard"
     },
     "/dashboard/blog/edit/$blogSlug": {
