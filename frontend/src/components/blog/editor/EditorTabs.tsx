@@ -3,8 +3,9 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MarkdownEditor } from './MarkdownEditor';
 import { DiffView } from './DiffView';
 import { MarkdownPreview } from './MarkdownPreview';
-import { Code, Eye, ShieldCheck } from 'lucide-react';
+import { BookOpen, Code, Eye, ShieldCheck } from 'lucide-react';
 import { EditorView } from '@codemirror/view';
+import { SourcesManagerContent } from '../SourcesManager';
 
 interface EditorTabsProps {
   content: string;
@@ -19,6 +20,7 @@ interface EditorTabsProps {
   authorName?: string;
   imageUrl?: string;
   tags?: string[];
+  articleId?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -122,6 +124,7 @@ export function EditorTabs({
   authorName,
   imageUrl,
   tags,
+  articleId,
 }: EditorTabsProps) {
   const syncLineRef = useRef(1);
   const scrollFractionRef = useRef(0);
@@ -196,6 +199,10 @@ export function EditorTabs({
             <Eye className="h-3.5 w-3.5" />
             Preview
           </TabsTrigger>
+          <TabsTrigger value="resources" className="gap-1.5 data-[state=active]:bg-muted">
+            <BookOpen className="h-3.5 w-3.5" />
+            Resources
+          </TabsTrigger>
         </div>
         <div className="flex">
           <TabsTrigger value="diff" className="gap-1.5 data-[state=active]:bg-yellow-900/30 data-[state=active]:text-yellow-400 text-yellow-500/70">
@@ -239,6 +246,13 @@ export function EditorTabs({
               imageUrl={imageUrl}
               tags={tags}
             />
+          </div>
+        )}
+
+        {/* Resources tab */}
+        {activeTab === 'resources' && (
+          <div className="absolute inset-0 overflow-auto">
+            <SourcesManagerContent articleId={articleId} />
           </div>
         )}
       </div>
