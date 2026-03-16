@@ -15,6 +15,7 @@ func Register(app *fiber.App) {
 	ds.Get("/", ListDataSources)
 	ds.Post("/", CreateDataSource)
 	ds.Post("/recommendations", RecommendDataSources)
+	ds.Post("/recommendations/discovery", RecommendDiscoveryDataSources)
 	ds.Get("/:id", GetDataSource)
 	ds.Put("/:id", UpdateDataSource)
 	ds.Delete("/:id", DeleteDataSource)

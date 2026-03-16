@@ -192,6 +192,48 @@ func RecommendDataSources(c *fiber.Ctx) error {
 	return response.Success(c, recommendations)
 }
 
+// RecommendDiscoveryDataSources handles POST /data-sources/recommendations/discovery
+// @Summary Discover adjacent data sources
+// @Description Recommend websites similar to the owner's current manual sources
+// @Tags data-sources
+// @Accept json
+// @Produce json
+// @Param request body dto.DataSourceDiscoveryRecommendationRequest false "Discovery recommendation search"
+// @Success 200 {object} response.SuccessResponse{data=dto.DataSourceRecommendationsResponse}
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 502 {object} response.ErrorResponse
+// @Security BearerAuth
+// @Router /data-sources/recommendations/discovery [post]
+func RecommendDiscoveryDataSources(c *fiber.Ctx) error {
+	svc := getRecommendationService()
+	var req dto.DataSourceDiscoveryRecommendationRequest
+	if len(c.Body()) > 0 {
+		if err := c.BodyParser(&req); err != nil {
+			return response.Error(c, core.InvalidInputError("Invalid request body"))
+		}
+	}
+	if err := validation.ValidateStruct(req); err != nil {
+		return response.Error(c, err)
+	}
+
+	orgID := middleware.GetOrgID(c)
+	var userID *uuid.UUID
+	if orgID == nil {
+		uid, err := middleware.GetUserID(c)
+		if err != nil {
+			return response.Error(c, err)
+		}
+		userID = &uid
+	}
+
+	recommendations, err := svc.RecommendFromExistingSources(c.Context(), orgID, userID, req)
+	if err != nil {
+		return response.Error(c, err)
+	}
+	return response.Success(c, recommendations)
+}
+
 // UpdateDataSource handles PUT /data-sources/:id
 // @Summary Update data source
 // @Description Update an existing data source

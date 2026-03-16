@@ -3,6 +3,7 @@ package datasource
 import (
 	"context"
 	"net/url"
+	"sort"
 	"strings"
 
 	"backend/pkg/api/dto"
@@ -17,11 +18,14 @@ import (
 const (
 	defaultRecommendationLimit = 8
 	maxRecommendationLimit     = 12
+	maxDiscoverySeedSources    = 5
+	maxDiscoveryResultsPerSeed = 6
 )
 
 // RecommendationSearchService defines the search provider used for source recommendations.
 type RecommendationSearchService interface {
 	Search(ctx context.Context, query string, options *exa.SearchOptions) (*exa.SearchResponse, error)
+	FindSimilar(ctx context.Context, url string, options *exa.FindSimilarOptions) (*exa.SearchResponse, error)
 	IsConfigured() bool
 }
 
@@ -67,7 +71,73 @@ func (s *RecommendationService) Recommend(ctx context.Context, orgID *uuid.UUID,
 
 	recommendations := s.buildRecommendations(searchResp.Results, existingSources, limit)
 	return &dto.DataSourceRecommendationsResponse{
+		Mode:            "query",
 		Query:           strings.TrimSpace(req.Query),
+		Recommendations: recommendations,
+	}, nil
+}
+
+// RecommendFromExistingSources returns ephemeral recommendations based on current manual sources.
+func (s *RecommendationService) RecommendFromExistingSources(ctx context.Context, orgID *uuid.UUID, userID *uuid.UUID, req dto.DataSourceDiscoveryRecommendationRequest) (*dto.DataSourceRecommendationsResponse, error) {
+	if orgID == nil && userID == nil {
+		return nil, core.InvalidInputError("Either organization_id or user_id must be provided")
+	}
+	if s.searchService == nil || !s.searchService.IsConfigured() {
+		return nil, core.ExternalError("Source discovery is unavailable because Exa is not configured")
+	}
+
+	limit := normalizeRecommendationLimit(req.Limit)
+	existingSources, err := s.listExistingSources(ctx, orgID, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	seedSources := filterDiscoverySeedSources(existingSources)
+	if len(seedSources) == 0 {
+		return &dto.DataSourceRecommendationsResponse{
+			Mode:            "discovery",
+			Recommendations: []dto.DataSourceRecommendationResponse{},
+		}, nil
+	}
+	if len(seedSources) > maxDiscoverySeedSources {
+		seedSources = seedSources[:maxDiscoverySeedSources]
+	}
+
+	candidates := make([]discoveryCandidate, 0, len(seedSources)*maxDiscoveryResultsPerSeed)
+	failedLookups := 0
+	for _, seed := range seedSources {
+		resp, findErr := s.searchService.FindSimilar(ctx, seed.URL, &exa.FindSimilarOptions{
+			NumResults:          maxDiscoveryResultsPerSeed,
+			ExcludeSourceDomain: true,
+			IncludeHighlights:   true,
+			IncludeSummary:      true,
+			IncludeText:         true,
+		})
+		if findErr != nil {
+			failedLookups++
+			continue
+		}
+
+		for _, result := range resp.Results {
+			candidates = append(candidates, discoveryCandidate{
+				Result:   result,
+				SeedName: seed.Name,
+			})
+		}
+	}
+
+	if len(candidates) == 0 && failedLookups > 0 {
+		return nil, core.ExternalError("Failed to fetch adjacent source recommendations")
+	}
+
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return candidates[i].Result.Score > candidates[j].Result.Score
+	})
+
+	recommendations := s.buildDiscoveryRecommendations(candidates, existingSources, seedSources, limit)
+	return &dto.DataSourceRecommendationsResponse{
+		Mode:            "discovery",
+		SeedCount:       len(seedSources),
 		Recommendations: recommendations,
 	}, nil
 }
@@ -124,6 +194,81 @@ func (s *RecommendationService) buildRecommendations(results []exa.SearchResult,
 			SampleTitle: result.Title,
 		})
 		seenDomains[domain] = struct{}{}
+
+		if len(recommendations) >= limit {
+			break
+		}
+	}
+
+	return recommendations
+}
+
+type discoveryCandidate struct {
+	Result   exa.SearchResult
+	SeedName string
+}
+
+func (s *RecommendationService) buildDiscoveryRecommendations(candidates []discoveryCandidate, existingSources []types.DataSource, seedSources []types.DataSource, limit int) []dto.DataSourceRecommendationResponse {
+	existingURLs := make(map[string]struct{}, len(existingSources))
+	existingRoots := make(map[string]struct{}, len(existingSources))
+	for _, source := range existingSources {
+		normalized, domain := normalizeRecommendationURL(source.URL)
+		if normalized != "" {
+			existingURLs[normalized] = struct{}{}
+		}
+		if root := extractRecommendationDomainRoot(domain); root != "" {
+			existingRoots[root] = struct{}{}
+		}
+	}
+
+	seedRoots := make(map[string]struct{}, len(seedSources))
+	for _, source := range seedSources {
+		_, domain := normalizeRecommendationURL(source.URL)
+		if root := extractRecommendationDomainRoot(domain); root != "" {
+			seedRoots[root] = struct{}{}
+		}
+	}
+
+	recommendations := make([]dto.DataSourceRecommendationResponse, 0, limit)
+	seenRoots := make(map[string]struct{}, limit)
+
+	for _, candidate := range candidates {
+		normalizedURL, domain := normalizeRecommendationURL(candidate.Result.URL)
+		if normalizedURL == "" || domain == "" {
+			continue
+		}
+
+		root := extractRecommendationDomainRoot(domain)
+		if root == "" {
+			continue
+		}
+
+		if _, exists := existingURLs[normalizedURL]; exists {
+			continue
+		}
+		if _, exists := existingRoots[root]; exists {
+			continue
+		}
+		if _, exists := seedRoots[root]; exists {
+			continue
+		}
+		if _, exists := seenRoots[root]; exists {
+			continue
+		}
+
+		recommendations = append(recommendations, dto.DataSourceRecommendationResponse{
+			Name:        humanizeDomain(domain),
+			URL:         normalizedURL,
+			Domain:      domain,
+			Summary:     summarizeResult(candidate.Result),
+			Reason:      discoveryReasonFromCandidate(candidate),
+			SourceType:  inferRecommendationSourceType(candidate.Result),
+			Score:       candidate.Result.Score,
+			Favicon:     candidate.Result.Favicon,
+			SampleURL:   candidate.Result.URL,
+			SampleTitle: candidate.Result.Title,
+		})
+		seenRoots[root] = struct{}{}
 
 		if len(recommendations) >= limit {
 			break
@@ -230,4 +375,38 @@ func humanizeDomain(domain string) string {
 		return domain
 	}
 	return strings.Join(nameParts, " ")
+}
+
+func filterDiscoverySeedSources(sources []types.DataSource) []types.DataSource {
+	seeds := make([]types.DataSource, 0, len(sources))
+	for _, source := range sources {
+		if source.IsEnabled && !source.IsDiscovered {
+			seeds = append(seeds, source)
+		}
+	}
+	return seeds
+}
+
+func extractRecommendationDomainRoot(domain string) string {
+	host := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(domain)), "www.")
+	if host == "" {
+		return ""
+	}
+
+	parts := strings.Split(host, ".")
+	if len(parts) < 2 {
+		return host
+	}
+
+	return parts[len(parts)-2] + "." + parts[len(parts)-1]
+}
+
+func discoveryReasonFromCandidate(candidate discoveryCandidate) string {
+	if candidate.SeedName == "" {
+		return "Adjacent site related to your current sources"
+	}
+	if title := strings.TrimSpace(candidate.Result.Title); title != "" {
+		return "Similar to " + candidate.SeedName + " - " + title
+	}
+	return "Similar to " + candidate.SeedName
 }

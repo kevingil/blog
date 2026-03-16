@@ -28,6 +28,14 @@ func (m *mockRecommendationSearchService) Search(ctx context.Context, query stri
 	return args.Get(0).(*exa.SearchResponse), args.Error(1)
 }
 
+func (m *mockRecommendationSearchService) FindSimilar(ctx context.Context, url string, options *exa.FindSimilarOptions) (*exa.SearchResponse, error) {
+	args := m.Called(ctx, url, options)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*exa.SearchResponse), args.Error(1)
+}
+
 func (m *mockRecommendationSearchService) IsConfigured() bool {
 	args := m.Called()
 	return args.Bool(0)
@@ -91,6 +99,7 @@ func TestRecommendationService_Recommend(t *testing.T) {
 		assert.NoError(t, err)
 		if assert.NotNil(t, result) {
 			assert.Equal(t, req.Query, result.Query)
+			assert.Equal(t, "query", result.Mode)
 			assert.Len(t, result.Recommendations, 2)
 			assert.Equal(t, "Example", result.Recommendations[0].Name)
 			assert.Equal(t, "https://example.com", result.Recommendations[0].URL)
@@ -99,6 +108,80 @@ func TestRecommendationService_Recommend(t *testing.T) {
 			assert.Equal(t, "https://example.com/posts/ai-engineer", result.Recommendations[0].SampleURL)
 			assert.Equal(t, "Opensourceweekly", result.Recommendations[1].Name)
 			assert.Equal(t, "newsletter", result.Recommendations[1].SourceType)
+		}
+
+		mockDSStore.AssertExpectations(t)
+		mockSearch.AssertExpectations(t)
+	})
+
+	t.Run("returns discovery recommendations from existing manual sources", func(t *testing.T) {
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockSearch := new(mockRecommendationSearchService)
+		svc := datasource.NewRecommendationService(mockDSStore, mockSearch)
+
+		userID := uuid.New()
+		mockDSStore.On("FindByUserID", ctx, userID).Return([]types.DataSource{
+			{Name: "Lenny's Newsletter", URL: "https://www.lennysnewsletter.com", IsEnabled: true},
+			{Name: "Existing Discovered", URL: "https://adjacent.dev", IsEnabled: true, IsDiscovered: true},
+			{Name: "Disabled Source", URL: "https://disabled.dev", IsEnabled: false},
+		}, nil).Once()
+		mockSearch.On("IsConfigured").Return(true).Once()
+		mockSearch.On("FindSimilar", ctx, "https://www.lennysnewsletter.com", mock.MatchedBy(func(options *exa.FindSimilarOptions) bool {
+			return options != nil && options.NumResults == 6 && options.ExcludeSourceDomain && options.IncludeSummary && options.IncludeHighlights && options.IncludeText
+		})).Return(&exa.SearchResponse{
+			Results: []exa.SearchResult{
+				{
+					Title:      "First Round Review",
+					URL:        "https://review.firstround.com/growth",
+					Summary:    "Startup and product writing.",
+					Highlights: []string{"Great fit for startup operators."},
+					Score:      0.91,
+				},
+				{
+					Title:      "Adjacent should be filtered",
+					URL:        "https://adjacent.dev/post",
+					Summary:    "Already added source.",
+					Highlights: []string{"Existing source."},
+					Score:      0.89,
+				},
+			},
+		}, nil).Once()
+
+		result, err := svc.RecommendFromExistingSources(ctx, nil, &userID, dto.DataSourceDiscoveryRecommendationRequest{
+			Limit: 4,
+		})
+
+		assert.NoError(t, err)
+		if assert.NotNil(t, result) {
+			assert.Equal(t, "discovery", result.Mode)
+			assert.Equal(t, 1, result.SeedCount)
+			assert.Len(t, result.Recommendations, 1)
+			assert.Equal(t, "https://review.firstround.com", result.Recommendations[0].URL)
+			assert.Contains(t, result.Recommendations[0].Reason, "Lenny's Newsletter")
+		}
+
+		mockDSStore.AssertExpectations(t)
+		mockSearch.AssertExpectations(t)
+	})
+
+	t.Run("returns empty discovery recommendations when no manual seeds exist", func(t *testing.T) {
+		mockDSStore := new(mocks.MockDataSourceRepository)
+		mockSearch := new(mockRecommendationSearchService)
+		svc := datasource.NewRecommendationService(mockDSStore, mockSearch)
+
+		userID := uuid.New()
+		mockDSStore.On("FindByUserID", ctx, userID).Return([]types.DataSource{
+			{Name: "Discovered", URL: "https://seeded.dev", IsEnabled: true, IsDiscovered: true},
+		}, nil).Once()
+		mockSearch.On("IsConfigured").Return(true).Once()
+
+		result, err := svc.RecommendFromExistingSources(ctx, nil, &userID, dto.DataSourceDiscoveryRecommendationRequest{})
+
+		assert.NoError(t, err)
+		if assert.NotNil(t, result) {
+			assert.Equal(t, "discovery", result.Mode)
+			assert.Equal(t, 0, result.SeedCount)
+			assert.Empty(t, result.Recommendations)
 		}
 
 		mockDSStore.AssertExpectations(t)

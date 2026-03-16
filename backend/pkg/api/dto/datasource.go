@@ -32,6 +32,11 @@ type DataSourceRecommendationRequest struct {
 	Limit int    `json:"limit" validate:"omitempty"`
 }
 
+// DataSourceDiscoveryRecommendationRequest represents a request to discover sources from existing inputs.
+type DataSourceDiscoveryRecommendationRequest struct {
+	Limit int `json:"limit" validate:"omitempty"`
+}
+
 // DataSourceResponse is the response for a data source
 type DataSourceResponse struct {
 	ID               uuid.UUID              `json:"id"`
@@ -72,7 +77,9 @@ type DataSourceRecommendationResponse struct {
 
 // DataSourceRecommendationsResponse wraps a recommendation search result set.
 type DataSourceRecommendationsResponse struct {
+	Mode            string                             `json:"mode,omitempty"`
 	Query           string                             `json:"query"`
+	SeedCount       int                                `json:"seed_count,omitempty"`
 	Recommendations []DataSourceRecommendationResponse `json:"recommendations"`
 }
 
