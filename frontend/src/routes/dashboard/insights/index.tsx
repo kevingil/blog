@@ -152,10 +152,10 @@ function InsightsPage() {
         <div className="text-center py-12 text-muted-foreground">
           <Lightbulb className="w-12 h-12 mx-auto mb-4 opacity-50" />
           <p className="text-lg font-medium mb-2">No insights yet</p>
-          <p className="text-sm">Insights are generated from your data sources. Add some data sources to get started.</p>
+          <p className="text-sm">Insights are generated from your data sources. Use the AI source finder to build a crawl list and get started.</p>
           <Link to="/dashboard/data-sources">
             <Button variant="outline" className="mt-4">
-              Configure Data Sources
+              Find Data Sources
             </Button>
           </Link>
         </div>
