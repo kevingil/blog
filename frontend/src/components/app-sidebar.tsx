@@ -102,6 +102,11 @@ const navigationData = {
       ],
     },
     {
+      title: "Tasks",
+      url: "/dashboard/tasks",
+      icon: IconInnerShadowTop,
+    },
+    {
       title: "Sources",
       url: "/dashboard/sources",
       icon: IconLink,
