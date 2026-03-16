@@ -49,6 +49,11 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAdminDashboard } from "@/services/dashboard/dashboard";
 import {
+  getTaskRunStatusLabel,
+  listTaskRuns,
+  type TaskRun,
+} from "@/services/taskRuns";
+import {
   listInsights,
   listTopics,
   markInsightAsRead,
@@ -105,6 +110,7 @@ function InsightsPage() {
             nextStatus.message || "Workflow step completed successfully.",
         });
         queryClient.invalidateQueries({ queryKey: ["insights"] });
+        queryClient.invalidateQueries({ queryKey: ["task-runs"] });
       }
 
       if (nextStatus.state === "failed") {
@@ -114,6 +120,7 @@ function InsightsPage() {
             nextStatus.error || nextStatus.message || "Workflow step failed.",
           variant: "destructive",
         });
+        queryClient.invalidateQueries({ queryKey: ["task-runs"] });
       }
     });
 
@@ -156,6 +163,11 @@ function InsightsPage() {
     }),
     [workerStatuses],
   );
+  const { data: latestPipelineRuns } = useQuery({
+    queryKey: ["task-runs", "latest-pipeline"],
+    queryFn: () => listTaskRuns({ taskName: "pipeline", limit: 1 }),
+  });
+  const latestPipelineRun = latestPipelineRuns?.runs?.[0];
 
   // Mutations
   const markReadMutation = useMutation({
@@ -264,6 +276,9 @@ function InsightsPage() {
             Manage Topics
           </Button>
         </Link>
+        <Link to="/dashboard/tasks">
+          <Button variant="outline">Tasks</Button>
+        </Link>
         <Link to="/dashboard/insights/sources">
           <Button variant="outline">
             <Search className="w-4 h-4 mr-2" />
@@ -366,6 +381,7 @@ function InsightsPage() {
         open={isWorkflowDialogOpen}
         onOpenChange={setIsWorkflowDialogOpen}
         workerStatuses={workflowStatuses}
+        latestPipelineRun={latestPipelineRun}
         activeAction={workflowAction}
         onRun={(workerName) => handleWorkerAction(workerName, "run")}
         onStop={(workerName) => handleWorkerAction(workerName, "stop")}
@@ -378,6 +394,7 @@ function InsightsWorkflowDialog({
   open,
   onOpenChange,
   workerStatuses,
+  latestPipelineRun,
   activeAction,
   onRun,
   onStop,
@@ -389,6 +406,7 @@ function InsightsWorkflowDialog({
     crawl?: WorkerStatus;
     insight?: WorkerStatus;
   };
+  latestPipelineRun?: TaskRun;
   activeAction: string | null;
   onRun: (workerName: string) => void;
   onStop: (workerName: string) => void;
@@ -397,10 +415,12 @@ function InsightsWorkflowDialog({
   const crawlStatus = workerStatuses.crawl;
   const insightStatus = workerStatuses.insight;
   const pipelineRunning = pipelineStatus?.state === "running";
+  const crawlRunning = crawlStatus?.state === "running";
+  const insightRunning = insightStatus?.state === "running";
   const workflowBusy =
     pipelineRunning ||
-    crawlStatus?.state === "running" ||
-    insightStatus?.state === "running";
+    crawlRunning ||
+    insightRunning;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -420,10 +440,13 @@ function InsightsWorkflowDialog({
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">Primary workflow</Badge>
-                  <WorkflowStatusBadge
-                    status={pipelineStatus}
-                    fallbackLabel="Ready"
-                  />
+                  {pipelineRunning ? (
+                    <WorkflowStatusBadge status={pipelineStatus} fallbackLabel="Running" />
+                  ) : latestPipelineRun ? (
+                    <TaskRunStatusBadge status={latestPipelineRun.status} />
+                  ) : (
+                    <Badge variant="outline">Idle</Badge>
+                  )}
                 </div>
                 <div>
                   <h3 className="text-base font-semibold">Run Full Pipeline</h3>
@@ -445,6 +468,24 @@ function InsightsWorkflowDialog({
                     </p>
                   </div>
                 )}
+                {!pipelineRunning && latestPipelineRun ? (
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      {latestPipelineRun.summary ||
+                        latestPipelineRun.error_summary ||
+                        "Latest pipeline run recorded."}
+                    </p>
+                    <Link
+                      to="/dashboard/tasks/$taskRunId"
+                      params={{ taskRunId: latestPipelineRun.id }}
+                    >
+                      <Button variant="ghost" size="sm" className="px-0">
+                        View latest run
+                        <ArrowRight className="w-4 h-4 ml-2" />
+                      </Button>
+                    </Link>
+                  </div>
+                ) : null}
               </div>
               <div className="flex items-center gap-2">
                 {pipelineRunning ? (
@@ -492,7 +533,7 @@ function InsightsWorkflowDialog({
           <div className="grid gap-3 lg:grid-cols-2">
             <WorkflowStepCard
               workerName="crawl"
-              status={crawlStatus}
+              status={crawlRunning ? crawlStatus : undefined}
               activeAction={activeAction}
               workflowBusy={workflowBusy}
               onRun={onRun}
@@ -500,7 +541,7 @@ function InsightsWorkflowDialog({
             />
             <WorkflowStepCard
               workerName="insight"
-              status={insightStatus}
+              status={insightRunning ? insightStatus : undefined}
               activeAction={activeAction}
               workflowBusy={workflowBusy}
               onRun={onRun}
@@ -530,6 +571,11 @@ function InsightsWorkflowDialog({
         </div>
 
         <DialogFooter>
+          <Link to="/dashboard/tasks">
+            <Button variant="outline" size="sm">
+              View Task History
+            </Button>
+          </Link>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             Close
           </Button>
@@ -641,6 +687,19 @@ function WorkflowStatusBadge({
       {label}
     </Badge>
   );
+}
+
+function TaskRunStatusBadge({ status }: { status: TaskRun["status"] }) {
+  const variant =
+    status === "failed"
+      ? "destructive"
+      : status === "warning"
+        ? "secondary"
+        : status === "running"
+          ? "default"
+          : "outline";
+
+  return <Badge variant={variant}>{getTaskRunStatusLabel(status)}</Badge>;
 }
 
 function getWorkerBadgeVariant(state: WorkerState | "idle") {
