@@ -2,7 +2,6 @@ import * as React from "react"
 import {
   IconBulb,
   IconCamera,
-  IconDatabase,
   IconFileDescription,
   IconFileWord,
   IconFolder,
@@ -96,20 +95,9 @@ const navigationData = {
           title: "Topics",
           url: "/dashboard/insights/topics",
         },
-      ],
-    },
-    {
-      title: "Data Sources",
-      url: "/dashboard/data-sources",
-      icon: IconDatabase,
-      items: [
         {
-          title: "All Sources",
-          url: "/dashboard/data-sources",
-        },
-        {
-          title: "Add Source",
-          url: "/dashboard/data-sources/new",
+          title: "Sources",
+          url: "/dashboard/insights/sources",
         },
       ],
     },

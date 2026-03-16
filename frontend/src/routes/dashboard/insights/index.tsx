@@ -1,18 +1,27 @@
-import { useState, useEffect } from 'react';
-import { createFileRoute, Link } from '@tanstack/react-router';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Lightbulb, Tag, Calendar, Pin, Check, ExternalLink, Loader2, Search } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { useState, useEffect } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Lightbulb,
+  Tag,
+  Calendar,
+  Pin,
+  Check,
+  ExternalLink,
+  Loader2,
+  Search,
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 import {
   Pagination,
   PaginationContent,
@@ -20,27 +29,27 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from '@/components/ui/pagination';
-import { useToast } from '@/hooks/use-toast';
-import { useAdminDashboard } from '@/services/dashboard/dashboard';
-import { 
-  listInsights, 
-  listTopics, 
-  markInsightAsRead, 
+} from "@/components/ui/pagination";
+import { useToast } from "@/hooks/use-toast";
+import { useAdminDashboard } from "@/services/dashboard/dashboard";
+import {
+  listInsights,
+  listTopics,
+  markInsightAsRead,
   toggleInsightPinned,
   searchInsights,
   type Insight,
   type InsightTopic,
-} from '@/services/insights';
+} from "@/services/insights";
 
-export const Route = createFileRoute('/dashboard/insights/')({
+export const Route = createFileRoute("/dashboard/insights/")({
   component: InsightsPage,
 });
 
 function InsightsPage() {
   const [page, setPage] = useState(1);
-  const [selectedTopicId, setSelectedTopicId] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTopicId, setSelectedTopicId] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const { toast } = useToast();
   const { setPageTitle } = useAdminDashboard();
@@ -52,24 +61,30 @@ function InsightsPage() {
 
   // Load topics
   const { data: topics = [] } = useQuery({
-    queryKey: ['insight-topics'],
+    queryKey: ["insight-topics"],
     queryFn: listTopics,
   });
 
   // Load insights
   const { data: insightsData, isLoading } = useQuery({
-    queryKey: ['insights', page, selectedTopicId],
-    queryFn: () => listInsights(page, 12, selectedTopicId === 'all' ? undefined : selectedTopicId),
+    queryKey: ["insights", page, selectedTopicId],
+    queryFn: () =>
+      listInsights(
+        page,
+        12,
+        selectedTopicId === "all" ? undefined : selectedTopicId,
+      ),
   });
 
   // Search insights
   const { data: searchResults, isLoading: isSearchLoading } = useQuery({
-    queryKey: ['insights-search', searchQuery],
+    queryKey: ["insights-search", searchQuery],
     queryFn: () => searchInsights(searchQuery, 20),
     enabled: searchQuery.length > 2,
   });
 
-  const insights = searchQuery.length > 2 ? searchResults || [] : insightsData?.insights || [];
+  const insights =
+    searchQuery.length > 2 ? searchResults || [] : insightsData?.insights || [];
   const total = insightsData?.total || 0;
   const totalPages = Math.ceil(total / 12);
 
@@ -77,15 +92,15 @@ function InsightsPage() {
   const markReadMutation = useMutation({
     mutationFn: markInsightAsRead,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['insights'] });
+      queryClient.invalidateQueries({ queryKey: ["insights"] });
     },
   });
 
   const togglePinMutation = useMutation({
     mutationFn: toggleInsightPinned,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['insights'] });
-      toast({ title: 'Success', description: 'Insight pin status updated' });
+      queryClient.invalidateQueries({ queryKey: ["insights"] });
+      toast({ title: "Success", description: "Insight pin status updated" });
     },
   });
 
@@ -99,10 +114,10 @@ function InsightsPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
     });
   };
 
@@ -119,10 +134,13 @@ function InsightsPage() {
             className="pl-9"
           />
         </div>
-        <Select value={selectedTopicId} onValueChange={(value) => {
-          setSelectedTopicId(value);
-          setPage(1);
-        }}>
+        <Select
+          value={selectedTopicId}
+          onValueChange={(value) => {
+            setSelectedTopicId(value);
+            setPage(1);
+          }}
+        >
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Filter by topic" />
           </SelectTrigger>
@@ -141,6 +159,12 @@ function InsightsPage() {
             Manage Topics
           </Button>
         </Link>
+        <Link to="/dashboard/insights/sources">
+          <Button variant="outline">
+            <Search className="w-4 h-4 mr-2" />
+            Sources
+          </Button>
+        </Link>
       </div>
 
       {isLoading || isSearchLoading ? (
@@ -152,12 +176,9 @@ function InsightsPage() {
         <div className="text-center py-12 text-muted-foreground">
           <Lightbulb className="w-12 h-12 mx-auto mb-4 opacity-50" />
           <p className="text-lg font-medium mb-2">No insights yet</p>
-          <p className="text-sm">Insights are generated from your data sources. Use the AI source finder to build a crawl list and get started.</p>
-          <Link to="/dashboard/data-sources">
-            <Button variant="outline" className="mt-4">
-              Find Data Sources
-            </Button>
-          </Link>
+          <p className="text-sm">
+            Add sources or topics to start generating insights.
+          </p>
         </div>
       ) : (
         <>
@@ -182,7 +203,11 @@ function InsightsPage() {
                   <PaginationItem>
                     <PaginationPrevious
                       onClick={() => setPage(Math.max(1, page - 1))}
-                      className={page === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                      className={
+                        page === 1
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
                     />
                   </PaginationItem>
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -202,7 +227,11 @@ function InsightsPage() {
                   <PaginationItem>
                     <PaginationNext
                       onClick={() => setPage(Math.min(totalPages, page + 1))}
-                      className={page === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                      className={
+                        page === totalPages
+                          ? "pointer-events-none opacity-50"
+                          : "cursor-pointer"
+                      }
                     />
                   </PaginationItem>
                 </PaginationContent>
@@ -222,10 +251,20 @@ interface InsightCardProps {
   formatDate: (date: string) => string;
 }
 
-function InsightCard({ insight, onMarkAsRead, onTogglePin, formatDate }: InsightCardProps) {
+function InsightCard({
+  insight,
+  onMarkAsRead,
+  onTogglePin,
+  formatDate,
+}: InsightCardProps) {
   return (
-    <Link to={`/dashboard/insights/${insight.id}`} onClick={() => !insight.is_read && onMarkAsRead(insight.id)}>
-      <Card className={`cursor-pointer transition-all hover:border-primary/50 ${!insight.is_read ? 'border-l-4 border-l-primary' : ''}`}>
+    <Link
+      to={`/dashboard/insights/${insight.id}`}
+      onClick={() => !insight.is_read && onMarkAsRead(insight.id)}
+    >
+      <Card
+        className={`cursor-pointer transition-all hover:border-primary/50 ${!insight.is_read ? "border-l-4 border-l-primary" : ""}`}
+      >
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-2">
             <CardTitle className="text-sm font-medium line-clamp-2 flex-1">
@@ -241,7 +280,9 @@ function InsightCard({ insight, onMarkAsRead, onTogglePin, formatDate }: Insight
                 className="h-6 w-6"
                 onClick={(e) => onTogglePin(e, insight.id)}
               >
-                <Pin className={`w-3 h-3 ${insight.is_pinned ? 'fill-current' : ''}`} />
+                <Pin
+                  className={`w-3 h-3 ${insight.is_pinned ? "fill-current" : ""}`}
+                />
               </Button>
             </div>
           </div>
@@ -253,7 +294,9 @@ function InsightCard({ insight, onMarkAsRead, onTogglePin, formatDate }: Insight
               </Badge>
             )}
             {!insight.is_read && (
-              <Badge variant="default" className="text-xs">New</Badge>
+              <Badge variant="default" className="text-xs">
+                New
+              </Badge>
             )}
           </div>
         </CardHeader>
@@ -265,7 +308,10 @@ function InsightCard({ insight, onMarkAsRead, onTogglePin, formatDate }: Insight
           {insight.key_points && insight.key_points.length > 0 && (
             <div className="space-y-1 mb-3">
               {insight.key_points.slice(0, 2).map((point, i) => (
-                <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                <div
+                  key={i}
+                  className="flex items-start gap-2 text-xs text-muted-foreground"
+                >
                   <Check className="w-3 h-3 mt-0.5 flex-shrink-0 text-green-500" />
                   <span className="line-clamp-1">{point}</span>
                 </div>
@@ -281,12 +327,13 @@ function InsightCard({ insight, onMarkAsRead, onTogglePin, formatDate }: Insight
           <div className="flex items-center gap-2 text-xs text-muted-foreground border-t pt-2">
             <Calendar className="w-3 h-3" />
             <span>{formatDate(insight.generated_at)}</span>
-            {insight.source_content_ids && insight.source_content_ids.length > 0 && (
-              <>
-                <span>•</span>
-                <span>{insight.source_content_ids.length} sources</span>
-              </>
-            )}
+            {insight.source_content_ids &&
+              insight.source_content_ids.length > 0 && (
+                <>
+                  <span>•</span>
+                  <span>{insight.source_content_ids.length} sources</span>
+                </>
+              )}
           </div>
         </CardContent>
       </Card>
