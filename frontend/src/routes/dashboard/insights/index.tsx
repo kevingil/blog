@@ -404,7 +404,7 @@ function InsightsWorkflowDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[min(96vw,92rem)] max-w-[calc(100%-2rem)] sm:max-w-[92rem]">
+      <DialogContent className="w-[min(94vw,72rem)] max-w-[calc(100%-2rem)] gap-3 p-5 sm:max-w-[72rem]">
         <DialogHeader>
           <DialogTitle>Generate Insights</DialogTitle>
           <DialogDescription>
@@ -414,10 +414,10 @@ function InsightsWorkflowDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-2">
-          <div className="rounded-2xl border border-white/[0.08] bg-black/30 p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="space-y-2">
+        <div className="space-y-4 py-1">
+          <div className="rounded-xl border border-white/[0.08] bg-black/30 p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-1.5">
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">Primary workflow</Badge>
                   <WorkflowStatusBadge
@@ -426,14 +426,14 @@ function InsightsWorkflowDialog({
                   />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold">Run Full Pipeline</h3>
+                  <h3 className="text-base font-semibold">Run Full Pipeline</h3>
                   <p className="text-sm text-muted-foreground">
                     Crawl your tracked sources first, then generate insights
                     from the newly crawled content.
                   </p>
                 </div>
                 {pipelineStatus && (
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {pipelineStatus.state === "running" && (
                       <Progress
                         value={pipelineStatus.progress}
@@ -450,6 +450,7 @@ function InsightsWorkflowDialog({
                 {pipelineRunning ? (
                   <Button
                     variant="outline"
+                    size="sm"
                     onClick={() => onStop(PIPELINE_WORKER_NAME)}
                     disabled={activeAction === `stop:${PIPELINE_WORKER_NAME}`}
                   >
@@ -464,6 +465,7 @@ function InsightsWorkflowDialog({
                   </Button>
                 ) : (
                   <Button
+                    size="sm"
                     onClick={() => onRun(PIPELINE_WORKER_NAME)}
                     disabled={
                       workflowBusy ||
@@ -487,7 +489,7 @@ function InsightsWorkflowDialog({
             </div>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-3 lg:grid-cols-2">
             <WorkflowStepCard
               workerName="crawl"
               status={crawlStatus}
@@ -506,7 +508,7 @@ function InsightsWorkflowDialog({
             />
           </div>
 
-          <div className="rounded-2xl border border-dashed border-white/[0.08] p-4 text-sm text-muted-foreground">
+          <div className="rounded-xl border border-dashed border-white/[0.08] p-3 text-sm text-muted-foreground">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="font-medium text-foreground">
@@ -518,7 +520,7 @@ function InsightsWorkflowDialog({
                 </p>
               </div>
               <Link to="/dashboard/insights/sources">
-                <Button variant="outline">
+                <Button variant="outline" size="sm">
                   Open Sources
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
@@ -528,7 +530,7 @@ function InsightsWorkflowDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             Close
           </Button>
         </DialogFooter>
@@ -557,8 +559,8 @@ function WorkflowStepCard({
   const stopActionKey = `stop:${workerName}`;
 
   return (
-    <Card className="border-white/[0.08]">
-      <CardHeader className="space-y-3">
+    <Card className="gap-4 border-white/[0.08] py-4">
+      <CardHeader className="space-y-2 px-4">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -606,7 +608,7 @@ function WorkflowStepCard({
           )}
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-2 px-4">
         {isRunning && <Progress value={status.progress} className="h-2" />}
         <p className="text-sm text-muted-foreground">
           {getWorkflowMessage(status)}
