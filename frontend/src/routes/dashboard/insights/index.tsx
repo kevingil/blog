@@ -404,7 +404,7 @@ function InsightsWorkflowDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[min(96vw,80rem)] max-w-5xl">
+      <DialogContent className="w-[min(96vw,92rem)] max-w-[calc(100%-2rem)] sm:max-w-[92rem]">
         <DialogHeader>
           <DialogTitle>Generate Insights</DialogTitle>
           <DialogDescription>
