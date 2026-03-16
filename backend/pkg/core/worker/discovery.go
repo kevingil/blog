@@ -55,14 +55,18 @@ func (w *DiscoveryWorker) Name() string {
 }
 
 // Run executes the discovery worker
-func (w *DiscoveryWorker) Run(ctx context.Context) error {
+func (w *DiscoveryWorker) Run(ctx context.Context) (*WorkerResult, error) {
 	w.logger.Info("starting discovery worker run")
 	statusService := GetStatusService()
 
 	if w.exaClient == nil {
 		w.logger.Warn("Exa client not configured, skipping discovery")
 		statusService.UpdateStatus(w.Name(), StateRunning, 100, "Exa not configured, skipping")
-		return nil
+		return &WorkerResult{
+			Status:  ResultStatusWarning,
+			Summary: "Exa not configured, discovery skipped",
+			Warnings: []string{"Exa client not configured"},
+		}, nil
 	}
 
 	// Get active data sources (not discovered ones, as they're already derived)
@@ -70,7 +74,7 @@ func (w *DiscoveryWorker) Run(ctx context.Context) error {
 	repo := repository.NewDataSourceRepository(database.DB())
 	sources, _, err := repo.List(ctx, 0, 100)
 	if err != nil {
-		return fmt.Errorf("failed to get data sources: %w", err)
+		return nil, fmt.Errorf("failed to get data sources: %w", err)
 	}
 
 	// Filter to only user-added sources
@@ -84,7 +88,11 @@ func (w *DiscoveryWorker) Run(ctx context.Context) error {
 	if len(activeManualSources) == 0 {
 		w.logger.Info("no active manual data sources found")
 		statusService.UpdateStatus(w.Name(), StateRunning, 100, "No manual sources to discover from")
-		return nil
+		return &WorkerResult{
+			Status:  ResultStatusWarning,
+			Summary: "No manual sources to discover from",
+			Warnings: []string{"No enabled manual sources were available"},
+		}, nil
 	}
 
 	// Limit sources to process
@@ -99,7 +107,7 @@ func (w *DiscoveryWorker) Run(ctx context.Context) error {
 	for i, source := range activeManualSources {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		default:
 			statusService.SetProgress(w.Name(), i, len(activeManualSources), fmt.Sprintf("Finding similar sites for: %s", source.Name))
 
@@ -114,7 +122,20 @@ func (w *DiscoveryWorker) Run(ctx context.Context) error {
 
 	w.logger.Info("discovery worker completed", "total_discovered", totalDiscovered)
 	statusService.SetProgress(w.Name(), len(activeManualSources), len(activeManualSources), fmt.Sprintf("Discovered %d new sites", totalDiscovered))
-	return nil
+	if totalDiscovered == 0 {
+		return &WorkerResult{
+			Status:  ResultStatusWarning,
+			Summary: "Discovery completed without new sites",
+			Metrics: map[string]interface{}{"seed_sources": len(activeManualSources), "discovered_sources": 0},
+			Warnings: []string{"No new adjacent sites were discovered"},
+		}, nil
+	}
+	return &WorkerResult{
+		Status:  ResultStatusCompleted,
+		Summary: fmt.Sprintf("Discovered %d new sites", totalDiscovered),
+		Metrics: map[string]interface{}{"seed_sources": len(activeManualSources), "discovered_sources": totalDiscovered},
+		OutputSummary: map[string]interface{}{"discovered_sources": totalDiscovered},
+	}, nil
 }
 
 // discoverSimilarSites discovers similar websites for a given source

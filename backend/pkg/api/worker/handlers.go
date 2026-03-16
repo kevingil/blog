@@ -2,6 +2,7 @@ package worker
 
 import (
 	"backend/pkg/api/dto"
+	"backend/pkg/api/middleware"
 	"backend/pkg/api/response"
 	"backend/pkg/core"
 	coreWorker "backend/pkg/core/worker"
@@ -19,6 +20,10 @@ func toStatusResponse(status *coreWorker.WorkerStatus) dto.WorkerStatusResponse 
 		Error:      status.Error,
 		ItemsTotal: status.ItemsTotal,
 		ItemsDone:  status.ItemsDone,
+	}
+	if status.TaskRunID != nil {
+		s := status.TaskRunID.String()
+		resp.TaskRunID = &s
 	}
 
 	if status.StartedAt != nil {
@@ -105,7 +110,17 @@ func RunWorker(c *fiber.Ctx) error {
 		return response.Error(c, core.InternalError("Worker manager not initialized"))
 	}
 
-	err := manager.RunWorkerNow(name)
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		return response.Error(c, core.UnauthorizedError("User not found"))
+	}
+	orgID := middleware.GetOrgID(c)
+	runID, err := manager.RunWorkerNowWithMetadata(name, coreWorker.RunMetadata{
+		UserID:            &userID,
+		OrganizationID:    orgID,
+		TriggeredByUserID: &userID,
+		TriggerSource:     "manual",
+	})
 	if err != nil {
 		switch err {
 		case coreWorker.ErrWorkerNotFound:
@@ -118,8 +133,9 @@ func RunWorker(c *fiber.Ctx) error {
 	}
 
 	return response.Success(c, fiber.Map{
-		"started": true,
-		"message": "Worker started successfully",
+		"started":     true,
+		"message":     "Worker started successfully",
+		"task_run_id": runID,
 	})
 }
 

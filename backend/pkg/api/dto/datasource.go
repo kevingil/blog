@@ -26,6 +26,17 @@ type DataSourceUpdateRequest struct {
 	IsEnabled      *bool   `json:"is_enabled"`
 }
 
+// DataSourceRecommendationRequest represents a request to recommend sources for a topic.
+type DataSourceRecommendationRequest struct {
+	Query string `json:"query" validate:"required,min=3,max=500"`
+	Limit int    `json:"limit" validate:"omitempty"`
+}
+
+// DataSourceDiscoveryRecommendationRequest represents a request to discover sources from existing inputs.
+type DataSourceDiscoveryRecommendationRequest struct {
+	Limit int `json:"limit" validate:"omitempty"`
+}
+
 // DataSourceResponse is the response for a data source
 type DataSourceResponse struct {
 	ID               uuid.UUID              `json:"id"`
@@ -48,6 +59,28 @@ type DataSourceResponse struct {
 	MetaData         map[string]interface{} `json:"meta_data,omitempty"`
 	CreatedAt        time.Time              `json:"created_at"`
 	UpdatedAt        time.Time              `json:"updated_at"`
+}
+
+// DataSourceRecommendationResponse is an ephemeral AI recommendation for a source to add.
+type DataSourceRecommendationResponse struct {
+	Name        string  `json:"name"`
+	URL         string  `json:"url"`
+	Domain      string  `json:"domain"`
+	Summary     string  `json:"summary,omitempty"`
+	Reason      string  `json:"reason,omitempty"`
+	SourceType  string  `json:"source_type"`
+	Score       float64 `json:"score,omitempty"`
+	Favicon     string  `json:"favicon,omitempty"`
+	SampleURL   string  `json:"sample_url,omitempty"`
+	SampleTitle string  `json:"sample_title,omitempty"`
+}
+
+// DataSourceRecommendationsResponse wraps a recommendation search result set.
+type DataSourceRecommendationsResponse struct {
+	Mode            string                             `json:"mode,omitempty"`
+	Query           string                             `json:"query"`
+	SeedCount       int                                `json:"seed_count,omitempty"`
+	Recommendations []DataSourceRecommendationResponse `json:"recommendations"`
 }
 
 // CrawledContentResponse is the response for crawled content

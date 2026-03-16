@@ -79,56 +79,100 @@ func (w *CrawlWorker) Name() string {
 }
 
 // Run executes the crawl worker
-func (w *CrawlWorker) Run(ctx context.Context) error {
+func (w *CrawlWorker) Run(ctx context.Context) (*WorkerResult, error) {
 	w.logger.Info("starting crawl worker run")
 	statusService := GetStatusService()
 
 	if w.exaClient == nil || !w.exaClient.IsConfigured() {
 		w.logger.Warn("Exa client not configured, skipping crawl")
 		statusService.UpdateStatus(w.Name(), StateRunning, 100, "Exa not configured, skipping")
-		return nil
+		return &WorkerResult{
+			Status:  ResultStatusWarning,
+			Summary: "Exa not configured, crawl skipped",
+			Metrics: map[string]interface{}{"sources_considered": 0, "content_created": 0},
+			Warnings: []string{"Exa client not configured"},
+		}, nil
 	}
 
 	// Get data sources due for crawling
 	statusService.UpdateStatus(w.Name(), StateRunning, 0, "Fetching sources to crawl...")
 	sources, err := w.dataSourceService.GetDueToCrawl(ctx, w.batchSize)
 	if err != nil {
-		return fmt.Errorf("failed to get sources due for crawling: %w", err)
+		return nil, fmt.Errorf("failed to get sources due for crawling: %w", err)
 	}
 
 	if len(sources) == 0 {
 		w.logger.Info("no data sources due for crawling")
 		statusService.UpdateStatus(w.Name(), StateRunning, 100, "No sources due for crawling")
-		return nil
+		return &WorkerResult{
+			Status:  ResultStatusWarning,
+			Summary: "No sources due for crawling",
+			Metrics: map[string]interface{}{"sources_considered": 0, "content_created": 0},
+			Warnings: []string{"No sources were due for crawling"},
+		}, nil
 	}
 
 	w.logger.Info("found data sources to crawl", "count", len(sources))
 	statusService.SetProgress(w.Name(), 0, len(sources), fmt.Sprintf("Found %d sources to crawl", len(sources)))
 
+	sourcesFailed := 0
+	sourcesSucceeded := 0
+	contentCreated := 0
 	for i, source := range sources {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		default:
 			statusService.SetProgress(w.Name(), i, len(sources), fmt.Sprintf("Crawling: %s", source.Name))
 
-			if err := w.crawlSource(ctx, &source); err != nil {
+			newContentCount, err := w.crawlSource(ctx, &source)
+			if err != nil {
 				w.logger.Error("failed to crawl source", "id", source.ID, "url", source.URL, "error", err)
 				errMsg := err.Error()
 				_ = w.dataSourceService.UpdateCrawlStatus(ctx, source.ID, "failed", &errMsg)
+				sourcesFailed++
 			} else {
 				_ = w.dataSourceService.UpdateCrawlStatus(ctx, source.ID, "success", nil)
 				_ = w.dataSourceService.SetNextCrawlTime(ctx, source.ID, source.CrawlFrequency)
+				sourcesSucceeded++
+				contentCreated += newContentCount
 			}
 		}
 	}
 
 	statusService.SetProgress(w.Name(), len(sources), len(sources), fmt.Sprintf("Completed crawling %d sources", len(sources)))
-	return nil
+	metrics := map[string]interface{}{
+		"sources_considered": len(sources),
+		"sources_succeeded":  sourcesSucceeded,
+		"sources_failed":     sourcesFailed,
+		"content_created":    contentCreated,
+	}
+	if contentCreated == 0 || sourcesFailed > 0 {
+		warnings := []string{}
+		if contentCreated == 0 {
+			warnings = append(warnings, "No new content was created")
+		}
+		if sourcesFailed > 0 {
+			warnings = append(warnings, fmt.Sprintf("%d sources failed during crawl", sourcesFailed))
+		}
+		return &WorkerResult{
+			Status:        ResultStatusWarning,
+			Summary:       fmt.Sprintf("Crawl finished with %d new content items", contentCreated),
+			OutputSummary: map[string]interface{}{"content_created": contentCreated},
+			Metrics:       metrics,
+			Warnings:      warnings,
+		}, nil
+	}
+	return &WorkerResult{
+		Status:        ResultStatusCompleted,
+		Summary:       fmt.Sprintf("Crawled %d sources and created %d content items", sourcesSucceeded, contentCreated),
+		OutputSummary: map[string]interface{}{"content_created": contentCreated},
+		Metrics:       metrics,
+	}, nil
 }
 
 // crawlSource crawls a single data source
-func (w *CrawlWorker) crawlSource(ctx context.Context, source *types.DataSource) error {
+func (w *CrawlWorker) crawlSource(ctx context.Context, source *types.DataSource) (int, error) {
 	w.logger.Info("crawling source", "id", source.ID, "name", source.Name, "url", source.URL)
 
 	// Update status to crawling
@@ -146,12 +190,12 @@ func (w *CrawlWorker) crawlSource(ctx context.Context, source *types.DataSource)
 	}
 
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if len(contents) == 0 {
 		w.logger.Info("no new content found", "source_id", source.ID)
-		return nil
+		return 0, nil
 	}
 
 	w.logger.Info("found content items", "source_id", source.ID, "count", len(contents))
@@ -163,7 +207,7 @@ func (w *CrawlWorker) crawlSource(ctx context.Context, source *types.DataSource)
 	for _, item := range contents {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return 0, ctx.Err()
 		default:
 			if err := w.processContent(ctx, contentRepo, source, &item); err != nil {
 				w.logger.Error("failed to process content", "url", item.URL, "error", err)
@@ -180,7 +224,7 @@ func (w *CrawlWorker) crawlSource(ctx context.Context, source *types.DataSource)
 	}
 
 	w.logger.Info("crawl completed", "source_id", source.ID, "new_content", newContentCount)
-	return nil
+	return newContentCount, nil
 }
 
 // crawledItem represents a single piece of crawled content

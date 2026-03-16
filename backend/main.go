@@ -22,10 +22,11 @@ package main
 
 import (
 	"backend/pkg/api"
-	coreAgent "backend/pkg/core/agent"
 	"backend/pkg/config"
+	coreAgent "backend/pkg/core/agent"
 	"backend/pkg/core/chat"
 	"backend/pkg/core/source"
+	"backend/pkg/core/taskrun"
 	"backend/pkg/core/worker"
 	"backend/pkg/database"
 	"backend/pkg/database/repository"
@@ -69,7 +70,7 @@ func main() {
 	if exaClient.IsConfigured() {
 		exaArg = exaClient
 	}
-	if err := coreAgent.InitializeAgentCopilotManager(nil, chatService, exaArg, sourceService, draftService); err != nil {
+	if err := coreAgent.InitializeAgentCopilotManager(sourceService, chatService, exaArg, sourceService, draftService); err != nil {
 		log.Printf("Warning: Failed to initialize AgentCopilotManager: %v", err)
 	}
 	log.Printf("Initialized Agent Services")
@@ -77,15 +78,19 @@ func main() {
 	// Initialize Worker Manager
 	workerLogger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	workerManager := worker.NewWorkerManager(workerLogger)
+	taskRunService := taskrun.NewService(repository.NewTaskRunRepository(database.DB()))
+	workerManager.SetTaskRunService(taskRunService)
 
 	// Create and register workers
 	crawlWorker := worker.NewCrawlWorker(workerLogger, cfg.Worker.ExaAPIKey)
 	insightWorker := worker.NewInsightWorker(workerLogger, cfg.Worker.GroqAPIKey)
 	discoveryWorker := worker.NewDiscoveryWorker(workerLogger, cfg.Worker.ExaAPIKey)
+	pipelineWorker := worker.NewPipelineWorker(workerLogger, workerManager)
 
 	workerManager.RegisterWorker(crawlWorker)
 	workerManager.RegisterWorker(insightWorker)
 	workerManager.RegisterWorker(discoveryWorker)
+	workerManager.RegisterWorker(pipelineWorker)
 
 	// NOTE: Cron scheduling is disabled for now - workers run manually only
 	// To enable scheduled runs, uncomment the following and set environment variables:

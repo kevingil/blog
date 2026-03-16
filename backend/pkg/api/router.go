@@ -14,6 +14,7 @@ import (
 	"backend/pkg/api/project"
 	"backend/pkg/api/source"
 	"backend/pkg/api/storage"
+	"backend/pkg/api/taskrun"
 	"backend/pkg/api/worker"
 
 	_ "backend/docs" // Import generated swagger docs
@@ -42,6 +43,7 @@ func RegisterRoutes(app *fiber.App) {
 	storage.Register(app)
 	datasource.Register(app)
 	insight.Register(app)
+	taskrun.Register(app)
 	worker.Register(app)
 
 	// Health check

@@ -17,20 +17,22 @@ type ToolInfo struct {
 type toolResponseType string
 
 type (
-	sessionIDContextKey      string
-	messageIDContextKey      string
-	articleIDContextKey       string
-	documentStateContextKey  string
+	sessionIDContextKey     string
+	messageIDContextKey     string
+	requestIDContextKey     string
+	articleIDContextKey     string
+	documentStateContextKey string
 )
 
 const (
 	ToolResponseTypeText  toolResponseType = "text"
 	ToolResponseTypeImage toolResponseType = "image"
 
-	SessionIDContextKey      sessionIDContextKey      = "session_id"
-	MessageIDContextKey      messageIDContextKey      = "message_id"
-	ArticleIDContextKey      articleIDContextKey       = "article_id"
-	DocumentStateContextKey  documentStateContextKey  = "document_state"
+	SessionIDContextKey     sessionIDContextKey     = "session_id"
+	MessageIDContextKey     messageIDContextKey     = "message_id"
+	RequestIDContextKey     requestIDContextKey     = "request_id"
+	ArticleIDContextKey     articleIDContextKey     = "article_id"
+	DocumentStateContextKey documentStateContextKey = "document_state"
 )
 
 // DocumentState holds the mutable working copy of the document during an agent turn.
@@ -154,9 +156,22 @@ func GetArticleIDFromContext(ctx context.Context) string {
 	return articleID.(string)
 }
 
+func GetRequestIDFromContext(ctx context.Context) string {
+	requestID := ctx.Value(RequestIDContextKey)
+	if requestID == nil {
+		return ""
+	}
+	return requestID.(string)
+}
+
 // WithArticleID adds article ID to context for tools that need it
 func WithArticleID(ctx context.Context, articleID string) context.Context {
 	return context.WithValue(ctx, ArticleIDContextKey, articleID)
+}
+
+// WithRequestID adds request ID to context for tools that persist per-turn state.
+func WithRequestID(ctx context.Context, requestID string) context.Context {
+	return context.WithValue(ctx, RequestIDContextKey, requestID)
 }
 
 // WithDocumentContent creates a mutable DocumentState and stores a pointer in context.

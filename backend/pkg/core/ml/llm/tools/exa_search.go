@@ -223,6 +223,17 @@ func (t *ExaSearchTool) Run(ctx context.Context, params ToolCall) (ToolResponse,
 				Content:    articleSource.Content,
 				URL:        articleSource.URL,
 				SourceType: "web_search", // Specify this as a web search source
+				MetaData: map[string]interface{}{
+					"resource": map[string]interface{}{
+						"origin_tool":      "search_web_sources",
+						"origin_query":     input.Query,
+						"usage_status":     "available",
+						"search_result_id": result.ID,
+						"author":           result.Author,
+						"published_date":   result.PublishedDate,
+						"created_in_turn":  GetRequestIDFromContext(ctx),
+					},
+				},
 			})
 			if err != nil {
 				log.Printf("🔍 [ExaSearch] ❌ Failed to create web content source from %s: %v", result.URL, err)
@@ -234,11 +245,11 @@ func (t *ExaSearchTool) Run(ctx context.Context, params ToolCall) (ToolResponse,
 			log.Printf("🔍 [ExaSearch] ✅ Successfully created web content source from %s (ID: %s)", result.URL, createdSource.ID)
 
 			sourceInfo := map[string]interface{}{
+				"source_id":        createdSource.ID.String(),
 				"original_title":   result.Title,
 				"original_url":     result.URL,
 				"source_created":   true,
 				"search_result_id": result.ID,
-				"source_id":        createdSource.ID,
 				"content_length":   len(result.Text),
 				"source_type":      "web_search",
 				"search_query":     input.Query,

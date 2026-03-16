@@ -98,8 +98,6 @@ import { Globe, EyeOff, History, Tag } from 'lucide-react';
 import { Dialog, DialogTitle, DialogContent, DialogTrigger, DialogDescription, DialogFooter, DialogHeader, DialogClose } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerClose } from '@/components/ui/drawer';
-import { SourcesManager } from './SourcesManager';
-import { SourcesPreview } from './SourcesPreview';
 import type { UseMutationResult } from '@tanstack/react-query';
 
 function PublishDrawerContent({
@@ -272,9 +270,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [generateImageOpen, setGenerateImageOpen] = useState(false);
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [generatingRewrite, setGeneratingRewrite] = useState(false);
-  const [sourcesManagerOpen, setSourcesManagerOpen] = useState(false);
   const [publishDrawerOpen, setPublishDrawerOpen] = useState(false);
-  const [sourcesRefreshTrigger] = useState(0);
   
   // Image versioning state
   const [imageVersions, setImageVersions] = useState<Array<{ url: string; prompt?: string; timestamp: number }>>([]);
@@ -1807,14 +1803,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
             {/* Article Tools Section */}
             <div className="flex flex-wrap items-center gap-1.5 mb-2">
-              {/* Sources Button */}
-              <SourcesPreview
-                articleId={article?.article.id}
-                onOpenDrawer={() => setSourcesManagerOpen(true)}
-                disabled={!article && isNew}
-                refreshTrigger={sourcesRefreshTrigger}
-              />
-
               {/* Tags Button */}
               <Drawer direction="right">
                 <DrawerTrigger asChild>
@@ -2014,6 +2002,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   authorName={user?.name}
                   imageUrl={previewImageUrl}
                   tags={watchedTags}
+                  articleId={article?.article.id}
                 />
                 {errors.content && <p className="text-red-500">{errors.content.message}</p>}
               </div>
@@ -2217,15 +2206,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           </PromptInput>
         </div>
       </div>
-
-      {/* Sources Manager */}
-      {article && (
-        <SourcesManager
-          articleId={article.article.id}
-          isOpen={sourcesManagerOpen}
-          onOpenChange={setSourcesManagerOpen}
-        />
-      )}
 
       {/* Version History Drawer */}
       <Drawer open={showVersions} onOpenChange={setShowVersions} direction="right">

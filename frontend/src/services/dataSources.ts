@@ -1,5 +1,5 @@
-import { apiGet, apiPost, apiPut, apiDelete } from './authenticatedFetch';
-import type { CrawledContent } from './insights';
+import { apiGet, apiPost, apiPut, apiDelete } from "./authenticatedFetch";
+import type { CrawledContent } from "./insights";
 
 // Types
 export interface DataSource {
@@ -41,6 +41,35 @@ export interface UpdateDataSourceRequest {
   is_enabled?: boolean;
 }
 
+export interface DataSourceRecommendation {
+  name: string;
+  url: string;
+  domain: string;
+  summary?: string;
+  reason?: string;
+  source_type: string;
+  score?: number;
+  favicon?: string;
+  sample_url?: string;
+  sample_title?: string;
+}
+
+export interface RecommendDataSourcesRequest {
+  query: string;
+  limit?: number;
+}
+
+export interface DiscoverDataSourcesRequest {
+  limit?: number;
+}
+
+export interface RecommendDataSourcesResponse {
+  mode?: "query" | "discovery";
+  query: string;
+  seed_count?: number;
+  recommendations: DataSourceRecommendation[];
+}
+
 // API calls
 
 export interface ListDataSourcesResponse {
@@ -50,24 +79,52 @@ export interface ListDataSourcesResponse {
   limit: number;
 }
 
-export async function listDataSources(page: number = 1, limit: number = 20): Promise<DataSource[] | ListDataSourcesResponse> {
+export async function listDataSources(
+  page: number = 1,
+  limit: number = 20,
+): Promise<DataSource[] | ListDataSourcesResponse> {
   const params = new URLSearchParams({
     page: page.toString(),
     limit: limit.toString(),
   });
-  
-  return apiGet<DataSource[] | ListDataSourcesResponse>(`/data-sources?${params}`);
+
+  return apiGet<DataSource[] | ListDataSourcesResponse>(
+    `/data-sources?${params}`,
+  );
 }
 
 export async function getDataSource(id: string): Promise<DataSource> {
   return apiGet<DataSource>(`/data-sources/${id}`);
 }
 
-export async function createDataSource(request: CreateDataSourceRequest): Promise<DataSource> {
-  return apiPost<DataSource>('/data-sources', request);
+export async function createDataSource(
+  request: CreateDataSourceRequest,
+): Promise<DataSource> {
+  return apiPost<DataSource>("/data-sources", request);
 }
 
-export async function updateDataSource(id: string, request: UpdateDataSourceRequest): Promise<DataSource> {
+export async function recommendDataSources(
+  request: RecommendDataSourcesRequest,
+): Promise<RecommendDataSourcesResponse> {
+  return apiPost<RecommendDataSourcesResponse>(
+    "/data-sources/recommendations",
+    request,
+  );
+}
+
+export async function discoverDataSourcesFromExistingSources(
+  request: DiscoverDataSourcesRequest = {},
+): Promise<RecommendDataSourcesResponse> {
+  return apiPost<RecommendDataSourcesResponse>(
+    "/data-sources/recommendations/discovery",
+    request,
+  );
+}
+
+export async function updateDataSource(
+  id: string,
+  request: UpdateDataSourceRequest,
+): Promise<DataSource> {
   return apiPut<DataSource>(`/data-sources/${id}`, request);
 }
 
@@ -76,7 +133,10 @@ export async function deleteDataSource(id: string): Promise<void> {
 }
 
 export async function triggerCrawl(id: string): Promise<void> {
-  await apiPost<{ success: boolean; message: string }>(`/data-sources/${id}/crawl`, {});
+  await apiPost<{ success: boolean; message: string }>(
+    `/data-sources/${id}/crawl`,
+    {},
+  );
 }
 
 export interface GetDataSourceContentResponse {
@@ -87,14 +147,16 @@ export interface GetDataSourceContentResponse {
 }
 
 export async function getDataSourceContent(
-  id: string, 
-  page: number = 1, 
-  limit: number = 20
+  id: string,
+  page: number = 1,
+  limit: number = 20,
 ): Promise<GetDataSourceContentResponse> {
   const params = new URLSearchParams({
     page: page.toString(),
     limit: limit.toString(),
   });
-  
-  return apiGet<GetDataSourceContentResponse>(`/data-sources/${id}/content?${params}`);
+
+  return apiGet<GetDataSourceContentResponse>(
+    `/data-sources/${id}/content?${params}`,
+  );
 }

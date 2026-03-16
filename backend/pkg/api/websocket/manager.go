@@ -91,6 +91,7 @@ func (m *Manager) broadcastWorkerStatus(update worker.StatusUpdate) {
 		Status: WorkerStatusData{
 			Name:        update.Status.Name,
 			State:       string(update.Status.State),
+			TaskRunID:   nil,
 			Progress:    update.Status.Progress,
 			Message:     update.Status.Message,
 			StartedAt:   startedAt,
@@ -100,6 +101,10 @@ func (m *Manager) broadcastWorkerStatus(update worker.StatusUpdate) {
 			ItemsDone:   update.Status.ItemsDone,
 		},
 		Timestamp: update.Timestamp,
+	}
+	if update.Status.TaskRunID != nil {
+		s := update.Status.TaskRunID.String()
+		msg.Status.TaskRunID = &s
 	}
 
 	data, err := json.Marshal(msg)
@@ -281,4 +286,3 @@ func (m *Manager) ActiveConnections() int {
 	defer m.mu.RUnlock()
 	return len(m.connections)
 }
-

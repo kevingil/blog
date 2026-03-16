@@ -12,6 +12,7 @@ import (
 	"backend/pkg/core/ml/llm/message"
 	"backend/pkg/core/ml/llm/models"
 	"backend/pkg/core/ml/llm/provider"
+	"backend/pkg/core/taskrun"
 	"backend/pkg/database"
 	"backend/pkg/database/repository"
 	"backend/pkg/types"
@@ -73,14 +74,19 @@ func (w *InsightWorker) Name() string {
 }
 
 // Run executes the insight worker
-func (w *InsightWorker) Run(ctx context.Context) error {
+func (w *InsightWorker) Run(ctx context.Context) (*WorkerResult, error) {
 	w.logger.Info("starting insight worker run")
 	statusService := GetStatusService()
+	tracker := taskrun.FromContext(ctx)
 
 	if w.llmProvider == nil {
 		w.logger.Warn("LLM provider not configured, skipping insight generation")
 		statusService.UpdateStatus(w.Name(), StateRunning, 100, "LLM not configured, skipping")
-		return nil
+		return &WorkerResult{
+			Status:  ResultStatusWarning,
+			Summary: "LLM provider not configured, insight generation skipped",
+			Warnings: []string{"LLM provider not configured"},
+		}, nil
 	}
 
 	// Get all topics
@@ -88,49 +94,102 @@ func (w *InsightWorker) Run(ctx context.Context) error {
 	topicRepo := repository.NewInsightTopicRepository(database.DB())
 	topics, err := topicRepo.FindAll(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get topics: %w", err)
+		return nil, fmt.Errorf("failed to get topics: %w", err)
 	}
 
 	if len(topics) == 0 {
 		w.logger.Info("no topics found, skipping insight generation")
 		statusService.UpdateStatus(w.Name(), StateRunning, 100, "No topics found")
-		return nil
+		return &WorkerResult{
+			Status:  ResultStatusWarning,
+			Summary: "No topics found for insight generation",
+			Warnings: []string{"No topics were configured"},
+		}, nil
 	}
 
 	w.logger.Info("processing topics for insights", "count", len(topics))
 	statusService.SetProgress(w.Name(), 0, len(topics), fmt.Sprintf("Found %d topics to process", len(topics)))
+	topicsSkippedInsufficient := 0
+	topicsSkippedRecent := 0
+	topicsFailed := 0
+	insightsCreated := 0
 
 	for i, topic := range topics {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		default:
 			statusService.SetProgress(w.Name(), i, len(topics), fmt.Sprintf("Generating insight for: %s", topic.Name))
 			
-			if err := w.generateInsightForTopic(ctx, &topic); err != nil {
+			result, err := w.generateInsightForTopic(ctx, &topic)
+			if err != nil {
 				w.logger.Error("failed to generate insight for topic", "topic_id", topic.ID, "topic_name", topic.Name, "error", err)
+				topicsFailed++
+				if tracker != nil {
+					_ = tracker.RecordEvent(ctx, nil, "topic_failed", "warning", fmt.Sprintf("Topic %s failed", topic.Name), map[string]interface{}{
+						"topic_id": topic.ID.String(),
+						"error":    err.Error(),
+					})
+				}
+				continue
+			}
+			switch result {
+			case "created":
+				insightsCreated++
+			case "skipped_insufficient":
+				topicsSkippedInsufficient++
+			case "skipped_recent":
+				topicsSkippedRecent++
 			}
 		}
 	}
 
 	statusService.SetProgress(w.Name(), len(topics), len(topics), fmt.Sprintf("Completed processing %d topics", len(topics)))
-	return nil
+	metrics := map[string]interface{}{
+		"topics_considered":                  len(topics),
+		"topics_skipped_insufficient_content": topicsSkippedInsufficient,
+		"topics_skipped_recent_insight":      topicsSkippedRecent,
+		"topics_failed":                      topicsFailed,
+		"insights_created":                   insightsCreated,
+	}
+	if insightsCreated == 0 || topicsFailed > 0 {
+		warnings := []string{}
+		if insightsCreated == 0 {
+			warnings = append(warnings, "No insights were created")
+		}
+		if topicsFailed > 0 {
+			warnings = append(warnings, fmt.Sprintf("%d topics failed during generation", topicsFailed))
+		}
+		return &WorkerResult{
+			Status:        ResultStatusWarning,
+			Summary:       fmt.Sprintf("Processed %d topics and created %d insights", len(topics), insightsCreated),
+			Metrics:       metrics,
+			OutputSummary: map[string]interface{}{"insights_created": insightsCreated},
+			Warnings:      warnings,
+		}, nil
+	}
+	return &WorkerResult{
+		Status:        ResultStatusCompleted,
+		Summary:       fmt.Sprintf("Created %d insights from %d topics", insightsCreated, len(topics)),
+		Metrics:       metrics,
+		OutputSummary: map[string]interface{}{"insights_created": insightsCreated},
+	}, nil
 }
 
 // generateInsightForTopic generates an insight for a specific topic
-func (w *InsightWorker) generateInsightForTopic(ctx context.Context, topic *types.InsightTopic) error {
+func (w *InsightWorker) generateInsightForTopic(ctx context.Context, topic *types.InsightTopic) (string, error) {
 	matchRepo := repository.NewContentTopicMatchRepository(database.DB())
 	contentRepo := repository.NewCrawledContentRepository(database.DB())
 
 	// Get recent content matches for this topic
 	matches, total, err := matchRepo.FindPrimaryByTopicID(ctx, topic.ID, 0, w.maxContentPerGen)
 	if err != nil {
-		return fmt.Errorf("failed to get content matches: %w", err)
+		return "", fmt.Errorf("failed to get content matches: %w", err)
 	}
 
 	if total < int64(w.minContentCount) {
 		w.logger.Debug("not enough content for insight generation", "topic_id", topic.ID, "content_count", total)
-		return nil
+		return "skipped_insufficient", nil
 	}
 
 	// Get content details
@@ -141,11 +200,11 @@ func (w *InsightWorker) generateInsightForTopic(ctx context.Context, topic *type
 
 	contents, err := contentRepo.FindByIDs(ctx, contentIDs)
 	if err != nil {
-		return fmt.Errorf("failed to get content details: %w", err)
+		return "", fmt.Errorf("failed to get content details: %w", err)
 	}
 
 	if len(contents) < w.minContentCount {
-		return nil
+		return "skipped_insufficient", nil
 	}
 
 	// Check if we should generate a new insight
@@ -154,7 +213,7 @@ func (w *InsightWorker) generateInsightForTopic(ctx context.Context, topic *type
 		// Only generate if last insight was more than 24 hours ago
 		if time.Since(*topic.LastInsightAt) < 24*time.Hour {
 			w.logger.Debug("recent insight exists, skipping", "topic_id", topic.ID)
-			return nil
+			return "skipped_recent", nil
 		}
 	}
 
@@ -164,7 +223,7 @@ func (w *InsightWorker) generateInsightForTopic(ctx context.Context, topic *type
 	// Generate insight using LLM
 	insightData, err := w.generateInsightWithLLM(ctx, topic, contentSummary)
 	if err != nil {
-		return fmt.Errorf("failed to generate insight with LLM: %w", err)
+		return "", fmt.Errorf("failed to generate insight with LLM: %w", err)
 	}
 
 	// Determine period
@@ -200,11 +259,11 @@ func (w *InsightWorker) generateInsightForTopic(ctx context.Context, topic *type
 		periodEnd,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to create insight: %w", err)
+		return "", fmt.Errorf("failed to create insight: %w", err)
 	}
 
 	w.logger.Info("generated insight for topic", "topic_id", topic.ID, "topic_name", topic.Name, "title", insightData.Title)
-	return nil
+	return "created", nil
 }
 
 // buildContentSummary builds a summary of content for LLM processing

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, ExternalLink, Edit2, Trash2, Globe, FileText, Loader2, FileIcon, X } from 'lucide-react';
+import { Plus, ExternalLink, Trash2, Globe, FileText, Loader2, FileIcon, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 import { 
   getArticleSources, 
   createSource, 
@@ -48,6 +49,12 @@ interface SourcesManagerProps {
   onOpenChange: (open: boolean) => void;
 }
 
+interface SourcesManagerContentProps {
+  articleId?: string;
+  className?: string;
+  showHeader?: boolean;
+}
+
 interface SourceFormData {
   title: string;
   content: string;
@@ -55,7 +62,11 @@ interface SourceFormData {
   source_type: 'web' | 'manual' | 'pdf';
 }
 
-export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManagerProps) {
+export function SourcesManagerContent({
+  articleId,
+  className,
+  showHeader = true,
+}: SourcesManagerContentProps) {
   const { toast } = useToast();
   const [sources, setSources] = useState<ArticleSource[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -76,12 +87,15 @@ export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManag
   
   const titleInputRef = useRef<HTMLInputElement>(null);
 
-  // Load sources when modal opens
   useEffect(() => {
-    if (isOpen && articleId) {
+    if (articleId) {
       loadSources();
+      return;
     }
-  }, [isOpen, articleId]);
+
+    setSources([]);
+    handleCancelEdit();
+  }, [articleId]);
 
   // Reset form when modal opens/closes or selected source changes
   useEffect(() => {
@@ -116,6 +130,10 @@ export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManag
   const loadSources = async () => {
     setIsLoading(true);
     try {
+      if (!articleId) {
+        setSources([]);
+        return;
+      }
       const sourcesData = await getArticleSources(articleId);
       setSources(sourcesData);
     } catch (error) {
@@ -283,20 +301,33 @@ export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManag
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="min-w-[90vw] w-[90vw] max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            Sources & References
-          </DialogTitle>
-          <DialogDescription>
+    <div className={cn('flex h-full flex-col', className)}>
+      {showHeader && (
+        <div className="border-b px-4 py-3 shrink-0">
+          <div className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            <h2 className="text-base font-semibold">Sources & References</h2>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
             Manage sources and references for this article. Add web links to scrape content automatically, or add manual sources.
-          </DialogDescription>
-        </DialogHeader>
+          </p>
+        </div>
+      )}
 
-        <div className="flex-1 flex gap-6 min-h-0">
-          {/* Left Panel - Sources List */}
+      {!articleId ? (
+        <div className="flex flex-1 items-center justify-center p-6 text-center text-muted-foreground">
+          <div className="max-w-sm space-y-3">
+            <FileText className="mx-auto h-14 w-14 opacity-30" />
+            <div className="space-y-1">
+              <p className="text-lg font-medium text-foreground">Save the article to manage resources</p>
+              <p className="text-sm">
+                Sources are attached to a saved article. Create the draft first, then return here to add and edit references.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-1 gap-6 min-h-0 p-4">
           <div className="w-1/3 flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium">Sources ({sources.length})</h3>
@@ -320,8 +351,8 @@ export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManag
                 </div>
               ) : (
                 sources.map((source) => (
-                  <Card 
-                    key={source.id} 
+                  <Card
+                    key={source.id}
                     className={`border cursor-pointer transition-colors ${
                       selectedSource?.id === source.id ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' : 'hover:bg-gray-50 dark:hover:bg-gray-800'
                     }`}
@@ -360,8 +391,8 @@ export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManag
                         <div className="flex items-center gap-1 ml-2">
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button 
-                                variant="ghost" 
+                              <Button
+                                variant="ghost"
                                 size="sm"
                                 onClick={(e) => e.stopPropagation()}
                               >
@@ -414,8 +445,7 @@ export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManag
             </div>
           </div>
 
-          {/* Right Panel - Edit Form */}
-          <div className="w-full flex flex-col">
+          <div className="w-full flex flex-col min-h-0">
             {(isEditing || isCreating) ? (
               <>
                 <div className="flex items-center justify-between mb-4">
@@ -427,8 +457,7 @@ export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManag
                   </Button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="flex-1 flex flex-col space-y-4">
-                  {/* URL Scraping Toggle */}
+                <form onSubmit={handleSubmit} className="flex-1 flex flex-col space-y-4 min-h-0">
                   {isCreating && (
                     <div className="flex items-center justify-between">
                       <Label htmlFor="use-url-scraping" className="text-sm font-medium">
@@ -442,10 +471,8 @@ export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManag
                     </div>
                   )}
 
-                  {/* Source Type and Title Row (when editing) */}
                   {isEditing ? (
                     <div className="flex gap-4">
-                      {/* Title Input */}
                       <div className="flex-[2] space-y-2">
                         <Label htmlFor="title">Title</Label>
                         <Input
@@ -457,12 +484,11 @@ export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManag
                         />
                       </div>
 
-                      {/* Source Type Dropdown */}
                       <div className="flex-1 space-y-2">
                         <Label htmlFor="source-type">Source Type</Label>
                         <Select
                           value={formData.source_type}
-                          onValueChange={(value: 'web' | 'manual' | 'pdf') => 
+                          onValueChange={(value: 'web' | 'manual' | 'pdf') =>
                             setFormData(prev => ({ ...prev, source_type: value }))
                           }
                         >
@@ -493,7 +519,6 @@ export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManag
                       </div>
                     </div>
                   ) : (
-                    /* Title Input for new sources */
                     <div className="space-y-2">
                       <Label htmlFor="title">Title</Label>
                       <Input
@@ -506,7 +531,6 @@ export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManag
                     </div>
                   )}
 
-                  {/* URL Input (when scraping or editing web source) */}
                   {(useUrlScraping || (isEditing && formData.source_type === 'web')) && (
                     <div className="space-y-2">
                       <Label htmlFor="url">URL</Label>
@@ -520,18 +544,17 @@ export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManag
                     </div>
                   )}
 
-                  {/* Content Input (only when not using URL scraping or editing non-web sources) */}
                   {(!useUrlScraping && !isEditing) || (isEditing && formData.source_type !== 'web') ? (
-                    <div className="space-y-2 flex-1 flex flex-col">
+                    <div className="space-y-2 flex-1 flex flex-col min-h-0">
                       <Label htmlFor="content">Content</Label>
                       <Textarea
                         id="content"
                         placeholder={
-                          isEditing && formData.source_type === 'pdf' 
-                            ? "PDF content or summary..." 
-                            : "Source content or summary..."
+                          isEditing && formData.source_type === 'pdf'
+                            ? 'PDF content or summary...'
+                            : 'Source content or summary...'
                         }
-                        className="flex-1 min-h-[300px] max-h-[calc(100vh-460px)]"
+                        className="flex-1 min-h-[300px]"
                         value={formData.content}
                         onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
                       />
@@ -542,9 +565,9 @@ export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManag
                       )}
                     </div>
                   ) : isEditing && formData.source_type === 'web' ? (
-                    <div className="space-y-2 flex-1 flex flex-col">
+                    <div className="space-y-2 flex-1 flex flex-col min-h-0">
                       <Label htmlFor="content">Content Preview</Label>
-                      <div className="flex-1 min-h-[300px] max-h-[calc(100vh-460px)] p-3 border rounded-md bg-gray-50 dark:bg-gray-900 overflow-y-auto">
+                      <div className="flex-1 min-h-[300px] p-3 border rounded-md bg-gray-50 dark:bg-gray-900 overflow-y-auto">
                         <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                           {formData.content || 'No content available'}
                         </p>
@@ -563,7 +586,7 @@ export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManag
                     <Button variant="outline" onClick={handleCancelEdit} type="button">
                       Cancel
                     </Button>
-                    <Button 
+                    <Button
                       type="submit"
                       disabled={isAddingSource || isScrapingUrl}
                     >
@@ -595,6 +618,22 @@ export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManag
             )}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManagerProps) {
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="min-w-[90vw] w-[90vw] max-h-[90vh] overflow-hidden flex flex-col p-0">
+        <DialogHeader className="sr-only">
+          <DialogTitle>Sources & References</DialogTitle>
+          <DialogDescription>
+            Manage sources and references for this article. Add web links to scrape content automatically, or add manual sources.
+          </DialogDescription>
+        </DialogHeader>
+        <SourcesManagerContent articleId={articleId} showHeader={false} />
       </DialogContent>
     </Dialog>
   );

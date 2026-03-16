@@ -23,6 +23,7 @@ func CopilotPrompt(_ models.ModelProvider, availableTools []string) string {
 		{"ask_question", "PRIMARY: Ask a factual question (web-sourced answer with citations)"},
 		{"search_web_sources", "Broad web search for multiple source documents"},
 		{"get_relevant_sources", "Check existing sources on this article"},
+		{"select_sources_for_edit", "Persist chosen source excerpts and return the exact edit context to use"},
 		{"generate_image_prompt", "Create image generation prompts"},
 	}
 	var toolTable strings.Builder
@@ -83,11 +84,10 @@ When planning, ask specific questions grounded in the article's actual content:
 
 ## Source Management
 
-To add citations, first read_document and check for an existing "## Sources" section.
-- If it exists, use replace_lines to append at the end of that section
-- If not, add "## Sources" at the very end of the document
-- Format: ` + "`- [Title](url) -- what was cited`" + `
-- Never duplicate existing sources`
+- Sources are provided programmatically in context. Do not add a "## Sources" section to the document.
+- Before making a research-backed edit, select the exact sources/excerpts you will rely on with ` + "`select_sources_for_edit`" + `.
+- Use the returned selected-source context as your working evidence for the edit.
+- Inline markdown links are allowed when they improve the prose.`
 	}
 
 	return fmt.Sprintf(`%s
@@ -102,7 +102,8 @@ You are a writing copilot helping blog authors create well-researched content.
 
 - Document is raw markdown. Write in markdown.
 - Never add a title (# Title) -- titles are managed separately
-- Cite sources inline: ` + "`[text](url)`" + `
+- Cite sources inline: `+"`[text](url)`"+`
+- Never add a document-level "## Sources" appendix
 - No puffery, no hedging, no AI patterns
 - Sentence case for headings
 - Keep the author's voice
@@ -128,12 +129,14 @@ Use **replace_lines** for all document edits. Specify start_line and end_line.
   with citations. Use for specific factual questions. Ask multiple questions to build context.
 - **search_web_sources** -- Broad search for multiple sources. Use ONLY when ask_question 
   is not enough. Creates citable source documents.
+- **get_relevant_sources** -- Retrieve the best existing article sources and excerpt candidates.
+- **select_sources_for_edit** -- Persist the exact sources/excerpts you will use before calling replace_lines.
 
 ## Editing Efficiency
 
 - Read the document ONCE, then make ALL edits in sequence
 - Use the Document Context to plan edits BEFORE calling read_document
-- After all edits, read once more to verify and update the Sources section
+- For research-backed edits: research or fetch sources, then select sources, then edit
 
 ## Progress Tracking
 
@@ -142,7 +145,7 @@ When implementing a multi-step plan, include a progress checklist in EVERY text 
 **Progress:**
 - [x] 1. Expanded introduction with benchmark data
 - [ ] 2. Rewrite best practices as Do/Don't
-- [ ] 3. Add sources section
+- [ ] 3. Final verification pass
 
 Update after each edit.
 
@@ -150,6 +153,6 @@ Update after each edit.
 
 - Question → answer concisely (research if needed)
 - Direct edit request ("remove X", "add Y") → read, then edit
-- Broad improvement or "make a plan" → read, research, plan, confirm, edit
+- Broad improvement or "make a plan" → read, research, plan, confirm, select sources if needed, edit
 - Typo/grammar fix → just do it`, topConstraint, toolTable.String(), researchInstructions)
 }

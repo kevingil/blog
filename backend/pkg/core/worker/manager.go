@@ -7,6 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"backend/pkg/core/taskrun"
+	"backend/pkg/types"
+
+	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 )
 
@@ -20,7 +24,7 @@ var (
 // Worker interface defines the contract for background workers
 type Worker interface {
 	Name() string
-	Run(ctx context.Context) error
+	Run(ctx context.Context) (*WorkerResult, error)
 }
 
 // WorkerManager manages background workers and their scheduling
@@ -33,6 +37,7 @@ type WorkerManager struct {
 	isRunning       bool
 	shutdownTimeout time.Duration
 	statusService   *StatusService
+	taskRunService  *taskrun.Service
 }
 
 // NewWorkerManager creates a new WorkerManager instance
@@ -49,6 +54,10 @@ func NewWorkerManager(logger *slog.Logger) *WorkerManager {
 		shutdownTimeout: 30 * time.Second,
 		statusService:   GetStatusService(),
 	}
+}
+
+func (m *WorkerManager) SetTaskRunService(service *taskrun.Service) {
+	m.taskRunService = service
 }
 
 // RegisterWorker registers a worker with the manager
@@ -77,7 +86,7 @@ func (m *WorkerManager) ScheduleWorker(workerName, schedule string) error {
 	}
 
 	_, err := m.cron.AddFunc(schedule, func() {
-		m.runWorker(worker)
+		m.runWorker(worker, RunMetadata{TriggerSource: "scheduled"}, nil)
 	})
 
 	if err != nil {
@@ -90,7 +99,7 @@ func (m *WorkerManager) ScheduleWorker(workerName, schedule string) error {
 }
 
 // runWorker runs a worker with proper context management
-func (m *WorkerManager) runWorker(worker Worker) {
+func (m *WorkerManager) runWorker(worker Worker, metadata RunMetadata, run *types.TaskRun) {
 	name := worker.Name()
 
 	// Check if worker is already running
@@ -105,8 +114,34 @@ func (m *WorkerManager) runWorker(worker Worker) {
 	m.runningWorkers[name] = cancel
 	m.mu.Unlock()
 
+	if run == nil && m.taskRunService != nil {
+		kind := types.TaskRunKindWorker
+		if name == PipelineWorkerName {
+			kind = types.TaskRunKindWorkflow
+		}
+		startedRun, err := m.taskRunService.StartRun(ctx, taskrun.StartRunInput{
+			Kind:              kind,
+			TaskName:          name,
+			OrganizationID:    metadata.OrganizationID,
+			UserID:            metadata.UserID,
+			TriggeredByUserID: metadata.TriggeredByUserID,
+			TriggerSource:     metadata.TriggerSource,
+			ParentRunID:       metadata.ParentRunID,
+		})
+		if err != nil {
+			m.logger.Error("failed to create task run", "name", name, "error", err)
+		} else {
+			run = startedRun
+		}
+	}
+
 	m.logger.Info("starting worker", "name", name)
-	m.statusService.StartWorker(name)
+	var taskRunID *uuid.UUID
+	if run != nil {
+		taskRunID = &run.ID
+		ctx = taskrun.WithTracker(ctx, taskrun.NewTracker(m.taskRunService, run.ID))
+	}
+	m.statusService.StartWorker(name, taskRunID)
 	startTime := time.Now()
 
 	defer func() {
@@ -118,16 +153,69 @@ func (m *WorkerManager) runWorker(worker Worker) {
 		m.logger.Info("worker completed", "name", name, "duration", duration)
 	}()
 
-	if err := worker.Run(ctx); err != nil {
+	result, err := worker.Run(ctx)
+	if err := ctx.Err(); err != nil {
+		m.logger.Warn("worker cancelled", "name", name, "error", err)
+		if run != nil && m.taskRunService != nil {
+			summary := "Run cancelled"
+			_ = m.taskRunService.FinishRun(context.Background(), taskrun.FinishRunInput{
+				RunID:   run.ID,
+				Status:  types.TaskRunStatusCancelled,
+				Summary: &summary,
+			})
+		}
+		m.statusService.SetError(name, err.Error())
+		return
+	}
+	if err != nil {
 		m.logger.Error("worker failed", "name", name, "error", err)
+		if run != nil && m.taskRunService != nil {
+			summary := err.Error()
+			_ = m.taskRunService.FinishRun(context.Background(), taskrun.FinishRunInput{
+				RunID:        run.ID,
+				Status:       types.TaskRunStatusFailed,
+				Summary:      &summary,
+				ErrorSummary: &summary,
+			})
+		}
 		m.statusService.SetError(name, err.Error())
 	} else {
+		if run != nil && m.taskRunService != nil {
+			runStatus := types.TaskRunStatusCompleted
+			if result != nil && result.Status == ResultStatusWarning {
+				runStatus = types.TaskRunStatusWarning
+			}
+			summary := "Completed successfully"
+			if result != nil && result.Summary != "" {
+				summary = result.Summary
+			}
+			_ = m.taskRunService.FinishRun(context.Background(), taskrun.FinishRunInput{
+				RunID:         run.ID,
+				Status:        runStatus,
+				Summary:       &summary,
+				OutputSummary: mapOrEmpty(result, func(r *WorkerResult) map[string]interface{} { return r.OutputSummary }),
+				Metrics:       mapOrEmpty(result, func(r *WorkerResult) map[string]interface{} { return r.Metrics }),
+			})
+			for _, warning := range warningsOrEmpty(result) {
+				_ = m.taskRunService.RecordEvent(context.Background(), taskrun.RecordEventInput{
+					RunID:     run.ID,
+					EventType: "warning",
+					Level:     types.TaskRunEventLevelWarning,
+					Message:   warning,
+				})
+			}
+		}
 		m.statusService.CompleteWorker(name, "Completed successfully")
 	}
 }
 
 // RunWorkerNow runs a worker immediately (outside of schedule)
 func (m *WorkerManager) RunWorkerNow(workerName string) error {
+	_, err := m.RunWorkerNowWithMetadata(workerName, RunMetadata{TriggerSource: "manual"})
+	return err
+}
+
+func (m *WorkerManager) RunWorkerNowWithMetadata(workerName string, metadata RunMetadata) (string, error) {
 	m.mu.RLock()
 	worker, exists := m.workers[workerName]
 	_, isRunning := m.runningWorkers[workerName]
@@ -135,16 +223,62 @@ func (m *WorkerManager) RunWorkerNow(workerName string) error {
 
 	if !exists {
 		m.logger.Error("worker not found", "name", workerName)
-		return ErrWorkerNotFound
+		return "", ErrWorkerNotFound
 	}
 
 	if isRunning {
 		m.logger.Warn("worker already running", "name", workerName)
-		return ErrWorkerAlreadyRunning
+		return "", ErrWorkerAlreadyRunning
 	}
 
-	go m.runWorker(worker)
-	return nil
+	if metadata.TriggerSource == "" {
+		metadata.TriggerSource = "manual"
+	}
+
+	var run *types.TaskRun
+	if m.taskRunService != nil {
+		kind := types.TaskRunKindWorker
+		if workerName == PipelineWorkerName {
+			kind = types.TaskRunKindWorkflow
+		}
+		startedRun, err := m.taskRunService.StartRun(context.Background(), taskrun.StartRunInput{
+			Kind:              kind,
+			TaskName:          workerName,
+			OrganizationID:    metadata.OrganizationID,
+			UserID:            metadata.UserID,
+			TriggeredByUserID: metadata.TriggeredByUserID,
+			TriggerSource:     metadata.TriggerSource,
+			ParentRunID:       metadata.ParentRunID,
+		})
+		if err != nil {
+			return "", err
+		}
+		run = startedRun
+	}
+
+	go m.runWorker(worker, metadata, run)
+	if run == nil {
+		return "", nil
+	}
+	return run.ID.String(), nil
+}
+
+func mapOrEmpty(result *WorkerResult, getter func(*WorkerResult) map[string]interface{}) map[string]interface{} {
+	if result == nil {
+		return map[string]interface{}{}
+	}
+	data := getter(result)
+	if data == nil {
+		return map[string]interface{}{}
+	}
+	return data
+}
+
+func warningsOrEmpty(result *WorkerResult) []string {
+	if result == nil {
+		return nil
+	}
+	return result.Warnings
 }
 
 // StopWorker stops a running worker

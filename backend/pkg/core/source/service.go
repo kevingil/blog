@@ -22,19 +22,40 @@ import (
 
 // CreateRequest represents a request to create a source
 type CreateRequest struct {
-	ArticleID  uuid.UUID `json:"article_id" validate:"required"`
-	Title      string    `json:"title"`
-	Content    string    `json:"content" validate:"required"`
-	URL        string    `json:"url"`
-	SourceType string    `json:"source_type"`
+	ArticleID  uuid.UUID              `json:"article_id" validate:"required"`
+	Title      string                 `json:"title"`
+	Content    string                 `json:"content" validate:"required"`
+	URL        string                 `json:"url"`
+	SourceType string                 `json:"source_type"`
+	MetaData   map[string]interface{} `json:"meta_data"`
 }
 
 // UpdateRequest represents a request to update a source
 type UpdateRequest struct {
-	Title      *string `json:"title,omitempty"`
-	Content    *string `json:"content,omitempty"`
-	URL        *string `json:"url,omitempty"`
-	SourceType *string `json:"source_type,omitempty"`
+	Title      *string                 `json:"title,omitempty"`
+	Content    *string                 `json:"content,omitempty"`
+	URL        *string                 `json:"url,omitempty"`
+	SourceType *string                 `json:"source_type,omitempty"`
+	MetaData   *map[string]interface{} `json:"meta_data,omitempty"`
+}
+
+// AgentResourceSelection stores durable agent usage metadata on a source row.
+type AgentResourceSelection struct {
+	ArticleID         uuid.UUID
+	SourceID          *uuid.UUID
+	Title             string
+	Content           string
+	URL               string
+	SourceType        string
+	OriginTool        string
+	OriginQuery       string
+	OriginQuestion    string
+	Author            string
+	PublishedDate     string
+	SelectedExcerpt   string
+	SelectedExcerptID string
+	RequestID         string
+	UsageStatus       string
 }
 
 // ScrapedContent represents scraped content from a URL
@@ -137,6 +158,7 @@ func (s *Service) Create(ctx context.Context, req CreateRequest) (*types.Source,
 		URL:        req.URL,
 		SourceType: sourceType,
 		Embedding:  embedding.Slice(),
+		MetaData:   req.MetaData,
 		CreatedAt:  time.Now(),
 	}
 
@@ -195,6 +217,9 @@ func (s *Service) Update(ctx context.Context, sourceID uuid.UUID, req UpdateRequ
 	if req.SourceType != nil {
 		source.SourceType = *req.SourceType
 	}
+	if req.MetaData != nil {
+		source.MetaData = *req.MetaData
+	}
 
 	if needsEmbeddingUpdate {
 		embedding, err := s.embeddingService.GenerateEmbedding(ctx, source.Content)
@@ -229,6 +254,140 @@ func (s *Service) SearchSimilar(ctx context.Context, articleID uuid.UUID, query 
 	}
 
 	return sources, nil
+}
+
+// UpsertAgentResource creates or updates a source row for agent-selected resources.
+func (s *Service) UpsertAgentResource(ctx context.Context, req AgentResourceSelection) (*types.Source, error) {
+	if req.ArticleID == uuid.Nil {
+		return nil, core.InvalidInputError("article_id is required")
+	}
+	if req.SelectedExcerpt == "" && req.Content == "" {
+		return nil, core.InvalidInputError("selected excerpt or content is required")
+	}
+
+	var (
+		existing *types.Source
+		err      error
+	)
+
+	if req.SourceID != nil && *req.SourceID != uuid.Nil {
+		existing, err = s.sourceRepo.FindByID(ctx, *req.SourceID)
+		if err != nil && err != core.ErrNotFound {
+			return nil, err
+		}
+		if existing != nil && existing.ArticleID != req.ArticleID {
+			return nil, core.InvalidInputError("source does not belong to article")
+		}
+	}
+
+	if existing == nil && req.URL != "" {
+		sources, err := s.sourceRepo.FindByArticleID(ctx, req.ArticleID)
+		if err != nil {
+			return nil, err
+		}
+		for i := range sources {
+			if sources[i].URL != "" && strings.EqualFold(strings.TrimSpace(sources[i].URL), strings.TrimSpace(req.URL)) {
+				existing = &sources[i]
+				break
+			}
+		}
+	}
+
+	if existing == nil {
+		content := req.Content
+		if content == "" {
+			content = req.SelectedExcerpt
+		}
+
+		sourceType := req.SourceType
+		if sourceType == "" {
+			sourceType = "web"
+		}
+
+		return s.Create(ctx, CreateRequest{
+			ArticleID:  req.ArticleID,
+			Title:      req.Title,
+			Content:    content,
+			URL:        req.URL,
+			SourceType: sourceType,
+			MetaData:   buildAgentResourceMeta(nil, req),
+		})
+	}
+
+	if req.Title != "" {
+		existing.Title = req.Title
+	}
+	if req.SourceType != "" {
+		existing.SourceType = req.SourceType
+	}
+	if req.Content != "" && strings.TrimSpace(existing.Content) == "" {
+		existing.Content = req.Content
+	}
+	existing.MetaData = buildAgentResourceMeta(existing.MetaData, req)
+
+	if err := s.sourceRepo.Update(ctx, existing); err != nil {
+		return nil, err
+	}
+
+	return existing, nil
+}
+
+func buildAgentResourceMeta(existing map[string]interface{}, req AgentResourceSelection) map[string]interface{} {
+	result := cloneMap(existing)
+	resourceMeta := map[string]interface{}{}
+	if raw, ok := result["resource"].(map[string]interface{}); ok {
+		resourceMeta = cloneMap(raw)
+	}
+
+	if req.OriginTool != "" {
+		resourceMeta["origin_tool"] = req.OriginTool
+	}
+	if req.OriginQuery != "" {
+		resourceMeta["origin_query"] = req.OriginQuery
+	}
+	if req.OriginQuestion != "" {
+		resourceMeta["origin_question"] = req.OriginQuestion
+	}
+	if req.Author != "" {
+		resourceMeta["author"] = req.Author
+	}
+	if req.PublishedDate != "" {
+		resourceMeta["published_date"] = req.PublishedDate
+	}
+	if req.SelectedExcerpt != "" {
+		resourceMeta["selected_excerpt"] = req.SelectedExcerpt
+	}
+	if req.SelectedExcerptID != "" {
+		resourceMeta["selected_excerpt_id"] = req.SelectedExcerptID
+	}
+
+	usageStatus := req.UsageStatus
+	if usageStatus == "" {
+		usageStatus = "used"
+	}
+	resourceMeta["usage_status"] = usageStatus
+
+	now := time.Now().Format(time.RFC3339)
+	resourceMeta["selected_at"] = now
+	resourceMeta["last_used_at"] = now
+	if req.RequestID != "" {
+		resourceMeta["last_used_in_turn"] = req.RequestID
+	}
+
+	result["resource"] = resourceMeta
+	return result
+}
+
+func cloneMap(input map[string]interface{}) map[string]interface{} {
+	if input == nil {
+		return map[string]interface{}{}
+	}
+
+	out := make(map[string]interface{}, len(input))
+	for k, v := range input {
+		out[k] = v
+	}
+	return out
 }
 
 // Scraping helper functions
