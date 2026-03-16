@@ -6,6 +6,7 @@ export type WorkerState = "idle" | "running" | "completed" | "failed";
 export interface WorkerStatus {
   name: string;
   state: WorkerState;
+  task_run_id?: string;
   progress: number;
   message: string;
   started_at?: string;
@@ -23,6 +24,7 @@ export interface AllWorkersStatusResponse {
 export interface RunWorkerResponse {
   started: boolean;
   message: string;
+  task_run_id?: string;
 }
 
 export interface StopWorkerResponse {
