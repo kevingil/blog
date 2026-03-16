@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -66,12 +66,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useWorkerStatuses } from "@/hooks/use-worker-statuses";
 import { useToast } from "@/hooks/use-toast";
 import { ApiError } from "@/services/authenticatedFetch";
 import { useAdminDashboard } from "@/services/dashboard/dashboard";
 import {
   createDataSource,
+  discoverDataSourcesFromExistingSources,
   deleteDataSource,
   listDataSources,
   recommendDataSources,
@@ -83,13 +83,6 @@ import {
   type RecommendDataSourcesResponse,
   type UpdateDataSourceRequest,
 } from "@/services/dataSources";
-import {
-  getWorkerDisplayName,
-  runWorker,
-  stopWorker,
-  type WorkerState,
-  type WorkerStatus,
-} from "@/services/workers";
 
 export const Route = createFileRoute("/dashboard/insights/sources")({
   component: InsightSourcesPage,
@@ -118,20 +111,7 @@ const getRecommendationTypeVariant = (
   }
 };
 
-const getWorkerStateBadgeVariant = (
-  state: WorkerState,
-): "default" | "secondary" | "destructive" | "outline" => {
-  switch (state) {
-    case "completed":
-      return "default";
-    case "running":
-      return "secondary";
-    case "failed":
-      return "destructive";
-    default:
-      return "outline";
-  }
-};
+type RecommendationMode = "query" | "discovery" | null;
 
 function InsightSourcesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -145,6 +125,7 @@ function InsightSourcesPage() {
   });
   const [queryInput, setQueryInput] = useState("");
   const [activeSearchQuery, setActiveSearchQuery] = useState("");
+  const [resultsMode, setResultsMode] = useState<RecommendationMode>(null);
   const [selectedRecommendations, setSelectedRecommendations] = useState<
     Record<string, boolean>
   >({});
@@ -152,55 +133,24 @@ function InsightSourcesPage() {
     Record<string, RecommendationStatus>
   >({});
   const [isAddingRecommendations, setIsAddingRecommendations] = useState(false);
-  const [discoveryAction, setDiscoveryAction] = useState<"run" | "stop" | null>(
-    null,
-  );
   const { toast } = useToast();
   const { setPageTitle } = useAdminDashboard();
   const queryClient = useQueryClient();
-  const workerStatuses = useWorkerStatuses();
-  const previousDiscoveryStatusRef = useRef<WorkerStatus | null>(null);
 
   useEffect(() => {
     setPageTitle("Insights Sources");
   }, [setPageTitle]);
-
-  useEffect(() => {
-    const discoveryStatus = workerStatuses.discovery;
-    const previousStatus = previousDiscoveryStatusRef.current;
-
-    if (discoveryStatus && previousStatus?.state !== discoveryStatus.state) {
-      if (discoveryStatus.state === "completed") {
-        toast({
-          title: `${getWorkerDisplayName("discovery")} completed`,
-          description:
-            discoveryStatus.message ||
-            "New related sources are ready to review.",
-        });
-        queryClient.invalidateQueries({ queryKey: ["data-sources"] });
-      } else if (discoveryStatus.state === "failed") {
-        toast({
-          title: `${getWorkerDisplayName("discovery")} failed`,
-          description:
-            discoveryStatus.error ||
-            discoveryStatus.message ||
-            "Site discovery failed.",
-          variant: "destructive",
-        });
-      }
-    }
-
-    previousDiscoveryStatusRef.current = discoveryStatus || null;
-  }, [queryClient, toast, workerStatuses]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["data-sources"],
     queryFn: () => listDataSources(),
   });
 
-  const recommendMutation = useMutation({
-    mutationFn: recommendDataSources,
-    onSuccess: (response) => {
+  const applyRecommendationResponse = useCallback(
+    (
+      response: RecommendDataSourcesResponse,
+      emptyState: { title: string; description: string },
+    ) => {
       const nextSelected: Record<string, boolean> = {};
       response.recommendations.forEach((recommendation) => {
         nextSelected[recommendationKey(recommendation)] = false;
@@ -208,11 +158,19 @@ function InsightSourcesPage() {
       setSelectedRecommendations(nextSelected);
       setRecommendationStatuses({});
       if (response.recommendations.length === 0) {
-        toast({
-          title: "No source recommendations found",
-          description: "Try a narrower topic or add a source manually.",
-        });
+        toast(emptyState);
       }
+    },
+    [toast],
+  );
+
+  const recommendMutation = useMutation({
+    mutationFn: recommendDataSources,
+    onSuccess: (response) => {
+      applyRecommendationResponse(response, {
+        title: "No source recommendations found",
+        description: "Try a narrower topic or add a source manually.",
+      });
     },
     onError: (error) => {
       toast({
@@ -221,6 +179,26 @@ function InsightSourcesPage() {
           error instanceof Error
             ? error.message
             : "Unable to load source recommendations.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const discoverMutation = useMutation({
+    mutationFn: discoverDataSourcesFromExistingSources,
+    onSuccess: (response) => {
+      applyRecommendationResponse(response, {
+        title: "No adjacent sites found",
+        description: "Add a few more manual sources or use Search AI instead.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Adjacent site search failed",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Unable to load adjacent site recommendations.",
         variant: "destructive",
       });
     },
@@ -309,8 +287,21 @@ function InsightSourcesPage() {
   const dataSources: DataSource[] = Array.isArray(data)
     ? data
     : (data as any)?.data_sources || [];
-  const recommendations = recommendMutation.data?.recommendations || [];
-  const isSearchMode = activeSearchQuery.length > 0;
+  const manualSourceCount = dataSources.filter(
+    (source) => source.is_enabled && !source.is_discovered,
+  ).length;
+  const currentResults =
+    resultsMode === "discovery"
+      ? discoverMutation.data
+      : recommendMutation.data;
+  const recommendations = currentResults?.recommendations || [];
+  const isSearchMode = resultsMode !== null;
+  const isFetchingRecommendations =
+    recommendMutation.isPending || discoverMutation.isPending;
+  const activeError =
+    resultsMode === "discovery"
+      ? discoverMutation.error
+      : recommendMutation.error;
   const selectedRecommendationCount = recommendations.filter(
     (recommendation) => {
       const key = recommendationKey(recommendation);
@@ -354,23 +345,37 @@ function InsightSourcesPage() {
   const clearSearch = useCallback(() => {
     setQueryInput("");
     setActiveSearchQuery("");
+    setResultsMode(null);
     setSelectedRecommendations({});
     setRecommendationStatuses({});
     recommendMutation.reset();
-  }, [recommendMutation]);
+    discoverMutation.reset();
+  }, [discoverMutation, recommendMutation]);
 
   const handleSearch = useCallback(() => {
     const trimmedQuery = queryInput.trim();
-    if (!trimmedQuery || recommendMutation.isPending) {
+    if (!trimmedQuery || isFetchingRecommendations) {
       return;
     }
 
     setActiveSearchQuery(trimmedQuery);
+    setResultsMode("query");
     recommendMutation.mutate({
       query: trimmedQuery,
       limit: 8,
     });
-  }, [queryInput, recommendMutation]);
+  }, [isFetchingRecommendations, queryInput, recommendMutation]);
+
+  const handleDiscoverFromSources = useCallback(() => {
+    if (manualSourceCount === 0 || isFetchingRecommendations) {
+      return;
+    }
+
+    setResultsMode("discovery");
+    discoverMutation.mutate({
+      limit: 8,
+    });
+  }, [discoverMutation, isFetchingRecommendations, manualSourceCount]);
 
   const handleToggleRecommendation = useCallback(
     (key: string, checked: boolean) => {
@@ -521,44 +526,6 @@ function InsightSourcesPage() {
     }
   }, [createMutation, editingSource, formData, updateMutation]);
 
-  const handleRunDiscovery = useCallback(async () => {
-    setDiscoveryAction("run");
-    try {
-      await runWorker("discovery");
-      toast({
-        title: "Site Discovery started",
-        description: "Looking for related sources based on your current list.",
-      });
-    } catch (error) {
-      toast({
-        title: "Failed to start Site Discovery",
-        description: error instanceof Error ? error.message : "Unknown error.",
-        variant: "destructive",
-      });
-    } finally {
-      setDiscoveryAction(null);
-    }
-  }, [toast]);
-
-  const handleStopDiscovery = useCallback(async () => {
-    setDiscoveryAction("stop");
-    try {
-      await stopWorker("discovery");
-      toast({
-        title: "Site Discovery stopped",
-        description: "Discovery has been stopped.",
-      });
-    } catch (error) {
-      toast({
-        title: "Failed to stop Site Discovery",
-        description: error instanceof Error ? error.message : "Unknown error.",
-        variant: "destructive",
-      });
-    } finally {
-      setDiscoveryAction(null);
-    }
-  }, [toast]);
-
   const getSourceStatusIcon = (status: string) => {
     switch (status) {
       case "success":
@@ -621,32 +588,6 @@ function InsightSourcesPage() {
                   Show Sources Table
                 </Button>
               )}
-              <Button
-                variant="outline"
-                onClick={
-                  workerStatuses.discovery?.state === "running"
-                    ? handleStopDiscovery
-                    : handleRunDiscovery
-                }
-                disabled={discoveryAction !== null}
-              >
-                {discoveryAction !== null ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    {discoveryAction === "run" ? "Starting" : "Stopping"}
-                  </>
-                ) : workerStatuses.discovery?.state === "running" ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                    Stop Discovery
-                  </>
-                ) : (
-                  <>
-                    <Search className="w-4 h-4 mr-2" />
-                    Run Site Discovery
-                  </>
-                )}
-              </Button>
               <Button onClick={handleOpenCreate}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Source
@@ -674,9 +615,9 @@ function InsightSourcesPage() {
                 <div className="flex items-center gap-2">
                   <Button
                     onClick={handleSearch}
-                    disabled={!queryInput.trim() || recommendMutation.isPending}
+                    disabled={!queryInput.trim() || isFetchingRecommendations}
                   >
-                    {recommendMutation.isPending ? (
+                    {recommendMutation.isPending && resultsMode === "query" ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                         Searching
@@ -685,6 +626,26 @@ function InsightSourcesPage() {
                       <>
                         <ArrowUp className="w-4 h-4 mr-2" />
                         Search AI
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleDiscoverFromSources}
+                    disabled={
+                      manualSourceCount === 0 || isFetchingRecommendations
+                    }
+                  >
+                    {discoverMutation.isPending &&
+                    resultsMode === "discovery" ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Discovering
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-4 h-4 mr-2" />
+                        Discover From Sources
                       </>
                     )}
                   </Button>
@@ -697,30 +658,45 @@ function InsightSourcesPage() {
               </div>
               {!isSearchMode && (
                 <p className="mt-3 text-xs text-muted-foreground">
-                  The table is the default view. Search only when you want AI
-                  recommendations for new sources.
+                  The table is the default view. Use Search AI for topic-based
+                  discovery, or Discover From Sources to find adjacent sites
+                  based on what you already track.
+                  {manualSourceCount === 0 &&
+                    " Add at least one manual source to unlock seeded discovery."}
                 </p>
               )}
             </div>
           </CardContent>
         </Card>
 
-        <DiscoverySection
-          status={workerStatuses.discovery}
-          action={discoveryAction}
-          onRun={handleRunDiscovery}
-          onStop={handleStopDiscovery}
-        />
-
         {isSearchMode ? (
           <SearchResultsSection
-            activeSearchQuery={activeSearchQuery}
-            results={recommendMutation.data}
-            isSearching={recommendMutation.isPending}
+            title={
+              resultsMode === "discovery"
+                ? "Adjacent Sites From Your Sources"
+                : "AI Search Results"
+            }
+            description={
+              resultsMode === "discovery"
+                ? currentResults?.seed_count
+                  ? `Recommendations based on ${currentResults.seed_count} current source${currentResults.seed_count === 1 ? "" : "s"}`
+                  : "Recommendations based on your current sources"
+                : `Recommendations for "${activeSearchQuery}"`
+            }
+            emptyDescription={
+              resultsMode === "discovery"
+                ? "Add a few more manual sources or try Search AI for a broader search."
+                : "Try a narrower search or add a source manually."
+            }
+            loadingLabel={
+              resultsMode === "discovery"
+                ? "Finding adjacent sites from your current sources..."
+                : "Searching for source recommendations..."
+            }
+            results={currentResults}
+            isSearching={isFetchingRecommendations}
             errorMessage={
-              recommendMutation.error instanceof Error
-                ? recommendMutation.error.message
-                : undefined
+              activeError instanceof Error ? activeError.message : undefined
             }
             selected={selectedRecommendations}
             statuses={recommendationStatuses}
@@ -888,7 +864,10 @@ function InsightSourcesPage() {
 }
 
 function SearchResultsSection({
-  activeSearchQuery,
+  title,
+  description,
+  emptyDescription,
+  loadingLabel,
   results,
   isSearching,
   errorMessage,
@@ -902,7 +881,10 @@ function SearchResultsSection({
   onAddSelected,
   onAddManually,
 }: {
-  activeSearchQuery: string;
+  title: string;
+  description: string;
+  emptyDescription: string;
+  loadingLabel: string;
   results?: RecommendDataSourcesResponse;
   isSearching: boolean;
   errorMessage?: string;
@@ -931,10 +913,8 @@ function SearchResultsSection({
     <Card>
       <CardHeader className="gap-4 md:flex-row md:items-start md:justify-between">
         <div>
-          <CardTitle className="text-base">AI Search Results</CardTitle>
-          <CardDescription>
-            {`Recommendations for "${activeSearchQuery}"`}
-          </CardDescription>
+          <CardTitle className="text-base">{title}</CardTitle>
+          <CardDescription>{description}</CardDescription>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={onAddManually}>
@@ -964,9 +944,7 @@ function SearchResultsSection({
         {isSearching ? (
           <div className="flex items-center justify-center py-16 text-muted-foreground">
             <Loader2 className="w-5 h-5 animate-spin" />
-            <span className="ml-2">
-              Searching for source recommendations...
-            </span>
+            <span className="ml-2">{loadingLabel}</span>
           </div>
         ) : errorMessage ? (
           <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive flex items-start gap-2">
@@ -979,9 +957,7 @@ function SearchResultsSection({
             <p className="font-medium text-foreground">
               No matching sources found
             </p>
-            <p className="mt-1 text-sm">
-              Try a narrower search or add a source manually.
-            </p>
+            <p className="mt-1 text-sm">{emptyDescription}</p>
           </div>
         ) : (
           <Table>
@@ -1318,80 +1294,6 @@ function SourcesTableSection({
               ))}
             </TableBody>
           </Table>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function DiscoverySection({
-  status,
-  action,
-  onRun,
-  onStop,
-}: {
-  status?: WorkerStatus;
-  action: "run" | "stop" | null;
-  onRun: () => void;
-  onStop: () => void;
-}) {
-  const isRunning = status?.state === "running";
-  const message =
-    status?.state === "failed"
-      ? status.error || status.message || "Site discovery failed."
-      : status?.message ||
-        "Discover related sites from your existing source list.";
-
-  return (
-    <Card className="border-white/[0.08]">
-      <CardHeader className="gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <CardTitle className="text-base">Site Discovery</CardTitle>
-            <Badge
-              variant={getWorkerStateBadgeVariant(status?.state || "idle")}
-            >
-              {status?.state || "idle"}
-            </Badge>
-          </div>
-          <CardDescription>
-            Find adjacent sites using your current sources as seeds. This
-            expands your inputs, it does not run the insights pipeline.
-          </CardDescription>
-        </div>
-        <Button
-          variant="outline"
-          onClick={isRunning ? onStop : onRun}
-          disabled={action !== null}
-        >
-          {action !== null ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              {action === "run" ? "Starting" : "Stopping"}
-            </>
-          ) : isRunning ? (
-            <>
-              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-              Stop Discovery
-            </>
-          ) : (
-            <>
-              <Search className="w-4 h-4 mr-2" />
-              Run Discovery
-            </>
-          )}
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        <p
-          className={`text-sm ${status?.state === "failed" ? "text-destructive" : "text-muted-foreground"}`}
-        >
-          {message}
-        </p>
-        {status?.completed_at && (
-          <p className="text-xs text-muted-foreground">
-            Last completed: {new Date(status.completed_at).toLocaleString()}
-          </p>
         )}
       </CardContent>
     </Card>
