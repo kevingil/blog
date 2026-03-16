@@ -57,14 +57,15 @@ type ArticleDraftService interface {
 
 // AgentAsyncCopilotManager - LLM Agent Framework powered copilot manager
 type AgentAsyncCopilotManager struct {
-	requests     map[string]*AgentAsyncRequest
-	mu           sync.RWMutex
-	agent        agent.Service
-	sessionSvc   session.Service
-	messageSvc   message.Service
-	chatService  ChatMessageServiceInterface
-	draftService ArticleDraftService // nil-safe: version snapshots and DB persistence are skipped if nil
-	config       Config
+	requests      map[string]*AgentAsyncRequest
+	mu            sync.RWMutex
+	agent         agent.Service
+	sessionSvc    session.Service
+	messageSvc    message.Service
+	chatService   ChatMessageServiceInterface
+	sourceService tools.ArticleSourceService
+	draftService  ArticleDraftService // nil-safe: version snapshots and DB persistence are skipped if nil
+	config        Config
 }
 
 // AgentAsyncRequest represents an async chat request
@@ -91,15 +92,16 @@ var (
 )
 
 // NewAgentAsyncCopilotManager creates a new agent manager with configuration
-func NewAgentAsyncCopilotManager(cfg Config, agentSvc agent.Service, sessionSvc session.Service, messageSvc message.Service, chatService ChatMessageServiceInterface, draftService ArticleDraftService) *AgentAsyncCopilotManager {
+func NewAgentAsyncCopilotManager(cfg Config, agentSvc agent.Service, sessionSvc session.Service, messageSvc message.Service, chatService ChatMessageServiceInterface, sourceService tools.ArticleSourceService, draftService ArticleDraftService) *AgentAsyncCopilotManager {
 	return &AgentAsyncCopilotManager{
-		requests:     make(map[string]*AgentAsyncRequest),
-		agent:        agentSvc,
-		sessionSvc:   sessionSvc,
-		messageSvc:   messageSvc,
-		chatService:  chatService,
-		draftService: draftService,
-		config:       cfg,
+		requests:      make(map[string]*AgentAsyncRequest),
+		agent:         agentSvc,
+		sessionSvc:    sessionSvc,
+		messageSvc:    messageSvc,
+		chatService:   chatService,
+		sourceService: sourceService,
+		draftService:  draftService,
+		config:        cfg,
 	}
 }
 
@@ -163,6 +165,7 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 	if sourceService != nil {
 		writingTools = append(writingTools,
 			tools.NewGetRelevantSourcesTool(sourceService),
+			tools.NewSelectSourcesForEditTool(sourceService),
 		)
 	}
 
@@ -178,7 +181,7 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 	}
 
 	// Create and set the global manager with configuration
-	manager := NewAgentAsyncCopilotManager(cfg, agentSvc, sessionSvc, messageSvc, chatService, draftService)
+	manager := NewAgentAsyncCopilotManager(cfg, agentSvc, sessionSvc, messageSvc, chatService, sourceService, draftService)
 	SetGlobalAgentManager(manager)
 
 	log.Printf("[Agent] Initialized with configuration (max_concurrent=%d, timeout=%v)", cfg.MaxConcurrentRequests, cfg.RequestTimeout)
@@ -344,6 +347,7 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	}
 
 	ctx := asyncReq.ctx
+	ctx = tools.WithRequestID(ctx, asyncReq.ID)
 	var articleID uuid.UUID
 	if asyncReq.Request.ArticleID != "" {
 		ctx = tools.WithArticleID(ctx, asyncReq.Request.ArticleID)
@@ -429,6 +433,14 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 		}
 		userPrompt += "\n\n" + docContext
 		log.Printf("[Agent] %s", strings.SplitN(docContext, "\n", 2)[0])
+	}
+
+	if articleID != uuid.Nil {
+		sourceContext := m.buildSourceContext(ctx, articleID)
+		if sourceContext != "" {
+			userPrompt += "\n\n" + sourceContext
+			log.Printf("[Agent] Added source context for article %s", articleID)
+		}
 	}
 
 	// Create a pre-turn version snapshot so the frontend can "Undo All" agent changes.
@@ -530,7 +542,7 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 			if event.Message.ID != "" {
 				asyncReq.iteration++
 				toolCalls := event.Message.ToolCalls()
-				
+
 				// Only save message when there are NO tool calls (final response)
 				// When there are tool calls, we continue accumulating steps
 				if len(toolCalls) == 0 {
@@ -836,7 +848,7 @@ func (m *AgentAsyncCopilotManager) saveAssistantMessage(ctx context.Context, asy
 	// Include chain of thought steps if present
 	if len(asyncReq.steps) > 0 {
 		log.Printf("[Agent]    Has %d chain of thought steps", len(asyncReq.steps))
-		
+
 		// Convert TurnStep to ChainOfThoughtStep
 		cotSteps := make([]metadata.ChainOfThoughtStep, len(asyncReq.steps))
 		for i, step := range asyncReq.steps {
@@ -866,7 +878,7 @@ func (m *AgentAsyncCopilotManager) saveAssistantMessage(ctx context.Context, asy
 			}
 		}
 		msgMetadata.WithSteps(cotSteps)
-		
+
 		// Also set legacy Thinking field for backward compatibility (combine all reasoning)
 		var allReasoning string
 		for _, step := range asyncReq.steps {
@@ -880,7 +892,7 @@ func (m *AgentAsyncCopilotManager) saveAssistantMessage(ctx context.Context, asy
 				Visible: true,
 			})
 		}
-		
+
 		// Reset steps for next turn
 		asyncReq.steps = nil
 		asyncReq.currentStepType = ""
@@ -1101,6 +1113,22 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 			return savedMsg
 		}
 
+		if toolName == "get_relevant_sources" {
+			totalFound := 0
+			if val, ok := toolResultData["total_found"].(float64); ok {
+				totalFound = int(val)
+			}
+
+			content := fmt.Sprintf("📚 Retrieved %d relevant source excerpts", totalFound)
+			savedMsg, err := m.chatService.SaveMessage(ctx, articleID, "assistant", content, msgMetadata)
+			if err != nil {
+				log.Printf("[Agent] ❌ Failed to save relevant source result message: %v", err)
+				return nil
+			}
+			log.Printf("[Agent] ✅ Saved relevant source result message (ID: %s)", savedMsg.ID)
+			return savedMsg
+		}
+
 		if toolName == "ask_question" {
 			log.Printf("[Agent]       ❓ ASK QUESTION TOOL DETECTED")
 
@@ -1118,8 +1146,52 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 			log.Printf("[Agent] ✅ Saved ask_question result message (ID: %s)", savedMsg.ID)
 			return savedMsg
 		}
+
+		if toolName == "select_sources_for_edit" {
+			selectedCount := 0
+			if val, ok := toolResultData["selected_count"].(float64); ok {
+				selectedCount = int(val)
+			}
+
+			content := fmt.Sprintf("🧠 Selected %d sources for edit context", selectedCount)
+			savedMsg, err := m.chatService.SaveMessage(ctx, articleID, "assistant", content, msgMetadata)
+			if err != nil {
+				log.Printf("[Agent] ❌ Failed to save source selection message: %v", err)
+				return nil
+			}
+			log.Printf("[Agent] ✅ Saved source selection result message (ID: %s)", savedMsg.ID)
+			return savedMsg
+		}
 	}
 	return nil
+}
+
+func (m *AgentAsyncCopilotManager) buildSourceContext(ctx context.Context, articleID uuid.UUID) string {
+	if m.sourceService == nil {
+		return ""
+	}
+
+	sources, err := m.sourceService.GetByArticleID(ctx, articleID)
+	if err != nil {
+		log.Printf("[Agent] Failed to load sources for context: %v", err)
+		return ""
+	}
+	if len(sources) == 0 {
+		return ""
+	}
+
+	resources := tools.BuildSourceContextResources(sources)
+	selected := tools.FilterSelectedSourceResources(resources)
+
+	blocks := make([]string, 0, 2)
+	if inventory := tools.FormatSourceInventoryContext(resources); inventory != "" {
+		blocks = append(blocks, inventory)
+	}
+	if selectedContext := tools.FormatSelectedSourcesContext(selected); selectedContext != "" {
+		blocks = append(blocks, selectedContext)
+	}
+
+	return strings.TrimSpace(strings.Join(blocks, "\n\n"))
 }
 
 // Helper functions
@@ -1221,11 +1293,11 @@ func generateHTMLOutline(html string) string {
 
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Extract header level and text
 		var level int
 		var headerText string
-		
+
 		if strings.HasPrefix(trimmed, "<h1") {
 			level = 1
 		} else if strings.HasPrefix(trimmed, "<h2") {
@@ -1241,19 +1313,19 @@ func generateHTMLOutline(html string) string {
 		} else {
 			continue
 		}
-		
+
 		// Extract text content from header tag
 		headerText = extractHeaderText(trimmed)
 		if headerText == "" {
 			continue
 		}
-		
+
 		// Create indentation based on level (h2 = no indent, h3 = 2 spaces, etc.)
 		indent := ""
 		if level > 2 {
 			indent = strings.Repeat("  ", level-2)
 		}
-		
+
 		outline = append(outline, fmt.Sprintf("%s- %s (line %d)", indent, headerText, i+1))
 	}
 
@@ -1276,7 +1348,7 @@ func extractHeaderText(header string) string {
 	if end == -1 {
 		end = len(header)
 	}
-	
+
 	text := header[start+1 : end]
 	// Clean up any nested tags (like <strong>, <em>, etc.)
 	text = stripHTMLTags(text)
