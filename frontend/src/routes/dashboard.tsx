@@ -23,6 +23,8 @@ import './dashboard/insights/index'
 import './dashboard/insights/topics'
 import './dashboard/insights/$insightId'
 import './dashboard/insights/sources'
+import './dashboard/tasks/index'
+import './dashboard/tasks/$taskRunId'
 import './dashboard/sources/index'
 
 export const Route = createFileRoute('/dashboard')({
