@@ -1,7 +1,7 @@
-import { apiGet, apiPost } from './authenticatedFetch';
+import { apiGet, apiPost } from "./authenticatedFetch";
 
 // Types
-export type WorkerState = 'idle' | 'running' | 'completed' | 'failed';
+export type WorkerState = "idle" | "running" | "completed" | "failed";
 
 export interface WorkerStatus {
   name: string;
@@ -34,10 +34,12 @@ export interface RunningWorkersResponse {
   workers: string[];
 }
 
+export const PIPELINE_WORKER_NAME = "pipeline";
+
 // API calls
 
 export async function getWorkersStatus(): Promise<AllWorkersStatusResponse> {
-  return apiGet<AllWorkersStatusResponse>('/workers/status');
+  return apiGet<AllWorkersStatusResponse>("/workers/status");
 }
 
 export async function getWorkerStatus(name: string): Promise<WorkerStatus> {
@@ -53,21 +55,23 @@ export async function stopWorker(name: string): Promise<StopWorkerResponse> {
 }
 
 export async function getRunningWorkers(): Promise<RunningWorkersResponse> {
-  return apiGet<RunningWorkersResponse>('/workers/running');
+  return apiGet<RunningWorkersResponse>("/workers/running");
 }
 
 // Worker display names
 export const WORKER_DISPLAY_NAMES: Record<string, string> = {
-  crawl: 'Content Crawler',
-  insight: 'Insight Generator',
-  discovery: 'Site Discovery',
+  pipeline: "Full Pipeline",
+  crawl: "Content Crawler",
+  insight: "Insight Generator",
+  discovery: "Site Discovery",
 };
 
 // Worker descriptions
 export const WORKER_DESCRIPTIONS: Record<string, string> = {
-  crawl: 'Crawls configured data sources and extracts content',
-  insight: 'Generates AI-powered insights from crawled content',
-  discovery: 'Discovers similar websites using Exa search',
+  pipeline: "Runs source crawl and insight generation in sequence",
+  crawl: "Crawls configured data sources and extracts content",
+  insight: "Generates AI-powered insights from crawled content",
+  discovery: "Discovers similar websites using Exa search",
 };
 
 // Get display name for a worker
@@ -77,5 +81,5 @@ export function getWorkerDisplayName(name: string): string {
 
 // Get description for a worker
 export function getWorkerDescription(name: string): string {
-  return WORKER_DESCRIPTIONS[name] || '';
+  return WORKER_DESCRIPTIONS[name] || "";
 }
