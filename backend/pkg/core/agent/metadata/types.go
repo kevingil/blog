@@ -166,10 +166,10 @@ type ThinkingBlock struct {
 // ChainOfThoughtStep represents a single step in the chain of thought
 // Steps are ordered: reasoning -> tool -> reasoning -> content
 type ChainOfThoughtStep struct {
-	Type      string                 `json:"type"`                // "reasoning", "tool", "content"
-	Reasoning *ThinkingBlock         `json:"reasoning,omitempty"` // Present when Type == "reasoning"
-	Tool      *ToolStepInfo          `json:"tool,omitempty"`      // Present when Type == "tool"
-	Content   string                 `json:"content,omitempty"`   // Present when Type == "content"
+	Type      string         `json:"type"`                // "reasoning", "tool", "content"
+	Reasoning *ThinkingBlock `json:"reasoning,omitempty"` // Present when Type == "reasoning"
+	Tool      *ToolStepInfo  `json:"tool,omitempty"`      // Present when Type == "tool"
+	Content   string         `json:"content,omitempty"`   // Present when Type == "content"
 }
 
 // ToolStepInfo represents tool execution info in a chain of thought step
@@ -268,6 +268,7 @@ var ToolCategories = map[string]ToolCategory{
 	"search_web_sources":       ToolCategoryResearch,
 	"ask_question":             ToolCategoryResearch,
 	"get_relevant_sources":     ToolCategoryResearch,
+	"select_sources_for_edit":  ToolCategoryAnalysis,
 	"fetch_url":                ToolCategoryResearch,
 	"add_context_from_sources": ToolCategoryAnalysis,
 	"replace_lines":            ToolCategoryEditing,
@@ -281,6 +282,7 @@ func IsParallelizable(toolName string) bool {
 		"search_web_sources":       true,
 		"ask_question":             true,
 		"get_relevant_sources":     true,
+		"select_sources_for_edit":  false,
 		"fetch_url":                true,
 		"add_context_from_sources": true,
 	}
@@ -290,12 +292,13 @@ func IsParallelizable(toolName string) bool {
 // HasArtifact returns whether a tool produces an artifact
 func HasArtifact(toolName string) bool {
 	artifactTools := map[string]bool{
-		"search_web_sources":    true,
-		"ask_question":          true,
-		"get_relevant_sources":  true,
-		"replace_lines":         true,
-		"generate_text_content": true,
-		"generate_image_prompt": true,
+		"search_web_sources":      true,
+		"ask_question":            true,
+		"get_relevant_sources":    true,
+		"select_sources_for_edit": true,
+		"replace_lines":           true,
+		"generate_text_content":   true,
+		"generate_image_prompt":   true,
 	}
 	return artifactTools[toolName]
 }

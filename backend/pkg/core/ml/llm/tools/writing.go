@@ -9,7 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"backend/pkg/database/models"
+	coreSource "backend/pkg/core/source"
+	"backend/pkg/types"
 
 	"github.com/google/uuid"
 	"github.com/sergi/go-diff/diffmatchpatch"
@@ -17,7 +18,9 @@ import (
 
 // ArticleSourceService interface for source operations - using the real service directly
 type ArticleSourceService interface {
-	SearchSimilarSources(ctx context.Context, articleID uuid.UUID, query string, limit int) ([]*models.Source, error)
+	GetByArticleID(ctx context.Context, articleID uuid.UUID) ([]types.Source, error)
+	SearchSimilar(ctx context.Context, articleID uuid.UUID, query string, limit int) ([]types.Source, error)
+	UpsertAgentResource(ctx context.Context, req coreSource.AgentResourceSelection) (*types.Source, error)
 }
 
 // TextGenerationService interface for text generation operations
@@ -189,7 +192,7 @@ func (t *GetRelevantSourcesTool) Run(ctx context.Context, params ToolCall) (Tool
 
 	// Search for similar sources
 	log.Printf("🔍 [GetRelevantSources] Executing vector similarity search...")
-	sources, err := t.sourceService.SearchSimilarSources(ctx, articleID, input.Query, input.Limit)
+	sources, err := t.sourceService.SearchSimilar(ctx, articleID, input.Query, input.Limit)
 	if err != nil {
 		log.Printf("🔍 [GetRelevantSources] ERROR: Search failed: %v", err)
 		return NewTextErrorResponse(fmt.Sprintf("Failed to search sources: %v", err)), err
@@ -230,12 +233,15 @@ func (t *GetRelevantSourcesTool) Run(ctx context.Context, params ToolCall) (Tool
 			log.Printf("   📝 Chunk #%d (score: %.3f, length: %d chars): %q", j+1, chunk.Score, len(chunk.Text), chunkPreview)
 
 			sourceData := map[string]interface{}{
+				"source_id":    source.ID.String(),
 				"source_title": source.Title,
 				"source_url":   source.URL,
 				"text_chunk":   chunk.Text,
+				"excerpt_text": chunk.Text,
 				"source_type":  source.SourceType,
 				"chunk_score":  chunk.Score,
-				"chunk_index":  j + 1,
+				"chunk_index":  chunk.Index,
+				"excerpt_id":   fmt.Sprintf("%s:%d", source.ID.String(), chunk.Index),
 			}
 			relevantSources = append(relevantSources, sourceData)
 		}
@@ -288,6 +294,7 @@ func (t *GetRelevantSourcesTool) Run(ctx context.Context, params ToolCall) (Tool
 
 	result := map[string]interface{}{
 		"relevant_sources": relevantSources,
+		"source_inventory": BuildSourceContextResources(sources),
 		"query":            input.Query,
 		"total_found":      len(relevantSources),
 		"tool_name":        "get_relevant_sources",
@@ -296,10 +303,13 @@ func (t *GetRelevantSourcesTool) Run(ctx context.Context, params ToolCall) (Tool
 	log.Printf("🔍 [GetRelevantSources] ✅ Returning %d relevant chunks from %d sources", len(relevantSources), len(sources))
 
 	// Create artifact hint for sources display
+	inventory := result["source_inventory"]
 	artifactData := map[string]interface{}{
-		"sources":     relevantSources,
-		"query":       input.Query,
-		"total_found": len(relevantSources),
+		"sources":          relevantSources,
+		"source_inventory": inventory,
+		"query":            input.Query,
+		"total_found":      len(relevantSources),
+		"inventory_count":  len(sources),
 	}
 
 	resultJSON, _ := json.Marshal(result)
@@ -476,7 +486,7 @@ func NewReplaceLinesTool(draftSaver DraftSaver) *ReplaceLinesTool {
 
 func (t *ReplaceLinesTool) Info() ToolInfo {
 	return ToolInfo{
-		Name: "replace_lines",
+		Name:        "replace_lines",
 		Description: `Replace lines in the document by line number. Use read_document to see line numbers and section boundaries. Works for any change: rewriting sections, fixing typos, adding content, deleting lines. For deletions, omit new_content or set to empty string.`,
 		Parameters: map[string]any{
 			"start_line": map[string]any{
