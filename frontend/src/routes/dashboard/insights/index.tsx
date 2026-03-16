@@ -1,20 +1,36 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowRight,
   Lightbulb,
   Tag,
   Calendar,
   Pin,
   Check,
-  ExternalLink,
+  Clock3,
   Loader2,
+  Play,
+  RefreshCw,
   Search,
+  Sparkles,
+  Square,
+  WandSparkles,
+  XCircle,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -39,8 +55,17 @@ import {
   toggleInsightPinned,
   searchInsights,
   type Insight,
-  type InsightTopic,
 } from "@/services/insights";
+import { useWorkerStatuses } from "@/hooks/use-worker-statuses";
+import {
+  PIPELINE_WORKER_NAME,
+  getWorkerDescription,
+  getWorkerDisplayName,
+  runWorker,
+  stopWorker,
+  type WorkerState,
+  type WorkerStatus,
+} from "@/services/workers";
 
 export const Route = createFileRoute("/dashboard/insights/")({
   component: InsightsPage,
@@ -50,14 +75,50 @@ function InsightsPage() {
   const [page, setPage] = useState(1);
   const [selectedTopicId, setSelectedTopicId] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [isSearching, setIsSearching] = useState(false);
+  const [isWorkflowDialogOpen, setIsWorkflowDialogOpen] = useState(false);
+  const [workflowAction, setWorkflowAction] = useState<string | null>(null);
   const { toast } = useToast();
   const { setPageTitle } = useAdminDashboard();
   const queryClient = useQueryClient();
+  const workerStatuses = useWorkerStatuses();
+  const previousStatusesRef = useRef<Record<string, WorkerStatus>>({});
 
   useEffect(() => {
     setPageTitle("Insights");
   }, [setPageTitle]);
+
+  useEffect(() => {
+    const watchedWorkers = [PIPELINE_WORKER_NAME, "crawl", "insight"];
+
+    watchedWorkers.forEach((workerName) => {
+      const previousStatus = previousStatusesRef.current[workerName];
+      const nextStatus = workerStatuses[workerName];
+
+      if (!nextStatus || previousStatus?.state === nextStatus.state) {
+        return;
+      }
+
+      if (nextStatus.state === "completed") {
+        toast({
+          title: `${getWorkerDisplayName(workerName)} completed`,
+          description:
+            nextStatus.message || "Workflow step completed successfully.",
+        });
+        queryClient.invalidateQueries({ queryKey: ["insights"] });
+      }
+
+      if (nextStatus.state === "failed") {
+        toast({
+          title: `${getWorkerDisplayName(workerName)} failed`,
+          description:
+            nextStatus.error || nextStatus.message || "Workflow step failed.",
+          variant: "destructive",
+        });
+      }
+    });
+
+    previousStatusesRef.current = workerStatuses;
+  }, [queryClient, toast, workerStatuses]);
 
   // Load topics
   const { data: topics = [] } = useQuery({
@@ -87,6 +148,14 @@ function InsightsPage() {
     searchQuery.length > 2 ? searchResults || [] : insightsData?.insights || [];
   const total = insightsData?.total || 0;
   const totalPages = Math.ceil(total / 12);
+  const workflowStatuses = useMemo(
+    () => ({
+      pipeline: workerStatuses[PIPELINE_WORKER_NAME],
+      crawl: workerStatuses["crawl"],
+      insight: workerStatuses["insight"],
+    }),
+    [workerStatuses],
+  );
 
   // Mutations
   const markReadMutation = useMutation({
@@ -111,6 +180,42 @@ function InsightsPage() {
   const handleTogglePin = async (e: React.MouseEvent, insightId: string) => {
     e.stopPropagation();
     togglePinMutation.mutate(insightId);
+  };
+
+  const handleWorkerAction = async (
+    workerName: string,
+    action: "run" | "stop",
+  ) => {
+    setWorkflowAction(`${action}:${workerName}`);
+    try {
+      if (action === "run") {
+        await runWorker(workerName);
+        toast({
+          title: `${getWorkerDisplayName(workerName)} started`,
+          description:
+            workerName === PIPELINE_WORKER_NAME
+              ? "The full insights pipeline is now running."
+              : `${getWorkerDisplayName(workerName)} is now running.`,
+        });
+      } else {
+        await stopWorker(workerName);
+        toast({
+          title: `${getWorkerDisplayName(workerName)} stopped`,
+          description: `${getWorkerDisplayName(workerName)} has been stopped.`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title:
+          action === "run"
+            ? "Failed to start workflow"
+            : "Failed to stop workflow",
+        description: error instanceof Error ? error.message : "Unknown error.",
+        variant: "destructive",
+      });
+    } finally {
+      setWorkflowAction(null);
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -165,6 +270,10 @@ function InsightsPage() {
             Sources
           </Button>
         </Link>
+        <Button onClick={() => setIsWorkflowDialogOpen(true)}>
+          <WandSparkles className="w-4 h-4 mr-2" />
+          Generate Insights
+        </Button>
       </div>
 
       {isLoading || isSearchLoading ? (
@@ -177,8 +286,20 @@ function InsightsPage() {
           <Lightbulb className="w-12 h-12 mx-auto mb-4 opacity-50" />
           <p className="text-lg font-medium mb-2">No insights yet</p>
           <p className="text-sm">
-            Add sources or topics to start generating insights.
+            Add sources and run the pipeline to start generating insights.
           </p>
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <Button onClick={() => setIsWorkflowDialogOpen(true)}>
+              <WandSparkles className="w-4 h-4 mr-2" />
+              Generate Insights
+            </Button>
+            <Link to="/dashboard/insights/sources">
+              <Button variant="outline">
+                <Search className="w-4 h-4 mr-2" />
+                Manage Sources
+              </Button>
+            </Link>
+          </div>
         </div>
       ) : (
         <>
@@ -240,8 +361,330 @@ function InsightsPage() {
           )}
         </>
       )}
+
+      <InsightsWorkflowDialog
+        open={isWorkflowDialogOpen}
+        onOpenChange={setIsWorkflowDialogOpen}
+        workerStatuses={workflowStatuses}
+        activeAction={workflowAction}
+        onRun={(workerName) => handleWorkerAction(workerName, "run")}
+        onStop={(workerName) => handleWorkerAction(workerName, "stop")}
+      />
     </section>
   );
+}
+
+function InsightsWorkflowDialog({
+  open,
+  onOpenChange,
+  workerStatuses,
+  activeAction,
+  onRun,
+  onStop,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  workerStatuses: {
+    pipeline?: WorkerStatus;
+    crawl?: WorkerStatus;
+    insight?: WorkerStatus;
+  };
+  activeAction: string | null;
+  onRun: (workerName: string) => void;
+  onStop: (workerName: string) => void;
+}) {
+  const pipelineStatus = workerStatuses.pipeline;
+  const crawlStatus = workerStatuses.crawl;
+  const insightStatus = workerStatuses.insight;
+  const pipelineRunning = pipelineStatus?.state === "running";
+  const workflowBusy =
+    pipelineRunning ||
+    crawlStatus?.state === "running" ||
+    insightStatus?.state === "running";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Generate Insights</DialogTitle>
+          <DialogDescription>
+            Run the full insights workflow from here. Site Discovery stays in
+            Sources because it expands what you crawl, not how insights are
+            generated.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6 py-2">
+          <div className="rounded-2xl border border-white/[0.08] bg-black/30 p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">Primary workflow</Badge>
+                  <WorkflowStatusBadge
+                    status={pipelineStatus}
+                    fallbackLabel="Ready"
+                  />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">Run Full Pipeline</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Crawl your tracked sources first, then generate insights
+                    from the newly crawled content.
+                  </p>
+                </div>
+                {pipelineStatus && (
+                  <div className="space-y-2">
+                    {pipelineStatus.state === "running" && (
+                      <Progress
+                        value={pipelineStatus.progress}
+                        className="h-2 max-w-xl"
+                      />
+                    )}
+                    <p className="text-sm text-muted-foreground">
+                      {getWorkflowMessage(pipelineStatus)}
+                    </p>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {pipelineRunning ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => onStop(PIPELINE_WORKER_NAME)}
+                    disabled={activeAction === `stop:${PIPELINE_WORKER_NAME}`}
+                  >
+                    {activeAction === `stop:${PIPELINE_WORKER_NAME}` ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Square className="w-4 h-4 mr-2" />
+                        Stop Pipeline
+                      </>
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => onRun(PIPELINE_WORKER_NAME)}
+                    disabled={
+                      workflowBusy ||
+                      activeAction === `run:${PIPELINE_WORKER_NAME}`
+                    }
+                  >
+                    {activeAction === `run:${PIPELINE_WORKER_NAME}` ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Starting
+                      </>
+                    ) : (
+                      <>
+                        <WandSparkles className="w-4 h-4 mr-2" />
+                        Run Full Pipeline
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <WorkflowStepCard
+              workerName="crawl"
+              status={crawlStatus}
+              activeAction={activeAction}
+              workflowBusy={workflowBusy}
+              onRun={onRun}
+              onStop={onStop}
+            />
+            <WorkflowStepCard
+              workerName="insight"
+              status={insightStatus}
+              activeAction={activeAction}
+              workflowBusy={workflowBusy}
+              onRun={onRun}
+              onStop={onStop}
+            />
+          </div>
+
+          <div className="rounded-2xl border border-dashed border-white/[0.08] p-4 text-sm text-muted-foreground">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-medium text-foreground">
+                  Source management and Site Discovery
+                </p>
+                <p className="mt-1">
+                  Manage your tracked inputs and discover related sites from the
+                  Sources page.
+                </p>
+              </div>
+              <Link to="/dashboard/insights/sources">
+                <Button variant="outline">
+                  Open Sources
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function WorkflowStepCard({
+  workerName,
+  status,
+  activeAction,
+  workflowBusy,
+  onRun,
+  onStop,
+}: {
+  workerName: string;
+  status?: WorkerStatus;
+  activeAction: string | null;
+  workflowBusy: boolean | undefined;
+  onRun: (workerName: string) => void;
+  onStop: (workerName: string) => void;
+}) {
+  const isRunning = status?.state === "running";
+  const runActionKey = `run:${workerName}`;
+  const stopActionKey = `stop:${workerName}`;
+
+  return (
+    <Card className="border-white/[0.08]">
+      <CardHeader className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-base">
+                {getWorkerDisplayName(workerName)}
+              </CardTitle>
+              <WorkflowStatusBadge status={status} fallbackLabel="Ready" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {getWorkerDescription(workerName)}
+            </p>
+          </div>
+          {isRunning ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onStop(workerName)}
+              disabled={activeAction === stopActionKey}
+            >
+              {activeAction === stopActionKey ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <Square className="w-4 h-4 mr-2" />
+                  Stop
+                </>
+              )}
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onRun(workerName)}
+              disabled={Boolean(workflowBusy) || activeAction === runActionKey}
+            >
+              {activeAction === runActionKey ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <Play className="w-4 h-4 mr-2" />
+                  Run
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {isRunning && <Progress value={status.progress} className="h-2" />}
+        <p className="text-sm text-muted-foreground">
+          {getWorkflowMessage(status)}
+        </p>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Clock3 className="w-3.5 h-3.5" />
+          <span>
+            {status?.completed_at
+              ? `Last completed ${new Date(status.completed_at).toLocaleString()}`
+              : "No completed run yet"}
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function WorkflowStatusBadge({
+  status,
+  fallbackLabel,
+}: {
+  status?: WorkerStatus;
+  fallbackLabel: string;
+}) {
+  const state = status?.state ?? "idle";
+  const label = status ? getWorkerStateLabel(status.state) : fallbackLabel;
+
+  return (
+    <Badge variant={getWorkerBadgeVariant(state)} className="capitalize">
+      {label}
+    </Badge>
+  );
+}
+
+function getWorkerBadgeVariant(state: WorkerState | "idle") {
+  switch (state) {
+    case "completed":
+      return "default" as const;
+    case "failed":
+      return "destructive" as const;
+    case "running":
+      return "secondary" as const;
+    default:
+      return "outline" as const;
+  }
+}
+
+function getWorkerStateLabel(state: WorkerState) {
+  switch (state) {
+    case "running":
+      return "Running";
+    case "completed":
+      return "Completed";
+    case "failed":
+      return "Failed";
+    default:
+      return "Idle";
+  }
+}
+
+function getWorkflowMessage(status?: WorkerStatus) {
+  if (!status) {
+    return "Ready to run.";
+  }
+
+  if (status.state === "failed") {
+    return status.error || status.message || "This run failed.";
+  }
+
+  if (status.state === "completed") {
+    return status.message || "Completed successfully.";
+  }
+
+  if (status.state === "running") {
+    return status.message || "Processing...";
+  }
+
+  return "Ready to run.";
 }
 
 interface InsightCardProps {

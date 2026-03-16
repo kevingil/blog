@@ -82,10 +82,12 @@ func main() {
 	crawlWorker := worker.NewCrawlWorker(workerLogger, cfg.Worker.ExaAPIKey)
 	insightWorker := worker.NewInsightWorker(workerLogger, cfg.Worker.GroqAPIKey)
 	discoveryWorker := worker.NewDiscoveryWorker(workerLogger, cfg.Worker.ExaAPIKey)
+	pipelineWorker := worker.NewPipelineWorker(workerLogger, workerManager)
 
 	workerManager.RegisterWorker(crawlWorker)
 	workerManager.RegisterWorker(insightWorker)
 	workerManager.RegisterWorker(discoveryWorker)
+	workerManager.RegisterWorker(pipelineWorker)
 
 	// NOTE: Cron scheduling is disabled for now - workers run manually only
 	// To enable scheduled runs, uncomment the following and set environment variables:
