@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Globe, 
@@ -13,12 +13,15 @@ import {
   XCircle, 
   AlertCircle,
   ExternalLink,
-  FileText,
   Play,
   Square,
   Sparkles,
   Search,
   Zap,
+  ArrowUp,
+  CheckCircle,
+  CircleAlert,
+  Link2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +30,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  PromptInput,
+  PromptInputAction,
+  PromptInputActions,
+  PromptInputTextarea,
+} from '@/components/ui/prompt-input';
 import {
   Select,
   SelectContent,
@@ -53,16 +63,21 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import { ApiError } from '@/services/authenticatedFetch';
 import { useAdminDashboard } from '@/services/dashboard/dashboard';
 import { 
   listDataSources, 
   createDataSource, 
   updateDataSource, 
   deleteDataSource,
+  recommendDataSources,
   triggerCrawl,
   type DataSource,
+  type DataSourceRecommendation,
   type CreateDataSourceRequest,
+  type RecommendDataSourcesResponse,
   type UpdateDataSourceRequest,
 } from '@/services/dataSources';
 import {
@@ -106,12 +121,300 @@ const getStateBgColor = (state: WorkerState): string => {
   }
 };
 
+type RecommendationSaveState = 'idle' | 'adding' | 'added' | 'error';
+
+interface RecommendationStatus {
+  state: RecommendationSaveState;
+  message?: string;
+}
+
+const getRecommendationStatusLabel = (status?: RecommendationStatus) => {
+  switch (status?.state) {
+    case 'adding':
+      return 'Adding...';
+    case 'added':
+      return 'Added';
+    case 'error':
+      return status.message || 'Failed';
+    default:
+      return '';
+  }
+};
+
+const recommendationKey = (recommendation: DataSourceRecommendation) => recommendation.url;
+
+const getRecommendationTypeVariant = (sourceType: string): 'default' | 'secondary' | 'outline' => {
+  switch (sourceType) {
+    case 'news':
+      return 'default';
+    case 'newsletter':
+      return 'secondary';
+    default:
+      return 'outline';
+  }
+};
+
 // Worker Controls Component
 interface WorkerControlsProps {
   workerStatuses: Record<string, WorkerStatus>;
   onRunWorker: (name: string) => void;
   onStopWorker: (name: string) => void;
   runningMutation: string | null;
+}
+
+interface SourceRecommendationsPanelProps {
+  query: string;
+  onQueryChange: (value: string) => void;
+  onSearch: () => void;
+  isSearching: boolean;
+  results?: RecommendDataSourcesResponse;
+  searchError?: string;
+  selected: Record<string, boolean>;
+  statuses: Record<string, RecommendationStatus>;
+  onToggleSelected: (key: string, checked: boolean) => void;
+  onToggleAll: (checked: boolean) => void;
+  onAddOne: (recommendation: DataSourceRecommendation) => void;
+  onAddSelected: () => void;
+  selectedCount: number;
+  isAddingSelection: boolean;
+  onManualAdd: () => void;
+}
+
+function SourceRecommendationsPanel({
+  query,
+  onQueryChange,
+  onSearch,
+  isSearching,
+  results,
+  searchError,
+  selected,
+  statuses,
+  onToggleSelected,
+  onToggleAll,
+  onAddOne,
+  onAddSelected,
+  selectedCount,
+  isAddingSelection,
+  onManualAdd,
+}: SourceRecommendationsPanelProps) {
+  const recommendations = results?.recommendations || [];
+  const selectableRecommendations = recommendations.filter((recommendation) => statuses[recommendationKey(recommendation)]?.state !== 'added');
+  const allSelected = selectableRecommendations.length > 0 && selectableRecommendations.every((recommendation) => selected[recommendationKey(recommendation)]);
+
+  return (
+    <Card className="mb-6 border-primary/20">
+      <CardHeader className="pb-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              <CardTitle className="text-base">AI Source Finder</CardTitle>
+            </div>
+            <CardDescription>
+              Describe a topic or request and get ranked source recommendations you can add to your crawl list.
+            </CardDescription>
+          </div>
+          <Button variant="outline" onClick={onManualAdd}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Manually
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <PromptInput
+          value={query}
+          onValueChange={onQueryChange}
+          onSubmit={onSearch}
+          isLoading={isSearching}
+          className="rounded-2xl border-primary/20"
+        >
+          <PromptInputTextarea
+            placeholder="Find sources for topics like AI coding agents, crypto market structure, or developer tooling news..."
+            className="min-h-[72px]"
+          />
+          <PromptInputActions className="justify-end pt-2">
+            <PromptInputAction tooltip={isSearching ? 'Searching' : 'Search for sources'}>
+              <Button
+                variant="default"
+                size="icon"
+                className="h-8 w-8 rounded-full"
+                disabled={!query.trim() || isSearching}
+                onClick={onSearch}
+              >
+                {isSearching ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <ArrowUp className="size-4" />
+                )}
+              </Button>
+            </PromptInputAction>
+          </PromptInputActions>
+        </PromptInput>
+
+        {searchError && (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive flex items-start gap-2">
+            <CircleAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <span>{searchError}</span>
+          </div>
+        )}
+
+        {results && (
+          <div className="space-y-3">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-medium">
+                  {recommendations.length === 0
+                    ? 'No recommendations found'
+                    : `Recommended sources for "${results.query}"`}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Review the list before creating data sources. Recommendations stay temporary until you add them.
+                </p>
+              </div>
+              {recommendations.length > 0 && (
+                <Button
+                  variant="outline"
+                  onClick={onAddSelected}
+                  disabled={selectedCount === 0 || isAddingSelection}
+                >
+                  {isAddingSelection ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Adding Selected
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Selected ({selectedCount})
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+
+            {recommendations.length === 0 ? (
+              <div className="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
+                Try a more specific request, a narrower niche, or a different keyword set.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={allSelected}
+                        onCheckedChange={(checked) => onToggleAll(checked === true)}
+                        aria-label="Select all recommendations"
+                      />
+                    </TableHead>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Why it matches</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {recommendations.map((recommendation) => {
+                    const key = recommendationKey(recommendation);
+                    const status = statuses[key];
+                    const isAdded = status?.state === 'added';
+
+                    return (
+                      <TableRow key={key} data-state={selected[key] ? 'selected' : undefined}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selected[key] || false}
+                            disabled={isAdded || status?.state === 'adding'}
+                            onCheckedChange={(checked) => onToggleSelected(key, checked === true)}
+                            aria-label={`Select ${recommendation.name}`}
+                          />
+                        </TableCell>
+                        <TableCell className="whitespace-normal">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium">{recommendation.name}</span>
+                              <Badge variant="outline" className="text-[11px]">
+                                {recommendation.domain}
+                              </Badge>
+                              {status?.state === 'added' && (
+                                <Badge variant="secondary" className="text-[11px]">
+                                  <CheckCircle className="w-3 h-3 mr-1" />
+                                  Added
+                                </Badge>
+                              )}
+                            </div>
+                            <a
+                              href={recommendation.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex max-w-full items-center gap-1 text-xs text-primary hover:underline"
+                            >
+                              <Link2 className="w-3 h-3" />
+                              <span className="truncate">{recommendation.url}</span>
+                            </a>
+                            {recommendation.sample_url && recommendation.sample_url !== recommendation.url && (
+                              <a
+                                href={recommendation.sample_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex max-w-full items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                                <span className="truncate">
+                                  Sample result: {recommendation.sample_title || recommendation.sample_url}
+                                </span>
+                              </a>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="whitespace-normal">
+                          <div className="space-y-1">
+                            {recommendation.reason && (
+                              <p className="text-sm">{recommendation.reason}</p>
+                            )}
+                            {recommendation.summary && (
+                              <p className="text-xs text-muted-foreground line-clamp-3">{recommendation.summary}</p>
+                            )}
+                            {status?.state === 'error' && (
+                              <p className="text-xs text-destructive">{getRecommendationStatusLabel(status)}</p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getRecommendationTypeVariant(recommendation.source_type)} className="capitalize">
+                            {recommendation.source_type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant={isAdded ? 'outline' : 'default'}
+                            size="sm"
+                            disabled={isAdded || status?.state === 'adding'}
+                            onClick={() => onAddOne(recommendation)}
+                          >
+                            {status?.state === 'adding' ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Adding
+                              </>
+                            ) : isAdded ? (
+                              'Added'
+                            ) : (
+                              'Add Source'
+                            )}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 function WorkerControls({ workerStatuses, onRunWorker, onStopWorker, runningMutation }: WorkerControlsProps) {
@@ -236,6 +539,10 @@ function DataSourcesPage() {
     crawl_frequency: 'daily',
     is_enabled: true,
   });
+  const [recommendationQuery, setRecommendationQuery] = useState('');
+  const [selectedRecommendations, setSelectedRecommendations] = useState<Record<string, boolean>>({});
+  const [recommendationStatuses, setRecommendationStatuses] = useState<Record<string, RecommendationStatus>>({});
+  const [isAddingRecommendations, setIsAddingRecommendations] = useState(false);
   const [workerStatuses, setWorkerStatuses] = useState<Record<string, WorkerStatus>>({});
   const [runningMutation, setRunningMutation] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -364,10 +671,40 @@ function DataSourcesPage() {
     queryFn: () => listDataSources(),
   });
 
+  const recommendMutation = useMutation({
+    mutationFn: recommendDataSources,
+    onSuccess: (response) => {
+      const nextSelected: Record<string, boolean> = {};
+      response.recommendations.forEach((recommendation) => {
+        nextSelected[recommendationKey(recommendation)] = false;
+      });
+      setSelectedRecommendations(nextSelected);
+      setRecommendationStatuses({});
+      if (response.recommendations.length === 0) {
+        toast({
+          title: 'No source recommendations found',
+          description: 'Try a more specific topic or add a source manually.',
+        });
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: 'Source search failed',
+        description: error instanceof Error ? error.message : 'Unable to search for source recommendations.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   // Handle both array and paginated response
   const dataSources: DataSource[] = Array.isArray(data) 
     ? data 
     : (data as any)?.data_sources || [];
+  const recommendations = recommendMutation.data?.recommendations || [];
+  const selectedRecommendationCount = recommendations.filter((recommendation) => {
+    const key = recommendationKey(recommendation);
+    return selectedRecommendations[key] && recommendationStatuses[key]?.state !== 'added';
+  }).length;
 
   const createMutation = useMutation({
     mutationFn: createDataSource,
@@ -445,6 +782,130 @@ function DataSourcesPage() {
     setEditingSource(null);
   };
 
+  const handleSearchRecommendations = useCallback(() => {
+    const trimmedQuery = recommendationQuery.trim();
+    if (!trimmedQuery || recommendMutation.isPending) {
+      return;
+    }
+
+    recommendMutation.mutate({
+      query: trimmedQuery,
+      limit: 8,
+    });
+  }, [recommendationQuery, recommendMutation]);
+
+  const handleToggleRecommendation = useCallback((key: string, checked: boolean) => {
+    setSelectedRecommendations((prev) => ({
+      ...prev,
+      [key]: checked,
+    }));
+  }, []);
+
+  const handleToggleAllRecommendations = useCallback((checked: boolean) => {
+    setSelectedRecommendations((prev) => {
+      const next = { ...prev };
+      recommendations.forEach((recommendation) => {
+        const key = recommendationKey(recommendation);
+        if (recommendationStatuses[key]?.state !== 'added') {
+          next[key] = checked;
+        }
+      });
+      return next;
+    });
+  }, [recommendations, recommendationStatuses]);
+
+  const saveRecommendations = useCallback(async (items: DataSourceRecommendation[]) => {
+    if (items.length === 0 || isAddingRecommendations) {
+      return;
+    }
+
+    setIsAddingRecommendations(true);
+    setRecommendationStatuses((prev) => {
+      const next = { ...prev };
+      items.forEach((recommendation) => {
+        next[recommendationKey(recommendation)] = { state: 'adding' };
+      });
+      return next;
+    });
+
+    const results = await Promise.allSettled(items.map(async (recommendation) => {
+      await createDataSource({
+        name: recommendation.name,
+        url: recommendation.url,
+        source_type: recommendation.source_type,
+        crawl_frequency: 'daily',
+        is_enabled: true,
+      });
+      return recommendation;
+    }));
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    setRecommendationStatuses((prev) => {
+      const next = { ...prev };
+
+      results.forEach((result, index) => {
+        const recommendation = items[index];
+        const key = recommendationKey(recommendation);
+
+        if (result.status === 'fulfilled') {
+          successCount += 1;
+          next[key] = { state: 'added', message: 'Added' };
+          return;
+        }
+
+        errorCount += 1;
+        const reason = result.reason instanceof ApiError
+          ? result.reason.message
+          : result.reason instanceof Error
+            ? result.reason.message
+            : 'Failed to add source';
+        next[key] = { state: 'error', message: reason };
+      });
+
+      return next;
+    });
+
+    setSelectedRecommendations((prev) => {
+      const next = { ...prev };
+      items.forEach((recommendation) => {
+        next[recommendationKey(recommendation)] = false;
+      });
+      return next;
+    });
+
+    if (successCount > 0) {
+      queryClient.invalidateQueries({ queryKey: ['data-sources'] });
+      toast({
+        title: successCount === 1 ? 'Source added' : `${successCount} sources added`,
+        description: errorCount > 0
+          ? `${errorCount} recommendation${errorCount === 1 ? '' : 's'} could not be added.`
+          : 'Recommended sources are now in your crawl list.',
+      });
+    } else {
+      toast({
+        title: 'No sources were added',
+        description: 'Review the per-source errors and try again.',
+        variant: 'destructive',
+      });
+    }
+
+    setIsAddingRecommendations(false);
+  }, [isAddingRecommendations, queryClient, toast]);
+
+  const handleAddRecommendation = useCallback((recommendation: DataSourceRecommendation) => {
+    saveRecommendations([recommendation]);
+  }, [saveRecommendations]);
+
+  const handleAddSelectedRecommendations = useCallback(() => {
+    const items = recommendations.filter((recommendation) => {
+      const key = recommendationKey(recommendation);
+      return selectedRecommendations[key] && recommendationStatuses[key]?.state !== 'added';
+    });
+    saveRecommendations(items);
+  }, [recommendations, selectedRecommendations, recommendationStatuses, saveRecommendations]);
+
   const handleSubmit = () => {
     if (editingSource) {
       updateMutation.mutate({ id: editingSource.id, data: formData });
@@ -483,6 +944,24 @@ function DataSourcesPage() {
 
   return (
     <section className="flex-1 p-0 md:p-4 overflow-auto">
+      <SourceRecommendationsPanel
+        query={recommendationQuery}
+        onQueryChange={setRecommendationQuery}
+        onSearch={handleSearchRecommendations}
+        isSearching={recommendMutation.isPending}
+        results={recommendMutation.data}
+        searchError={recommendMutation.error instanceof Error ? recommendMutation.error.message : undefined}
+        selected={selectedRecommendations}
+        statuses={recommendationStatuses}
+        onToggleSelected={handleToggleRecommendation}
+        onToggleAll={handleToggleAllRecommendations}
+        onAddOne={handleAddRecommendation}
+        onAddSelected={handleAddSelectedRecommendations}
+        selectedCount={selectedRecommendationCount}
+        isAddingSelection={isAddingRecommendations}
+        onManualAdd={handleOpenCreate}
+      />
+
       {/* Worker Controls */}
       <WorkerControls
         workerStatuses={workerStatuses}
@@ -514,11 +993,17 @@ function DataSourcesPage() {
         <div className="text-center py-12 text-muted-foreground">
           <Globe className="w-12 h-12 mx-auto mb-4 opacity-50" />
           <p className="text-lg font-medium mb-2">No data sources yet</p>
-          <p className="text-sm mb-4">Add blogs, forums, or news sites to crawl for insights.</p>
-          <Button onClick={handleOpenCreate}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Your First Source
-          </Button>
+          <p className="text-sm mb-4">Use the AI source finder above to build a crawl list, or add one manually.</p>
+          <div className="flex items-center justify-center gap-2">
+            <Button onClick={handleSearchRecommendations} disabled={!recommendationQuery.trim() || recommendMutation.isPending}>
+              <Sparkles className="w-4 h-4 mr-2" />
+              Find Sources
+            </Button>
+            <Button variant="outline" onClick={handleOpenCreate}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Manually
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
