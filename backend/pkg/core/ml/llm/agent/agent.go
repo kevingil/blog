@@ -328,11 +328,9 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 
 	// Check if any tools are parallelizable
 	parallelizableTools := map[string]bool{
-		"search_web_sources":       true,
-		"ask_question":             true,
-		"get_relevant_sources":     true,
-		"fetch_url":                true,
-		"add_context_from_sources": true,
+		"search_web_sources":   true,
+		"ask_question":         true,
+		"get_relevant_sources": true,
 	}
 
 	// Determine if we can parallelize (all tools must be parallelizable)

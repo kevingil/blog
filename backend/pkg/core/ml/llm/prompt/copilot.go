@@ -39,7 +39,7 @@ func CopilotPrompt(_ models.ModelProvider, availableTools []string) string {
 		topConstraint = `## When to Plan vs When to Act
 
 **HARD RULE — When user asks to plan, brainstorm, or discuss:**
-- Do NOT call replace_lines or rewrite_document.
+- Do NOT call replace_lines.
 - Present your plan and STOP. Wait for the user to say "proceed", "go ahead", "apply", "yes", "do it", etc. before editing.
 - When in doubt, plan first. Never edit without explicit confirmation when the intent is ambiguous.
 

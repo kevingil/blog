@@ -6,21 +6,21 @@ import (
 	"encoding/json"
 	"log"
 
-	agentTypes "backend/pkg/core/agent"
+	"backend/pkg/core/copilot"
 
 	"github.com/gofiber/contrib/websocket"
 )
 
 // AgentStreamProvider defines the interface for retrieving agent response channels
 type AgentStreamProvider interface {
-	GetResponseChannel(requestID string) (<-chan agentTypes.StreamResponse, bool)
+	GetResponseChannel(requestID string) (<-chan copilot.StreamResponse, bool)
 }
 
 // HandleAgentStream handles streaming for an agent request
 func HandleAgentStream(ctx context.Context, conn *websocket.Conn, requestID string, provider AgentStreamProvider) {
 	responseChan, exists := provider.GetResponseChannel(requestID)
 	if !exists {
-		errorMsg := agentTypes.StreamResponse{
+		errorMsg := copilot.StreamResponse{
 			RequestID: requestID,
 			Type:      "error",
 			Error:     "Request not found",

@@ -2,12 +2,12 @@
 package websocket
 
 import (
-	agentTypes "backend/pkg/core/agent"
+	"backend/pkg/core/copilot"
 	"time"
 )
 
 // StreamData is an alias for the agent's StreamResponse type
-type StreamData = agentTypes.StreamResponse
+type StreamData = copilot.StreamResponse
 
 // SubscribeMessage represents a client subscription message
 type SubscribeMessage struct {
@@ -18,10 +18,10 @@ type SubscribeMessage struct {
 
 // WorkerStatusMessage represents a worker status WebSocket message
 type WorkerStatusMessage struct {
-	Type       string             `json:"type"`       // Always "worker-status"
-	WorkerName string             `json:"worker_name"`
-	Status     WorkerStatusData   `json:"status"`
-	Timestamp  time.Time          `json:"timestamp"`
+	Type       string           `json:"type"` // Always "worker-status"
+	WorkerName string           `json:"worker_name"`
+	Status     WorkerStatusData `json:"status"`
+	Timestamp  time.Time        `json:"timestamp"`
 }
 
 // WorkerStatusData represents worker status in WebSocket messages

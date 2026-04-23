@@ -5,8 +5,8 @@ import (
 	"backend/pkg/api/validation"
 	agentws "backend/pkg/api/websocket"
 	"backend/pkg/core"
-	coreAgent "backend/pkg/core/agent"
 	"backend/pkg/core/chat"
+	"backend/pkg/core/copilot"
 	"backend/pkg/core/worker"
 	"backend/pkg/database"
 	"context"
@@ -43,7 +43,7 @@ func getChatService() *chat.MessageService {
 // @Security BearerAuth
 // @Router /agent [post]
 func AgentCopilot(c *fiber.Ctx) error {
-	var req coreAgent.ChatRequest
+	var req copilot.ChatRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, core.InvalidInputError("Invalid request body"))
 	}
@@ -51,14 +51,14 @@ func AgentCopilot(c *fiber.Ctx) error {
 		return response.Error(c, err)
 	}
 
-	manager := coreAgent.GetAgentAsyncCopilotManager()
+	manager := copilot.GetManager()
 	requestID, err := manager.SubmitChatRequest(req)
 	if err != nil {
 		log.Printf("[Agent API] Failed to submit request: %v", err)
 		return response.Error(c, err)
 	}
 
-	return response.Success(c, coreAgent.ChatRequestResponse{
+	return response.Success(c, copilot.ChatRequestResponse{
 		RequestID: requestID,
 		Status:    "processing",
 	})
@@ -69,8 +69,8 @@ func WebsocketHandler(con *websocketLib.Conn) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	agentManager := coreAgent.GetAgentAsyncCopilotManager()
-	
+	agentManager := copilot.GetManager()
+
 	// Track worker status subscription
 	var workerStatusSubscribed bool
 	var workerStatusCancel context.CancelFunc
@@ -99,7 +99,7 @@ func WebsocketHandler(con *websocketLib.Conn) {
 						var wsCtx context.Context
 						wsCtx, workerStatusCancel = context.WithCancel(ctx)
 						go handleWorkerStatusStream(wsCtx, con)
-						
+
 						// Send acknowledgment
 						ack := map[string]interface{}{
 							"type":    "subscribed",
@@ -125,7 +125,7 @@ func WebsocketHandler(con *websocketLib.Conn) {
 		}
 	}()
 	<-ctx.Done()
-	
+
 	// Cleanup worker status subscription
 	if workerStatusCancel != nil {
 		workerStatusCancel()
