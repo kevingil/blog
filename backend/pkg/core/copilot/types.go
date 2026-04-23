@@ -1,5 +1,5 @@
-// Package agent provides types and infrastructure for the agent system
-package agent
+// Package copilot provides types and infrastructure for the interactive copilot.
+package copilot
 
 // ChatMessage is a simplified representation of a chat message from the frontend.
 // It intentionally mirrors the OpenAI message schema but without advanced fields (tool calls, etc.)
@@ -13,8 +13,8 @@ type ChatMessage struct {
 type ChatRequest struct {
 	Message          string `json:"message" validate:"required,min=1"`
 	DocumentContent  string `json:"documentContent,omitempty"`
-	DocumentMarkdown string `json:"documentMarkdown,omitempty"` // Markdown version of the document for agent editing
-	ArticleID        string `json:"articleId" validate:"required"`  // Required for loading context
+	DocumentMarkdown string `json:"documentMarkdown,omitempty"`    // Markdown version of the document for agent editing
+	ArticleID        string `json:"articleId" validate:"required"` // Required for loading context
 }
 
 // ChatRequestResponse is the immediate response returned when a chat request is submitted
@@ -68,7 +68,7 @@ type StreamResponse struct {
 	// NEW: Chain of thought content
 	ThinkingContent string `json:"thinking_content,omitempty"`
 
-	// Full message for artifact tools (replace_lines, rewrite_document, search_web_sources)
+	// Full message for artifact tools (replace_lines, search_web_sources, ask_question)
 	// Contains complete meta_data structure matching database format
 	FullMessage *FullMessagePayload `json:"full_message,omitempty"`
 
@@ -169,10 +169,10 @@ type ArtifactUpdate struct {
 // TurnStep represents a single step in the chain of thought
 // Steps are ordered: reasoning -> tool -> reasoning -> content
 type TurnStep struct {
-	Type      string           `json:"type"`                 // "reasoning", "tool", "content"
-	Reasoning *ReasoningStep   `json:"reasoning,omitempty"`  // Present when Type == "reasoning"
-	Tool      *ToolStepPayload `json:"tool,omitempty"`       // Present when Type == "tool"
-	Content   string           `json:"content,omitempty"`    // Present when Type == "content"
+	Type      string           `json:"type"`                // "reasoning", "tool", "content"
+	Reasoning *ReasoningStep   `json:"reasoning,omitempty"` // Present when Type == "reasoning"
+	Tool      *ToolStepPayload `json:"tool,omitempty"`      // Present when Type == "tool"
+	Content   string           `json:"content,omitempty"`   // Present when Type == "content"
 }
 
 // ReasoningStep represents a reasoning/thinking step in the chain

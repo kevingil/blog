@@ -1,4 +1,4 @@
-package agent
+package copilot
 
 import (
 	"context"
@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"backend/pkg/core/agent/metadata"
-	"backend/pkg/core/ml/llm/agent"
+	"backend/pkg/core/copilot/metadata"
+	llmagent "backend/pkg/core/ml/llm/agent"
 	"backend/pkg/core/ml/llm/config"
 	"backend/pkg/core/ml/llm/message"
 	"backend/pkg/core/ml/llm/session"
@@ -55,11 +55,11 @@ type ArticleDraftService interface {
 	UpdateDraftContent(ctx context.Context, articleID uuid.UUID, htmlContent string) error
 }
 
-// AgentAsyncCopilotManager - LLM Agent Framework powered copilot manager
-type AgentAsyncCopilotManager struct {
+// Manager is the LLM-powered interactive copilot manager.
+type Manager struct {
 	requests      map[string]*AgentAsyncRequest
 	mu            sync.RWMutex
-	agent         agent.Service
+	agent         llmagent.Service
 	sessionSvc    session.Service
 	messageSvc    message.Service
 	chatService   ChatMessageServiceInterface
@@ -87,13 +87,12 @@ type AgentAsyncRequest struct {
 
 // Global singleton for backward compatibility
 var (
-	globalAgentManager *AgentAsyncCopilotManager
-	agentManagerOnce   sync.Once
+	globalManager *Manager
 )
 
-// NewAgentAsyncCopilotManager creates a new agent manager with configuration
-func NewAgentAsyncCopilotManager(cfg Config, agentSvc agent.Service, sessionSvc session.Service, messageSvc message.Service, chatService ChatMessageServiceInterface, sourceService tools.ArticleSourceService, draftService ArticleDraftService) *AgentAsyncCopilotManager {
-	return &AgentAsyncCopilotManager{
+// NewManager creates a new copilot manager with configuration.
+func NewManager(cfg Config, agentSvc llmagent.Service, sessionSvc session.Service, messageSvc message.Service, chatService ChatMessageServiceInterface, sourceService tools.ArticleSourceService, draftService ArticleDraftService) *Manager {
+	return &Manager{
 		requests:      make(map[string]*AgentAsyncRequest),
 		agent:         agentSvc,
 		sessionSvc:    sessionSvc,
@@ -105,20 +104,20 @@ func NewAgentAsyncCopilotManager(cfg Config, agentSvc agent.Service, sessionSvc 
 	}
 }
 
-// GetAgentAsyncCopilotManager returns the singleton agent-based async manager
-func GetAgentAsyncCopilotManager() *AgentAsyncCopilotManager {
-	if globalAgentManager == nil {
-		globalAgentManager = &AgentAsyncCopilotManager{
+// GetManager returns the singleton agent-based async manager.
+func GetManager() *Manager {
+	if globalManager == nil {
+		globalManager = &Manager{
 			requests: make(map[string]*AgentAsyncRequest),
 			config:   LoadConfig(),
 		}
 	}
-	return globalAgentManager
+	return globalManager
 }
 
-// SetGlobalAgentManager sets the global agent manager instance
-func SetGlobalAgentManager(manager *AgentAsyncCopilotManager) {
-	globalAgentManager = manager
+// SetGlobalManager sets the global agent manager instance.
+func SetGlobalManager(manager *Manager) {
+	globalManager = manager
 }
 
 // ExaClient interface combines ExaSearchService and ExaAnswerService
@@ -128,8 +127,8 @@ type ExaClient interface {
 	tools.ExaAnswerService
 }
 
-// InitializeAgentCopilotManager initializes the agent copilot manager with real services
-func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, chatService ChatMessageServiceInterface, exaClient ExaClient, sourceCreator tools.SourceCreator, draftService ArticleDraftService) error {
+// InitializeManager initializes the agent copilot manager with real services.
+func InitializeManager(sourceService tools.ArticleSourceService, chatService ChatMessageServiceInterface, exaClient ExaClient, sourceCreator tools.SourceCreator, draftService ArticleDraftService) error {
 	// Load agent configuration
 	cfg := LoadConfig()
 
@@ -170,7 +169,7 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 	}
 
 	// Create the agent using the LLM framework
-	agentSvc, err := agent.NewAgent(
+	agentSvc, err := llmagent.NewAgent(
 		config.AgentCopilot,
 		sessionSvc,
 		messageSvc,
@@ -181,19 +180,11 @@ func InitializeAgentCopilotManager(sourceService tools.ArticleSourceService, cha
 	}
 
 	// Create and set the global manager with configuration
-	manager := NewAgentAsyncCopilotManager(cfg, agentSvc, sessionSvc, messageSvc, chatService, sourceService, draftService)
-	SetGlobalAgentManager(manager)
+	manager := NewManager(cfg, agentSvc, sessionSvc, messageSvc, chatService, sourceService, draftService)
+	SetGlobalManager(manager)
 
 	log.Printf("[Agent] Initialized with configuration (max_concurrent=%d, timeout=%v)", cfg.MaxConcurrentRequests, cfg.RequestTimeout)
 	return nil
-}
-
-// InitializeWithDefaults initializes the agent copilot manager with default services
-// This is a convenience function that initializes without optional services
-func InitializeWithDefaults(chatService ChatMessageServiceInterface, draftService ArticleDraftService) error {
-	// Initialize without source service and exa client
-	// These can be provided via InitializeAgentCopilotManager when available
-	return InitializeAgentCopilotManager(nil, chatService, nil, nil, draftService)
 }
 
 // draftSaverAdapter bridges the tools.DraftSaver interface (string article IDs)
@@ -210,7 +201,7 @@ func (a *draftSaverAdapter) UpdateDraftContent(ctx context.Context, articleID st
 	return a.draftService.UpdateDraftContent(ctx, parsed, htmlContent)
 }
 
-func (m *AgentAsyncCopilotManager) SubmitChatRequest(req ChatRequest) (string, error) {
+func (m *Manager) SubmitChatRequest(req ChatRequest) (string, error) {
 	if req.Message == "" {
 		return "", errors.New("message is required")
 	}
@@ -255,7 +246,7 @@ func (m *AgentAsyncCopilotManager) SubmitChatRequest(req ChatRequest) (string, e
 	return requestID, nil
 }
 
-func (m *AgentAsyncCopilotManager) GetResponseChannel(requestID string) (<-chan StreamResponse, bool) {
+func (m *Manager) GetResponseChannel(requestID string) (<-chan StreamResponse, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -268,7 +259,7 @@ func (m *AgentAsyncCopilotManager) GetResponseChannel(requestID string) (<-chan 
 }
 
 // Shutdown gracefully shuts down the agent manager
-func (m *AgentAsyncCopilotManager) Shutdown(timeout time.Duration) error {
+func (m *Manager) Shutdown(timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 
 	log.Printf("[Agent] Shutting down, waiting for %d in-flight requests...", m.ActiveRequests())
@@ -295,14 +286,14 @@ func (m *AgentAsyncCopilotManager) Shutdown(timeout time.Duration) error {
 }
 
 // ActiveRequests returns the number of active requests
-func (m *AgentAsyncCopilotManager) ActiveRequests() int {
+func (m *Manager) ActiveRequests() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return len(m.requests)
 }
 
 // CancelRequest cancels a specific request by ID
-func (m *AgentAsyncCopilotManager) CancelRequest(requestID string) error {
+func (m *Manager) CancelRequest(requestID string) error {
 	m.mu.RLock()
 	req, exists := m.requests[requestID]
 	m.mu.RUnlock()
@@ -315,7 +306,7 @@ func (m *AgentAsyncCopilotManager) CancelRequest(requestID string) error {
 	return nil
 }
 
-func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncRequest) {
+func (m *Manager) processAgentRequest(asyncReq *AgentAsyncRequest) {
 	defer func() {
 		asyncReq.cancel()
 		close(asyncReq.ResponseChan)
@@ -491,14 +482,14 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 		}
 
 		switch event.Type {
-		case agent.AgentEventTypeThinking:
+		case llmagent.AgentEventTypeThinking:
 			asyncReq.ResponseChan <- StreamResponse{
 				RequestID:       asyncReq.ID,
 				Type:            "thinking",
 				ThinkingMessage: event.ThinkingMessage,
 				Iteration:       event.Iteration,
 			}
-		case agent.AgentEventTypeReasoningDelta:
+		case llmagent.AgentEventTypeReasoningDelta:
 			// If current step is not reasoning, start a new reasoning step
 			if asyncReq.currentStepType != "reasoning" {
 				asyncReq.currentStepIdx = len(asyncReq.steps)
@@ -518,7 +509,7 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 				Iteration:       asyncReq.iteration,
 				StepIndex:       asyncReq.currentStepIdx,
 			}
-		case agent.AgentEventTypeContentDelta:
+		case llmagent.AgentEventTypeContentDelta:
 			// If current step is not content, start a new content step
 			if asyncReq.currentStepType != "content" {
 				asyncReq.currentStepIdx = len(asyncReq.steps)
@@ -538,7 +529,7 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 				Iteration: asyncReq.iteration,
 				StepIndex: asyncReq.currentStepIdx,
 			}
-		case agent.AgentEventTypeResponse:
+		case llmagent.AgentEventTypeResponse:
 			if event.Message.ID != "" {
 				asyncReq.iteration++
 				toolCalls := event.Message.ToolCalls()
@@ -613,7 +604,7 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 					}
 				}
 			}
-		case agent.AgentEventTypeTool:
+		case llmagent.AgentEventTypeTool:
 			if event.Message.ID != "" {
 				toolResults := event.Message.ToolResults()
 
@@ -721,7 +712,7 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 					}
 				}
 			}
-		case agent.AgentEventTypeError:
+		case llmagent.AgentEventTypeError:
 			// Error is already handled above
 		default:
 			log.Println("Unknown event type", event.Type)
@@ -738,7 +729,7 @@ func (m *AgentAsyncCopilotManager) processAgentRequest(asyncReq *AgentAsyncReque
 	log.Printf("[Agent] Completed request %s in %v", asyncReq.ID, duration)
 }
 
-func (m *AgentAsyncCopilotManager) loadConversationContext(ctx context.Context, articleID uuid.UUID, limit int) ([]message.Message, error) {
+func (m *Manager) loadConversationContext(ctx context.Context, articleID uuid.UUID, limit int) ([]message.Message, error) {
 	if m.chatService == nil {
 		return []message.Message{}, nil
 	}
@@ -827,7 +818,7 @@ func (m *AgentAsyncCopilotManager) loadConversationContext(ctx context.Context, 
 	return agentMessages, nil
 }
 
-func (m *AgentAsyncCopilotManager) saveAssistantMessage(ctx context.Context, asyncReq *AgentAsyncRequest, msg message.Message, articleID uuid.UUID) {
+func (m *Manager) saveAssistantMessage(ctx context.Context, asyncReq *AgentAsyncRequest, msg message.Message, articleID uuid.UUID) {
 	if m.chatService == nil || articleID == uuid.Nil {
 		return
 	}
@@ -933,7 +924,7 @@ func (m *AgentAsyncCopilotManager) saveAssistantMessage(ctx context.Context, asy
 	}
 }
 
-func (m *AgentAsyncCopilotManager) monitorTimeout(ctx context.Context, asyncReq *AgentAsyncRequest) {
+func (m *Manager) monitorTimeout(ctx context.Context, asyncReq *AgentAsyncRequest) {
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 
@@ -969,7 +960,7 @@ func (m *AgentAsyncCopilotManager) monitorTimeout(ctx context.Context, asyncReq 
 	}
 }
 
-func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, asyncReq *AgentAsyncRequest, msg message.Message, toolResults []message.ToolResult, articleID uuid.UUID) *models.ChatMessage {
+func (m *Manager) saveToolResultMessage(ctx context.Context, asyncReq *AgentAsyncRequest, msg message.Message, toolResults []message.ToolResult, articleID uuid.UUID) *models.ChatMessage {
 	if m.chatService == nil || articleID == uuid.Nil {
 		return nil
 	}
@@ -1020,48 +1011,33 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 		}
 		msgMetadata.WithToolExecution(toolExec)
 
-		if toolName == "replace_lines" || toolName == "rewrite_document" {
+		if toolName == "replace_lines" {
 			log.Printf("[Agent]       ✏️  ARTIFACT TOOL DETECTED: %s (isError: %v)", toolName, isError)
 
 			artifactID := uuid.New().String()
 			artifactType := metadata.ArtifactTypeCodeEdit
-			if toolName == "rewrite_document" {
-				artifactType = metadata.ArtifactTypeRewrite
-			}
 
 			var artifactContent string
 			var diffPreview string
 			var description string
 
-			if toolName == "replace_lines" {
-				// All editing tools use old_str/new_str format for diff display
-				if newStr, ok := toolResultData["new_str"].(string); ok {
-					artifactContent = newStr
-				} else if newText, ok := toolResultData["new_text"].(string); ok {
-					artifactContent = newText
-				}
-				if oldStr, ok := toolResultData["old_str"].(string); ok {
-					diffPreview = fmt.Sprintf("Old: %s\nNew: %s", truncate(oldStr, 50), truncate(artifactContent, 50))
-				} else if oldText, ok := toolResultData["original_text"].(string); ok {
-					diffPreview = fmt.Sprintf("Old: %s\nNew: %s", truncate(oldText, 50), truncate(artifactContent, 50))
-				}
-				if reason, ok := toolResultData["reason"].(string); ok {
-					description = reason
-				}
-				// For error results, use the error content as description if no reason
-				if isError && description == "" {
-					description = toolResult.Content
-				}
-			} else if toolName == "rewrite_document" {
-				if newContent, ok := toolResultData["new_content"].(string); ok {
-					artifactContent = newContent
-				}
-				if originalContent, ok := toolResultData["original_content"].(string); ok {
-					diffPreview = fmt.Sprintf("Original: %s\nNew: %s", truncate(originalContent, 50), truncate(artifactContent, 50))
-				}
-				if reason, ok := toolResultData["reason"].(string); ok {
-					description = reason
-				}
+			// All editing tools use old_str/new_str format for diff display
+			if newStr, ok := toolResultData["new_str"].(string); ok {
+				artifactContent = newStr
+			} else if newText, ok := toolResultData["new_text"].(string); ok {
+				artifactContent = newText
+			}
+			if oldStr, ok := toolResultData["old_str"].(string); ok {
+				diffPreview = fmt.Sprintf("Old: %s\nNew: %s", truncate(oldStr, 50), truncate(artifactContent, 50))
+			} else if oldText, ok := toolResultData["original_text"].(string); ok {
+				diffPreview = fmt.Sprintf("Old: %s\nNew: %s", truncate(oldText, 50), truncate(artifactContent, 50))
+			}
+			if reason, ok := toolResultData["reason"].(string); ok {
+				description = reason
+			}
+			// For error results, use the error content as description if no reason
+			if isError && description == "" {
+				description = toolResult.Content
 			}
 
 			artifactStatus := metadata.ArtifactStatusPending
@@ -1166,7 +1142,7 @@ func (m *AgentAsyncCopilotManager) saveToolResultMessage(ctx context.Context, as
 	return nil
 }
 
-func (m *AgentAsyncCopilotManager) buildSourceContext(ctx context.Context, articleID uuid.UUID) string {
+func (m *Manager) buildSourceContext(ctx context.Context, articleID uuid.UUID) string {
 	if m.sourceService == nil {
 		return ""
 	}

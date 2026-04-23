@@ -13,4 +13,3 @@ The hike on the first day did not take long, I started around noon, and finished
 ### Running a Perl Script in a Dockerfile
 One of the great things about Perl is that it ships with Linux out of the box. It's so well integrated with Unix, it can serve as a wrapper around system tools. Its strong support for text manipulation and data processing makes it very valuable when building distributed systems. When deploying complex Docker applications, there might be some pre-processing during the build process that can take advantage of Perl's many strong suits.
 `
-

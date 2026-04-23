@@ -1,4 +1,4 @@
-package agent
+package writer
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"backend/pkg/core/agent/prompts"
+	"backend/pkg/core/copilot/writer/prompts"
 	"backend/pkg/core/ml"
 	"backend/pkg/database/models"
 

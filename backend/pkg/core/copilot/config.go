@@ -1,5 +1,5 @@
-// Package agent provides types and infrastructure for the agent system
-package agent
+// Package copilot provides the interactive article copilot orchestration layer.
+package copilot
 
 import (
 	"os"
@@ -13,7 +13,6 @@ type Config struct {
 	RequestTimeout        time.Duration
 	ChannelBuffer         int
 	CleanupDelay          time.Duration
-	DefaultModel          string
 }
 
 // LoadConfig loads agent configuration from environment variables
@@ -23,7 +22,6 @@ func LoadConfig() Config {
 		RequestTimeout:        getEnvDuration("AGENT_REQUEST_TIMEOUT", 10*time.Minute),
 		ChannelBuffer:         getEnvInt("AGENT_CHANNEL_BUFFER", 100),
 		CleanupDelay:          getEnvDuration("AGENT_CLEANUP_DELAY", 15*time.Minute),
-		DefaultModel:          getEnvString("AGENT_DEFAULT_MODEL", "gpt-4o"),
 	}
 }
 
@@ -46,12 +44,3 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 	}
 	return defaultValue
 }
-
-// getEnvString gets a string from environment or returns default
-func getEnvString(key string, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-

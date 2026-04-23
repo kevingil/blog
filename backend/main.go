@@ -23,8 +23,8 @@ package main
 import (
 	"backend/pkg/api"
 	"backend/pkg/config"
-	coreAgent "backend/pkg/core/agent"
 	"backend/pkg/core/chat"
+	"backend/pkg/core/copilot"
 	"backend/pkg/core/source"
 	"backend/pkg/core/taskrun"
 	"backend/pkg/core/worker"
@@ -54,7 +54,7 @@ func main() {
 	chatService := chat.NewMessageService(database.New())
 	articleRepo := repository.NewArticleRepository(database.DB())
 	sourceRepo := repository.NewSourceRepository(database.DB())
-	draftService := coreAgent.NewArticleDraftService(articleRepo)
+	draftService := copilot.NewArticleDraftService(articleRepo)
 	sourceService := source.NewService(sourceRepo, articleRepo)
 
 	// Initialize Exa client for web research (ask_question, search_web_sources)
@@ -66,11 +66,11 @@ func main() {
 	}
 
 	// Pass all services: sourceService for source lookup, exaClient for research, sourceService for source creation
-	var exaArg coreAgent.ExaClient
+	var exaArg copilot.ExaClient
 	if exaClient.IsConfigured() {
 		exaArg = exaClient
 	}
-	if err := coreAgent.InitializeAgentCopilotManager(sourceService, chatService, exaArg, sourceService, draftService); err != nil {
+	if err := copilot.InitializeManager(sourceService, chatService, exaArg, sourceService, draftService); err != nil {
 		log.Printf("Warning: Failed to initialize AgentCopilotManager: %v", err)
 	}
 	log.Printf("Initialized Agent Services")

@@ -5,21 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"time"
-
-	"github.com/google/uuid"
 )
-
-// NewArtifactInfo creates a new artifact info structure
-func NewArtifactInfo(artifactType, content, title, description string) *ArtifactInfo {
-	return &ArtifactInfo{
-		ID:          uuid.New().String(),
-		Type:        artifactType,
-		Status:      ArtifactStatusPending,
-		Content:     content,
-		Title:       title,
-		Description: description,
-	}
-}
 
 // NewToolExecution creates a new tool execution record
 func NewToolExecution(toolName, toolID string, input, output interface{}, duration time.Duration, err error) *ToolExecution {
@@ -32,11 +18,11 @@ func NewToolExecution(toolName, toolID string, input, output interface{}, durati
 		ExecutedAt: time.Now(),
 		Success:    err == nil,
 	}
-	
+
 	if err != nil {
 		te.Error = err.Error()
 	}
-	
+
 	return te
 }
 
@@ -57,52 +43,6 @@ func (c *MessageContext) WithDocumentHash(content string) *MessageContext {
 	return c
 }
 
-// NewTaskStatus creates a new task status record
-func NewTaskStatus(taskID, name string) *TaskStatus {
-	return &TaskStatus{
-		TaskID:    taskID,
-		Name:      name,
-		Status:    TaskStatusQueued,
-		Progress:  0,
-		StartedAt: time.Now(),
-	}
-}
-
-// Start marks a task as in progress
-func (t *TaskStatus) Start() {
-	t.Status = TaskStatusInProgress
-	t.StartedAt = time.Now()
-}
-
-// Complete marks a task as completed
-func (t *TaskStatus) Complete() {
-	t.Status = TaskStatusCompleted
-	t.Progress = 100
-	now := time.Now()
-	t.CompletedAt = &now
-}
-
-// Fail marks a task as failed
-func (t *TaskStatus) Fail(err error) {
-	t.Status = TaskStatusFailed
-	now := time.Now()
-	t.CompletedAt = &now
-	if err != nil {
-		t.Error = err.Error()
-	}
-}
-
-// UpdateProgress updates task progress
-func (t *TaskStatus) UpdateProgress(progress float64) {
-	if progress < 0 {
-		progress = 0
-	}
-	if progress > 100 {
-		progress = 100
-	}
-	t.Progress = progress
-}
-
 // NewUserAction creates a new user action record
 func NewUserAction(action, artifactID, feedback, reason string) *UserAction {
 	return &UserAction{
@@ -114,17 +54,6 @@ func NewUserAction(action, artifactID, feedback, reason string) *UserAction {
 	}
 }
 
-// NewAttachment creates a new attachment
-func NewAttachment(attachmentType, name, url, mimeType string, size int64) Attachment {
-	return Attachment{
-		Type:     attachmentType,
-		Name:     name,
-		URL:      url,
-		MimeType: mimeType,
-		Size:     size,
-	}
-}
-
 // BuildMetaData creates a complete metadata structure
 func BuildMetaData() *MessageMetaData {
 	return &MessageMetaData{}
@@ -133,12 +62,6 @@ func BuildMetaData() *MessageMetaData {
 // WithArtifact adds artifact info to metadata
 func (m *MessageMetaData) WithArtifact(artifact *ArtifactInfo) *MessageMetaData {
 	m.Artifact = artifact
-	return m
-}
-
-// WithTaskStatus adds task status to metadata
-func (m *MessageMetaData) WithTaskStatus(task *TaskStatus) *MessageMetaData {
-	m.TaskStatus = task
 	return m
 }
 
@@ -160,12 +83,6 @@ func (m *MessageMetaData) WithUserAction(action *UserAction) *MessageMetaData {
 	return m
 }
 
-// WithAttachments adds attachments to metadata
-func (m *MessageMetaData) WithAttachments(attachments []Attachment) *MessageMetaData {
-	m.Attachments = attachments
-	return m
-}
-
 // WithThinking adds thinking/reasoning content to metadata (LEGACY - use WithSteps for new code)
 func (m *MessageMetaData) WithThinking(thinking *ThinkingBlock) *MessageMetaData {
 	m.Thinking = thinking
@@ -182,4 +99,3 @@ func (m *MessageMetaData) WithSteps(steps []ChainOfThoughtStep) *MessageMetaData
 func (m *MessageMetaData) Build() *MessageMetaData {
 	return m
 }
-

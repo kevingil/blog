@@ -35,3 +35,6 @@ main
 # Cursor
 .cursor/plans/
 
+# Internal docs
+.docs/
+

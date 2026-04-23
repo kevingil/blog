@@ -124,11 +124,13 @@ function handleCompletion() {
   "type": "plan",
   "data": {
     "strategy": "use_tools",
-    "reasoning": "User wants document rewritten, will use rewrite tool",
+    "reasoning": "User wants a section rewritten, will use replace_lines",
     "tools": [
       {
-        "name": "rewrite_document",
+        "name": "replace_lines",
         "parameters": {
+          "start_line": 12,
+          "end_line": 18,
           "new_content": "...",
           "reason": "Making content more engaging"
         },
@@ -218,14 +220,7 @@ Replaces lines in the document by line number. Use `read_document` to see line n
 - Applies text changes directly to the TipTap editor in real-time
 - Provides visual feedback about successful edits
 
-### 2. rewrite_document
-Completely rewrites or significantly edits document content.
-
-**Parameters:**
-- `new_content` (string): The new document content in markdown
-- `reason` (string): Brief explanation of changes made
-
-### 3. generate_image_prompt
+### 2. generate_image_prompt
 Generates an image prompt based on document content.
 
 **Parameters:**
@@ -233,19 +228,6 @@ Generates an image prompt based on document content.
 
 **Result:**
 - `prompt` (string): Generated image prompt
-
-### 4. analyze_document
-Analyzes document for improvement areas and provides contextual suggestions.
-
-**Parameters:**
-- `user_request` (string, required): The user's original request to understand what they want to improve
-- `focus_area` (string, optional): What to focus on (engagement, clarity, structure, grammar, flow, technical_accuracy). If not provided, the tool will infer from the user request or provide overall analysis
-
-**Result:**
-- `focus_area` (string): The area that was analyzed
-- `user_request` (string): The original user request
-- `suggestions` (array): List of contextual improvement suggestions
-- `analysis_done` (boolean): Completion status
 
 ## UI Implementation Example
 

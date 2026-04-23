@@ -8,9 +8,6 @@ type MessageMetaData struct {
 	// Artifact information - for content suggestions/changes
 	Artifact *ArtifactInfo `json:"artifact,omitempty"`
 
-	// Task/tool execution tracking
-	TaskStatus *TaskStatus `json:"task_status,omitempty"`
-
 	// Tool execution details
 	ToolExecution *ToolExecution `json:"tool_execution,omitempty"`
 
@@ -19,9 +16,6 @@ type MessageMetaData struct {
 
 	// User actions (accept/reject)
 	UserAction *UserAction `json:"user_action,omitempty"`
-
-	// Attached files/resources
-	Attachments []Attachment `json:"attachments,omitempty"`
 
 	// Chain of thought reasoning (from reasoning models) - LEGACY, use Steps instead
 	Thinking *ThinkingBlock `json:"thinking,omitempty"`
@@ -57,25 +51,6 @@ const (
 	ArtifactTypeSuggestion        = "suggestion"
 	ArtifactTypeContentGeneration = "content_generation"
 	ArtifactTypeImagePrompt       = "image_prompt"
-)
-
-// TaskStatus represents the status of a task or tool execution
-type TaskStatus struct {
-	TaskID      string     `json:"task_id"`
-	Name        string     `json:"name"`
-	Status      string     `json:"status"` // "queued", "in_progress", "completed", "failed"
-	Progress    float64    `json:"progress"`
-	StartedAt   time.Time  `json:"started_at"`
-	CompletedAt *time.Time `json:"completed_at,omitempty"`
-	Error       string     `json:"error,omitempty"`
-}
-
-// Task status constants
-const (
-	TaskStatusQueued     = "queued"
-	TaskStatusInProgress = "in_progress"
-	TaskStatusCompleted  = "completed"
-	TaskStatusFailed     = "failed"
 )
 
 // ToolExecution represents details about a tool execution
@@ -114,22 +89,6 @@ const (
 	UserActionAccept = "accept"
 	UserActionReject = "reject"
 	UserActionModify = "modify"
-)
-
-// Attachment represents an attached file or resource
-type Attachment struct {
-	Type     string `json:"type"` // "file", "link", "image"
-	Name     string `json:"name"`
-	URL      string `json:"url"`
-	MimeType string `json:"mime_type,omitempty"`
-	Size     int64  `json:"size,omitempty"`
-}
-
-// Attachment type constants
-const (
-	AttachmentTypeFile  = "file"
-	AttachmentTypeLink  = "link"
-	AttachmentTypeImage = "image"
 )
 
 // =============================================================================
@@ -252,53 +211,3 @@ const (
 	ArtifactStatusAcceptedNew ArtifactStatus = "accepted"
 	ArtifactStatusRejectedNew ArtifactStatus = "rejected"
 )
-
-// ToolCategory represents the category of a tool for UI grouping
-type ToolCategory string
-
-const (
-	ToolCategoryResearch   ToolCategory = "research"
-	ToolCategoryAnalysis   ToolCategory = "analysis"
-	ToolCategoryEditing    ToolCategory = "editing"
-	ToolCategoryGeneration ToolCategory = "generation"
-)
-
-// ToolCategoryInfo provides metadata about tool categories
-var ToolCategories = map[string]ToolCategory{
-	"search_web_sources":       ToolCategoryResearch,
-	"ask_question":             ToolCategoryResearch,
-	"get_relevant_sources":     ToolCategoryResearch,
-	"select_sources_for_edit":  ToolCategoryAnalysis,
-	"fetch_url":                ToolCategoryResearch,
-	"add_context_from_sources": ToolCategoryAnalysis,
-	"replace_lines":            ToolCategoryEditing,
-	"generate_text_content":    ToolCategoryGeneration,
-	"generate_image_prompt":    ToolCategoryGeneration,
-}
-
-// IsParallelizable returns whether a tool can be executed in parallel with others
-func IsParallelizable(toolName string) bool {
-	parallelTools := map[string]bool{
-		"search_web_sources":       true,
-		"ask_question":             true,
-		"get_relevant_sources":     true,
-		"select_sources_for_edit":  false,
-		"fetch_url":                true,
-		"add_context_from_sources": true,
-	}
-	return parallelTools[toolName]
-}
-
-// HasArtifact returns whether a tool produces an artifact
-func HasArtifact(toolName string) bool {
-	artifactTools := map[string]bool{
-		"search_web_sources":      true,
-		"ask_question":            true,
-		"get_relevant_sources":    true,
-		"select_sources_for_edit": true,
-		"replace_lines":           true,
-		"generate_text_content":   true,
-		"generate_image_prompt":   true,
-	}
-	return artifactTools[toolName]
-}

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"backend/pkg/core"
-	"backend/pkg/core/agent/metadata"
+	"backend/pkg/core/copilot/metadata"
 	"backend/pkg/database"
 	"backend/pkg/database/models"
 	"backend/pkg/database/repository"

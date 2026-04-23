@@ -19,4 +19,3 @@ Use this as a reference for the author's writing style and tone.`, writingContex
 func WriterUserPrompt(title, prompt string) string {
 	return fmt.Sprintf("Title: %q\nPrompt: %s", title, prompt)
 }
-

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"backend/pkg/core"
-	"backend/pkg/core/agent"
+	"backend/pkg/core/copilot/writer"
 	"backend/pkg/core/ml"
 	"backend/pkg/database/models"
 	"backend/pkg/database/repository"
@@ -341,7 +341,7 @@ func (s *Service) GetRecommended(ctx context.Context, currentArticleID uuid.UUID
 
 // GenerateArticle uses AI to generate an article
 func (s *Service) GenerateArticle(ctx context.Context, prompt string, title string, authorID uuid.UUID, publish bool) (*models.Article, error) {
-	writerAgent := agent.NewWriterAgent()
+	writerAgent := writer.NewWriterAgent()
 
 	article, err := writerAgent.GenerateArticle(ctx, prompt, title, authorID)
 	if err != nil {
@@ -489,7 +489,7 @@ func (s *Service) Update(ctx context.Context, articleID uuid.UUID, req UpdateReq
 
 // UpdateWithContext updates article content using AI context
 func (s *Service) UpdateWithContext(ctx context.Context, articleID uuid.UUID) (*models.Article, error) {
-	writerAgent := agent.NewWriterAgent()
+	writerAgent := writer.NewWriterAgent()
 
 	article, err := s.articleRepo.FindByID(ctx, articleID)
 	if err != nil {
