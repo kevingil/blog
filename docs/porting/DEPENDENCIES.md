@@ -15,7 +15,7 @@ only after its representative behavior passes.
 | golang-jwt | `jsonwebtoken` | claim names, algorithms, expiry and error semantics |
 | x/crypto bcrypt | `bcrypt` | existing password hashes remain verifiable |
 | AWS Go S3 | AWS SDK for Rust S3 | R2 endpoint/path style, credentials, object operations |
-| MCP Go | official `rmcp` | stdio and streamable HTTP transports |
+| MCP Go | no Rust dependency | Reviewed dormant: the active Go composition has an empty MCP server map, so the Rust inventory records the disposition without shipping an unused transport |
 | OpenAI/Anthropic/Google SDKs | local `reqwest` adapters | exact payloads, SSE order, tools, usage, errors, cancellation |
 | OpenTelemetry | `tracing`, OpenTelemetry Rust, OTLP | boundary spans, propagation, OTLP HTTP |
 
@@ -34,3 +34,10 @@ only after its representative behavior passes.
 
 Provider SDK replacement is intentionally not one Rust SDK per Go SDK. The
 streaming trial decides the minimum local adapters and features.
+
+The active insight worker retains its separate Groq dependency through the
+OpenAI-compatible Responses contract and `openai/gpt-oss-120b`; it is configured
+only by `GROQ_API_KEY`/`GROQ_BASE_URL`. OpenAI remains the active copilot,
+embedding, image, and article-generation provider. Anthropic, Gemini, and Vertex
+adapters are contract-tested for the provider boundary but are not registered by
+the current composition root.

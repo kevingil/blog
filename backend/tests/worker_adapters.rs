@@ -374,7 +374,7 @@ async fn topics_and_configuration_are_delegated_without_global_state() -> TestRe
 }
 
 #[tokio::test]
-async fn insufficient_match_total_or_loaded_content_skips_before_openai() -> TestResult {
+async fn insufficient_match_total_or_loaded_content_skips_before_provider() -> TestResult {
     let fixture = fixture(now());
     let topic = topic(None);
     seed(
@@ -598,7 +598,7 @@ fn generated_types_have_no_implicit_or_heuristic_defaults() {
 }
 
 #[test]
-fn openai_adapter_requires_strict_validated_json_and_typed_input() -> TestResult {
+fn insight_adapter_requires_strict_validated_json_and_typed_input() -> TestResult {
     let request = InsightGenerationRequest {
         topic: worker_adapters::InsightTopicContext {
             name: "Rust systems".to_owned(),

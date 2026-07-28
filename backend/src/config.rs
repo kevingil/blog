@@ -14,6 +14,8 @@ pub struct Config {
     pub cors_origins: Vec<String>,
     pub openai_api_key: SecretString,
     pub openai_base_url: String,
+    pub groq_api_key: SecretString,
+    pub groq_base_url: String,
     pub exa_api_key: SecretString,
     pub exa_base_url: String,
     pub s3_endpoint: String,
@@ -69,6 +71,9 @@ impl Config {
             openai_api_key: SecretString::from(std::env::var("OPENAI_API_KEY").unwrap_or_default()),
             openai_base_url: std::env::var("OPENAI_BASE_URL")
                 .unwrap_or_else(|_| "https://api.openai.com/v1".to_owned()),
+            groq_api_key: SecretString::from(std::env::var("GROQ_API_KEY").unwrap_or_default()),
+            groq_base_url: std::env::var("GROQ_BASE_URL")
+                .unwrap_or_else(|_| "https://api.groq.com/openai/v1".to_owned()),
             exa_api_key: SecretString::from(std::env::var("EXA_API_KEY").unwrap_or_default()),
             exa_base_url: std::env::var("EXA_BASE_URL")
                 .unwrap_or_else(|_| "https://api.exa.ai".to_owned()),

@@ -40,6 +40,10 @@ pub struct OpenAiClient {
     api_key: SecretString,
     base_url: String,
     embedding_model: String,
+    provider_model: Model,
+    system_message: Option<String>,
+    max_output_tokens: i64,
+    reasoning_effort: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,6 +76,15 @@ impl OpenAiClient {
             api_key: SecretString::from(api_key),
             base_url,
             embedding_model: DEFAULT_EMBEDDING_MODEL.to_owned(),
+            provider_model: Model::openai(
+                COPILOT_MODEL_ID,
+                COPILOT_API_MODEL,
+                COPILOT_MAX_OUTPUT_TOKENS,
+                true,
+            ),
+            system_message: None,
+            max_output_tokens: COPILOT_MAX_OUTPUT_TOKENS,
+            reasoning_effort: Some("medium".to_owned()),
         })
     }
 
@@ -83,6 +96,35 @@ impl OpenAiClient {
             ));
         }
         self.embedding_model = model;
+        Ok(self)
+    }
+
+    pub fn with_provider_model(
+        mut self,
+        model: Model,
+        system_message: impl Into<String>,
+        reasoning_effort: Option<String>,
+    ) -> Result<Self, AppError> {
+        if model.api_model.trim().is_empty() {
+            return Err(AppError::InvalidInput(
+                "provider API model must not be empty".to_owned(),
+            ));
+        }
+        if model.default_max_tokens <= 0 {
+            return Err(AppError::InvalidInput(
+                "provider max tokens must be greater than zero".to_owned(),
+            ));
+        }
+        let system_message = system_message.into();
+        if system_message.trim().is_empty() {
+            return Err(AppError::InvalidInput(
+                "provider system message must not be empty".to_owned(),
+            ));
+        }
+        self.max_output_tokens = model.default_max_tokens;
+        self.provider_model = model;
+        self.system_message = Some(system_message);
+        self.reasoning_effort = reasoning_effort;
         Ok(self)
     }
 
@@ -162,6 +204,55 @@ impl OpenAiClient {
         }
     }
 
+    pub(crate) async fn generate_provider_text(&self, input: &str) -> Result<String, AppError> {
+        if !self.is_configured() {
+            return Err(AppError::External);
+        }
+        if input.trim().is_empty() {
+            return Err(AppError::InvalidInput(
+                "response input must not be empty".to_owned(),
+            ));
+        }
+        let response = self
+            .client
+            .post(format!("{}/responses", self.base_url))
+            .bearer_auth(self.api_key.expose_secret())
+            .json(&ResponseRequest {
+                model: &self.provider_model.api_model,
+                instructions: self.system_message().to_owned(),
+                input: serde_json::Value::String(input.to_owned()),
+                store: (self.provider_model.provider.0
+                    != crate::core::ml::llm::ModelProvider::GROQ)
+                    .then_some(false),
+                stream: false,
+                tools: Vec::new(),
+                max_output_tokens: Some(self.max_output_tokens),
+                reasoning: self
+                    .reasoning_effort
+                    .clone()
+                    .map(|effort| ResponseReasoning { effort }),
+            })
+            .send()
+            .await
+            .map_err(|_| AppError::External)?;
+        if !response.status().is_success() {
+            return Err(AppError::External);
+        }
+        let body: ResponseBody = response.json().await.map_err(|_| AppError::External)?;
+        let text = body
+            .output
+            .into_iter()
+            .flat_map(|item| item.content)
+            .filter_map(|content| content.text)
+            .collect::<Vec<_>>()
+            .join("");
+        if text.trim().is_empty() {
+            Err(AppError::External)
+        } else {
+            Ok(text)
+        }
+    }
+
     pub async fn generate_image(&self, prompt: &str) -> Result<GeneratedImage, AppError> {
         if !self.is_configured() {
             return Err(AppError::External);
@@ -225,7 +316,8 @@ struct ResponseRequest<'a> {
     model: &'a str,
     instructions: String,
     input: serde_json::Value,
-    store: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    store: Option<bool>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     stream: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -242,7 +334,7 @@ impl<'a> ResponseRequest<'a> {
             model: DEFAULT_GENERATION_MODEL,
             instructions: instructions.to_owned(),
             input: serde_json::Value::String(input.to_owned()),
-            store: false,
+            store: Some(false),
             stream: false,
             tools: Vec::new(),
             max_output_tokens: None,
@@ -253,7 +345,7 @@ impl<'a> ResponseRequest<'a> {
 
 #[derive(Serialize)]
 struct ResponseReasoning {
-    effort: &'static str,
+    effort: String,
 }
 
 #[derive(Deserialize)]
@@ -380,16 +472,13 @@ impl TextGenerationPort for OpenAiClient {
 #[async_trait]
 impl Provider for OpenAiClient {
     fn model(&self) -> Model {
-        Model::openai(
-            COPILOT_MODEL_ID,
-            COPILOT_API_MODEL,
-            COPILOT_MAX_OUTPUT_TOKENS,
-            true,
-        )
+        self.provider_model.clone()
     }
 
     fn system_message(&self) -> &str {
-        "You are the blog writing copilot."
+        self.system_message
+            .as_deref()
+            .unwrap_or("You are the blog writing copilot.")
     }
 
     async fn stream_response(
@@ -407,7 +496,10 @@ impl Provider for OpenAiClient {
             .iter()
             .map(|tool| tool.info().name)
             .collect::<Vec<_>>();
-        let instructions = copilot_prompt(&tool_names);
+        let instructions = self
+            .system_message
+            .clone()
+            .unwrap_or_else(|| copilot_prompt(&tool_names));
         let input = response_input(&messages);
         let response_tools = tools
             .iter()
@@ -432,14 +524,19 @@ impl Provider for OpenAiClient {
             .post(format!("{}/responses", self.base_url))
             .bearer_auth(self.api_key.expose_secret())
             .json(&ResponseRequest {
-                model: COPILOT_API_MODEL,
+                model: &self.provider_model.api_model,
                 instructions,
                 input,
-                store: false,
+                store: (self.provider_model.provider.0
+                    != crate::core::ml::llm::ModelProvider::GROQ)
+                    .then_some(false),
                 stream: true,
                 tools: response_tools,
-                max_output_tokens: Some(COPILOT_MAX_OUTPUT_TOKENS),
-                reasoning: Some(ResponseReasoning { effort: "medium" }),
+                max_output_tokens: Some(self.max_output_tokens),
+                reasoning: self
+                    .reasoning_effort
+                    .clone()
+                    .map(|effort| ResponseReasoning { effort }),
             })
             .send();
         let response = tokio::select! {
@@ -714,6 +811,31 @@ async fn process_response_event(
                     },
                 )
                 .await?;
+            } else if item.get("type").and_then(serde_json::Value::as_str) == Some("reasoning") {
+                for part in item
+                    .get("content")
+                    .and_then(serde_json::Value::as_array)
+                    .into_iter()
+                    .flatten()
+                {
+                    if part.get("type").and_then(serde_json::Value::as_str)
+                        == Some("reasoning_text")
+                    {
+                        let text = part
+                            .get("text")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or_default();
+                        if !text.is_empty() {
+                            state.reasoning.push_str(text);
+                            send_provider_event(
+                                sender,
+                                cancellation,
+                                ProviderEvent::thinking_delta(text.to_owned()),
+                            )
+                            .await?;
+                        }
+                    }
+                }
             }
         }
         "response.function_call_arguments.delta" => {

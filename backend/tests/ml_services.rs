@@ -98,17 +98,18 @@ fn copilot_prompt_only_advertises_registered_tools() {
 }
 
 #[test]
-fn dormant_provider_and_mcp_paths_are_inventory_only() {
+fn only_unregistered_mcp_and_nested_agent_paths_remain_inventory_only() {
     let names = DORMANT_CAPABILITIES
         .iter()
         .map(|capability| capability.name)
         .collect::<Vec<_>>();
-    assert!(names.contains(&"anthropic"));
-    assert!(names.contains(&"gemini"));
-    assert!(names.contains(&"groq"));
-    assert!(names.contains(&"vertex_ai"));
+    assert!(!names.contains(&"anthropic"));
+    assert!(!names.contains(&"gemini"));
+    assert!(!names.contains(&"groq"));
+    assert!(!names.contains(&"vertex_ai"));
     assert!(names.contains(&"mcp_stdio"));
     assert!(names.contains(&"mcp_sse"));
+    assert!(names.contains(&"nested_agent"));
     assert!(
         DORMANT_CAPABILITIES
             .iter()

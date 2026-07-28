@@ -68,8 +68,23 @@ async fn responses(
 ) -> Response<Body> {
     record(&state, "/v1/responses", &request).await;
     let input = response_input_text(&request);
+    let output_text = if request.get("model").and_then(Value::as_str) == Some("openai/gpt-oss-120b")
+    {
+        json!({
+            "title": "Fixture insight",
+            "summary": "A deterministic fixture summary.",
+            "content": "Deterministic fixture insight content grounded in the supplied articles.",
+            "key_points": [
+                "First fixture takeaway",
+                "Second fixture takeaway",
+                "Third fixture takeaway"
+            ]
+        })
+        .to_string()
+    } else {
+        format!("Fixture response: {input}")
+    };
     if request.get("stream").and_then(Value::as_bool) == Some(true) {
-        let delta = format!("Fixture response: {input}");
         let completed = json!({
             "id": "resp_fixture",
             "object": "response",
@@ -79,7 +94,7 @@ async fn responses(
                 "id": "msg_fixture",
                 "role": "assistant",
                 "status": "completed",
-                "content": [{"type": "output_text", "text": delta, "annotations": []}]
+                "content": [{"type": "output_text", "text": output_text, "annotations": []}]
             }],
             "usage": {
                 "input_tokens": 4,
@@ -90,7 +105,7 @@ async fn responses(
         let stream = [
             format!(
                 "data: {}",
-                json!({"type": "response.output_text.delta", "delta": delta})
+                json!({"type": "response.output_text.delta", "delta": output_text})
             ),
             format!(
                 "data: {}",
@@ -111,7 +126,7 @@ async fn responses(
             "type": "message",
             "content": [{
                 "type": "output_text",
-                "text": format!("Fixture response: {input}")
+                "text": output_text
             }]
         }],
         "usage": {"input_tokens": 4, "output_tokens": 4}

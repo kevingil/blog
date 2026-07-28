@@ -43,8 +43,8 @@ use crate::{
             TextGenerationService,
             llm::{
                 Agent, AskQuestionTool, GenerateImagePromptTool, GetRelevantSourcesTool,
-                InMemorySessionStore, ReadDocumentTool, ReplaceLinesTool, SearchWebSourcesTool,
-                SelectSourcesForEditTool, SessionStore, Tool,
+                InMemorySessionStore, Model, ModelProvider, ReadDocumentTool, ReplaceLinesTool,
+                SearchWebSourcesTool, SelectSourcesForEditTool, SessionStore, Tool,
             },
         },
         organization::OrganizationService,
@@ -73,11 +73,12 @@ use crate::{
         user_insight_status::DieselUserInsightStatusRepository,
     },
     integrations::{
-        exa::ExaClient, fetch::HttpFetchExtract, openai::OpenAiClient, s3::S3ObjectStore,
+        exa::ExaClient, fetch::HttpFetchExtract, llm::GroqClient, openai::OpenAiClient,
+        s3::S3ObjectStore,
     },
     runtime::{
-        AgentQueueWorker, CombinedAgentStreamProvider, CopilotRuntime, ImageQueueWorker,
-        RuntimeAgentQueue, RuntimeImageQueue, RuntimeInsightGenerator,
+        AgentQueueWorker, CombinedAgentStreamProvider, CopilotRuntime, INSIGHT_INSTRUCTIONS,
+        ImageQueueWorker, RuntimeAgentQueue, RuntimeImageQueue, RuntimeInsightGenerator,
     },
     server,
 };
@@ -117,6 +118,20 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
     let openai = Arc::new(OpenAiClient::with_base_url(
         config.openai_api_key.expose_secret(),
         config.openai_base_url.clone(),
+    )?);
+    let groq = Arc::new(GroqClient::with_base_url(
+        config.groq_api_key.expose_secret(),
+        config.groq_base_url.clone(),
+        Model::new(
+            "openai/gpt-oss-120b",
+            ModelProvider::GROQ,
+            "openai/gpt-oss-120b",
+            2_000,
+            true,
+            true,
+        ),
+        INSIGHT_INSTRUCTIONS,
+        Some("medium".to_owned()),
     )?);
     let exa = Arc::new(ExaClient::with_base_url(
         config.exa_api_key.expose_secret(),
@@ -244,12 +259,12 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         data_sources,
         Some(exa.clone()),
     )));
-    let insight_generator = openai.is_configured().then(|| {
+    let insight_generator = groq.is_configured().then(|| {
         Arc::new(RuntimeInsightGenerator::new(
             topics,
             topic_matches,
             Arc::new(DieselCrawledContentRepository::new(pool.clone())),
-            openai.clone(),
+            groq,
             insight_service.clone(),
             clock,
         )) as Arc<dyn crate::core::worker::InsightGenerationPort>

@@ -149,9 +149,13 @@ article creation, agent submission, and image-generation/object-storage smoke
 flows. The Rust process runs as UID 10001. Graceful and forced shutdown are
 also covered by the server and upgraded-WebSocket lifecycle tests.
 
-External provider behavior is exercised through deterministic local OpenAI
-Responses/SSE, Exa, image, and S3-compatible fixtures. No parity test contacts
-production services.
+External provider behavior is exercised through deterministic local OpenAI,
+Groq-compatible Responses/SSE, Anthropic, Gemini, Vertex AI, Exa, image, and
+S3-compatible fixtures. The active insight worker keeps the Go composition's
+separate `GROQ_API_KEY` configuration, `openai/gpt-oss-120b` model, and
+2,000-token output cap instead of substituting the copilot's OpenAI client. MCP
+remains inventory-only because the active Go configuration contains no MCP
+servers. No parity test contacts production services.
 
 ## Pending baseline evidence
 

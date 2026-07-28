@@ -57,7 +57,7 @@ hyper-util = { version = "=0.1.20", features = ["service", "tokio"] }
 jsonwebtoken = { version = "=11.0.0", features = ["rust_crypto"] }
 pdf-extract = "=0.12.0"
 pgvector = { version = "=0.4.2", features = ["diesel"] }
-reqwest = { version = "=0.13.4", default-features = false, features = ["json", "multipart", "rustls", "stream"] }
+reqwest = { version = "=0.13.4", default-features = false, features = ["json", "multipart", "query", "rustls", "stream"] }
 scraper = "=0.27.0"
 secrecy = { version = "=0.10.3", features = ["serde"] }
 serde = { version = "=1.0.228", features = ["derive"] }

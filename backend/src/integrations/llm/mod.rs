@@ -1,1 +1,3 @@
-// Provider adapters are ported after their event and usage contracts are fixed.
+mod client;
+
+pub use client::{AnthropicClient, GeminiClient, GroqClient, VertexAiClient};

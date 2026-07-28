@@ -16,7 +16,7 @@ use crate::{
         worker::{Clock, InsightGenerationPort, InsightTopicResult, WorkerFailure},
     },
     error::AppError,
-    integrations::openai::OpenAiClient,
+    integrations::{llm::GroqClient, openai::OpenAiClient},
 };
 
 const MIN_CONTENT_COUNT: i64 = 3;
@@ -25,7 +25,7 @@ const RECENT_INSIGHT_WINDOW: Duration = Duration::hours(24);
 const FALLBACK_PERIOD: Duration = Duration::days(7);
 const MAX_ARTICLE_CONTENT_CHARS: usize = 1_500;
 
-const INSIGHT_INSTRUCTIONS: &str = r#"Analyze the supplied topic and articles and return one insight.
+pub(crate) const INSIGHT_INSTRUCTIONS: &str = r#"Analyze the supplied topic and articles and return one insight.
 
 Return only a JSON object with this exact schema:
 {
@@ -105,6 +105,22 @@ impl InsightTextGenerator for OpenAiClient {
     ) -> Result<GeneratedInsight, AppError> {
         let input = serde_json::to_string(&request).map_err(|_| AppError::Internal)?;
         let response = self.generate_text(INSIGHT_INSTRUCTIONS, &input).await?;
+        decode_generated_insight(&response)
+    }
+}
+
+#[async_trait]
+impl InsightTextGenerator for GroqClient {
+    fn is_configured(&self) -> bool {
+        GroqClient::is_configured(self)
+    }
+
+    async fn generate_insight(
+        &self,
+        request: InsightGenerationRequest,
+    ) -> Result<GeneratedInsight, AppError> {
+        let input = serde_json::to_string(&request).map_err(|_| AppError::Internal)?;
+        let response = self.generate_text(&input).await?;
         decode_generated_insight(&response)
     }
 }

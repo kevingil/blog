@@ -40,6 +40,7 @@ case "$mode" in
       profile_service \
       project_repository \
       project_service \
+      provider_adapters \
       s3_object_store \
       source_service \
       storage_repository \

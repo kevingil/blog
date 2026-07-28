@@ -1,6 +1,5 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DormantCapabilityKind {
-    Provider,
     McpTransport,
     AgentTool,
 }
@@ -13,29 +12,9 @@ pub struct DormantCapability {
 }
 
 /// These Go paths exist but are not configured by the active blog composition
-/// root. They are recorded explicitly so a future product decision can port
-/// them without pretending that unverified behavior is live today.
+/// root. Provider adapters are implemented and contract-tested separately;
+/// only capabilities with no active registration remain in this inventory.
 pub const DORMANT_CAPABILITIES: &[DormantCapability] = &[
-    DormantCapability {
-        name: "anthropic",
-        kind: DormantCapabilityKind::Provider,
-        disposition: "inventory-only: disabled by default in Go",
-    },
-    DormantCapability {
-        name: "gemini",
-        kind: DormantCapabilityKind::Provider,
-        disposition: "inventory-only: disabled by default in Go",
-    },
-    DormantCapability {
-        name: "groq",
-        kind: DormantCapabilityKind::Provider,
-        disposition: "inventory-only: disabled by default in Go",
-    },
-    DormantCapability {
-        name: "vertex_ai",
-        kind: DormantCapabilityKind::Provider,
-        disposition: "inventory-only: no active blog configuration",
-    },
     DormantCapability {
         name: "mcp_stdio",
         kind: DormantCapabilityKind::McpTransport,
