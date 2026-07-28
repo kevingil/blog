@@ -1,14 +1,14 @@
 version: 2
 before:
   hooks:
-  - cd backend && go mod tidy
+  - cd backend-go && go mod tidy
 
 env:
   - PACKAGE_PATH=github.com/<user>/<repo>/cmd
 
 builds:
 - binary: "{{ .ProjectName }}"
-  dir: backend
+  dir: backend-go
   main: .
   goos:
   - darwin

@@ -1,7 +1,7 @@
 import { defineConfig } from "@hey-api/openapi-ts";
 
 export default defineConfig({
-  input: "../backend/docs/swagger.json",
+  input: "../backend-go/docs/swagger.json",
   output: "./src/client",
   plugins: [
     "@hey-api/typescript",

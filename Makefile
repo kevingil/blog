@@ -5,16 +5,16 @@ all: build test
 
 build:
 	@echo "Building..."
-	@cd backend && go build -o ../main .
+	@cd backend-go && go build -o ../main .
 
 # Run the application
 run:
-	@cd backend && go run .
+	@cd backend-go && go run .
 
 # Test the application
 test:
 	@echo "Testing..."
-	@cd backend && go test ./... -v
+	@cd backend-go && go test ./... -v
 
 # Clean the binary
 clean:
@@ -24,7 +24,7 @@ clean:
 # Generate Swagger documentation
 swagger:
 	@echo "Generating Swagger docs..."
-	@cd backend && swag init --parseDependency --parseInternal --generalInfo main.go
+	@cd backend-go && swag init --parseDependency --parseInternal --generalInfo main.go
 
 # Generate frontend API client from OpenAPI spec
 generate-client: swagger
