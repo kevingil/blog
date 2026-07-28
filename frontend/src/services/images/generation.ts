@@ -1,0 +1,83 @@
+import { ImageGeneration, ImageGenerationStatus } from '../types';
+import { VITE_API_BASE_URL } from '../constants';
+import { handleApiResponse } from '../apiHelpers';
+
+export async function generateArticleImage(
+  prompt: string | undefined, 
+  articleId: number | undefined,
+  generatePrompt: boolean = false,
+): Promise<{ 
+  success: boolean, 
+  generationRequestId: string,
+}> {
+  if (!articleId) {
+    return { success: false, generationRequestId: "" };
+  }
+
+  try {
+    const response = await fetch(`${VITE_API_BASE_URL}/images/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt,
+        article_id: articleId,
+        generate_prompt: generatePrompt,
+      }),
+    });
+
+    const result = await handleApiResponse<{ request_id: string }>(response);
+    return { 
+      success: true, 
+      generationRequestId: result.request_id 
+    };
+  } catch (error) {
+    console.error(error);
+    return { success: false, generationRequestId: "" };
+  }
+}
+
+export async function getImageGeneration(requestId: string): Promise<ImageGeneration | null> {
+  try {
+    const response = await fetch(`${VITE_API_BASE_URL}/images/${requestId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null;
+      }
+      throw new Error('Failed to get image generation');
+    }
+
+    return handleApiResponse<ImageGeneration>(response);
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+export async function getImageGenerationStatus(requestId: string): Promise<ImageGenerationStatus> {
+  try {
+    const response = await fetch(`${VITE_API_BASE_URL}/images/${requestId}/status`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to get image generation status');
+    }
+
+    return handleApiResponse<ImageGenerationStatus>(response);
+  } catch (error) {
+    console.error(error);
+    return { accepted: false, requestId, outputUrl: "" };
+  }
+}
+

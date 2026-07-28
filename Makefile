@@ -1,0 +1,51 @@
+# Simple Makefile for a Go project
+
+# Build the application
+all: build test
+
+build:
+	@echo "Building..."
+	@cd backend && go build -o ../main .
+
+# Run the application
+run:
+	@cd backend && go run .
+
+# Test the application
+test:
+	@echo "Testing..."
+	@cd backend && go test ./... -v
+
+# Clean the binary
+clean:
+	@echo "Cleaning..."
+	@rm -f main
+
+# Generate Swagger documentation
+swagger:
+	@echo "Generating Swagger docs..."
+	@cd backend && swag init --parseDependency --parseInternal --generalInfo main.go
+
+# Generate frontend API client from OpenAPI spec
+generate-client: swagger
+	@echo "Generating frontend API client..."
+	@cd frontend && bun run generate-client
+
+# Live Reload
+watch:
+	@if command -v air > /dev/null; then \
+            air; \
+            echo "Watching...";\
+        else \
+            read -p "Go's 'air' is not installed on your machine. Do you want to install it? [Y/n] " choice; \
+            if [ "$$choice" != "n" ] && [ "$$choice" != "N" ]; then \
+                go install github.com/air-verse/air@latest; \
+                air; \
+                echo "Watching...";\
+            else \
+                echo "You chose not to install air. Exiting..."; \
+                exit 1; \
+            fi; \
+        fi
+
+.PHONY: all build run test clean watch swagger generate-client

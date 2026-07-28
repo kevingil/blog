@@ -1,0 +1,137 @@
+[
+  {
+    "id": 1,
+    "header": "Profile Management",
+    "type": "User Settings",
+    "status": "Active",
+    "target": "100",
+    "limit": "∞",
+    "reviewer": "System Admin"
+  },
+  {
+    "id": 2,
+    "header": "Blog Articles",
+    "type": "Content Management",
+    "status": "Active",
+    "target": "50",
+    "limit": "100",
+    "reviewer": "Content Editor"
+  },
+  {
+    "id": 3,
+    "header": "New Article Creation",
+    "type": "Content Creation",
+    "status": "Active",
+    "target": "10",
+    "limit": "25",
+    "reviewer": "Content Editor"
+  },
+  {
+    "id": 4,
+    "header": "Media Uploads",
+    "type": "File Management",
+    "status": "Active",
+    "target": "200",
+    "limit": "500",
+    "reviewer": "Content Manager"
+  },
+  {
+    "id": 5,
+    "header": "General Configuration",
+    "type": "System Settings",
+    "status": "Active",
+    "target": "20",
+    "limit": "50",
+    "reviewer": "System Admin"
+  },
+  {
+    "id": 6,
+    "header": "Security Settings",
+    "type": "Security Management",
+    "status": "Active",
+    "target": "15",
+    "limit": "30",
+    "reviewer": "Security Admin"
+  },
+  {
+    "id": 7,
+    "header": "Draft Articles",
+    "type": "Content Review",
+    "status": "In Process",
+    "target": "5",
+    "limit": "15",
+    "reviewer": "Content Editor"
+  },
+  {
+    "id": 8,
+    "header": "Published Articles",
+    "type": "Content Management",
+    "status": "Done",
+    "target": "45",
+    "limit": "85",
+    "reviewer": "Content Editor"
+  },
+  {
+    "id": 9,
+    "header": "Image Library",
+    "type": "Media Management",
+    "status": "Active",
+    "target": "150",
+    "limit": "300",
+    "reviewer": "Content Manager"
+  },
+  {
+    "id": 10,
+    "header": "Document Storage",
+    "type": "File Management",
+    "status": "Active",
+    "target": "50",
+    "limit": "200",
+    "reviewer": "Content Manager"
+  },
+  {
+    "id": 11,
+    "header": "Blog Analytics",
+    "type": "Analytics",
+    "status": "Active",
+    "target": "∞",
+    "limit": "∞",
+    "reviewer": "Analytics Team"
+  },
+  {
+    "id": 12,
+    "header": "SEO Optimization",
+    "type": "Content Enhancement",
+    "status": "In Process",
+    "target": "40",
+    "limit": "50",
+    "reviewer": "SEO Specialist"
+  },
+  {
+    "id": 13,
+    "header": "User Authentication",
+    "type": "Security",
+    "status": "Done",
+    "target": "100",
+    "limit": "100",
+    "reviewer": "Security Admin"
+  },
+  {
+    "id": 14,
+    "header": "Comment Moderation",
+    "type": "Content Review",
+    "status": "Active",
+    "target": "25",
+    "limit": "50",
+    "reviewer": "Content Moderator"
+  },
+  {
+    "id": 15,
+    "header": "Backup System",
+    "type": "System Management",
+    "status": "Done",
+    "target": "1",
+    "limit": "1",
+    "reviewer": "System Admin"
+  }
+]
