@@ -38,3 +38,5 @@ main
 # Internal docs
 .docs/
 
+# Local execution plans
+.plans/
