@@ -1,8 +1,8 @@
 # Blog Copilot
 
 An agentic blog editor with a React/Bun frontend and an Axum/Rust backend.
-`backend-go/` is retained temporarily as the buildable behavior oracle for the
-port; production code lives in `backend/`.
+The legacy Go backend is no longer vendored. Its pinned source reference and
+the retained porting evidence live in `docs/porting/`.
 
 ![Blog Copilot](frontend/public/IMG_2718.png)
 
@@ -62,7 +62,10 @@ docker compose --profile test run --build --rm test
 The insight behavior target is always compiled and executed, but CI reports its
 11 exact cases separately because that subsystem remains work in progress.
 
-The Go/Rust parity environment uses independent PostgreSQL 17.4 databases:
+The Go/Rust parity environment uses independent PostgreSQL 17.4 databases. It
+fetches the pinned [kevingil/blog-go](https://github.com/kevingil/blog-go)
+source as a Docker build context, so the reference implementation does not
+remain in this repository:
 
 ```bash
 docker compose -f docker-compose.parity.yml up --build \

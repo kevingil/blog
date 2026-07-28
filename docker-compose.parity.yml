@@ -13,6 +13,12 @@ x-db-environment: &db-environment
   POSTGRES_DB: blog
   TZ: UTC
 
+x-go-reference-build: &go-reference-build
+  context: .
+  dockerfile: Dockerfile.go-reference
+  additional_contexts:
+    go_reference: https://github.com/kevingil/blog-go.git#67e918381c0331d29be39f88b0a62e8f8d6f1d10
+
 services:
   external-fixtures:
     build:
@@ -64,16 +70,14 @@ services:
 
   go-migrate:
     build:
-      context: .
-      dockerfile: docker/goose/Dockerfile
+      <<: *go-reference-build
+      target: migrate
     command:
       - -dir
       - /migrations
       - postgres
       - postgres://blog:blog@go-db:5432/blog?sslmode=disable
       - up
-    volumes:
-      - ./backend-go/pkg/database/migrations:/migrations:ro
     depends_on:
       go-db:
         condition: service_healthy
@@ -113,8 +117,8 @@ services:
 
   go-api:
     build:
-      context: .
-      dockerfile: Dockerfile.go-reference
+      <<: *go-reference-build
+      target: runtime
     environment:
       DATABASE_URL: postgres://blog:blog@go-db:5432/blog
       AUTH_SECRET: local-parity-secret
