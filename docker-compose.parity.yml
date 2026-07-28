@@ -1,0 +1,125 @@
+name: blog-parity
+
+x-db-build: &db-build
+  context: .
+  dockerfile: docker/postgres/Dockerfile
+  args:
+    POSTGRES_VERSION: "17.4"
+    PGVECTOR_VERSION: "0.8.2"
+
+x-db-environment: &db-environment
+  POSTGRES_USER: blog
+  POSTGRES_PASSWORD: blog
+  POSTGRES_DB: blog
+  TZ: UTC
+
+services:
+  go-db:
+    build: *db-build
+    environment: *db-environment
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blog -d blog"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "55433:5432"
+
+  rust-db:
+    build: *db-build
+    environment: *db-environment
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blog -d blog"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "55434:5432"
+
+  go-migrate:
+    build:
+      context: .
+      dockerfile: docker/goose/Dockerfile
+    command:
+      - -dir
+      - /migrations
+      - postgres
+      - postgres://blog:blog@go-db:5432/blog?sslmode=disable
+      - up
+    volumes:
+      - ./backend-go/pkg/database/migrations:/migrations:ro
+    depends_on:
+      go-db:
+        condition: service_healthy
+
+  rust-migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["/usr/local/bin/migrate"]
+    environment:
+      DATABASE_URL: postgres://blog:blog@rust-db:5432/blog
+      AUTH_SECRET: local-parity-secret
+    depends_on:
+      rust-db:
+        condition: service_healthy
+
+  go-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.go-reference
+    environment:
+      DATABASE_URL: postgres://blog:blog@go-db:5432/blog
+      AUTH_SECRET: local-parity-secret
+      S3_BUCKET: local-fixture
+      S3_URL_PREFIX: http://external-fixtures:9090/storage
+      PORT: "8081"
+    depends_on:
+      go-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8081/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "8081:8081"
+
+  rust-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://blog:blog@rust-db:5432/blog
+      AUTH_SECRET: local-parity-secret
+      PORT: "8080"
+    depends_on:
+      rust-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "8080:8080"
+
+  contract-tests:
+    image: oven/bun:1.3.14
+    working_dir: /workspace/contract-tests
+    command: ["bun", "test"]
+    environment:
+      GO_BACKEND_BASE_URL: http://go-api:8081
+      RUST_BACKEND_BASE_URL: http://rust-api:8080
+      REPORT_PATH: /reports/parity.json
+    volumes:
+      - .:/workspace:ro
+      - parity-reports:/reports
+    depends_on:
+      rust-api:
+        condition: service_healthy
+      go-api:
+        condition: service_healthy
+
+volumes:
+  parity-reports:

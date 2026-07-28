@@ -1,29 +1,27 @@
-ARG GO_VERSION=1.24.4
-FROM golang:${GO_VERSION}-bookworm AS builder
+FROM rust:1.92.0-bookworm@sha256:e90e846de4124376164ddfbaab4b0774c7bdeef5e738866295e5a90a34a307a2 AS builder
 
-WORKDIR /app
-COPY backend-go/go.mod backend-go/go.sum ./backend-go/
-WORKDIR /app/backend-go
-RUN go mod download && go mod verify
-WORKDIR /app
-COPY . .
-RUN ls -la /app
-WORKDIR /app/backend-go
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libpq-dev pkg-config \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN go build -v -o /run-app .
+WORKDIR /app/backend
+COPY backend/Cargo.toml backend/Cargo.lock backend/rust-toolchain.toml backend/diesel.toml ./
+COPY backend/migrations ./migrations
+COPY backend/src ./src
+COPY backend/tests ./tests
+RUN cargo build --locked --release --bin blog-backend --bin migrate
 
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
 
-# Set working directory to root
-WORKDIR /app
-COPY --from=builder /run-app /usr/local/bin/
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl libpq5 \
+    && useradd --system --uid 10001 --create-home blog \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy the app directory
-COPY --from=builder /app /app
+COPY --from=builder /app/backend/target/release/blog-backend /usr/local/bin/blog-backend
+COPY --from=builder /app/backend/target/release/migrate /usr/local/bin/migrate
 
-# Required for secure connections to external services
-RUN apt-get update && apt-get install -y ca-certificates
-
-RUN ls -la /app
-
-CMD ["run-app"]
+USER 10001
+ENV PORT=8080
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/blog-backend"]

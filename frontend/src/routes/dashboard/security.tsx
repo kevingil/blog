@@ -12,6 +12,11 @@ type ActionState = {
   success?: string;
 };
 
+const MAX_PASSWORD_BYTES = 72;
+
+const isPasswordTooLong = (password: string) =>
+  new TextEncoder().encode(password).length > MAX_PASSWORD_BYTES;
+
 export const Route = createFileRoute('/dashboard/security')({
   component: SecurityPage,
 });
@@ -25,9 +30,34 @@ function SecurityPage() {
 
   const handlePasswordSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setIsPasswordPending(true);
     const formData = new FormData(event.currentTarget);
-    
+    const currentPassword = formData.get('currentPassword');
+    const newPassword = formData.get('newPassword');
+    const confirmPassword = formData.get('confirmPassword');
+
+    if (
+      typeof currentPassword !== 'string' ||
+      typeof newPassword !== 'string' ||
+      typeof confirmPassword !== 'string'
+    ) {
+      setPasswordState({ error: 'All password fields are required' });
+      return;
+    }
+    if (
+      isPasswordTooLong(currentPassword) ||
+      isPasswordTooLong(newPassword) ||
+      isPasswordTooLong(confirmPassword)
+    ) {
+      setPasswordState({ error: 'Passwords must be at most 72 bytes when UTF-8 encoded' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordState({ error: 'New passwords do not match' });
+      return;
+    }
+
+    setIsPasswordPending(true);
+
     try {
       await updatePassword(formData);
       setPasswordState({ success: 'Password updated successfully' });
@@ -40,9 +70,20 @@ function SecurityPage() {
 
   const handleDeleteSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setIsDeletePending(true);
     const formData = new FormData(event.currentTarget);
-    
+    const password = formData.get('password');
+
+    if (typeof password !== 'string') {
+      setDeleteState({ error: 'Password is required' });
+      return;
+    }
+    if (isPasswordTooLong(password)) {
+      setDeleteState({ error: 'Password must be at most 72 bytes when UTF-8 encoded' });
+      return;
+    }
+
+    setIsDeletePending(true);
+
     try {
       await deleteAccount(formData);
       setDeleteState({ success: 'Account deleted successfully' });
@@ -74,7 +115,7 @@ function SecurityPage() {
                 autoComplete="current-password"
                 required
                 minLength={8}
-                maxLength={100}
+                maxLength={72}
               />
             </div>
             <div>
@@ -86,7 +127,7 @@ function SecurityPage() {
                 autoComplete="new-password"
                 required
                 minLength={8}
-                maxLength={100}
+                maxLength={72}
               />
             </div>
             <div>
@@ -97,7 +138,7 @@ function SecurityPage() {
                 type="password"
                 required
                 minLength={8}
-                maxLength={100}
+                maxLength={72}
               />
             </div>
             {passwordState.error && (
@@ -144,7 +185,7 @@ function SecurityPage() {
                 type="password"
                 required
                 minLength={8}
-                maxLength={100}
+                maxLength={72}
               />
             </div>
             {deleteState.error && (

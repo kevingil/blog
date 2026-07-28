@@ -1,0 +1,88 @@
+name: blog-rust
+
+x-db-environment: &db-environment
+  POSTGRES_USER: blog
+  POSTGRES_PASSWORD: blog
+  POSTGRES_DB: blog
+  TZ: UTC
+
+x-api-environment: &api-environment
+  DATABASE_URL: postgres://blog:blog@db:5432/blog
+  AUTH_SECRET: local-test-secret-that-is-not-used-in-production
+  PORT: "8080"
+  HOST: 0.0.0.0
+  ALLOWED_ORIGINS: http://localhost:3000
+
+services:
+  db:
+    build:
+      context: .
+      dockerfile: docker/postgres/Dockerfile
+      args:
+        POSTGRES_VERSION: "17.4"
+        PGVECTOR_VERSION: "0.8.2"
+    environment: *db-environment
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blog -d blog"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "55432:5432"
+    volumes:
+      - blog-rust-db:/var/lib/postgresql/data
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["/usr/local/bin/migrate"]
+    environment: *api-environment
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment: *api-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "8080:8080"
+
+  test:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: docker/test/Dockerfile
+    environment:
+      DATABASE_URL: postgres://blog:blog@db:5432/blog
+      TEST_DATABASE_URL: postgres://blog:blog@db:5432/blog
+      AUTH_SECRET: local-test-secret-that-is-not-used-in-production
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:8080
+        VITE_WS_URL: ws://localhost:8080/websocket
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+
+volumes:
+  blog-rust-db:

@@ -25,6 +25,9 @@
 
 # .env file
 **/.env
+.git
+.plans
+backend/target
 
 # Project build
 **/main

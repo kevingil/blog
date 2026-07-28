@@ -1,0 +1,29 @@
+ARG GO_VERSION=1.24.4
+FROM golang:${GO_VERSION}-bookworm@sha256:10f549dc8489597aa7ed2b62008199bb96717f52a8e8434ea035d5b44368f8a6 AS builder
+
+WORKDIR /app
+COPY backend-go/go.mod backend-go/go.sum ./backend-go/
+WORKDIR /app/backend-go
+RUN go mod download && go mod verify
+WORKDIR /app
+COPY . .
+RUN ls -la /app
+WORKDIR /app/backend-go
+
+RUN go build -v -o /run-app .
+
+FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
+
+# Set working directory to root
+WORKDIR /app
+COPY --from=builder /run-app /usr/local/bin/
+
+# Copy the app directory
+COPY --from=builder /app /app
+
+# Required for secure connections to external services
+RUN apt-get update && apt-get install -y ca-certificates curl
+
+RUN ls -la /app
+
+CMD ["run-app"]

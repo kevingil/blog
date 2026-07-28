@@ -22,6 +22,10 @@ function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (new TextEncoder().encode(password).length > 72) {
+      setError('Invalid email or password');
+      return;
+    }
     setIsLoading(true);
 
     try {
@@ -84,7 +88,7 @@ function Login() {
                 autoComplete="current-password"
                 required
                 minLength={8}
-                maxLength={100}
+                maxLength={72}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="appearance-none rounded-full relative block w-full h-12 border border-gray-300 focus:outline-none focus:z-10 sm:text-sm"
