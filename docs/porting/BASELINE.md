@@ -2,6 +2,10 @@
 
 ## Source and toolchain
 
+- Canonical source: <https://github.com/kevingil/blog-go>
+- Pinned upstream revision:
+  [`67e918381c0331d29be39f88b0a62e8f8d6f1d10`](https://github.com/kevingil/blog-go/commit/67e918381c0331d29be39f88b0a62e8f8d6f1d10)
+- Pinned upstream source directory: `backend/`
 - Imported content commit: `3df5ccd823b49cbb157dbbeb091bec906bcdc1a8`
 - Behavior-preserving rename commit: `a286dac2fc14035c6e1c87953f5d1c6d99d7a6b5`
 - Required reference toolchain: Go `1.24.4`
@@ -18,21 +22,29 @@
   `sha256:1eff5a5f3fcf8431a0abb7eddf5471fec24e5e1905a2581aeacdb07a4479b92b`.
 - PostgreSQL runtime: `postgres:17.4-bookworm` at
   `sha256:304ab813518754228f9f792f79d6da36359b82d8ecf418096c636725f8c930ad`.
-- Goose builder: `golang:1.25.7-bookworm` at
-  `sha256:564e366a28ad1d70f460a2b97d1d299a562f08707eb0ecb24b659e5bd6c108e1`.
+- Goose reference: official `v3.27.1` Linux release binaries, verified against
+  the upstream SHA-256 checksums for `arm64` and `x86_64`.
 
-The renamed Go tree built successfully with `go build ./...`. The renamed root
-Dockerfile also built successfully as `blog-go-rename-baseline`. The preserved
-Go suite passes all 101 top-level cases with an isolated writable build cache:
+Before its deletion, the renamed Go tree built successfully with
+`go build ./...`. The renamed root Dockerfile also built successfully as
+`blog-go-rename-baseline`. The preserved Go suite passed all 101 top-level
+cases with an isolated writable build cache:
 
 ```sh
-cd backend-go
+git clone https://github.com/kevingil/blog-go.git ../blog-go-reference
+git -C ../blog-go-reference checkout --detach 67e918381c0331d29be39f88b0a62e8f8d6f1d10
+cd ../blog-go-reference/backend
 GOCACHE=/tmp/blog-go-build-cache go test ./...
 ```
 
 The imported article-service test was updated only to pass the explicit
 `publishedAt` argument already required by the imported service signature; its
 mock expectation and behavioral assertion remain unchanged.
+
+Immediately before deletion, the pinned upstream `backend/` directory and the
+former local `backend-go/` directory both contained 235 files. Their only diff
+was that documented test-only compatibility update. The runtime source,
+migrations, generated Swagger documents, dependencies, and fixtures matched.
 
 ## Inventory
 
@@ -57,23 +69,27 @@ mock expectation and behavioral assertion remain unchanged.
   services remain authoritative consumers until each row is reconciled.
 - Detailed rows and unresolved decisions live in `CONTRACTS.tsv`.
 
-## Baseline commands and results
+## Historical baseline commands and results
+
+These commands record the acceptance evidence produced while the local
+`backend-go/` copy existed. Use the pinned external checkout above for any new
+Go-only investigation.
 
 ```sh
-cd backend-go
+cd ../blog-go-reference/backend
 go build ./...
 ```
 
 Passed after the rename.
 
 ```sh
-docker build -t blog-go-rename-baseline .
+docker build -t blog-go-rename-baseline ../blog-go-reference
 ```
 
 Passed on Docker Desktop arm64 using the Go 1.24.4 builder.
 
 ```sh
-cd backend-go
+cd ../blog-go-reference/backend
 go test ./pkg/core/insight -run '^TestService_' -count=1 -v
 ```
 
@@ -158,6 +174,12 @@ remains inventory-only because the active Go configuration contains no MCP
 servers. No parity test contacts production services.
 
 ## Pending baseline evidence
+
+No further static source information is required from the original Go
+repository before deleting the local copy: every one of its 222 Go files has a
+recorded disposition, every contract row is classified, all seven migration
+bodies are retained in Diesel form, and the exact source revision remains
+available upstream.
 
 The read-only Supabase settings/fingerprint remains pending because no
 production database credentials were made available to this checkout.

@@ -1,8 +1,34 @@
 # Go-to-Rust Porting Rules
 
 This is the durable semantic guide for the atomic backend rewrite. The Go
-oracle is `backend-go/`; the Rust implementation is `backend/`. Mechanical
-parity precedes refactoring.
+oracle is the `backend/` directory at
+[`kevingil/blog-go@67e9183`](https://github.com/kevingil/blog-go/tree/67e918381c0331d29be39f88b0a62e8f8d6f1d10/backend);
+the Rust implementation is `backend/` in this repository. Mechanical parity
+precedes refactoring.
+
+## Legacy source reference
+
+- Canonical repository: <https://github.com/kevingil/blog-go>
+- Pinned source revision:
+  `67e918381c0331d29be39f88b0a62e8f8d6f1d10`
+- Pinned source directory: `backend/`
+- Local import commit: `3df5ccd823b49cbb157dbbeb091bec906bcdc1a8`
+- Local rename commit: `a286dac2fc14035c6e1c87953f5d1c6d99d7a6b5`
+
+The `backend-go/...` paths in `MODULE_MAP.tsv` and `OWNERSHIP.tsv` are stable
+historical identifiers for files under the pinned source's `backend/...`
+directory; they do not imply that a local `backend-go/` directory exists.
+
+The upstream snapshot was compared against the former local tree before
+deletion. All 235 files matched except
+`pkg/core/article/service_test.go`, whose local copy contained only the
+documented compatibility update that passes the already-required
+`publishedAt` argument. No runtime implementation differed.
+
+`docker-compose.parity.yml` fetches this exact revision as a named Docker build
+context for reproducible Go/Diesel migration and HTTP/WebSocket parity checks.
+Changing the pinned revision requires reviewing and updating the porting
+ledgers first.
 
 ## Layer and dependency direction
 
