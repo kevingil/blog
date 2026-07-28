@@ -1,6 +1,7 @@
 import { ImageGeneration, ImageGenerationStatus } from '../types';
-import { VITE_API_BASE_URL } from '../constants';
-import { handleApiResponse } from '../apiHelpers';
+import { Images } from '@/client';
+import type { ImageGenerationResponse } from '@/client';
+import { generatedData } from '../generatedClient';
 
 export async function generateArticleImage(
   prompt: string | undefined, 
@@ -15,19 +16,15 @@ export async function generateArticleImage(
   }
 
   try {
-    const response = await fetch(`${VITE_API_BASE_URL}/images/generate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        prompt,
-        article_id: articleId,
-        generate_prompt: generatePrompt,
+    const result = await generatedData<{ request_id: string }>(
+      Images.generateImage({
+        body: {
+          prompt: prompt ?? '',
+          article_id: String(articleId),
+          generate_prompt: generatePrompt,
+        },
       }),
-    });
-
-    const result = await handleApiResponse<{ request_id: string }>(response);
+    );
     return { 
       success: true, 
       generationRequestId: result.request_id 
@@ -40,22 +37,24 @@ export async function generateArticleImage(
 
 export async function getImageGeneration(requestId: string): Promise<ImageGeneration | null> {
   try {
-    const response = await fetch(`${VITE_API_BASE_URL}/images/${requestId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        return null;
-      }
-      throw new Error('Failed to get image generation');
+    const value = await generatedData<ImageGenerationResponse>(
+      Images.getImageGeneration({ path: { requestId } }),
+    );
+    return {
+      id: Number(value.id),
+      created_at: value.created_at ? Date.parse(value.created_at) : 0,
+      updated_at: value.completed_at ? Date.parse(value.completed_at) : 0,
+      prompt: value.prompt,
+      provider: value.provider,
+      model: value.model,
+      request_id: value.request_id,
+      output_url: value.output_url || undefined,
+      storage_key: value.file_index_id || undefined,
+    };
+  } catch (error: any) {
+    if (error.status === 404) {
+      return null;
     }
-
-    return handleApiResponse<ImageGeneration>(response);
-  } catch (error) {
     console.error(error);
     return null;
   }
@@ -63,21 +62,11 @@ export async function getImageGeneration(requestId: string): Promise<ImageGenera
 
 export async function getImageGenerationStatus(requestId: string): Promise<ImageGenerationStatus> {
   try {
-    const response = await fetch(`${VITE_API_BASE_URL}/images/${requestId}/status`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to get image generation status');
-    }
-
-    return handleApiResponse<ImageGenerationStatus>(response);
+    return generatedData<ImageGenerationStatus>(
+      Images.getImageGenerationStatus({ path: { requestId } }),
+    );
   } catch (error) {
     console.error(error);
     return { accepted: false, requestId, outputUrl: "" };
   }
 }
-

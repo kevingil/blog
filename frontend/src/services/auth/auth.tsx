@@ -1,8 +1,8 @@
 import { atom, useAtomValue, useSetAtom } from 'jotai';
 import { User } from '../types';
 import { createContext, useContext, ReactNode, useEffect } from 'react';
-import { VITE_API_BASE_URL } from '../constants';
-import { handleApiResponse } from '../apiHelpers';
+import { Auth } from '@/client';
+import { generatedData } from '../generatedClient';
 
 const initialToken: string | null = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 const storedUser = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
@@ -62,28 +62,16 @@ export function useAuthContext(): AuthContext {
 }
 
 export async function performLogin(email: string, password: string): Promise<{ user: User; token: string }> {
-  const response = await fetch(`${VITE_API_BASE_URL}/auth/login`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email, password }),
-  });
-
-  return handleApiResponse<{ user: User; token: string }>(response);
+  return generatedData<{ user: User; token: string }>(
+    Auth.authLogin({ body: { email, password } }),
+  );
 }
 
 export async function performLogout(): Promise<void> {
   const token = localStorage.getItem('token');
   if (token) {
     try {
-      const response = await fetch(`${VITE_API_BASE_URL}/auth/logout`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      await handleApiResponse<{ message: string }>(response);
+      await generatedData<{ message: string }>(Auth.authLogout());
     } catch (error) {
       console.error('Logout failed:', error);
     }
@@ -96,94 +84,42 @@ export async function signOut(): Promise<void> {
   await performLogout();
 }
 
-export async function getCurrentUser(token: string): Promise<User | null> {
-  try {
-    const response = await fetch(`${VITE_API_BASE_URL}/auth/me`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const data = await handleApiResponse<{ user: User }>(response);
-    return data.user;
-  } catch {
-    return null;
-  }
-}
-
-export async function refreshToken(token: string): Promise<string | null> {
-  try {
-    const response = await fetch(`${VITE_API_BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const data = await handleApiResponse<{ token: string }>(response);
-    return data.token;
-  } catch {
-    return null;
-  }
-}
-
 export async function updateAccount(formData: FormData): Promise<void> {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    throw new Error('Not authenticated');
-  }
-
-  const response = await fetch(`${VITE_API_BASE_URL}/auth/account`, {
-    method: 'PUT',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
-    body: formData,
-  });
-
-  await handleApiResponse<{ message: string }>(response);
+  await generatedData<{ message: string }>(
+    Auth.authUpdateAccount({
+      body: {
+        name: requiredFormValue(formData, 'name'),
+        email: requiredFormValue(formData, 'email'),
+      },
+    }),
+  );
 }
 
 export async function updatePassword(formData: FormData): Promise<void> {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    throw new Error('Not authenticated');
-  }
-
-  const response = await fetch(`${VITE_API_BASE_URL}/auth/password`, {
-    method: 'PUT',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
-    body: formData,
-  });
-
-  await handleApiResponse<{ message: string }>(response);
+  await generatedData<{ message: string }>(
+    Auth.authUpdatePassword({
+      body: {
+        currentPassword: requiredFormValue(formData, 'currentPassword'),
+        newPassword: requiredFormValue(formData, 'newPassword'),
+      },
+    }),
+  );
 }
 
 export async function deleteAccount(formData: FormData): Promise<void> {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    throw new Error('Not authenticated');
+  await generatedData<{ message: string }>(
+    Auth.authDeleteAccount({
+      body: { password: requiredFormValue(formData, 'password') },
+    }),
+  );
+}
+
+function requiredFormValue(formData: FormData, key: string): string {
+  const value = formData.get(key);
+  if (typeof value !== 'string') {
+    throw new Error(`Missing ${key}`);
   }
-
-  const response = await fetch(`${VITE_API_BASE_URL}/auth/account`, {
-    method: 'DELETE',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
-    body: formData,
-  });
-
-  await handleApiResponse<{ message: string }>(response);
+  return value;
 }
 
 // Custom hook for auth state
@@ -223,30 +159,6 @@ export function useAuth() {
       localStorage.removeItem('token');
     }
   }, [user, token]);
-
-  // // Set up token refresh interval
-  // React.useEffect(() => {
-  //   if (!token) return;
-
-  //   console.log('token', token);
-  //   const interval = setInterval(async () => {
-  //     const newToken = await refreshToken(token);
-  //     if (newToken) {
-  //       if (newToken !== token) {
-  //         setToken(newToken);
-  //         localStorage.setItem('token', newToken);
-  //       }
-  //     } else {
-  //       // Token refresh failed, logout
-  //       setToken(null);
-  //       setUser(null);
-  //       localStorage.removeItem('token');
-  //       localStorage.removeItem('user');
-  //     }
-  //   }, 5 * 60 * 1000); // Refresh every 5 minutes
-
-  //   return () => clearInterval(interval);
-  // }, [token, setToken, setUser]);
 
   return {
     user,

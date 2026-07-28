@@ -9,5 +9,6 @@ COPY backend/Cargo.toml backend/Cargo.lock backend/rust-toolchain.toml backend/d
 COPY backend/migrations ./migrations
 COPY backend/src ./src
 COPY backend/tests ./tests
+COPY scripts/test-rust.sh /app/scripts/test-rust.sh
 
-CMD ["cargo", "test", "--locked", "--lib", "--test", "auth", "--test", "auth_database", "--test", "article_repository", "--test", "health", "--test", "websocket_contract", "--test", "websocket_network", "--", "--test-threads=1"]
+CMD ["/app/scripts/test-rust.sh", "blocking"]

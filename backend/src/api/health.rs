@@ -3,8 +3,6 @@ use serde::Serialize;
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::app::AppState;
-
 #[derive(Debug, Serialize, ToSchema)]
 pub struct HealthResponse {
     pub status: &'static str,
@@ -39,7 +37,10 @@ pub async fn root() -> Json<RootResponse> {
     })
 }
 
-pub fn router() -> OpenApiRouter<AppState> {
+pub fn router<S>() -> OpenApiRouter<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
     OpenApiRouter::new()
         .routes(routes!(root))
         .routes(routes!(health))

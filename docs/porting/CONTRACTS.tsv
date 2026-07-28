@@ -105,13 +105,13 @@ WS-005	websocket	C->S	subscribe-worker	upgraded	{action:"subscribe",channel:"wor
 WS-006	websocket	S->C	worker-ack	upgraded	-	{type:"subscribed",channel:"worker-status"}	no timestamp	use-worker-statuses.ts	n/a	active-contract
 WS-007	websocket	S->C	worker-status	upgraded	-	{type:"worker-status",worker_name,status,timestamp?}	initial omits timestamp and task_run_id;updates include timestamp	use-worker-statuses.ts	n/a	active-contract
 WS-008	websocket	C->S	unsubscribe-worker	upgraded	{action:"unsubscribe",channel:"worker-status"}	-	no ack	use-worker-statuses.ts	n/a	active-contract
-UNRESOLVED-001	frontend	POST	/images/generate	Bearer JWT	frontend request	none registered	-	frontend/src/components/blog/Editor.tsx	absent	missing-implementation
-UNRESOLVED-002	frontend	GET	/images/{requestId}	Bearer JWT	path	none registered	-	frontend ImageLoader consumers	absent	missing-implementation
-UNRESOLVED-003	frontend	GET	/images/{requestId}/status	Bearer JWT	path	none registered	-	frontend ImageLoader consumers	absent	missing-implementation
-UNRESOLVED-004	frontend	PUT	/blog/articles/{id}/context	Bearer JWT	frontend request	none registered	overlaps live PUT /blog/{id}/update	frontend/src/components/blog/Editor.tsx	absent	missing-implementation
-UNRESOLVED-005	frontend	GET	/auth/session	unknown	-	none registered	-	frontend export only	absent	dead-consumer
-UNRESOLVED-006	frontend	POST	/auth/refresh	unknown	-	none registered	-	frontend export only	absent	dead-consumer
-UNRESOLVED-007	frontend	GET	/auth/me	unknown	-	none registered	-	frontend export only	absent	dead-consumer
-UNRESOLVED-008	frontend	GET	/blog/{id}/chat-history	unknown	path	none registered	-	frontend export only	absent	dead-consumer
-UNRESOLVED-009	frontend	PUT	/pages/contact-me	unknown	body	none registered	conflicts path with GET /pages/{slug}	frontend export only	absent	dead-consumer
-UNRESOLVED-010	frontend	PUT	/pages/about-me	unknown	body	none registered	conflicts path with GET /pages/{slug}	frontend export only	absent	dead-consumer
+HTTP-099	image	POST	/images/generate	Bearer JWT	{prompt,article_id,generate_prompt}	202 {request_id};400;401;502	exact snake_case request and response	frontend/src/components/blog/Editor.tsx	covered	approved-change
+HTTP-100	image	GET	/images/{requestId}	Bearer JWT	path request ID	200 ImageGenerationResponse;401;404;500	per runtime DTO	frontend ImageLoader consumers	covered	approved-change
+HTTP-101	image	GET	/images/{requestId}/status	Bearer JWT	path request ID	200 ImageGenerationStatus;401;404;500	camelCase plus compatibility snake_case fields	frontend ImageLoader consumers	covered	approved-change
+RESOLVED-004	frontend	PUT	/blog/articles/{id}/context	Bearer JWT	frontend request	resolved to HTTP-017	frontend caller now uses generated updateArticleWithContext	frontend/src/components/blog/Editor.tsx	n/a	resolved-existing-contract
+REMOVED-005	frontend	GET	/auth/session	unknown	-	dead export removed	-	none	n/a	removed-dead-consumer
+REMOVED-006	frontend	POST	/auth/refresh	unknown	-	dead export removed	-	none	n/a	removed-dead-consumer
+REMOVED-007	frontend	GET	/auth/me	unknown	-	dead export removed	-	none	n/a	removed-dead-consumer
+REMOVED-008	frontend	GET	/blog/{id}/chat-history	unknown	path	dead export removed	-	none	n/a	removed-dead-consumer
+REMOVED-009	frontend	PUT	/pages/contact-me	unknown	body	dead export removed	-	none	n/a	removed-dead-consumer
+REMOVED-010	frontend	PUT	/pages/about-me	unknown	body	dead export removed	-	none	n/a	removed-dead-consumer

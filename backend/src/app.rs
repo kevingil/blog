@@ -18,7 +18,12 @@ use tower_http::{
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
-    api::{auth::AuthState, websocket::WebSocketSupervisorHandle},
+    api::{
+        agent::AgentState, article::ArticleState, auth::AuthState, datasource::DataSourceState,
+        image::ImageState, insight::InsightState, organization::OrganizationState, page::PageState,
+        profile::ProfileState, project::ProjectState, source::SourceState, storage::StorageState,
+        taskrun::TaskRunState, websocket::WebSocketSupervisorHandle, worker::WorkerState,
+    },
     constants::{DEFAULT_REQUEST_TIMEOUT, MAX_REQUEST_BODY_BYTES},
     database::pool::PgPool,
     openapi,
@@ -28,15 +33,62 @@ use crate::{
 pub struct AppState {
     pub(crate) pool: PgPool,
     auth: AuthState,
+    agent: AgentState,
+    article: ArticleState,
+    datasource: DataSourceState,
+    image: ImageState,
+    insight: InsightState,
+    organization: OrganizationState,
+    page: PageState,
+    profile: ProfileState,
+    project: ProjectState,
+    source: SourceState,
+    storage: StorageState,
+    taskrun: TaskRunState,
     websocket: WebSocketSupervisorHandle,
+    worker: WorkerState,
+}
+
+pub struct AppDependencies {
+    pub agent: AgentState,
+    pub article: ArticleState,
+    pub datasource: DataSourceState,
+    pub image: ImageState,
+    pub insight: InsightState,
+    pub organization: OrganizationState,
+    pub page: PageState,
+    pub profile: ProfileState,
+    pub project: ProjectState,
+    pub source: SourceState,
+    pub storage: StorageState,
+    pub taskrun: TaskRunState,
+    pub worker: WorkerState,
 }
 
 impl AppState {
-    pub fn new(pool: PgPool, auth: AuthState, websocket: WebSocketSupervisorHandle) -> Self {
+    pub fn new(
+        pool: PgPool,
+        auth: AuthState,
+        websocket: WebSocketSupervisorHandle,
+        dependencies: AppDependencies,
+    ) -> Self {
         Self {
             pool,
             auth,
+            agent: dependencies.agent,
+            article: dependencies.article,
+            datasource: dependencies.datasource,
+            image: dependencies.image,
+            insight: dependencies.insight,
+            organization: dependencies.organization,
+            page: dependencies.page,
+            profile: dependencies.profile,
+            project: dependencies.project,
+            source: dependencies.source,
+            storage: dependencies.storage,
+            taskrun: dependencies.taskrun,
             websocket,
+            worker: dependencies.worker,
         }
     }
 
@@ -50,6 +102,34 @@ impl axum::extract::FromRef<AppState> for AuthState {
         state.auth.clone()
     }
 }
+
+macro_rules! from_app_state {
+    ($state:ty, $field:ident) => {
+        impl axum::extract::FromRef<AppState> for $state {
+            fn from_ref(state: &AppState) -> Self {
+                state.$field.clone()
+            }
+        }
+    };
+}
+
+from_app_state!(AgentState, agent);
+impl axum::extract::FromRef<AppState> for ArticleState {
+    fn from_ref(state: &AppState) -> Self {
+        state.article.clone()
+    }
+}
+from_app_state!(DataSourceState, datasource);
+from_app_state!(ImageState, image);
+from_app_state!(InsightState, insight);
+from_app_state!(OrganizationState, organization);
+from_app_state!(PageState, page);
+from_app_state!(ProfileState, profile);
+from_app_state!(ProjectState, project);
+from_app_state!(SourceState, source);
+from_app_state!(StorageState, storage);
+from_app_state!(TaskRunState, taskrun);
+from_app_state!(WorkerState, worker);
 
 impl axum::extract::FromRef<AppState> for WebSocketSupervisorHandle {
     fn from_ref(state: &AppState) -> Self {

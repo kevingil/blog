@@ -4,6 +4,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::Serialize;
+use std::collections::BTreeMap;
 use thiserror::Error;
 use utoipa::ToSchema;
 
@@ -29,25 +30,22 @@ pub enum AppError {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ErrorEnvelope {
-    pub error: ErrorBody,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct ErrorBody {
+    pub error: String,
     pub code: &'static str,
-    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<BTreeMap<String, String>>,
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, code) = match self {
-            Self::InvalidInput(_) => (StatusCode::BAD_REQUEST, "invalid_input"),
-            Self::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
-            Self::Forbidden => (StatusCode::FORBIDDEN, "forbidden"),
-            Self::NotFound => (StatusCode::NOT_FOUND, "not_found"),
-            Self::Conflict(_) => (StatusCode::CONFLICT, "conflict"),
+            Self::InvalidInput(_) => (StatusCode::BAD_REQUEST, "INVALID_INPUT"),
+            Self::Unauthorized => (StatusCode::UNAUTHORIZED, "UNAUTHORIZED"),
+            Self::Forbidden => (StatusCode::FORBIDDEN, "FORBIDDEN"),
+            Self::NotFound => (StatusCode::NOT_FOUND, "NOT_FOUND"),
+            Self::Conflict(_) => (StatusCode::CONFLICT, "CONFLICT"),
             Self::Database | Self::External | Self::Internal => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "internal_error")
+                (StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR")
             }
         };
 
@@ -60,7 +58,9 @@ impl IntoResponse for AppError {
         (
             status,
             Json(ErrorEnvelope {
-                error: ErrorBody { code, message },
+                error: message,
+                code,
+                details: None,
             }),
         )
             .into_response()

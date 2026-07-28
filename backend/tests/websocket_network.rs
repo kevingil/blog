@@ -1,20 +1,13 @@
 use std::{sync::Arc, time::Duration};
 
 use blog_backend::{
-    api::{
-        auth::AuthState,
-        websocket::{
-            EmptyWorkerStatusProvider, UnavailableAgentStreamProvider, WebSocketConfig,
-            WebSocketSupervisor,
-        },
+    api::websocket::{
+        EmptyWorkerStatusProvider, UnavailableAgentStreamProvider, WebSocketConfig,
+        WebSocketSupervisor,
     },
-    app::{self, AppState},
-    core::auth::AuthService,
-    database::{pool::create_pool, repository::account::DieselAccountRepository},
     server,
 };
 use futures_util::{SinkExt, StreamExt};
-use secrecy::SecretString;
 use serde_json::{Value, json};
 use tokio::{net::TcpListener, time::timeout};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
@@ -22,13 +15,6 @@ use tokio_util::sync::CancellationToken;
 
 #[tokio::test]
 async fn upgraded_session_is_owned_and_reaped_before_shutdown_returns() -> anyhow::Result<()> {
-    let pool = create_pool(&SecretString::from(
-        "postgres://blog:blog@127.0.0.1:5432/blog".to_owned(),
-    ))?;
-    let auth = AuthState::new(Arc::new(AuthService::new(
-        Arc::new(DieselAccountRepository::new(pool.clone())),
-        "websocket-network-secret",
-    )?));
     let websocket_config = WebSocketConfig {
         shutdown_wait: Duration::from_millis(250),
         ..WebSocketConfig::default()
@@ -38,8 +24,11 @@ async fn upgraded_session_is_owned_and_reaped_before_shutdown_returns() -> anyho
         Arc::new(UnavailableAgentStreamProvider),
         Arc::new(EmptyWorkerStatusProvider),
     )?;
-    let state = AppState::new(pool, auth, websocket_handle.clone());
-    let router = app::router(state, &[])?;
+    let (router, _) = blog_backend::api::websocket::router::<
+        blog_backend::api::websocket::WebSocketSupervisorHandle,
+    >()
+    .split_for_parts();
+    let router = router.with_state(websocket_handle.clone());
 
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;

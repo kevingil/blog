@@ -1,9 +1,7 @@
-name: goreleaser
+name: Go Reference Release
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -16,7 +14,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.22.x'
+          go-version: '1.24.4'
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6

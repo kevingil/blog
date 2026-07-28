@@ -1,4 +1,5 @@
-import { apiGet, apiPost, apiPut, apiDelete } from '@/services/authenticatedFetch';
+import { Projects } from '@/client';
+import { generatedData } from '@/services/generatedClient';
 
 export type Project = {
   id: string;
@@ -25,14 +26,14 @@ export type ListProjectsResponse = {
 };
 
 export async function listProjects(page: number = 1, perPage: number = 20): Promise<ListProjectsResponse> {
-  const params = new URLSearchParams({ page: String(page), perPage: String(perPage) });
-  // Public endpoint - skip auth
-  return apiGet<ListProjectsResponse>(`/projects/?${params}`, { skipAuth: true });
+  return generatedData<ListProjectsResponse>(
+    Projects.listProjects({ query: { page, perPage } }),
+  );
 }
 
 export async function getProject(id: string): Promise<ProjectDetail> {
   // Public endpoint - skip auth
-  return apiGet<ProjectDetail>(`/projects/${id}`, { skipAuth: true });
+  return generatedData<ProjectDetail>(Projects.getProject({ path: { id } }));
 }
 
 export async function createProject(payload: {
@@ -44,7 +45,7 @@ export async function createProject(payload: {
   url?: string;
 }): Promise<Project> {
   // Protected endpoint - requires auth
-  return apiPost<Project>('/projects/', payload);
+  return generatedData<Project>(Projects.createProject({ body: payload }));
 }
 
 export async function updateProject(id: string, payload: {
@@ -57,12 +58,11 @@ export async function updateProject(id: string, payload: {
   created_at?: string;
 }): Promise<Project> {
   // Protected endpoint - requires auth
-  return apiPut<Project>(`/projects/${id}`, payload);
+  return generatedData<Project>(Projects.updateProject({ path: { id }, body: payload }));
 }
 
 export async function deleteProject(id: string): Promise<{ success: boolean }> {
   // Protected endpoint - requires auth
-  return apiDelete<{ success: boolean }>(`/projects/${id}`);
+  return generatedData<{ success: boolean }>(Projects.deleteProject({ path: { id } }));
 }
-
 

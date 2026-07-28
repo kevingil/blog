@@ -4,12 +4,234 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
+export type AllWorkersStatusResponse = {
+    workers: Array<WorkerStatusResponse>;
+    is_running: boolean;
+};
+
+export type Article = {
+    id: string;
+    slug: string;
+    author_id: string;
+    tag_ids?: Array<number> | null;
+    draft_title: string;
+    draft_content: string;
+    draft_image_url: string;
+    draft_embedding: Array<number>;
+    published_title?: string | null;
+    published_content?: string | null;
+    published_image_url?: string | null;
+    published_embedding: Array<number>;
+    published_at?: string | null;
+    current_draft_version_id?: string | null;
+    current_published_version_id?: string | null;
+    imagen_request_id?: string | null;
+    session_memory?: {
+        [key: string]: unknown;
+    } | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+};
+
+export type ArticleListItem = {
+    article: Article;
+    author: AuthorData;
+    tags: Array<TagData>;
+};
+
+export type ArticleListResponse = {
+    articles: Array<ArticleListItem>;
+    total_pages: number;
+    include_drafts: boolean;
+};
+
+export type ArticleVersionListResponse = {
+    versions: Array<ArticleVersionResponse>;
+    total: number;
+};
+
+export type ArticleVersionResponse = {
+    id: string;
+    article_id: string;
+    version_number: number;
+    status: string;
+    title: string;
+    content: string;
+    image_url: string;
+    created_at?: string | null;
+};
+
+export type ArtifactFeedbackRequest = {
+    feedback?: string;
+};
+
 export type AuthErrorResponse = {
     error: string;
     code: string;
     details?: {
         [key: string]: string;
     } | null;
+};
+
+export type AuthorData = {
+    id: string;
+    name: string;
+};
+
+export type ChatMessageResponse = {
+    id: string;
+    article_id: string;
+    role: string;
+    content: string;
+    meta_data?: unknown;
+    created_at: string;
+};
+
+export type ChatRequest = {
+    message: string;
+    documentContent?: string;
+    documentMarkdown?: string;
+    articleId: string;
+};
+
+export type ChatRequestResponse = {
+    requestId: string;
+    status: string;
+};
+
+export type ConversationHistoryResponse = {
+    messages: Array<ChatMessageResponse>;
+    article_id: string;
+    total: number;
+};
+
+export type CountResponse = {
+    count: number;
+};
+
+export type CrawlTriggeredResponse = {
+    success: boolean;
+    message: string;
+};
+
+export type CrawledContentResponse = {
+    id: string;
+    data_source_id: string;
+    url: string;
+    title?: string | null;
+    content: string;
+    summary?: string | null;
+    author?: string | null;
+    published_at?: string | null;
+    meta_data?: {
+        [key: string]: unknown;
+    } | null;
+    created_at: string;
+    data_source_name?: string | null;
+    data_source_url?: string | null;
+};
+
+export type CreateArticle = {
+    title: string;
+    content: string;
+    image_url?: string;
+    tags?: Array<string>;
+    publish?: boolean;
+    authorId: string;
+};
+
+export type CreateFolderRequest = {
+    path: string;
+};
+
+export type CreateSourceRequest = {
+    article_id: string;
+    title?: string;
+    content?: string;
+    url?: string;
+    source_type?: string;
+    meta_data?: {
+        [key: string]: unknown;
+    } | null;
+};
+
+export type DataSourceContentResponse = {
+    contents: Array<CrawledContentResponse>;
+    total: number;
+    page: number;
+    limit: number;
+};
+
+export type DataSourceCreateRequest = {
+    name: string;
+    url: string;
+    feed_url?: string | null;
+    source_type?: string;
+    crawl_frequency?: string;
+    is_enabled?: boolean | null;
+};
+
+export type DataSourceDiscoveryRecommendationRequest = {
+    limit?: number;
+};
+
+export type DataSourceRecommendationRequest = {
+    query: string;
+    limit?: number;
+};
+
+export type DataSourceRecommendationResponse = {
+    name: string;
+    url: string;
+    domain: string;
+    summary?: string;
+    reason?: string;
+    source_type: string;
+    score?: number;
+    favicon?: string;
+    sample_url?: string;
+    sample_title?: string;
+};
+
+export type DataSourceRecommendationsResponse = {
+    mode?: string;
+    query: string;
+    seed_count?: number;
+    recommendations: Array<DataSourceRecommendationResponse>;
+};
+
+export type DataSourceResponse = {
+    id: string;
+    organization_id?: string | null;
+    user_id?: string | null;
+    name: string;
+    url: string;
+    feed_url?: string | null;
+    source_type: string;
+    crawl_frequency: string;
+    is_enabled: boolean;
+    is_discovered: boolean;
+    discovered_from_id?: string | null;
+    last_crawled_at?: string | null;
+    next_crawl_at?: string | null;
+    crawl_status: string;
+    error_message?: string | null;
+    content_count: number;
+    subscriber_count: number;
+    meta_data?: {
+        [key: string]: unknown;
+    } | null;
+    created_at: string;
+    updated_at: string;
+};
+
+export type DataSourceUpdateRequest = {
+    name?: string | null;
+    url?: string | null;
+    feed_url?: string | null;
+    source_type?: string | null;
+    crawl_frequency?: string | null;
+    is_enabled?: boolean | null;
 };
 
 export type DeleteAccountRequest = {
@@ -19,8 +241,157 @@ export type DeleteAccountRequest = {
     password: string;
 };
 
+export type DeleteArticleResponse = {
+    success: boolean;
+};
+
+export type ErrorEnvelope = {
+    error: string;
+    code: string;
+    details?: {
+        [key: string]: string;
+    } | null;
+};
+
+export type FileDataResponse = {
+    key: string;
+    last_modified: string;
+    size: string;
+    size_raw: number;
+    url: string;
+    is_image: boolean;
+};
+
+export type FolderDataResponse = {
+    name: string;
+    path: string;
+    is_hidden: boolean;
+    last_modified: string;
+    file_count: number;
+};
+
+export type GenerateArticleRequest = {
+    prompt?: string;
+    title?: string;
+};
+
+export type GenerateArticleResponse = {
+    article: Article;
+    request_id: string;
+};
+
+export type GenerateImageRequest = {
+    prompt: string;
+    article_id: string;
+    generate_prompt?: boolean;
+};
+
+export type GenerateImageResponse = {
+    request_id: string;
+};
+
 export type HealthResponse = {
     status: string;
+};
+
+export type ImageGenerationResponse = {
+    id: string;
+    prompt: string;
+    provider: string;
+    model: string;
+    request_id: string;
+    status: string;
+    output_url: string;
+    file_index_id?: string | null;
+    error_message: string;
+    meta_data?: {
+        [key: string]: unknown;
+    } | null;
+    created_at?: string | null;
+    completed_at?: string | null;
+};
+
+export type ImageGenerationStatus = {
+    accepted: boolean;
+    requestId: string;
+    outputUrl: string;
+    request_id: string;
+    output_url: string;
+};
+
+export type InsightListResponse = {
+    insights: Array<InsightWithUserStatus>;
+    total: number;
+    page: number;
+    limit: number;
+};
+
+export type InsightResponse = {
+    id: string;
+    organization_id?: string | null;
+    topic_id?: string | null;
+    title: string;
+    summary: string;
+    content?: string | null;
+    key_points?: Array<string> | null;
+    source_content_ids: Array<string>;
+    generated_at: string;
+    period_start?: string | null;
+    period_end?: string | null;
+    is_read: boolean;
+    is_pinned: boolean;
+    is_used_in_article: boolean;
+    meta_data?: {
+        [key: string]: unknown;
+    } | null;
+    topic_name?: string | null;
+    topic_color?: string | null;
+    topic_icon?: string | null;
+};
+
+export type InsightTopicCreateRequest = {
+    name: string;
+    description?: string | null;
+    keywords?: Array<string> | null;
+    color?: string | null;
+    icon?: string | null;
+};
+
+export type InsightTopicResponse = {
+    id: string;
+    organization_id?: string | null;
+    name: string;
+    description?: string | null;
+    keywords?: Array<string> | null;
+    is_auto_generated: boolean;
+    content_count: number;
+    last_insight_at?: string | null;
+    color?: string | null;
+    icon?: string | null;
+    created_at: string;
+    updated_at: string;
+};
+
+export type InsightTopicUpdateRequest = {
+    name?: string | null;
+    description?: string | null;
+    keywords?: Array<string> | null;
+    color?: string | null;
+    icon?: string | null;
+};
+
+export type InsightWithSources = InsightResponse & {
+    source_contents: Array<CrawledContentResponse>;
+    topic?: null | InsightTopicResponse;
+};
+
+export type InsightWithUserStatus = InsightResponse & {
+    user_status?: null | UserInsightStatusResponse;
+};
+
+export type ListFilesResponse = {
+    files: Array<FileDataResponse>;
+    folders: Array<FolderDataResponse>;
 };
 
 export type LoginRequest = {
@@ -37,6 +408,186 @@ export type MessageResponse = {
     message: string;
 };
 
+export type OrganizationCreateRequest = {
+    name?: string;
+    slug?: string;
+    bio?: string | null;
+    logo_url?: string | null;
+    website_url?: string | null;
+    email_public?: string | null;
+    social_links?: {
+        [key: string]: string;
+    } | null;
+    meta_description?: string | null;
+};
+
+export type OrganizationResponse = {
+    id: string;
+    name: string;
+    slug: string;
+    bio: string;
+    logo_url: string;
+    website_url: string;
+    email_public: string;
+    social_links: {
+        [key: string]: string;
+    };
+    meta_description: string;
+};
+
+export type OrganizationUpdateRequest = {
+    name?: string | null;
+    slug?: string | null;
+    bio?: string | null;
+    logo_url?: string | null;
+    website_url?: string | null;
+    email_public?: string | null;
+    social_links?: {
+        [key: string]: string;
+    } | null;
+    meta_description?: string | null;
+};
+
+export type PageCreateRequest = {
+    slug?: string;
+    title?: string;
+    content?: string;
+    description?: string;
+    image_url?: string;
+    meta_data?: {
+        [key: string]: unknown;
+    } | null;
+    is_published?: boolean;
+};
+
+export type PageListResponse = {
+    pages: Array<PageResponse>;
+    total: number;
+    page: number;
+    per_page: number;
+    total_pages: number;
+};
+
+export type PageResponse = {
+    id: string;
+    slug: string;
+    title: string;
+    content: string;
+    description: string;
+    image_url: string;
+    meta_data?: {
+        [key: string]: unknown;
+    } | null;
+    is_published: boolean;
+    created_at: string;
+    updated_at: string;
+};
+
+export type PageUpdateRequest = {
+    title?: string | null;
+    content?: string | null;
+    description?: string | null;
+    image_url?: string | null;
+    meta_data?: {
+        [key: string]: unknown;
+    } | null;
+    is_published?: boolean | null;
+};
+
+export type PendingArtifactsResponse = {
+    artifacts: Array<ChatMessageResponse>;
+};
+
+export type PinResponse = {
+    success: boolean;
+    is_pinned: boolean;
+};
+
+export type PopularTagsResponse = {
+    tags: Array<string>;
+};
+
+export type ProfileUpdateRequest = {
+    name?: string | null;
+    bio?: string | null;
+    profile_image?: string | null;
+    email_public?: string | null;
+    social_links?: {
+        [key: string]: string;
+    } | null;
+    meta_description?: string | null;
+};
+
+export type ProjectCreateRequest = {
+    title?: string;
+    description?: string;
+    content?: string;
+    tags?: Array<string>;
+    image_url?: string;
+    url?: string;
+};
+
+export type ProjectDetailResponse = {
+    project: ProjectResponse;
+    tags: Array<string>;
+};
+
+export type ProjectListResponse = {
+    projects: Array<ProjectResponse>;
+    total: number;
+    current_page: number;
+    per_page: number;
+};
+
+export type ProjectResponse = {
+    id: string;
+    title: string;
+    description: string;
+    content: string;
+    tag_ids?: Array<number>;
+    image_url?: string;
+    url?: string;
+    created_at: string;
+    updated_at: string;
+};
+
+export type ProjectUpdateRequest = {
+    title?: string | null;
+    description?: string | null;
+    content?: string | null;
+    tags?: Array<string> | null;
+    image_url?: string | null;
+    url?: string | null;
+};
+
+export type PublicProfileResponse = {
+    type: string;
+    id: string;
+    name: string;
+    bio: string;
+    image_url: string;
+    email_public: string;
+    social_links: {
+        [key: string]: string;
+    };
+    meta_description: string;
+    website_url?: string | null;
+};
+
+export type PublishArticleRequest = {
+    published_at?: number | null;
+};
+
+export type RecommendedArticle = {
+    id: string;
+    title: string;
+    slug: string;
+    image_url?: string | null;
+    published_at?: string | null;
+    created_at?: string | null;
+    author?: string | null;
+};
+
 export type RegisterRequest = {
     name: string;
     email: string;
@@ -48,6 +599,321 @@ export type RegisterRequest = {
 
 export type RootResponse = {
     message: string;
+};
+
+export type RunWorkerResponse = {
+    started: boolean;
+    message: string;
+    task_run_id: string;
+};
+
+export type RunningWorkersResponse = {
+    workers: Array<string>;
+};
+
+export type ScrapeSourceRequest = {
+    article_id: string;
+    url: string;
+};
+
+export type SearchSourcesResponse = {
+    sources: Array<SourceResponse>;
+    query: string;
+};
+
+export type SiteSettingsResponse = {
+    public_profile_type: string;
+    public_user_id?: string | null;
+    public_organization_id?: string | null;
+};
+
+export type SiteSettingsUpdateRequest = {
+    public_profile_type?: string | null;
+    public_user_id?: string | null;
+    public_organization_id?: string | null;
+};
+
+export type SourceListResponse = {
+    sources: Array<SourceWithArticleResponse>;
+    total_pages: number;
+    page: number;
+};
+
+export type SourceResponse = {
+    id: string;
+    article_id: string;
+    title: string;
+    content: string;
+    url: string;
+    source_type: string;
+    embedding?: Array<number> | null;
+    meta_data?: {
+        [key: string]: unknown;
+    } | null;
+    created_at: string;
+};
+
+export type SourceWithArticleResponse = {
+    id: string;
+    article_id: string;
+    title: string;
+    content: string;
+    content_preview: string;
+    url?: string;
+    source_type: string;
+    meta_data?: {
+        [key: string]: unknown;
+    } | null;
+    created_at: string;
+    article_title: string;
+    article_slug: string;
+};
+
+export type SourcesResponse = {
+    sources: Array<SourceResponse>;
+};
+
+export type StopWorkerResponse = {
+    stopped: boolean;
+    message: string;
+};
+
+export type SuccessFlag = {
+    success: boolean;
+};
+
+export type SuccessFlagResponse = {
+    success: boolean;
+};
+
+export type SuccessResponseAllWorkersStatusResponse = {
+    data: {
+        workers: Array<WorkerStatusResponse>;
+        is_running: boolean;
+    };
+};
+
+export type SuccessResponseArticle = {
+    data: {
+        id: string;
+        slug: string;
+        author_id: string;
+        tag_ids?: Array<number> | null;
+        draft_title: string;
+        draft_content: string;
+        draft_image_url: string;
+        draft_embedding: Array<number>;
+        published_title?: string | null;
+        published_content?: string | null;
+        published_image_url?: string | null;
+        published_embedding: Array<number>;
+        published_at?: string | null;
+        current_draft_version_id?: string | null;
+        current_published_version_id?: string | null;
+        imagen_request_id?: string | null;
+        session_memory?: {
+            [key: string]: unknown;
+        } | null;
+        created_at?: string | null;
+        updated_at?: string | null;
+    };
+};
+
+export type SuccessResponseArticleListItem = {
+    data: {
+        article: Article;
+        author: AuthorData;
+        tags: Array<TagData>;
+    };
+};
+
+export type SuccessResponseArticleListResponse = {
+    data: {
+        articles: Array<ArticleListItem>;
+        total_pages: number;
+        include_drafts: boolean;
+    };
+};
+
+export type SuccessResponseArticleVersionListResponse = {
+    data: {
+        versions: Array<ArticleVersionResponse>;
+        total: number;
+    };
+};
+
+export type SuccessResponseArticleVersionResponse = {
+    data: {
+        id: string;
+        article_id: string;
+        version_number: number;
+        status: string;
+        title: string;
+        content: string;
+        image_url: string;
+        created_at?: string | null;
+    };
+};
+
+export type SuccessResponseChatRequestResponse = {
+    data: {
+        requestId: string;
+        status: string;
+    };
+};
+
+export type SuccessResponseConversationHistoryResponse = {
+    data: {
+        messages: Array<ChatMessageResponse>;
+        article_id: string;
+        total: number;
+    };
+};
+
+export type SuccessResponseCountResponse = {
+    data: {
+        count: number;
+    };
+};
+
+export type SuccessResponseCrawlTriggeredResponse = {
+    data: {
+        success: boolean;
+        message: string;
+    };
+};
+
+export type SuccessResponseDataSourceContentResponse = {
+    data: {
+        contents: Array<CrawledContentResponse>;
+        total: number;
+        page: number;
+        limit: number;
+    };
+};
+
+export type SuccessResponseDataSourceRecommendationsResponse = {
+    data: {
+        mode?: string;
+        query: string;
+        seed_count?: number;
+        recommendations: Array<DataSourceRecommendationResponse>;
+    };
+};
+
+export type SuccessResponseDataSourceResponse = {
+    data: {
+        id: string;
+        organization_id?: string | null;
+        user_id?: string | null;
+        name: string;
+        url: string;
+        feed_url?: string | null;
+        source_type: string;
+        crawl_frequency: string;
+        is_enabled: boolean;
+        is_discovered: boolean;
+        discovered_from_id?: string | null;
+        last_crawled_at?: string | null;
+        next_crawl_at?: string | null;
+        crawl_status: string;
+        error_message?: string | null;
+        content_count: number;
+        subscriber_count: number;
+        meta_data?: {
+            [key: string]: unknown;
+        } | null;
+        created_at: string;
+        updated_at: string;
+    };
+};
+
+export type SuccessResponseDeleteArticleResponse = {
+    data: {
+        success: boolean;
+    };
+};
+
+export type SuccessResponseGenerateArticleResponse = {
+    data: {
+        article: Article;
+        request_id: string;
+    };
+};
+
+export type SuccessResponseGenerateImageResponse = {
+    data: {
+        request_id: string;
+    };
+};
+
+export type SuccessResponseImageGenerationResponse = {
+    data: {
+        id: string;
+        prompt: string;
+        provider: string;
+        model: string;
+        request_id: string;
+        status: string;
+        output_url: string;
+        file_index_id?: string | null;
+        error_message: string;
+        meta_data?: {
+            [key: string]: unknown;
+        } | null;
+        created_at?: string | null;
+        completed_at?: string | null;
+    };
+};
+
+export type SuccessResponseImageGenerationStatus = {
+    data: {
+        accepted: boolean;
+        requestId: string;
+        outputUrl: string;
+        request_id: string;
+        output_url: string;
+    };
+};
+
+export type SuccessResponseInsightListResponse = {
+    data: {
+        insights: Array<InsightWithUserStatus>;
+        total: number;
+        page: number;
+        limit: number;
+    };
+};
+
+export type SuccessResponseInsightTopicResponse = {
+    data: {
+        id: string;
+        organization_id?: string | null;
+        name: string;
+        description?: string | null;
+        keywords?: Array<string> | null;
+        is_auto_generated: boolean;
+        content_count: number;
+        last_insight_at?: string | null;
+        color?: string | null;
+        icon?: string | null;
+        created_at: string;
+        updated_at: string;
+    };
+};
+
+export type SuccessResponseInsightWithSources = {
+    data: InsightResponse & {
+        source_contents: Array<CrawledContentResponse>;
+        topic?: null | InsightTopicResponse;
+    };
+};
+
+export type SuccessResponseListFilesResponse = {
+    data: {
+        files: Array<FileDataResponse>;
+        folders: Array<FolderDataResponse>;
+    };
 };
 
 export type SuccessResponseLoginResponse = {
@@ -63,9 +929,448 @@ export type SuccessResponseMessageResponse = {
     };
 };
 
+export type SuccessResponseOptionVecRecommendedArticle = {
+    data: null | Array<{
+        id: string;
+        title: string;
+        slug: string;
+        image_url?: string | null;
+        published_at?: string | null;
+        created_at?: string | null;
+        author?: string | null;
+    }>;
+};
+
+export type SuccessResponseOrganizationResponse = {
+    data: {
+        id: string;
+        name: string;
+        slug: string;
+        bio: string;
+        logo_url: string;
+        website_url: string;
+        email_public: string;
+        social_links: {
+            [key: string]: string;
+        };
+        meta_description: string;
+    };
+};
+
+export type SuccessResponsePageListResponse = {
+    data: {
+        pages: Array<PageResponse>;
+        total: number;
+        page: number;
+        per_page: number;
+        total_pages: number;
+    };
+};
+
+export type SuccessResponsePageResponse = {
+    data: {
+        id: string;
+        slug: string;
+        title: string;
+        content: string;
+        description: string;
+        image_url: string;
+        meta_data?: {
+            [key: string]: unknown;
+        } | null;
+        is_published: boolean;
+        created_at: string;
+        updated_at: string;
+    };
+};
+
+export type SuccessResponsePendingArtifactsResponse = {
+    data: {
+        artifacts: Array<ChatMessageResponse>;
+    };
+};
+
+export type SuccessResponsePinResponse = {
+    data: {
+        success: boolean;
+        is_pinned: boolean;
+    };
+};
+
+export type SuccessResponsePopularTagsResponse = {
+    data: {
+        tags: Array<string>;
+    };
+};
+
+export type SuccessResponseProjectDetailResponse = {
+    data: {
+        project: ProjectResponse;
+        tags: Array<string>;
+    };
+};
+
+export type SuccessResponseProjectListResponse = {
+    data: {
+        projects: Array<ProjectResponse>;
+        total: number;
+        current_page: number;
+        per_page: number;
+    };
+};
+
+export type SuccessResponseProjectResponse = {
+    data: {
+        id: string;
+        title: string;
+        description: string;
+        content: string;
+        tag_ids?: Array<number>;
+        image_url?: string;
+        url?: string;
+        created_at: string;
+        updated_at: string;
+    };
+};
+
+export type SuccessResponsePublicProfileResponse = {
+    data: {
+        type: string;
+        id: string;
+        name: string;
+        bio: string;
+        image_url: string;
+        email_public: string;
+        social_links: {
+            [key: string]: string;
+        };
+        meta_description: string;
+        website_url?: string | null;
+    };
+};
+
+export type SuccessResponseRunWorkerResponse = {
+    data: {
+        started: boolean;
+        message: string;
+        task_run_id: string;
+    };
+};
+
+export type SuccessResponseRunningWorkersResponse = {
+    data: {
+        workers: Array<string>;
+    };
+};
+
+export type SuccessResponseSearchSourcesResponse = {
+    data: {
+        sources: Array<SourceResponse>;
+        query: string;
+    };
+};
+
+export type SuccessResponseSiteSettingsResponse = {
+    data: {
+        public_profile_type: string;
+        public_user_id?: string | null;
+        public_organization_id?: string | null;
+    };
+};
+
+export type SuccessResponseSourceListResponse = {
+    data: {
+        sources: Array<SourceWithArticleResponse>;
+        total_pages: number;
+        page: number;
+    };
+};
+
+export type SuccessResponseSourceResponse = {
+    data: {
+        id: string;
+        article_id: string;
+        title: string;
+        content: string;
+        url: string;
+        source_type: string;
+        embedding?: Array<number> | null;
+        meta_data?: {
+            [key: string]: unknown;
+        } | null;
+        created_at: string;
+    };
+};
+
+export type SuccessResponseSourcesResponse = {
+    data: {
+        sources: Array<SourceResponse>;
+    };
+};
+
+export type SuccessResponseStopWorkerResponse = {
+    data: {
+        stopped: boolean;
+        message: string;
+    };
+};
+
+export type SuccessResponseSuccessFlag = {
+    data: {
+        success: boolean;
+    };
+};
+
+export type SuccessResponseSuccessFlagResponse = {
+    data: {
+        success: boolean;
+    };
+};
+
+export type SuccessResponseTaskRunDetailResponse = {
+    data: {
+        run: TaskRunResponse;
+        steps: Array<TaskRunStepResponse>;
+        events: Array<TaskRunEventResponse>;
+    };
+};
+
+export type SuccessResponseTaskRunEventsResponse = {
+    data: {
+        events: Array<TaskRunEventResponse>;
+    };
+};
+
+export type SuccessResponseTaskRunListResponse = {
+    data: {
+        runs: Array<TaskRunResponse>;
+    };
+};
+
+export type SuccessResponseUploadFileResponse = {
+    data: {
+        success: boolean;
+        url: string;
+        key: string;
+    };
+};
+
+export type SuccessResponseUserProfileResponse = {
+    data: {
+        id: string;
+        name: string;
+        bio: string;
+        profile_image: string;
+        email_public: string;
+        social_links: {
+            [key: string]: string;
+        };
+        meta_description: string;
+        organization_id?: string | null;
+    };
+};
+
+export type SuccessResponseVecCrawledContentResponse = {
+    data: Array<{
+        id: string;
+        data_source_id: string;
+        url: string;
+        title?: string | null;
+        content: string;
+        summary?: string | null;
+        author?: string | null;
+        published_at?: string | null;
+        meta_data?: {
+            [key: string]: unknown;
+        } | null;
+        created_at: string;
+        data_source_name?: string | null;
+        data_source_url?: string | null;
+    }>;
+};
+
+export type SuccessResponseVecDataSourceResponse = {
+    data: Array<{
+        id: string;
+        organization_id?: string | null;
+        user_id?: string | null;
+        name: string;
+        url: string;
+        feed_url?: string | null;
+        source_type: string;
+        crawl_frequency: string;
+        is_enabled: boolean;
+        is_discovered: boolean;
+        discovered_from_id?: string | null;
+        last_crawled_at?: string | null;
+        next_crawl_at?: string | null;
+        crawl_status: string;
+        error_message?: string | null;
+        content_count: number;
+        subscriber_count: number;
+        meta_data?: {
+            [key: string]: unknown;
+        } | null;
+        created_at: string;
+        updated_at: string;
+    }>;
+};
+
+export type SuccessResponseVecInsightResponse = {
+    data: Array<{
+        id: string;
+        organization_id?: string | null;
+        topic_id?: string | null;
+        title: string;
+        summary: string;
+        content?: string | null;
+        key_points?: Array<string> | null;
+        source_content_ids: Array<string>;
+        generated_at: string;
+        period_start?: string | null;
+        period_end?: string | null;
+        is_read: boolean;
+        is_pinned: boolean;
+        is_used_in_article: boolean;
+        meta_data?: {
+            [key: string]: unknown;
+        } | null;
+        topic_name?: string | null;
+        topic_color?: string | null;
+        topic_icon?: string | null;
+    }>;
+};
+
+export type SuccessResponseVecInsightTopicResponse = {
+    data: Array<{
+        id: string;
+        organization_id?: string | null;
+        name: string;
+        description?: string | null;
+        keywords?: Array<string> | null;
+        is_auto_generated: boolean;
+        content_count: number;
+        last_insight_at?: string | null;
+        color?: string | null;
+        icon?: string | null;
+        created_at: string;
+        updated_at: string;
+    }>;
+};
+
+export type SuccessResponseVecOrganizationResponse = {
+    data: Array<{
+        id: string;
+        name: string;
+        slug: string;
+        bio: string;
+        logo_url: string;
+        website_url: string;
+        email_public: string;
+        social_links: {
+            [key: string]: string;
+        };
+        meta_description: string;
+    }>;
+};
+
+export type SuccessResponseWorkerStatusResponse = {
+    data: {
+        name: string;
+        state: string;
+        task_run_id?: string | null;
+        progress: number;
+        message: string;
+        started_at?: string | null;
+        completed_at?: string | null;
+        error?: string;
+        items_total: number;
+        items_done: number;
+    };
+};
+
+export type TagData = {
+    article_id: string;
+    tag_id: number;
+    name: string;
+};
+
+export type TaskRunDetailResponse = {
+    run: TaskRunResponse;
+    steps: Array<TaskRunStepResponse>;
+    events: Array<TaskRunEventResponse>;
+};
+
+export type TaskRunEventResponse = {
+    id: string;
+    event_type: string;
+    level: string;
+    message: string;
+    created_at: string;
+    step_key?: string | null;
+    meta_data?: {
+        [key: string]: unknown;
+    };
+};
+
+export type TaskRunEventsResponse = {
+    events: Array<TaskRunEventResponse>;
+};
+
+export type TaskRunListResponse = {
+    runs: Array<TaskRunResponse>;
+};
+
+export type TaskRunResponse = {
+    id: string;
+    kind: string;
+    task_name: string;
+    status: string;
+    trigger_source: string;
+    summary?: string | null;
+    error_summary?: string | null;
+    started_at?: string | null;
+    completed_at?: string | null;
+    duration_ms?: number | null;
+    output_summary?: {
+        [key: string]: unknown;
+    };
+    metrics?: {
+        [key: string]: unknown;
+    };
+    parent_run_id?: string | null;
+};
+
+export type TaskRunStepResponse = {
+    id: string;
+    step_key: string;
+    step_name: string;
+    status: string;
+    summary?: string | null;
+    error_summary?: string | null;
+    started_at?: string | null;
+    completed_at?: string | null;
+    metrics?: {
+        [key: string]: unknown;
+    };
+};
+
 export type UpdateAccountRequest = {
     name: string;
     email: string;
+};
+
+export type UpdateArticle = {
+    title: string;
+    content: string;
+    image_url?: string;
+    tags?: Array<string>;
+    published_at?: number | null;
+};
+
+export type UpdateFolderRequest = {
+    oldPath: string;
+    newPath: string;
 };
 
 export type UpdatePasswordRequest = {
@@ -79,11 +1384,66 @@ export type UpdatePasswordRequest = {
     newPassword: string;
 };
 
+export type UpdateSourceRequest = {
+    title?: string | null;
+    content?: string | null;
+    url?: string | null;
+    source_type?: string | null;
+    meta_data?: {
+        [key: string]: unknown;
+    } | null;
+};
+
+export type UploadFileRequest = {
+    key: string;
+    file: Blob | File;
+};
+
+export type UploadFileResponse = {
+    success: boolean;
+    url: string;
+    key: string;
+};
+
+export type UserInsightStatusResponse = {
+    insight_id: string;
+    is_read: boolean;
+    is_pinned: boolean;
+    is_used_in_article: boolean;
+    read_at?: string | null;
+};
+
+export type UserProfileResponse = {
+    id: string;
+    name: string;
+    bio: string;
+    profile_image: string;
+    email_public: string;
+    social_links: {
+        [key: string]: string;
+    };
+    meta_description: string;
+    organization_id?: string | null;
+};
+
 export type UserResponse = {
     id: string;
     name: string;
     email: string;
     role: string;
+};
+
+export type WorkerStatusResponse = {
+    name: string;
+    state: string;
+    task_run_id?: string | null;
+    progress: number;
+    message: string;
+    started_at?: string | null;
+    completed_at?: string | null;
+    error?: string;
+    items_total: number;
+    items_done: number;
 };
 
 export type RootStatusData = {
@@ -98,6 +1458,146 @@ export type RootStatusResponses = {
 };
 
 export type RootStatusResponse = RootStatusResponses[keyof RootStatusResponses];
+
+export type SubmitAgentRequestData = {
+    body: ChatRequest;
+    path?: never;
+    query?: never;
+    url: '/agent';
+};
+
+export type SubmitAgentRequestErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type SubmitAgentRequestError = SubmitAgentRequestErrors[keyof SubmitAgentRequestErrors];
+
+export type SubmitAgentRequestResponses = {
+    200: SuccessResponseChatRequestResponse;
+};
+
+export type SubmitAgentRequestResponse = SubmitAgentRequestResponses[keyof SubmitAgentRequestResponses];
+
+export type GetPendingArtifactsData = {
+    body?: never;
+    path: {
+        articleId: string;
+    };
+    query?: never;
+    url: '/agent/artifacts/{articleId}/pending';
+};
+
+export type GetPendingArtifactsErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetPendingArtifactsError = GetPendingArtifactsErrors[keyof GetPendingArtifactsErrors];
+
+export type GetPendingArtifactsResponses = {
+    200: SuccessResponsePendingArtifactsResponse;
+};
+
+export type GetPendingArtifactsResponse = GetPendingArtifactsResponses[keyof GetPendingArtifactsResponses];
+
+export type AcceptArtifactData = {
+    body: ArtifactFeedbackRequest;
+    path: {
+        messageId: string;
+    };
+    query?: never;
+    url: '/agent/artifacts/{messageId}/accept';
+};
+
+export type AcceptArtifactErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type AcceptArtifactError = AcceptArtifactErrors[keyof AcceptArtifactErrors];
+
+export type AcceptArtifactResponses = {
+    200: SuccessResponseSuccessFlagResponse;
+};
+
+export type AcceptArtifactResponse = AcceptArtifactResponses[keyof AcceptArtifactResponses];
+
+export type RejectArtifactData = {
+    body: ArtifactFeedbackRequest;
+    path: {
+        messageId: string;
+    };
+    query?: never;
+    url: '/agent/artifacts/{messageId}/reject';
+};
+
+export type RejectArtifactErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type RejectArtifactError = RejectArtifactErrors[keyof RejectArtifactErrors];
+
+export type RejectArtifactResponses = {
+    200: SuccessResponseSuccessFlagResponse;
+};
+
+export type RejectArtifactResponse = RejectArtifactResponses[keyof RejectArtifactResponses];
+
+export type ClearConversationHistoryData = {
+    body?: never;
+    path: {
+        articleId: string;
+    };
+    query?: never;
+    url: '/agent/conversations/{articleId}';
+};
+
+export type ClearConversationHistoryErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type ClearConversationHistoryError = ClearConversationHistoryErrors[keyof ClearConversationHistoryErrors];
+
+export type ClearConversationHistoryResponses = {
+    200: SuccessResponseSuccessFlagResponse;
+};
+
+export type ClearConversationHistoryResponse = ClearConversationHistoryResponses[keyof ClearConversationHistoryResponses];
+
+export type GetConversationHistoryData = {
+    body?: never;
+    path: {
+        articleId: string;
+    };
+    query?: {
+        limit?: string;
+    };
+    url: '/agent/conversations/{articleId}';
+};
+
+export type GetConversationHistoryErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetConversationHistoryError = GetConversationHistoryErrors[keyof GetConversationHistoryErrors];
+
+export type GetConversationHistoryResponses = {
+    200: SuccessResponseConversationHistoryResponse;
+};
+
+export type GetConversationHistoryResponse = GetConversationHistoryResponses[keyof GetConversationHistoryResponses];
 
 export type AuthDeleteAccountData = {
     body: DeleteAccountRequest;
@@ -221,6 +1721,641 @@ export type AuthRegisterResponses = {
 
 export type AuthRegisterResponse = AuthRegisterResponses[keyof AuthRegisterResponses];
 
+export type GetArticlesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        articlesPerPage?: number;
+        tag?: string;
+        status?: string;
+        sortBy?: string;
+        sortOrder?: string;
+    };
+    url: '/blog/articles';
+};
+
+export type GetArticlesResponses = {
+    200: SuccessResponseArticleListResponse;
+};
+
+export type GetArticlesResponse = GetArticlesResponses[keyof GetArticlesResponses];
+
+export type CreateArticleData = {
+    body: CreateArticle;
+    path?: never;
+    query?: never;
+    url: '/blog/articles';
+};
+
+export type CreateArticleErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+};
+
+export type CreateArticleError = CreateArticleErrors[keyof CreateArticleErrors];
+
+export type CreateArticleResponses = {
+    201: SuccessResponseArticleListItem;
+};
+
+export type CreateArticleResponse = CreateArticleResponses[keyof CreateArticleResponses];
+
+export type SearchArticlesData = {
+    body?: never;
+    path?: never;
+    query: {
+        query: string;
+        page?: number;
+        tag?: string;
+        status?: string;
+        sortBy?: string;
+        sortOrder?: string;
+    };
+    url: '/blog/articles/search';
+};
+
+export type SearchArticlesErrors = {
+    400: ErrorEnvelope;
+};
+
+export type SearchArticlesError = SearchArticlesErrors[keyof SearchArticlesErrors];
+
+export type SearchArticlesResponses = {
+    200: SuccessResponseArticleListResponse;
+};
+
+export type SearchArticlesResponse = SearchArticlesResponses[keyof SearchArticlesResponses];
+
+export type GetArticleVersionData = {
+    body?: never;
+    path: {
+        versionId: string;
+    };
+    query?: never;
+    url: '/blog/articles/versions/{versionId}';
+};
+
+export type GetArticleVersionResponses = {
+    200: SuccessResponseArticleVersionResponse;
+};
+
+export type GetArticleVersionResponse = GetArticleVersionResponses[keyof GetArticleVersionResponses];
+
+export type GetRecommendedArticlesData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/blog/articles/{id}/recommended';
+};
+
+export type GetRecommendedArticlesResponses = {
+    200: SuccessResponseOptionVecRecommendedArticle;
+};
+
+export type GetRecommendedArticlesResponse = GetRecommendedArticlesResponses[keyof GetRecommendedArticlesResponses];
+
+export type DeleteArticleData = {
+    body?: never;
+    path: {
+        /**
+         * Article ID
+         */
+        slug: string;
+    };
+    query?: never;
+    url: '/blog/articles/{slug}';
+};
+
+export type DeleteArticleErrors = {
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+};
+
+export type DeleteArticleError = DeleteArticleErrors[keyof DeleteArticleErrors];
+
+export type DeleteArticleResponses = {
+    200: SuccessResponseDeleteArticleResponse;
+};
+
+export type DeleteArticleResponse2 = DeleteArticleResponses[keyof DeleteArticleResponses];
+
+export type GetArticleDataData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/blog/articles/{slug}';
+};
+
+export type GetArticleDataErrors = {
+    404: ErrorEnvelope;
+};
+
+export type GetArticleDataError = GetArticleDataErrors[keyof GetArticleDataErrors];
+
+export type GetArticleDataResponses = {
+    200: SuccessResponseArticleListItem;
+};
+
+export type GetArticleDataResponse = GetArticleDataResponses[keyof GetArticleDataResponses];
+
+export type PublishArticleData = {
+    body?: null | PublishArticleRequest;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/blog/articles/{slug}/publish';
+};
+
+export type PublishArticleResponses = {
+    200: SuccessResponseArticleListItem;
+};
+
+export type PublishArticleResponse = PublishArticleResponses[keyof PublishArticleResponses];
+
+export type RevertArticleToVersionData = {
+    body?: never;
+    path: {
+        slug: string;
+        versionId: string;
+    };
+    query?: never;
+    url: '/blog/articles/{slug}/revert/{versionId}';
+};
+
+export type RevertArticleToVersionResponses = {
+    200: SuccessResponseArticleListItem;
+};
+
+export type RevertArticleToVersionResponse = RevertArticleToVersionResponses[keyof RevertArticleToVersionResponses];
+
+export type UnpublishArticleData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/blog/articles/{slug}/unpublish';
+};
+
+export type UnpublishArticleResponses = {
+    200: SuccessResponseArticleListItem;
+};
+
+export type UnpublishArticleResponse = UnpublishArticleResponses[keyof UnpublishArticleResponses];
+
+export type UpdateArticleData = {
+    body: UpdateArticle;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/blog/articles/{slug}/update';
+};
+
+export type UpdateArticleErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+};
+
+export type UpdateArticleError = UpdateArticleErrors[keyof UpdateArticleErrors];
+
+export type UpdateArticleResponses = {
+    200: SuccessResponseArticleListItem;
+};
+
+export type UpdateArticleResponse = UpdateArticleResponses[keyof UpdateArticleResponses];
+
+export type ListArticleVersionsData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/blog/articles/{slug}/versions';
+};
+
+export type ListArticleVersionsResponses = {
+    200: SuccessResponseArticleVersionListResponse;
+};
+
+export type ListArticleVersionsResponse = ListArticleVersionsResponses[keyof ListArticleVersionsResponses];
+
+export type GenerateArticleData = {
+    body: GenerateArticleRequest;
+    path?: never;
+    query?: never;
+    url: '/blog/generate';
+};
+
+export type GenerateArticleErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GenerateArticleError = GenerateArticleErrors[keyof GenerateArticleErrors];
+
+export type GenerateArticleResponses = {
+    200: SuccessResponseGenerateArticleResponse;
+};
+
+export type GenerateArticleResponse2 = GenerateArticleResponses[keyof GenerateArticleResponses];
+
+export type GetPopularTagsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/blog/tags/popular';
+};
+
+export type GetPopularTagsResponses = {
+    200: SuccessResponsePopularTagsResponse;
+};
+
+export type GetPopularTagsResponse = GetPopularTagsResponses[keyof GetPopularTagsResponses];
+
+export type UpdateArticleWithContextData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/blog/{id}/update';
+};
+
+export type UpdateArticleWithContextErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+};
+
+export type UpdateArticleWithContextError = UpdateArticleWithContextErrors[keyof UpdateArticleWithContextErrors];
+
+export type UpdateArticleWithContextResponses = {
+    200: SuccessResponseArticle;
+};
+
+export type UpdateArticleWithContextResponse = UpdateArticleWithContextResponses[keyof UpdateArticleWithContextResponses];
+
+export type ListPagesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        perPage?: number;
+        isPublished?: boolean;
+    };
+    url: '/dashboard/pages';
+};
+
+export type ListPagesErrors = {
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type ListPagesError = ListPagesErrors[keyof ListPagesErrors];
+
+export type ListPagesResponses = {
+    200: SuccessResponsePageListResponse;
+};
+
+export type ListPagesResponse = ListPagesResponses[keyof ListPagesResponses];
+
+export type CreatePageData = {
+    body: PageCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/dashboard/pages';
+};
+
+export type CreatePageErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    409: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type CreatePageError = CreatePageErrors[keyof CreatePageErrors];
+
+export type CreatePageResponses = {
+    201: SuccessResponsePageResponse;
+};
+
+export type CreatePageResponse = CreatePageResponses[keyof CreatePageResponses];
+
+export type DeletePageData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/dashboard/pages/{id}';
+};
+
+export type DeletePageErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type DeletePageError = DeletePageErrors[keyof DeletePageErrors];
+
+export type DeletePageResponses = {
+    200: SuccessResponseSuccessFlag;
+};
+
+export type DeletePageResponse = DeletePageResponses[keyof DeletePageResponses];
+
+export type GetPageByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/dashboard/pages/{id}';
+};
+
+export type GetPageByIdErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetPageByIdError = GetPageByIdErrors[keyof GetPageByIdErrors];
+
+export type GetPageByIdResponses = {
+    200: SuccessResponsePageResponse;
+};
+
+export type GetPageByIdResponse = GetPageByIdResponses[keyof GetPageByIdResponses];
+
+export type UpdatePageData = {
+    body: PageUpdateRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/dashboard/pages/{id}';
+};
+
+export type UpdatePageErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type UpdatePageError = UpdatePageErrors[keyof UpdatePageErrors];
+
+export type UpdatePageResponses = {
+    200: SuccessResponsePageResponse;
+};
+
+export type UpdatePageResponse = UpdatePageResponses[keyof UpdatePageResponses];
+
+export type ListAllSourcesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+    };
+    url: '/dashboard/sources';
+};
+
+export type ListAllSourcesErrors = {
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type ListAllSourcesError = ListAllSourcesErrors[keyof ListAllSourcesErrors];
+
+export type ListAllSourcesResponses = {
+    200: SuccessResponseSourceListResponse;
+};
+
+export type ListAllSourcesResponse = ListAllSourcesResponses[keyof ListAllSourcesResponses];
+
+export type ListDataSourcesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+    };
+    url: '/data-sources';
+};
+
+export type ListDataSourcesErrors = {
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type ListDataSourcesError = ListDataSourcesErrors[keyof ListDataSourcesErrors];
+
+export type ListDataSourcesResponses = {
+    200: SuccessResponseVecDataSourceResponse;
+};
+
+export type ListDataSourcesResponse = ListDataSourcesResponses[keyof ListDataSourcesResponses];
+
+export type CreateDataSourceData = {
+    body: DataSourceCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/data-sources';
+};
+
+export type CreateDataSourceErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    409: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type CreateDataSourceError = CreateDataSourceErrors[keyof CreateDataSourceErrors];
+
+export type CreateDataSourceResponses = {
+    201: SuccessResponseDataSourceResponse;
+};
+
+export type CreateDataSourceResponse = CreateDataSourceResponses[keyof CreateDataSourceResponses];
+
+export type RecommendDataSourcesData = {
+    body: DataSourceRecommendationRequest;
+    path?: never;
+    query?: never;
+    url: '/data-sources/recommendations';
+};
+
+export type RecommendDataSourcesErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    502: ErrorEnvelope;
+};
+
+export type RecommendDataSourcesError = RecommendDataSourcesErrors[keyof RecommendDataSourcesErrors];
+
+export type RecommendDataSourcesResponses = {
+    200: SuccessResponseDataSourceRecommendationsResponse;
+};
+
+export type RecommendDataSourcesResponse = RecommendDataSourcesResponses[keyof RecommendDataSourcesResponses];
+
+export type DiscoverDataSourcesData = {
+    body?: null | DataSourceDiscoveryRecommendationRequest;
+    path?: never;
+    query?: never;
+    url: '/data-sources/recommendations/discovery';
+};
+
+export type DiscoverDataSourcesErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    502: ErrorEnvelope;
+};
+
+export type DiscoverDataSourcesError = DiscoverDataSourcesErrors[keyof DiscoverDataSourcesErrors];
+
+export type DiscoverDataSourcesResponses = {
+    200: SuccessResponseDataSourceRecommendationsResponse;
+};
+
+export type DiscoverDataSourcesResponse = DiscoverDataSourcesResponses[keyof DiscoverDataSourcesResponses];
+
+export type DeleteDataSourceData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/data-sources/{id}';
+};
+
+export type DeleteDataSourceErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type DeleteDataSourceError = DeleteDataSourceErrors[keyof DeleteDataSourceErrors];
+
+export type DeleteDataSourceResponses = {
+    200: SuccessResponseSuccessFlag;
+};
+
+export type DeleteDataSourceResponse = DeleteDataSourceResponses[keyof DeleteDataSourceResponses];
+
+export type GetDataSourceData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/data-sources/{id}';
+};
+
+export type GetDataSourceErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetDataSourceError = GetDataSourceErrors[keyof GetDataSourceErrors];
+
+export type GetDataSourceResponses = {
+    200: SuccessResponseDataSourceResponse;
+};
+
+export type GetDataSourceResponse = GetDataSourceResponses[keyof GetDataSourceResponses];
+
+export type UpdateDataSourceData = {
+    body: DataSourceUpdateRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/data-sources/{id}';
+};
+
+export type UpdateDataSourceErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    409: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type UpdateDataSourceError = UpdateDataSourceErrors[keyof UpdateDataSourceErrors];
+
+export type UpdateDataSourceResponses = {
+    200: SuccessResponseDataSourceResponse;
+};
+
+export type UpdateDataSourceResponse = UpdateDataSourceResponses[keyof UpdateDataSourceResponses];
+
+export type GetDataSourceContentData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        page?: number;
+        limit?: number;
+    };
+    url: '/data-sources/{id}/content';
+};
+
+export type GetDataSourceContentErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetDataSourceContentError = GetDataSourceContentErrors[keyof GetDataSourceContentErrors];
+
+export type GetDataSourceContentResponses = {
+    200: SuccessResponseDataSourceContentResponse;
+};
+
+export type GetDataSourceContentResponse = GetDataSourceContentResponses[keyof GetDataSourceContentResponses];
+
+export type TriggerDataSourceCrawlData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/data-sources/{id}/crawl';
+};
+
+export type TriggerDataSourceCrawlErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type TriggerDataSourceCrawlError = TriggerDataSourceCrawlErrors[keyof TriggerDataSourceCrawlErrors];
+
+export type TriggerDataSourceCrawlResponses = {
+    200: SuccessResponseCrawlTriggeredResponse;
+};
+
+export type TriggerDataSourceCrawlResponse = TriggerDataSourceCrawlResponses[keyof TriggerDataSourceCrawlResponses];
+
 export type HealthCheckData = {
     body?: never;
     path?: never;
@@ -233,6 +2368,1148 @@ export type HealthCheckResponses = {
 };
 
 export type HealthCheckResponse = HealthCheckResponses[keyof HealthCheckResponses];
+
+export type GenerateImageData = {
+    body: GenerateImageRequest;
+    path?: never;
+    query?: never;
+    url: '/images/generate';
+};
+
+export type GenerateImageErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    502: ErrorEnvelope;
+};
+
+export type GenerateImageError = GenerateImageErrors[keyof GenerateImageErrors];
+
+export type GenerateImageResponses = {
+    202: SuccessResponseGenerateImageResponse;
+};
+
+export type GenerateImageResponse2 = GenerateImageResponses[keyof GenerateImageResponses];
+
+export type GetImageGenerationData = {
+    body?: never;
+    path: {
+        requestId: string;
+    };
+    query?: never;
+    url: '/images/{requestId}';
+};
+
+export type GetImageGenerationErrors = {
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetImageGenerationError = GetImageGenerationErrors[keyof GetImageGenerationErrors];
+
+export type GetImageGenerationResponses = {
+    200: SuccessResponseImageGenerationResponse;
+};
+
+export type GetImageGenerationResponse = GetImageGenerationResponses[keyof GetImageGenerationResponses];
+
+export type GetImageGenerationStatusData = {
+    body?: never;
+    path: {
+        requestId: string;
+    };
+    query?: never;
+    url: '/images/{requestId}/status';
+};
+
+export type GetImageGenerationStatusErrors = {
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetImageGenerationStatusError = GetImageGenerationStatusErrors[keyof GetImageGenerationStatusErrors];
+
+export type GetImageGenerationStatusResponses = {
+    200: SuccessResponseImageGenerationStatus;
+};
+
+export type GetImageGenerationStatusResponse = GetImageGenerationStatusResponses[keyof GetImageGenerationStatusResponses];
+
+export type ListInsightsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+        topic_id?: string;
+    };
+    url: '/insights';
+};
+
+export type ListInsightsErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type ListInsightsError = ListInsightsErrors[keyof ListInsightsErrors];
+
+export type ListInsightsResponses = {
+    200: SuccessResponseInsightListResponse;
+};
+
+export type ListInsightsResponse = ListInsightsResponses[keyof ListInsightsResponses];
+
+export type GetRecentInsightContentData = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+    };
+    url: '/insights/content/recent';
+};
+
+export type GetRecentInsightContentErrors = {
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetRecentInsightContentError = GetRecentInsightContentErrors[keyof GetRecentInsightContentErrors];
+
+export type GetRecentInsightContentResponses = {
+    200: SuccessResponseVecCrawledContentResponse;
+};
+
+export type GetRecentInsightContentResponse = GetRecentInsightContentResponses[keyof GetRecentInsightContentResponses];
+
+export type SearchInsightContentData = {
+    body?: never;
+    path?: never;
+    query?: {
+        q?: string;
+        limit?: number;
+    };
+    url: '/insights/content/search';
+};
+
+export type SearchInsightContentErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+    502: ErrorEnvelope;
+};
+
+export type SearchInsightContentError = SearchInsightContentErrors[keyof SearchInsightContentErrors];
+
+export type SearchInsightContentResponses = {
+    200: SuccessResponseVecCrawledContentResponse;
+};
+
+export type SearchInsightContentResponse = SearchInsightContentResponses[keyof SearchInsightContentResponses];
+
+export type SearchInsightsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        q?: string;
+        limit?: number;
+    };
+    url: '/insights/search';
+};
+
+export type SearchInsightsErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+    502: ErrorEnvelope;
+};
+
+export type SearchInsightsError = SearchInsightsErrors[keyof SearchInsightsErrors];
+
+export type SearchInsightsResponses = {
+    200: SuccessResponseVecInsightResponse;
+};
+
+export type SearchInsightsResponse = SearchInsightsResponses[keyof SearchInsightsResponses];
+
+export type ListInsightTopicsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/insights/topics';
+};
+
+export type ListInsightTopicsErrors = {
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type ListInsightTopicsError = ListInsightTopicsErrors[keyof ListInsightTopicsErrors];
+
+export type ListInsightTopicsResponses = {
+    200: SuccessResponseVecInsightTopicResponse;
+};
+
+export type ListInsightTopicsResponse = ListInsightTopicsResponses[keyof ListInsightTopicsResponses];
+
+export type CreateInsightTopicData = {
+    body: InsightTopicCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/insights/topics';
+};
+
+export type CreateInsightTopicErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+    502: ErrorEnvelope;
+};
+
+export type CreateInsightTopicError = CreateInsightTopicErrors[keyof CreateInsightTopicErrors];
+
+export type CreateInsightTopicResponses = {
+    201: SuccessResponseInsightTopicResponse;
+};
+
+export type CreateInsightTopicResponse = CreateInsightTopicResponses[keyof CreateInsightTopicResponses];
+
+export type DeleteInsightTopicData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/insights/topics/{id}';
+};
+
+export type DeleteInsightTopicErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type DeleteInsightTopicError = DeleteInsightTopicErrors[keyof DeleteInsightTopicErrors];
+
+export type DeleteInsightTopicResponses = {
+    200: SuccessResponseSuccessFlag;
+};
+
+export type DeleteInsightTopicResponse = DeleteInsightTopicResponses[keyof DeleteInsightTopicResponses];
+
+export type GetInsightTopicData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/insights/topics/{id}';
+};
+
+export type GetInsightTopicErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetInsightTopicError = GetInsightTopicErrors[keyof GetInsightTopicErrors];
+
+export type GetInsightTopicResponses = {
+    200: SuccessResponseInsightTopicResponse;
+};
+
+export type GetInsightTopicResponse = GetInsightTopicResponses[keyof GetInsightTopicResponses];
+
+export type UpdateInsightTopicData = {
+    body: InsightTopicUpdateRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/insights/topics/{id}';
+};
+
+export type UpdateInsightTopicErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+    502: ErrorEnvelope;
+};
+
+export type UpdateInsightTopicError = UpdateInsightTopicErrors[keyof UpdateInsightTopicErrors];
+
+export type UpdateInsightTopicResponses = {
+    200: SuccessResponseInsightTopicResponse;
+};
+
+export type UpdateInsightTopicResponse = UpdateInsightTopicResponses[keyof UpdateInsightTopicResponses];
+
+export type GetUnreadInsightCountData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/insights/unread-count';
+};
+
+export type GetUnreadInsightCountErrors = {
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetUnreadInsightCountError = GetUnreadInsightCountErrors[keyof GetUnreadInsightCountErrors];
+
+export type GetUnreadInsightCountResponses = {
+    200: SuccessResponseCountResponse;
+};
+
+export type GetUnreadInsightCountResponse = GetUnreadInsightCountResponses[keyof GetUnreadInsightCountResponses];
+
+export type DeleteInsightData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/insights/{id}';
+};
+
+export type DeleteInsightErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type DeleteInsightError = DeleteInsightErrors[keyof DeleteInsightErrors];
+
+export type DeleteInsightResponses = {
+    200: SuccessResponseSuccessFlag;
+};
+
+export type DeleteInsightResponse = DeleteInsightResponses[keyof DeleteInsightResponses];
+
+export type GetInsightData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/insights/{id}';
+};
+
+export type GetInsightErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetInsightError = GetInsightErrors[keyof GetInsightErrors];
+
+export type GetInsightResponses = {
+    200: SuccessResponseInsightWithSources;
+};
+
+export type GetInsightResponse = GetInsightResponses[keyof GetInsightResponses];
+
+export type ToggleInsightPinnedData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/insights/{id}/pin';
+};
+
+export type ToggleInsightPinnedErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type ToggleInsightPinnedError = ToggleInsightPinnedErrors[keyof ToggleInsightPinnedErrors];
+
+export type ToggleInsightPinnedResponses = {
+    200: SuccessResponsePinResponse;
+};
+
+export type ToggleInsightPinnedResponse = ToggleInsightPinnedResponses[keyof ToggleInsightPinnedResponses];
+
+export type MarkInsightReadData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/insights/{id}/read';
+};
+
+export type MarkInsightReadErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type MarkInsightReadError = MarkInsightReadErrors[keyof MarkInsightReadErrors];
+
+export type MarkInsightReadResponses = {
+    200: SuccessResponseSuccessFlag;
+};
+
+export type MarkInsightReadResponse = MarkInsightReadResponses[keyof MarkInsightReadResponses];
+
+export type ListOrganizationsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/organizations';
+};
+
+export type ListOrganizationsErrors = {
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type ListOrganizationsError = ListOrganizationsErrors[keyof ListOrganizationsErrors];
+
+export type ListOrganizationsResponses = {
+    200: SuccessResponseVecOrganizationResponse;
+};
+
+export type ListOrganizationsResponse = ListOrganizationsResponses[keyof ListOrganizationsResponses];
+
+export type CreateOrganizationData = {
+    body: OrganizationCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/organizations';
+};
+
+export type CreateOrganizationErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    409: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type CreateOrganizationError = CreateOrganizationErrors[keyof CreateOrganizationErrors];
+
+export type CreateOrganizationResponses = {
+    201: SuccessResponseOrganizationResponse;
+};
+
+export type CreateOrganizationResponse = CreateOrganizationResponses[keyof CreateOrganizationResponses];
+
+export type LeaveOrganizationData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/organizations/leave';
+};
+
+export type LeaveOrganizationErrors = {
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type LeaveOrganizationError = LeaveOrganizationErrors[keyof LeaveOrganizationErrors];
+
+export type LeaveOrganizationResponses = {
+    200: SuccessResponseSuccessFlag;
+};
+
+export type LeaveOrganizationResponse = LeaveOrganizationResponses[keyof LeaveOrganizationResponses];
+
+export type DeleteOrganizationData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/organizations/{id}';
+};
+
+export type DeleteOrganizationErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type DeleteOrganizationError = DeleteOrganizationErrors[keyof DeleteOrganizationErrors];
+
+export type DeleteOrganizationResponses = {
+    200: SuccessResponseSuccessFlag;
+};
+
+export type DeleteOrganizationResponse = DeleteOrganizationResponses[keyof DeleteOrganizationResponses];
+
+export type GetOrganizationData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/organizations/{id}';
+};
+
+export type GetOrganizationErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetOrganizationError = GetOrganizationErrors[keyof GetOrganizationErrors];
+
+export type GetOrganizationResponses = {
+    200: SuccessResponseOrganizationResponse;
+};
+
+export type GetOrganizationResponse = GetOrganizationResponses[keyof GetOrganizationResponses];
+
+export type UpdateOrganizationData = {
+    body: OrganizationUpdateRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/organizations/{id}';
+};
+
+export type UpdateOrganizationErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    409: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type UpdateOrganizationError = UpdateOrganizationErrors[keyof UpdateOrganizationErrors];
+
+export type UpdateOrganizationResponses = {
+    200: SuccessResponseOrganizationResponse;
+};
+
+export type UpdateOrganizationResponse = UpdateOrganizationResponses[keyof UpdateOrganizationResponses];
+
+export type JoinOrganizationData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/organizations/{id}/join';
+};
+
+export type JoinOrganizationErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type JoinOrganizationError = JoinOrganizationErrors[keyof JoinOrganizationErrors];
+
+export type JoinOrganizationResponses = {
+    200: SuccessResponseSuccessFlag;
+};
+
+export type JoinOrganizationResponse = JoinOrganizationResponses[keyof JoinOrganizationResponses];
+
+export type GetPageBySlugData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/pages/{slug}';
+};
+
+export type GetPageBySlugErrors = {
+    400: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetPageBySlugError = GetPageBySlugErrors[keyof GetPageBySlugErrors];
+
+export type GetPageBySlugResponses = {
+    200: SuccessResponsePageResponse;
+};
+
+export type GetPageBySlugResponse = GetPageBySlugResponses[keyof GetPageBySlugResponses];
+
+export type GetMyProfileData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/profile';
+};
+
+export type GetMyProfileErrors = {
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetMyProfileError = GetMyProfileErrors[keyof GetMyProfileErrors];
+
+export type GetMyProfileResponses = {
+    200: SuccessResponseUserProfileResponse;
+};
+
+export type GetMyProfileResponse = GetMyProfileResponses[keyof GetMyProfileResponses];
+
+export type UpdateProfileData = {
+    body: ProfileUpdateRequest;
+    path?: never;
+    query?: never;
+    url: '/profile';
+};
+
+export type UpdateProfileErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type UpdateProfileError = UpdateProfileErrors[keyof UpdateProfileErrors];
+
+export type UpdateProfileResponses = {
+    200: SuccessResponseUserProfileResponse;
+};
+
+export type UpdateProfileResponse = UpdateProfileResponses[keyof UpdateProfileResponses];
+
+export type GetPublicProfileData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/profile/public';
+};
+
+export type GetPublicProfileErrors = {
+    500: ErrorEnvelope;
+};
+
+export type GetPublicProfileError = GetPublicProfileErrors[keyof GetPublicProfileErrors];
+
+export type GetPublicProfileResponses = {
+    200: SuccessResponsePublicProfileResponse;
+};
+
+export type GetPublicProfileResponse = GetPublicProfileResponses[keyof GetPublicProfileResponses];
+
+export type GetSiteSettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/profile/settings';
+};
+
+export type GetSiteSettingsErrors = {
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetSiteSettingsError = GetSiteSettingsErrors[keyof GetSiteSettingsErrors];
+
+export type GetSiteSettingsResponses = {
+    200: SuccessResponseSiteSettingsResponse;
+};
+
+export type GetSiteSettingsResponse = GetSiteSettingsResponses[keyof GetSiteSettingsResponses];
+
+export type UpdateSiteSettingsData = {
+    body: SiteSettingsUpdateRequest;
+    path?: never;
+    query?: never;
+    url: '/profile/settings';
+};
+
+export type UpdateSiteSettingsErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    403: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type UpdateSiteSettingsError = UpdateSiteSettingsErrors[keyof UpdateSiteSettingsErrors];
+
+export type UpdateSiteSettingsResponses = {
+    200: SuccessResponseSiteSettingsResponse;
+};
+
+export type UpdateSiteSettingsResponse = UpdateSiteSettingsResponses[keyof UpdateSiteSettingsResponses];
+
+export type ListProjectsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        perPage?: number;
+    };
+    url: '/projects';
+};
+
+export type ListProjectsErrors = {
+    500: ErrorEnvelope;
+};
+
+export type ListProjectsError = ListProjectsErrors[keyof ListProjectsErrors];
+
+export type ListProjectsResponses = {
+    200: SuccessResponseProjectListResponse;
+};
+
+export type ListProjectsResponse = ListProjectsResponses[keyof ListProjectsResponses];
+
+export type CreateProjectData = {
+    body: ProjectCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/projects';
+};
+
+export type CreateProjectErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type CreateProjectError = CreateProjectErrors[keyof CreateProjectErrors];
+
+export type CreateProjectResponses = {
+    201: SuccessResponseProjectResponse;
+};
+
+export type CreateProjectResponse = CreateProjectResponses[keyof CreateProjectResponses];
+
+export type DeleteProjectData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/projects/{id}';
+};
+
+export type DeleteProjectErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type DeleteProjectError = DeleteProjectErrors[keyof DeleteProjectErrors];
+
+export type DeleteProjectResponses = {
+    200: SuccessResponseSuccessFlag;
+};
+
+export type DeleteProjectResponse = DeleteProjectResponses[keyof DeleteProjectResponses];
+
+export type GetProjectData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/projects/{id}';
+};
+
+export type GetProjectErrors = {
+    400: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetProjectError = GetProjectErrors[keyof GetProjectErrors];
+
+export type GetProjectResponses = {
+    200: SuccessResponseProjectDetailResponse;
+};
+
+export type GetProjectResponse = GetProjectResponses[keyof GetProjectResponses];
+
+export type UpdateProjectData = {
+    body: ProjectUpdateRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/projects/{id}';
+};
+
+export type UpdateProjectErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type UpdateProjectError = UpdateProjectErrors[keyof UpdateProjectErrors];
+
+export type UpdateProjectResponses = {
+    200: SuccessResponseProjectResponse;
+};
+
+export type UpdateProjectResponse = UpdateProjectResponses[keyof UpdateProjectResponses];
+
+export type CreateSourceData = {
+    body: CreateSourceRequest;
+    path?: never;
+    query?: never;
+    url: '/sources';
+};
+
+export type CreateSourceErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+    502: ErrorEnvelope;
+};
+
+export type CreateSourceError = CreateSourceErrors[keyof CreateSourceErrors];
+
+export type CreateSourceResponses = {
+    201: SuccessResponseSourceResponse;
+};
+
+export type CreateSourceResponse = CreateSourceResponses[keyof CreateSourceResponses];
+
+export type GetArticleSourcesData = {
+    body?: never;
+    path: {
+        articleId: string;
+    };
+    query?: never;
+    url: '/sources/article/{articleId}';
+};
+
+export type GetArticleSourcesErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetArticleSourcesError = GetArticleSourcesErrors[keyof GetArticleSourcesErrors];
+
+export type GetArticleSourcesResponses = {
+    200: SuccessResponseSourcesResponse;
+};
+
+export type GetArticleSourcesResponse = GetArticleSourcesResponses[keyof GetArticleSourcesResponses];
+
+export type SearchSimilarSourcesData = {
+    body?: never;
+    path: {
+        articleId: string;
+    };
+    query?: {
+        q?: string;
+        limit?: number;
+    };
+    url: '/sources/article/{articleId}/search';
+};
+
+export type SearchSimilarSourcesErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+    502: ErrorEnvelope;
+};
+
+export type SearchSimilarSourcesError = SearchSimilarSourcesErrors[keyof SearchSimilarSourcesErrors];
+
+export type SearchSimilarSourcesResponses = {
+    200: SuccessResponseSearchSourcesResponse;
+};
+
+export type SearchSimilarSourcesResponse = SearchSimilarSourcesResponses[keyof SearchSimilarSourcesResponses];
+
+export type ScrapeAndCreateSourceData = {
+    body: ScrapeSourceRequest;
+    path?: never;
+    query?: never;
+    url: '/sources/scrape';
+};
+
+export type ScrapeAndCreateSourceErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+    502: ErrorEnvelope;
+};
+
+export type ScrapeAndCreateSourceError = ScrapeAndCreateSourceErrors[keyof ScrapeAndCreateSourceErrors];
+
+export type ScrapeAndCreateSourceResponses = {
+    201: SuccessResponseSourceResponse;
+};
+
+export type ScrapeAndCreateSourceResponse = ScrapeAndCreateSourceResponses[keyof ScrapeAndCreateSourceResponses];
+
+export type DeleteSourceData = {
+    body?: never;
+    path: {
+        sourceId: string;
+    };
+    query?: never;
+    url: '/sources/{sourceId}';
+};
+
+export type DeleteSourceErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type DeleteSourceError = DeleteSourceErrors[keyof DeleteSourceErrors];
+
+export type DeleteSourceResponses = {
+    200: SuccessResponseSuccessFlag;
+};
+
+export type DeleteSourceResponse = DeleteSourceResponses[keyof DeleteSourceResponses];
+
+export type GetSourceData = {
+    body?: never;
+    path: {
+        sourceId: string;
+    };
+    query?: never;
+    url: '/sources/{sourceId}';
+};
+
+export type GetSourceErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetSourceError = GetSourceErrors[keyof GetSourceErrors];
+
+export type GetSourceResponses = {
+    200: SuccessResponseSourceResponse;
+};
+
+export type GetSourceResponse = GetSourceResponses[keyof GetSourceResponses];
+
+export type UpdateSourceData = {
+    body: UpdateSourceRequest;
+    path: {
+        sourceId: string;
+    };
+    query?: never;
+    url: '/sources/{sourceId}';
+};
+
+export type UpdateSourceErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+    502: ErrorEnvelope;
+};
+
+export type UpdateSourceError = UpdateSourceErrors[keyof UpdateSourceErrors];
+
+export type UpdateSourceResponses = {
+    200: SuccessResponseSourceResponse;
+};
+
+export type UpdateSourceResponse = UpdateSourceResponses[keyof UpdateSourceResponses];
+
+export type ListStorageFilesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        prefix?: string;
+    };
+    url: '/storage/files';
+};
+
+export type ListStorageFilesErrors = {
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type ListStorageFilesError = ListStorageFilesErrors[keyof ListStorageFilesErrors];
+
+export type ListStorageFilesResponses = {
+    200: SuccessResponseListFilesResponse;
+};
+
+export type ListStorageFilesResponse = ListStorageFilesResponses[keyof ListStorageFilesResponses];
+
+export type CreateStorageFolderData = {
+    body: CreateFolderRequest;
+    path?: never;
+    query?: never;
+    url: '/storage/folders';
+};
+
+export type CreateStorageFolderErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type CreateStorageFolderError = CreateStorageFolderErrors[keyof CreateStorageFolderErrors];
+
+export type CreateStorageFolderResponses = {
+    200: SuccessResponseSuccessFlagResponse;
+};
+
+export type CreateStorageFolderResponse = CreateStorageFolderResponses[keyof CreateStorageFolderResponses];
+
+export type UpdateStorageFolderData = {
+    body: UpdateFolderRequest;
+    path?: never;
+    query?: never;
+    url: '/storage/folders';
+};
+
+export type UpdateStorageFolderErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type UpdateStorageFolderError = UpdateStorageFolderErrors[keyof UpdateStorageFolderErrors];
+
+export type UpdateStorageFolderResponses = {
+    200: SuccessResponseSuccessFlagResponse;
+};
+
+export type UpdateStorageFolderResponse = UpdateStorageFolderResponses[keyof UpdateStorageFolderResponses];
+
+export type UploadStorageFileData = {
+    body: UploadFileRequest;
+    path?: never;
+    query?: never;
+    url: '/storage/upload';
+};
+
+export type UploadStorageFileErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type UploadStorageFileError = UploadStorageFileErrors[keyof UploadStorageFileErrors];
+
+export type UploadStorageFileResponses = {
+    200: SuccessResponseUploadFileResponse;
+};
+
+export type UploadStorageFileResponse = UploadStorageFileResponses[keyof UploadStorageFileResponses];
+
+export type DeleteStorageFileData = {
+    body?: never;
+    path: {
+        key: string;
+    };
+    query?: never;
+    url: '/storage/{key}';
+};
+
+export type DeleteStorageFileErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type DeleteStorageFileError = DeleteStorageFileErrors[keyof DeleteStorageFileErrors];
+
+export type DeleteStorageFileResponses = {
+    200: SuccessResponseSuccessFlagResponse;
+};
+
+export type DeleteStorageFileResponse = DeleteStorageFileResponses[keyof DeleteStorageFileResponses];
+
+export type ListTaskRunsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        task_name?: string;
+        status?: string;
+        kind?: string;
+        limit?: string;
+    };
+    url: '/task-runs';
+};
+
+export type ListTaskRunsErrors = {
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type ListTaskRunsError = ListTaskRunsErrors[keyof ListTaskRunsErrors];
+
+export type ListTaskRunsResponses = {
+    200: SuccessResponseTaskRunListResponse;
+};
+
+export type ListTaskRunsResponse = ListTaskRunsResponses[keyof ListTaskRunsResponses];
+
+export type GetTaskRunData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/task-runs/{id}';
+};
+
+export type GetTaskRunErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetTaskRunError = GetTaskRunErrors[keyof GetTaskRunErrors];
+
+export type GetTaskRunResponses = {
+    200: SuccessResponseTaskRunDetailResponse;
+};
+
+export type GetTaskRunResponse = GetTaskRunResponses[keyof GetTaskRunResponses];
+
+export type ListTaskRunEventsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/task-runs/{id}/events';
+};
+
+export type ListTaskRunEventsErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type ListTaskRunEventsError = ListTaskRunEventsErrors[keyof ListTaskRunEventsErrors];
+
+export type ListTaskRunEventsResponses = {
+    200: SuccessResponseTaskRunEventsResponse;
+};
+
+export type ListTaskRunEventsResponse = ListTaskRunEventsResponses[keyof ListTaskRunEventsResponses];
 
 export type ConnectWebSocketData = {
     body?: never;
@@ -251,3 +3528,113 @@ export type ConnectWebSocketErrors = {
      */
     426: unknown;
 };
+
+export type GetRunningWorkersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/workers/running';
+};
+
+export type GetRunningWorkersErrors = {
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetRunningWorkersError = GetRunningWorkersErrors[keyof GetRunningWorkersErrors];
+
+export type GetRunningWorkersResponses = {
+    200: SuccessResponseRunningWorkersResponse;
+};
+
+export type GetRunningWorkersResponse = GetRunningWorkersResponses[keyof GetRunningWorkersResponses];
+
+export type GetAllWorkerStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/workers/status';
+};
+
+export type GetAllWorkerStatusErrors = {
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GetAllWorkerStatusError = GetAllWorkerStatusErrors[keyof GetAllWorkerStatusErrors];
+
+export type GetAllWorkerStatusResponses = {
+    200: SuccessResponseAllWorkersStatusResponse;
+};
+
+export type GetAllWorkerStatusResponse = GetAllWorkerStatusResponses[keyof GetAllWorkerStatusResponses];
+
+export type RunWorkerData = {
+    body?: never;
+    path: {
+        name: string;
+    };
+    query?: never;
+    url: '/workers/{name}/run';
+};
+
+export type RunWorkerErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type RunWorkerError = RunWorkerErrors[keyof RunWorkerErrors];
+
+export type RunWorkerResponses = {
+    200: SuccessResponseRunWorkerResponse;
+};
+
+export type RunWorkerResponse2 = RunWorkerResponses[keyof RunWorkerResponses];
+
+export type GetWorkerStatusData = {
+    body?: never;
+    path: {
+        name: string;
+    };
+    query?: never;
+    url: '/workers/{name}/status';
+};
+
+export type GetWorkerStatusErrors = {
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+};
+
+export type GetWorkerStatusError = GetWorkerStatusErrors[keyof GetWorkerStatusErrors];
+
+export type GetWorkerStatusResponses = {
+    200: SuccessResponseWorkerStatusResponse;
+};
+
+export type GetWorkerStatusResponse = GetWorkerStatusResponses[keyof GetWorkerStatusResponses];
+
+export type StopWorkerData = {
+    body?: never;
+    path: {
+        name: string;
+    };
+    query?: never;
+    url: '/workers/{name}/stop';
+};
+
+export type StopWorkerErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type StopWorkerError = StopWorkerErrors[keyof StopWorkerErrors];
+
+export type StopWorkerResponses = {
+    200: SuccessResponseStopWorkerResponse;
+};
+
+export type StopWorkerResponse2 = StopWorkerResponses[keyof StopWorkerResponses];

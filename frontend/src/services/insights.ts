@@ -1,4 +1,5 @@
-import { apiGet, apiPost, apiPut, apiDelete } from './authenticatedFetch';
+import { Insights } from '@/client';
+import { generatedData } from './generatedClient';
 
 // Types
 export interface InsightTopic {
@@ -87,84 +88,72 @@ export async function listInsights(
   limit: number = 20,
   topicId?: string
 ): Promise<ListInsightsResponse> {
-  const params = new URLSearchParams({
-    page: page.toString(),
-    limit: limit.toString(),
-  });
-  if (topicId) {
-    params.set('topic_id', topicId);
-  }
-  
-  return apiGet<ListInsightsResponse>(`/insights?${params}`);
+  return generatedData<ListInsightsResponse>(
+    Insights.listInsights({ query: { page, limit, topic_id: topicId } }),
+  );
 }
 
 export async function getInsight(id: string): Promise<InsightWithSources> {
-  return apiGet<InsightWithSources>(`/insights/${id}`);
+  return generatedData<InsightWithSources>(Insights.getInsight({ path: { id } }));
 }
 
 export async function markInsightAsRead(id: string): Promise<void> {
-  await apiPost<{ success: boolean }>(`/insights/${id}/read`, {});
+  await generatedData<{ success: boolean }>(Insights.markInsightRead({ path: { id } }));
 }
 
 export async function toggleInsightPinned(id: string): Promise<void> {
-  await apiPost<{ success: boolean }>(`/insights/${id}/pin`, {});
+  await generatedData<{ success: boolean }>(Insights.toggleInsightPinned({ path: { id } }));
 }
 
 export async function deleteInsight(id: string): Promise<void> {
-  await apiDelete<{ success: boolean }>(`/insights/${id}`);
+  await generatedData<{ success: boolean }>(Insights.deleteInsight({ path: { id } }));
 }
 
 export async function searchInsights(query: string, limit: number = 10): Promise<Insight[]> {
-  const params = new URLSearchParams({
-    q: query,
-    limit: limit.toString(),
-  });
-  
-  return apiGet<Insight[]>(`/insights/search?${params}`);
+  return generatedData<Insight[]>(Insights.searchInsights({ query: { q: query, limit } }));
 }
 
 export async function getUnreadCount(): Promise<number> {
-  const data = await apiGet<{ count: number }>('/insights/unread-count');
+  const data = await generatedData<{ count: number }>(Insights.getUnreadInsightCount());
   return data.count;
 }
 
 // Topic API calls
 
 export async function listTopics(): Promise<InsightTopic[]> {
-  return apiGet<InsightTopic[]>('/insights/topics');
+  return generatedData<InsightTopic[]>(Insights.listInsightTopics());
 }
 
 export async function getTopic(id: string): Promise<InsightTopic> {
-  return apiGet<InsightTopic>(`/insights/topics/${id}`);
+  return generatedData<InsightTopic>(Insights.getInsightTopic({ path: { id } }));
 }
 
 export async function createTopic(request: CreateTopicRequest): Promise<InsightTopic> {
-  return apiPost<InsightTopic>('/insights/topics', request);
+  return generatedData<InsightTopic>(Insights.createInsightTopic({ body: request }));
 }
 
 export async function updateTopic(id: string, request: UpdateTopicRequest): Promise<InsightTopic> {
-  return apiPut<InsightTopic>(`/insights/topics/${id}`, request);
+  return generatedData<InsightTopic>(
+    Insights.updateInsightTopic({ path: { id }, body: request }),
+  );
 }
 
 export async function deleteTopic(id: string): Promise<void> {
-  await apiDelete<{ success: boolean }>(`/insights/topics/${id}`);
+  await generatedData<{ success: boolean }>(
+    Insights.deleteInsightTopic({ path: { id } }),
+  );
 }
 
 // Crawled content API calls
 
 export async function searchCrawledContent(query: string, limit: number = 10): Promise<CrawledContent[]> {
-  const params = new URLSearchParams({
-    q: query,
-    limit: limit.toString(),
-  });
-  
-  return apiGet<CrawledContent[]>(`/insights/content/search?${params}`);
+  return generatedData<CrawledContent[]>(
+    Insights.searchInsightContent({ query: { q: query, limit } }),
+  );
 }
 
 export async function getRecentCrawledContent(limit: number = 20): Promise<CrawledContent[]> {
-  const params = new URLSearchParams({
-    limit: limit.toString(),
-  });
-  
-  return apiGet<CrawledContent[]>(`/insights/content/recent?${params}`);
+  return generatedData<CrawledContent[]>(
+    Insights.getRecentInsightContent({ query: { limit } }),
+  );
 }

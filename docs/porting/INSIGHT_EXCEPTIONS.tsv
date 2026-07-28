@@ -1,12 +1,12 @@
 target	case_id	go_observed_result	rust_observed_result	removal_condition
-insights	TestService_GetInsightByID	pass	pending_port	Rust case and insight API parity case pass
-insights	TestService_ListInsights	pass	pending_port	Rust case and insight API parity case pass
-insights	TestService_CreateInsight	pass	pending_port	Rust case and insight API parity case pass
-insights	TestService_DeleteInsight	pass	pending_port	Rust case and insight API parity case pass
-insights	TestService_GetTopicByID	pass	pending_port	Rust case and insight API parity case pass
-insights	TestService_ListTopics	pass	pending_port	Rust case and insight API parity case pass
-insights	TestService_CreateTopic	pass	pending_port	Rust case and insight API parity case pass
-insights	TestService_DeleteTopic	pass	pending_port	Rust case and insight API parity case pass
-insights	TestService_MarkInsightAsRead	pass	pending_port	Rust case and insight API parity case pass
-insights	TestService_ToggleInsightPinned	pass	pending_port	Rust case and insight API parity case pass
-insights	TestService_ListAllTopics	pass	pending_port	Rust case and insight API parity case pass
+insights	TestService_GetInsightByID	pass	pass	Rust case and insight API parity case pass
+insights	TestService_ListInsights	pass	pass	Rust case and insight API parity case pass
+insights	TestService_CreateInsight	pass	pass	Rust case and insight API parity case pass
+insights	TestService_DeleteInsight	pass	pass	Rust case and insight API parity case pass
+insights	TestService_GetTopicByID	pass	pass	Rust case and insight API parity case pass
+insights	TestService_ListTopics	pass	pass	Rust case and insight API parity case pass
+insights	TestService_CreateTopic	pass	pass	Rust case and insight API parity case pass
+insights	TestService_DeleteTopic	pass	pass	Rust case and insight API parity case pass
+insights	TestService_MarkInsightAsRead	pass	pass	Rust case and insight API parity case pass
+insights	TestService_ToggleInsightPinned	pass	pass	Rust case and insight API parity case pass
+insights	TestService_ListAllTopics	pass	pass	Rust case and insight API parity case pass

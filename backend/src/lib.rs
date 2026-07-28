@@ -8,6 +8,7 @@ pub mod database;
 pub mod error;
 pub mod integrations;
 pub mod openapi;
+pub mod runtime;
 pub mod schema;
 pub mod server;
 pub mod telemetry;

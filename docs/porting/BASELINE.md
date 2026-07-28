@@ -22,7 +22,17 @@
   `sha256:564e366a28ad1d70f460a2b97d1d299a562f08707eb0ecb24b659e5bd6c108e1`.
 
 The renamed Go tree built successfully with `go build ./...`. The renamed root
-Dockerfile also built successfully as `blog-go-rename-baseline`.
+Dockerfile also built successfully as `blog-go-rename-baseline`. The preserved
+Go suite passes all 101 top-level cases with an isolated writable build cache:
+
+```sh
+cd backend-go
+GOCACHE=/tmp/blog-go-build-cache go test ./...
+```
+
+The imported article-service test was updated only to pass the explicit
+`publishedAt` argument already required by the imported service signature; its
+mock expectation and behavioral assertion remain unchanged.
 
 ## Inventory
 
@@ -88,9 +98,71 @@ extension metadata. This establishes local Goose-to-Diesel DDL equivalence; it
 does not substitute for the required read-only Supabase fingerprint before
 production adoption.
 
+The Compose parity gate now creates both databases from empty PostgreSQL 17.4
+volumes, runs Goose and Diesel independently, requires the exact fingerprint
+above, and only then starts the language-neutral contract suite. The final
+parity run passed all 93 HTTP, authentication-boundary, and WebSocket cases
+against both live servers.
+
+## Rust and full-stack acceptance evidence
+
+The Rust blocking matrix passed every selected library, repository, service,
+HTTP, provider, storage, worker, WebSocket, lifecycle, and database test:
+
+```sh
+TEST_DATABASE_URL=postgres://blog:blog@127.0.0.1:55432/blog \
+TEST_S3_ENDPOINT=http://127.0.0.1:9000 \
+./scripts/test-rust.sh blocking
+```
+
+The exact insight exception lane also ran and passed all 11 recorded cases:
+
+```sh
+./scripts/test-rust.sh insights
+```
+
+The release/compiler and contract-generation gates pass:
+
+```sh
+cd backend
+cargo fmt --all -- --check
+cargo check --locked
+cargo clippy --locked --lib --bins -- -D warnings
+cargo build --locked --release
+
+cd ..
+./scripts/generate-client.sh
+node scripts/verify-openapi-contracts.mjs
+
+cd frontend
+bun run build
+```
+
+The verifier reports 100 OpenAPI operations with 100 unique stable operation
+IDs and complete coverage of settled HTTP ledger rows. The generated client is
+the active frontend transport. The frontend release build succeeds; its
+existing CSS minifier and large-chunk messages remain warnings.
+
+The default Compose stack was started from empty volumes, served a healthy Rust
+API and frontend, and completed disposable register/login, authenticated
+article creation, agent submission, and image-generation/object-storage smoke
+flows. The Rust process runs as UID 10001. Graceful and forced shutdown are
+also covered by the server and upgraded-WebSocket lifecycle tests.
+
+External provider behavior is exercised through deterministic local OpenAI
+Responses/SSE, Exa, image, and S3-compatible fixtures. No parity test contacts
+production services.
+
 ## Pending baseline evidence
 
-Performance, request/provider snapshots, fixture checksums, and the Supabase
-settings/fingerprint remain pending. Acceptance budgets must be recorded before
-bulk performance changes and cannot be invented after the Rust results are
-known.
+The read-only Supabase settings/fingerprint remains pending because no
+production database credentials were made available to this checkout.
+Production adoption must stop until that capture and the documented
+schema-identical staging rehearsal pass.
+
+The original plan also requires a pre-port Go performance baseline before
+setting latency, throughput, memory, pool, and binary-size acceptance budgets.
+That evidence was not captured before bulk implementation, so no retrospective
+budget is invented here. Performance comparison and the actual Fly deployment
+or later Render staging/cutover remain explicit production-release gates rather
+than local implementation claims.

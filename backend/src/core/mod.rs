@@ -1,2 +1,17 @@
 pub mod article;
 pub mod auth;
+pub mod chat;
+pub mod copilot;
+pub mod datasource;
+pub mod image;
+pub mod insight;
+pub mod ml;
+pub mod organization;
+pub mod page;
+pub mod profile;
+pub mod project;
+pub mod source;
+pub mod storage;
+pub mod tag;
+pub mod taskrun;
+pub mod worker;

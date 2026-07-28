@@ -1,4 +1,5 @@
-import { apiGet, apiPost } from './authenticatedFetch';
+import { Agent } from '@/client';
+import { generatedData } from './generatedClient';
 
 export interface ArtifactInfo {
   id: string;
@@ -28,24 +29,30 @@ export interface ChatMessage {
 
 // Accept an artifact
 export async function acceptArtifact(messageId: string, feedback?: string): Promise<{ status: string; message_id: string }> {
-  return apiPost<{ status: string; message_id: string }>(
-    `/agent/artifacts/${messageId}/accept`,
-    { feedback: feedback || '' }
+  await generatedData<{ success: boolean }>(
+    Agent.acceptArtifact({
+      path: { messageId },
+      body: { feedback: feedback || '' },
+    }),
   );
+  return { status: 'accepted', message_id: messageId };
 }
 
 // Reject an artifact
 export async function rejectArtifact(messageId: string, reason?: string): Promise<{ status: string; message_id: string }> {
-  return apiPost<{ status: string; message_id: string }>(
-    `/agent/artifacts/${messageId}/reject`,
-    { reason: reason || '' }
+  await generatedData<{ success: boolean }>(
+    Agent.rejectArtifact({
+      path: { messageId },
+      body: { feedback: reason || '' },
+    }),
   );
+  return { status: 'rejected', message_id: messageId };
 }
 
 // Get pending artifacts for an article
 export async function getPendingArtifacts(articleId: string): Promise<{ artifacts: ChatMessage[]; total: number }> {
-  return apiGet<{ artifacts: ChatMessage[]; total: number }>(
-    `/agent/artifacts/${articleId}/pending`
+  const data = await generatedData<{ artifacts: ChatMessage[] }>(
+    Agent.getPendingArtifacts({ path: { articleId } }),
   );
+  return { artifacts: data.artifacts, total: data.artifacts.length };
 }
-

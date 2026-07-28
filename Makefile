@@ -1,4 +1,4 @@
-# Build and generation entry points during the Go-to-Rust port.
+# Build, test, and generation entry points.
 
 # Build the application
 all: build test
@@ -10,7 +10,6 @@ build-go:
 run-go:
 	@cd backend-go && go run .
 
-# Test the application
 test-go:
 	@echo "Testing..."
 	@cd backend-go && go test ./... -v
@@ -34,7 +33,10 @@ build:
 	@cd backend && cargo build --locked
 
 test:
-	@cd backend && cargo test --locked --lib --test auth --test health --test websocket_contract
+	@./scripts/test-rust.sh blocking
+
+test-insights:
+	@./scripts/test-rust.sh insights
 
 test-database:
 	@cd backend && cargo test --locked --test auth_database --test article_repository --test websocket_network -- --test-threads=1
@@ -45,8 +47,8 @@ test-docker:
 run:
 	@cd backend && cargo run --locked --bin blog-backend
 
-# Live Reload
-watch:
+# Go reference live reload
+watch-go:
 	@if command -v air > /dev/null; then \
             air; \
             echo "Watching...";\
@@ -62,4 +64,4 @@ watch:
             fi; \
         fi
 
-.PHONY: all build build-go run run-go test test-database test-docker test-go clean watch swagger-go generate-client
+.PHONY: all build build-go run run-go test test-insights test-database test-docker test-go clean watch-go swagger-go generate-client

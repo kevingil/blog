@@ -30,10 +30,17 @@ path = "src/bin/schema_fingerprint.rs"
 name = "adopt-goose-migrations"
 path = "src/bin/adopt_goose_migrations.rs"
 
+[[bin]]
+name = "external-fixtures"
+path = "src/bin/external_fixtures.rs"
+
 [dependencies]
 anyhow = "=1.0.102"
 async-trait = "=0.1.89"
+aws-config = { version = "=1.8.18", default-features = false, features = ["behavior-version-latest", "default-https-client", "rt-tokio"] }
+aws-sdk-s3 = { version = "=1.137.0", default-features = false, features = ["default-https-client", "rt-tokio", "rustls"] }
 axum = { version = "=0.8.9", features = ["json", "macros", "multipart", "ws"] }
+base64 = "=0.22.1"
 bcrypt = "=0.19.3"
 chrono = { version = "=0.4.42", features = ["serde"] }
 clap = { version = "=4.5.60", features = ["derive", "env"] }
@@ -48,8 +55,10 @@ http = "=1.4.0"
 hyper = { version = "=1.11.0", features = ["http1", "server"] }
 hyper-util = { version = "=0.1.20", features = ["service", "tokio"] }
 jsonwebtoken = { version = "=11.0.0", features = ["rust_crypto"] }
+pdf-extract = "=0.12.0"
 pgvector = { version = "=0.4.2", features = ["diesel"] }
 reqwest = { version = "=0.13.4", default-features = false, features = ["json", "multipart", "rustls", "stream"] }
+scraper = "=0.27.0"
 secrecy = { version = "=0.10.3", features = ["serde"] }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.149", features = ["preserve_order"] }
@@ -77,3 +86,6 @@ unsafe_code = "forbid"
 unwrap_used = "deny"
 expect_used = "deny"
 panic = "deny"
+
+[profile.test]
+debug = 0

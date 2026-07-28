@@ -9,7 +9,7 @@ COPY backend/Cargo.toml backend/Cargo.lock backend/rust-toolchain.toml backend/d
 COPY backend/migrations ./migrations
 COPY backend/src ./src
 COPY backend/tests ./tests
-RUN cargo build --locked --release --bin blog-backend --bin migrate
+RUN cargo build --locked --release --bin blog-backend --bin migrate --bin schema-fingerprint --bin external-fixtures
 
 FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
 
@@ -20,6 +20,8 @@ RUN apt-get update \
 
 COPY --from=builder /app/backend/target/release/blog-backend /usr/local/bin/blog-backend
 COPY --from=builder /app/backend/target/release/migrate /usr/local/bin/migrate
+COPY --from=builder /app/backend/target/release/schema-fingerprint /usr/local/bin/schema-fingerprint
+COPY --from=builder /app/backend/target/release/external-fixtures /usr/local/bin/external-fixtures
 
 USER 10001
 ENV PORT=8080

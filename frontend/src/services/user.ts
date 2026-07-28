@@ -1,4 +1,6 @@
-import { apiGet, apiPut } from '@/services/authenticatedFetch';
+import { Pages } from '@/client';
+import type { PageResponse } from '@/client';
+import { generatedData } from '@/services/generatedClient';
 
 export interface User {
   id: number;
@@ -36,20 +38,12 @@ export async function getUser(): Promise<User | null> {
   return null;
 } 
 
-export async function updateContactPage(data: ContactPageData): Promise<ContactPageData | null> {
-  // Protected endpoint - requires auth
-  return apiPut<ContactPageData>('/pages/contact-me', data);
-}
-
-export async function updateAboutPage(data: AboutPageData): Promise<AboutPageData | null> {
-  // Protected endpoint - requires auth
-  return apiPut<AboutPageData>('/pages/about-me', data);
-}
-
 export async function getContactPage(): Promise<ContactPageData | null> {
   try {
     // Public endpoint - skip auth
-    const page = await apiGet<any>('/pages/contact-me', { skipAuth: true });
+    const page = await generatedData<PageResponse>(
+      Pages.getPageBySlug({ path: { slug: 'contact-me' } }),
+    );
     
     // meta_data is a JSON object, parse social_links and email_address from it
     let meta: Record<string, any> = {};
@@ -59,7 +53,7 @@ export async function getContactPage(): Promise<ContactPageData | null> {
       meta = {};
     }
     return {
-      id: page.id,
+      id: page.id as unknown as number,
       title: page.title,
       content: page.content || '',
       description: page.description || '',
@@ -80,10 +74,12 @@ export async function getContactPage(): Promise<ContactPageData | null> {
 export async function getAboutPage(): Promise<AboutPageData | null> {
   try {
     // Public endpoint - skip auth
-    const page = await apiGet<any>('/pages/about-me', { skipAuth: true });
+    const page = await generatedData<PageResponse>(
+      Pages.getPageBySlug({ path: { slug: 'about-me' } }),
+    );
     
     return {
-      id: page.id,
+      id: page.id as unknown as number,
       title: page.title,
       content: page.content || '',
       description: page.description || '',

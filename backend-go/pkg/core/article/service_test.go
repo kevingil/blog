@@ -279,13 +279,13 @@ func TestService_Publish(t *testing.T) {
 		}
 
 		mockArticleStore.On("FindByID", ctx, articleID).Return(testArticle, nil).Once()
-		mockArticleStore.On("Publish", ctx, testArticle).Return(nil).Once()
+		mockArticleStore.On("Publish", ctx, testArticle, (*time.Time)(nil)).Return(nil).Once()
 		// Mock for GetByID after publish
 		mockArticleStore.On("FindByID", ctx, articleID).Return(testArticle, nil).Once()
 		mockAccountStore.On("FindByID", ctx, authorID).Return(&types.Account{ID: authorID, Name: "Author"}, nil).Once()
 		mockTagStore.On("FindByIDs", ctx, []int64{}).Return([]types.Tag{}, nil).Once()
 
-		result, err := svc.Publish(ctx, articleID)
+		result, err := svc.Publish(ctx, articleID, nil)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)

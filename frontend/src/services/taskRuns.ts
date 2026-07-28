@@ -1,4 +1,5 @@
-import { apiGet } from "./authenticatedFetch";
+import { TaskRuns } from "@/client";
+import { generatedData } from "./generatedClient";
 
 export type TaskRunStatus =
   | "queued"
@@ -64,25 +65,20 @@ interface ListTaskRunsParams {
 }
 
 export async function listTaskRuns(params: ListTaskRunsParams = {}): Promise<TaskRunListResponse> {
-  const search = new URLSearchParams();
-  if (params.taskName) {
-    search.set("task_name", params.taskName);
-  }
-  if (params.status && params.status !== "all") {
-    search.set("status", params.status);
-  }
-  if (params.kind) {
-    search.set("kind", params.kind);
-  }
-  if (params.limit) {
-    search.set("limit", String(params.limit));
-  }
-  const query = search.toString();
-  return apiGet<TaskRunListResponse>(`/task-runs${query ? `?${query}` : ""}`);
+  const query = {
+    task_name: params.taskName,
+    status: params.status === "all" ? undefined : params.status,
+    kind: params.kind,
+    limit: params.limit === undefined ? undefined : String(params.limit),
+  };
+
+  return generatedData<TaskRunListResponse>(TaskRuns.listTaskRuns({ query }));
 }
 
 export async function getTaskRun(taskRunId: string): Promise<TaskRunDetailResponse> {
-  return apiGet<TaskRunDetailResponse>(`/task-runs/${taskRunId}`);
+  return generatedData<TaskRunDetailResponse>(
+    TaskRuns.getTaskRun({ path: { id: taskRunId } }),
+  );
 }
 
 export function getTaskRunStatusLabel(status: TaskRunStatus): string {

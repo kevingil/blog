@@ -1,4 +1,5 @@
-import { apiGet, apiPost } from "./authenticatedFetch";
+import { Workers } from "@/client";
+import { generatedData } from "./generatedClient";
 
 // Types
 export type WorkerState = "idle" | "running" | "completed" | "failed";
@@ -41,23 +42,23 @@ export const PIPELINE_WORKER_NAME = "pipeline";
 // API calls
 
 export async function getWorkersStatus(): Promise<AllWorkersStatusResponse> {
-  return apiGet<AllWorkersStatusResponse>("/workers/status");
+  return generatedData<AllWorkersStatusResponse>(Workers.getAllWorkerStatus());
 }
 
 export async function getWorkerStatus(name: string): Promise<WorkerStatus> {
-  return apiGet<WorkerStatus>(`/workers/${name}/status`);
+  return generatedData<WorkerStatus>(Workers.getWorkerStatus({ path: { name } }));
 }
 
 export async function runWorker(name: string): Promise<RunWorkerResponse> {
-  return apiPost<RunWorkerResponse>(`/workers/${name}/run`);
+  return generatedData<RunWorkerResponse>(Workers.runWorker({ path: { name } }));
 }
 
 export async function stopWorker(name: string): Promise<StopWorkerResponse> {
-  return apiPost<StopWorkerResponse>(`/workers/${name}/stop`);
+  return generatedData<StopWorkerResponse>(Workers.stopWorker({ path: { name } }));
 }
 
 export async function getRunningWorkers(): Promise<RunningWorkersResponse> {
-  return apiGet<RunningWorkersResponse>("/workers/running");
+  return generatedData<RunningWorkersResponse>(Workers.getRunningWorkers());
 }
 
 // Worker display names
