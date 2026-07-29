@@ -27,8 +27,8 @@ name = "schema-fingerprint"
 path = "src/bin/schema_fingerprint.rs"
 
 [[bin]]
-name = "adopt-goose-migrations"
-path = "src/bin/adopt_goose_migrations.rs"
+name = "stamp-diesel-migrations"
+path = "src/bin/stamp_diesel_migrations.rs"
 
 [[bin]]
 name = "external-fixtures"
