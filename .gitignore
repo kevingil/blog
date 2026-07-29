@@ -38,3 +38,8 @@ main
 # Internal docs
 .docs/
 
+# Local execution plans
+.plans/
+
+# Rust build output
+/backend/target/

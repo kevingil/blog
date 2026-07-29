@@ -1,0 +1,168 @@
+name: blog-rust
+
+x-db-environment: &db-environment
+  POSTGRES_USER: blog
+  POSTGRES_PASSWORD: blog
+  POSTGRES_DB: blog
+  TZ: UTC
+
+x-api-environment: &api-environment
+  DATABASE_URL: postgres://blog:blog@db:5432/blog
+  AUTH_SECRET: local-test-secret-that-is-not-used-in-production
+  PORT: "8080"
+  HOST: 0.0.0.0
+  ALLOWED_ORIGINS: http://localhost:3000
+  OPENAI_API_KEY: local-fixture-key
+  OPENAI_BASE_URL: http://external-fixtures:8090/v1
+  GROQ_API_KEY: local-fixture-key
+  GROQ_BASE_URL: http://external-fixtures:8090/v1
+  EXA_API_KEY: local-fixture-key
+  EXA_BASE_URL: http://external-fixtures:8090
+  S3_ENDPOINT: http://object-storage:9000
+  S3_ACCESS_KEY_ID: blog
+  S3_ACCESS_KEY_SECRET: blog-local-secret
+  S3_BUCKET: blog
+  S3_URL_PREFIX: http://localhost:9000/blog
+
+services:
+  external-fixtures:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["/usr/local/bin/external-fixtures"]
+    ports:
+      - "8090:8090"
+
+  object-storage:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: blog
+      MINIO_ROOT_PASSWORD: blog-local-secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - blog-rust-object-storage:/data
+
+  object-storage-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    depends_on:
+      object-storage:
+        condition: service_started
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        until mc alias set local http://object-storage:9000 blog blog-local-secret; do sleep 1; done;
+        mc mb --ignore-existing local/blog;
+        mc anonymous set download local/blog
+    restart: "no"
+
+  db:
+    build:
+      context: .
+      dockerfile: docker/postgres/Dockerfile
+      args:
+        POSTGRES_VERSION: "17.4"
+        PGVECTOR_VERSION: "0.8.2"
+    environment: *db-environment
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blog -d blog"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "55432:5432"
+    volumes:
+      - blog-rust-db:/var/lib/postgresql/data
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["/usr/local/bin/migrate"]
+    environment: *api-environment
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment: *api-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      object-storage-init:
+        condition: service_completed_successfully
+      external-fixtures:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "8080:8080"
+
+  test:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: docker/test/Dockerfile
+    environment:
+      DATABASE_URL: postgres://blog:blog@db:5432/blog
+      TEST_DATABASE_URL: postgres://blog:blog@db:5432/blog
+      AUTH_SECRET: local-test-secret-that-is-not-used-in-production
+      OPENAI_API_KEY: local-fixture-key
+      OPENAI_BASE_URL: http://external-fixtures:8090/v1
+      GROQ_API_KEY: local-fixture-key
+      GROQ_BASE_URL: http://external-fixtures:8090/v1
+      EXA_API_KEY: local-fixture-key
+      EXA_BASE_URL: http://external-fixtures:8090
+      S3_ENDPOINT: http://object-storage:9000
+      S3_ACCESS_KEY_ID: blog
+      S3_ACCESS_KEY_SECRET: blog-local-secret
+      S3_BUCKET: blog
+      S3_URL_PREFIX: http://localhost:9000/blog
+      TEST_S3_ENDPOINT: http://object-storage:9000
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      object-storage-init:
+        condition: service_completed_successfully
+      external-fixtures:
+        condition: service_started
+
+  insights-test:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: docker/test/Dockerfile
+    command: ["/app/scripts/test-rust.sh", "insights"]
+    environment:
+      DATABASE_URL: postgres://blog:blog@db:5432/blog
+      TEST_DATABASE_URL: postgres://blog:blog@db:5432/blog
+      AUTH_SECRET: local-test-secret-that-is-not-used-in-production
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:8080
+        VITE_WS_URL: ws://localhost:8080/websocket
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+
+volumes:
+  blog-rust-db:
+  blog-rust-object-storage:

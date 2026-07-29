@@ -1,0 +1,202 @@
+name: blog-parity
+
+x-db-build: &db-build
+  context: .
+  dockerfile: docker/postgres/Dockerfile
+  args:
+    POSTGRES_VERSION: "17.4"
+    PGVECTOR_VERSION: "0.8.2"
+
+x-db-environment: &db-environment
+  POSTGRES_USER: blog
+  POSTGRES_PASSWORD: blog
+  POSTGRES_DB: blog
+  TZ: UTC
+
+x-go-reference-build: &go-reference-build
+  context: .
+  dockerfile: Dockerfile.go-reference
+  additional_contexts:
+    go_reference: https://github.com/kevingil/blog-go.git#67e918381c0331d29be39f88b0a62e8f8d6f1d10
+
+services:
+  external-fixtures:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["/usr/local/bin/external-fixtures"]
+
+  object-storage:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: blog
+      MINIO_ROOT_PASSWORD: blog-local-secret
+
+  object-storage-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    depends_on:
+      object-storage:
+        condition: service_started
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        until mc alias set local http://object-storage:9000 blog blog-local-secret; do sleep 1; done;
+        mc mb --ignore-existing local/blog;
+        mc anonymous set download local/blog
+
+  go-db:
+    build: *db-build
+    environment: *db-environment
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blog -d blog"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "55433:5432"
+
+  rust-db:
+    build: *db-build
+    environment: *db-environment
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blog -d blog"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "55434:5432"
+
+  go-migrate:
+    build:
+      <<: *go-reference-build
+      target: migrate
+    command:
+      - -dir
+      - /migrations
+      - postgres
+      - postgres://blog:blog@go-db:5432/blog?sslmode=disable
+      - up
+    depends_on:
+      go-db:
+        condition: service_healthy
+
+  rust-migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["/usr/local/bin/migrate"]
+    environment:
+      DATABASE_URL: postgres://blog:blog@rust-db:5432/blog
+      AUTH_SECRET: local-parity-secret
+    depends_on:
+      rust-db:
+        condition: service_healthy
+
+  schema-parity:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - >-
+        go_fingerprint="$$(DATABASE_URL=postgres://blog:blog@go-db:5432/blog
+        /usr/local/bin/schema-fingerprint)";
+        rust_fingerprint="$$(DATABASE_URL=postgres://blog:blog@rust-db:5432/blog
+        /usr/local/bin/schema-fingerprint)";
+        test "$$go_fingerprint" = "$$rust_fingerprint";
+        test "$$rust_fingerprint" =
+        "81fa7f13268ae949c1c627f62ea860d4fe7dfb72698a4f40c5b4706cadd07b29";
+        echo "Go/Diesel schema fingerprint: $$rust_fingerprint"
+    depends_on:
+      go-migrate:
+        condition: service_completed_successfully
+      rust-migrate:
+        condition: service_completed_successfully
+
+  go-api:
+    build:
+      <<: *go-reference-build
+      target: runtime
+    environment:
+      DATABASE_URL: postgres://blog:blog@go-db:5432/blog
+      AUTH_SECRET: local-parity-secret
+      S3_BUCKET: local-fixture
+      S3_URL_PREFIX: http://external-fixtures:9090/storage
+      S3_ENDPOINT: http://object-storage:9000
+      S3_ACCESS_KEY_ID: blog
+      S3_ACCESS_KEY_SECRET: blog-local-secret
+      OPENAI_API_KEY: local-fixture-key
+      OPENAI_BASE_URL: http://external-fixtures:8090/v1
+      EXA_API_KEY: local-fixture-key
+      PORT: "8081"
+    depends_on:
+      go-migrate:
+        condition: service_completed_successfully
+      object-storage-init:
+        condition: service_completed_successfully
+      external-fixtures:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8081/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "8081:8081"
+
+  rust-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://blog:blog@rust-db:5432/blog
+      AUTH_SECRET: local-parity-secret
+      PORT: "8080"
+      HOST: 0.0.0.0
+      OPENAI_API_KEY: local-fixture-key
+      OPENAI_BASE_URL: http://external-fixtures:8090/v1
+      EXA_API_KEY: local-fixture-key
+      EXA_BASE_URL: http://external-fixtures:8090
+      S3_ENDPOINT: http://object-storage:9000
+      S3_ACCESS_KEY_ID: blog
+      S3_ACCESS_KEY_SECRET: blog-local-secret
+      S3_BUCKET: blog
+      S3_URL_PREFIX: http://object-storage:9000/blog
+    depends_on:
+      rust-migrate:
+        condition: service_completed_successfully
+      object-storage-init:
+        condition: service_completed_successfully
+      external-fixtures:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "8080:8080"
+
+  contract-tests:
+    image: oven/bun:1.3.14
+    working_dir: /workspace/contract-tests
+    command: ["bun", "test"]
+    environment:
+      GO_BACKEND_BASE_URL: http://go-api:8081
+      RUST_BACKEND_BASE_URL: http://rust-api:8080
+      REPORT_PATH: /reports/parity.json
+    volumes:
+      - .:/workspace:ro
+      - parity-reports:/reports
+    depends_on:
+      rust-api:
+        condition: service_healthy
+      go-api:
+        condition: service_healthy
+      schema-parity:
+        condition: service_completed_successfully
+
+volumes:
+  parity-reports:

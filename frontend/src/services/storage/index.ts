@@ -1,5 +1,10 @@
-import { VITE_API_BASE_URL } from "../constants";
-import { apiGet, apiPost, apiPut, apiDelete, authenticatedFetch } from "../authenticatedFetch";
+import { Storage } from "@/client";
+import type {
+    FileDataResponse,
+    FolderDataResponse,
+    ListFilesResponse,
+} from "@/client";
+import { generatedData } from "../generatedClient";
 
 export type FileData = {
     key: string;
@@ -19,32 +24,49 @@ export type FolderData = {
 };
 
 export async function listFiles(prefix: string | null): Promise<{ files: FileData[], folders: FolderData[] }> {
-    const url = `/storage/files${prefix ? `?prefix=${encodeURIComponent(prefix)}` : ''}`;
-    return apiGet<{ files: FileData[], folders: FolderData[] }>(url);
+    const data = await generatedData<ListFilesResponse>(
+        Storage.listStorageFiles({ query: { prefix: prefix ?? undefined } }),
+    );
+    return {
+        files: data.files.map(toFileData),
+        folders: data.folders.map(toFolderData),
+    };
 }
 
 export async function uploadFile(key: string, file: File) {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('key', key);
-
-    // For FormData, we need to use authenticatedFetch directly without Content-Type
-    return authenticatedFetch<any>(`${VITE_API_BASE_URL}/storage/upload`, {
-        method: 'POST',
-        body: formData,
-        headers: {}, // Let browser set Content-Type with boundary for FormData
-    });
+    return generatedData(
+        Storage.uploadStorageFile({ body: { key, file } }),
+    );
 }
 
 export async function deleteFile(key: string) {
-    await apiDelete<{ success: boolean }>(`/storage/${encodeURIComponent(key)}`);
+    await generatedData<{ success: boolean }>(
+        Storage.deleteStorageFile({ path: { key } }),
+    );
 }
 
 export async function createFolder(folderPath: string) {
-    await apiPost<{ success: boolean }>('/storage/folders', { path: folderPath });
+    await generatedData<{ success: boolean }>(
+        Storage.createStorageFolder({ body: { path: folderPath } }),
+    );
 }
 
 export async function updateFolder(oldPath: string, newPath: string) {
-    await apiPut<{ success: boolean }>('/storage/folders', { oldPath, newPath });
+    await generatedData<{ success: boolean }>(
+        Storage.updateStorageFolder({ body: { oldPath, newPath } }),
+    );
 }
 
+function toFileData(file: FileDataResponse): FileData {
+    return { ...file, last_modified: new Date(file.last_modified) };
+}
+
+function toFolderData(folder: FolderDataResponse): FolderData {
+    return {
+        name: folder.name,
+        path: folder.path,
+        isHidden: folder.is_hidden,
+        lastModified: new Date(folder.last_modified),
+        fileCount: folder.file_count,
+    };
+}

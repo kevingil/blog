@@ -1,4 +1,5 @@
-import { apiGet, apiPost, apiPut, apiDelete } from '@/services/authenticatedFetch';
+import { Pages } from '@/client';
+import { generatedData } from '@/services/generatedClient';
 
 export interface Page {
   id: string;
@@ -42,39 +43,32 @@ export interface PageUpdateRequest {
 
 // Dashboard CRUD operations (authenticated)
 export async function getAllPages(page: number = 1, perPage: number = 20, isPublished?: boolean): Promise<PageListResponse> {
-  const params = new URLSearchParams({
-    page: page.toString(),
-    perPage: perPage.toString(),
-  });
-
-  if (isPublished !== undefined) {
-    params.append('isPublished', isPublished.toString());
-  }
-
-  return apiGet<PageListResponse>(`/dashboard/pages?${params}`);
+  return generatedData<PageListResponse>(
+    Pages.listPages({ query: { page, perPage, isPublished } }),
+  );
 }
 
 export async function getPage(id: string): Promise<Page> {
-  return apiGet<Page>(`/dashboard/pages/${id}`);
+  return generatedData<Page>(Pages.getPageById({ path: { id } }));
 }
 
 export async function createPage(data: PageCreateRequest): Promise<Page> {
-  return apiPost<Page>('/dashboard/pages', data);
+  return generatedData<Page>(Pages.createPage({ body: data }));
 }
 
 export async function updatePage(id: string, data: PageUpdateRequest): Promise<Page> {
-  return apiPut<Page>(`/dashboard/pages/${id}`, data);
+  return generatedData<Page>(Pages.updatePage({ path: { id }, body: data }));
 }
 
 export async function deletePage(id: string): Promise<{ success: boolean }> {
-  return apiDelete<{ success: boolean }>(`/dashboard/pages/${id}`);
+  return generatedData<{ success: boolean }>(Pages.deletePage({ path: { id } }));
 }
 
 // Public page retrieval (for display on public pages)
 export async function getPageBySlug(slug: string): Promise<Page | null> {
   try {
     // Public endpoint - skip auth
-    return await apiGet<Page>(`/pages/${slug}`, { skipAuth: true });
+    return await generatedData<Page>(Pages.getPageBySlug({ path: { slug } }));
   } catch (error: any) {
     if (error.status === 404) {
       return null;
@@ -92,4 +86,3 @@ export async function getAboutPage() {
 export async function getContactPage() {
   return getPageBySlug('contact-me');
 }
-

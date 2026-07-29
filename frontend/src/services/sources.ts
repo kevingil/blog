@@ -1,4 +1,5 @@
-import { apiGet, apiPost, apiPut, apiDelete } from './authenticatedFetch';
+import { Sources } from '@/client';
+import { generatedData } from './generatedClient';
 import type { 
   ArticleSource, 
   ArticleSourceWithArticle,
@@ -15,43 +16,44 @@ export interface GetAllSourcesResponse {
 
 // Get all sources with pagination (for dashboard)
 export async function getAllSources(page: number = 1, limit: number = 20): Promise<GetAllSourcesResponse> {
-  const params = new URLSearchParams({
-    page: page.toString(),
-    limit: limit.toString(),
-  });
-  
-  return apiGet<GetAllSourcesResponse>(`/dashboard/sources?${params}`);
+  return generatedData<GetAllSourcesResponse>(
+    Sources.listAllSources({ query: { page, limit } }),
+  );
 }
 
 // Get all sources for an article
 export async function getArticleSources(articleId: string): Promise<ArticleSource[]> {
-  const data = await apiGet<{ sources: ArticleSource[] }>(`/sources/article/${articleId}`);
+  const data = await generatedData<{ sources: ArticleSource[] }>(
+    Sources.getArticleSources({ path: { articleId } }),
+  );
   return data.sources || [];
 }
 
 // Create a new source
 export async function createSource(request: CreateSourceRequest): Promise<ArticleSource> {
-  return apiPost<ArticleSource>('/sources/', request);
+  return generatedData<ArticleSource>(Sources.createSource({ body: request }));
 }
 
 // Scrape a URL and create a source
 export async function scrapeAndCreateSource(request: ScrapeSourceRequest): Promise<ArticleSource> {
-  return apiPost<ArticleSource>('/sources/scrape', request);
+  return generatedData<ArticleSource>(Sources.scrapeAndCreateSource({ body: request }));
 }
 
 // Get a specific source
 export async function getSource(sourceId: string): Promise<ArticleSource> {
-  return apiGet<ArticleSource>(`/sources/${sourceId}`);
+  return generatedData<ArticleSource>(Sources.getSource({ path: { sourceId } }));
 }
 
 // Update a source
 export async function updateSource(sourceId: string, request: UpdateSourceRequest): Promise<ArticleSource> {
-  return apiPut<ArticleSource>(`/sources/${sourceId}`, request);
+  return generatedData<ArticleSource>(
+    Sources.updateSource({ path: { sourceId }, body: request }),
+  );
 }
 
 // Delete a source
 export async function deleteSource(sourceId: string): Promise<void> {
-  await apiDelete<{ success: boolean }>(`/sources/${sourceId}`);
+  await generatedData<{ success: boolean }>(Sources.deleteSource({ path: { sourceId } }));
 }
 
 // Search for similar sources
@@ -60,11 +62,8 @@ export async function searchSimilarSources(
   query: string, 
   limit: number = 5
 ): Promise<ArticleSource[]> {
-  const params = new URLSearchParams({
-    q: query,
-    limit: limit.toString(),
-  });
-
-  const data = await apiGet<{ sources: ArticleSource[] }>(`/sources/article/${articleId}/search?${params}`);
+  const data = await generatedData<{ sources: ArticleSource[] }>(
+    Sources.searchSimilarSources({ path: { articleId }, query: { q: query, limit } }),
+  );
   return data.sources || [];
 }

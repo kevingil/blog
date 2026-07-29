@@ -1,4 +1,5 @@
-import { apiGet, apiPost, apiPut, apiDelete } from '@/services/authenticatedFetch';
+import { Organizations } from '@/client';
+import { generatedData } from '@/services/generatedClient';
 
 /**
  * Organization data
@@ -48,7 +49,7 @@ export interface OrganizationUpdateRequest {
  */
 export async function listOrganizations(): Promise<Organization[]> {
   try {
-    return await apiGet<Organization[]>('/organizations');
+    return await generatedData<Organization[]>(Organizations.listOrganizations());
   } catch (error: any) {
     console.error('Error fetching organizations:', error);
     return [];
@@ -60,7 +61,7 @@ export async function listOrganizations(): Promise<Organization[]> {
  */
 export async function getOrganization(id: string): Promise<Organization | null> {
   try {
-    return await apiGet<Organization>(`/organizations/${id}`);
+    return await generatedData<Organization>(Organizations.getOrganization({ path: { id } }));
   } catch (error: any) {
     if (error.status === 404) {
       return null;
@@ -74,14 +75,14 @@ export async function getOrganization(id: string): Promise<Organization | null> 
  * Create a new organization
  */
 export async function createOrganization(data: OrganizationCreateRequest): Promise<Organization> {
-  return await apiPost<Organization>('/organizations', data);
+  return generatedData<Organization>(Organizations.createOrganization({ body: data }));
 }
 
 /**
  * Update an organization
  */
 export async function updateOrganization(id: string, data: OrganizationUpdateRequest): Promise<Organization> {
-  return await apiPut<Organization>(`/organizations/${id}`, data);
+  return generatedData<Organization>(Organizations.updateOrganization({ path: { id }, body: data }));
 }
 
 /**
@@ -89,7 +90,7 @@ export async function updateOrganization(id: string, data: OrganizationUpdateReq
  */
 export async function deleteOrganization(id: string): Promise<boolean> {
   try {
-    await apiDelete<{ success: boolean }>(`/organizations/${id}`);
+    await generatedData<{ success: boolean }>(Organizations.deleteOrganization({ path: { id } }));
     return true;
   } catch (error: any) {
     console.error('Error deleting organization:', error);
@@ -102,7 +103,7 @@ export async function deleteOrganization(id: string): Promise<boolean> {
  */
 export async function joinOrganization(orgId: string): Promise<boolean> {
   try {
-    await apiPost<{ success: boolean }>(`/organizations/${orgId}/join`);
+    await generatedData<{ success: boolean }>(Organizations.joinOrganization({ path: { id: orgId } }));
     return true;
   } catch (error: any) {
     console.error('Error joining organization:', error);
@@ -115,7 +116,7 @@ export async function joinOrganization(orgId: string): Promise<boolean> {
  */
 export async function leaveOrganization(): Promise<boolean> {
   try {
-    await apiPost<{ success: boolean }>('/organizations/leave');
+    await generatedData<{ success: boolean }>(Organizations.leaveOrganization());
     return true;
   } catch (error: any) {
     console.error('Error leaving organization:', error);

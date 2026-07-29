@@ -8,7 +8,8 @@ import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, ArrowUp,
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { VITE_API_BASE_URL } from "@/services/constants";
-import { apiPost, isAuthError } from '@/services/authenticatedFetch';
+import { isAuthError } from '@/services/authenticatedFetch';
+import { submitAgentRequest } from '@/services/agent';
 
 // Editor modules
 import { EditorTabs } from './editor/EditorTabs';
@@ -1004,7 +1005,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       }
       
       // Submit the request with single message - backend loads context from DB
-      const result = await apiPost<{ requestId: string; status: string }>('/agent', {
+      const result = await submitAgentRequest({
         message: messageText,  // Single message string
         documentContent: documentContent,
         documentMarkdown: documentMarkdown || '',  // Markdown version for agent editing

@@ -1,4 +1,5 @@
-import { apiGet, apiPost, apiPut, apiDelete } from "./authenticatedFetch";
+import { DataSources } from "@/client";
+import { generatedData } from "./generatedClient";
 import type { CrawledContent } from "./insights";
 
 // Types
@@ -83,41 +84,34 @@ export async function listDataSources(
   page: number = 1,
   limit: number = 20,
 ): Promise<DataSource[] | ListDataSourcesResponse> {
-  const params = new URLSearchParams({
-    page: page.toString(),
-    limit: limit.toString(),
-  });
-
-  return apiGet<DataSource[] | ListDataSourcesResponse>(
-    `/data-sources?${params}`,
+  return generatedData<DataSource[] | ListDataSourcesResponse>(
+    DataSources.listDataSources({ query: { page, limit } }),
   );
 }
 
 export async function getDataSource(id: string): Promise<DataSource> {
-  return apiGet<DataSource>(`/data-sources/${id}`);
+  return generatedData<DataSource>(DataSources.getDataSource({ path: { id } }));
 }
 
 export async function createDataSource(
   request: CreateDataSourceRequest,
 ): Promise<DataSource> {
-  return apiPost<DataSource>("/data-sources", request);
+  return generatedData<DataSource>(DataSources.createDataSource({ body: request }));
 }
 
 export async function recommendDataSources(
   request: RecommendDataSourcesRequest,
 ): Promise<RecommendDataSourcesResponse> {
-  return apiPost<RecommendDataSourcesResponse>(
-    "/data-sources/recommendations",
-    request,
+  return generatedData<RecommendDataSourcesResponse>(
+    DataSources.recommendDataSources({ body: request }),
   );
 }
 
 export async function discoverDataSourcesFromExistingSources(
   request: DiscoverDataSourcesRequest = {},
 ): Promise<RecommendDataSourcesResponse> {
-  return apiPost<RecommendDataSourcesResponse>(
-    "/data-sources/recommendations/discovery",
-    request,
+  return generatedData<RecommendDataSourcesResponse>(
+    DataSources.discoverDataSources({ body: request }),
   );
 }
 
@@ -125,17 +119,20 @@ export async function updateDataSource(
   id: string,
   request: UpdateDataSourceRequest,
 ): Promise<DataSource> {
-  return apiPut<DataSource>(`/data-sources/${id}`, request);
+  return generatedData<DataSource>(
+    DataSources.updateDataSource({ path: { id }, body: request }),
+  );
 }
 
 export async function deleteDataSource(id: string): Promise<void> {
-  await apiDelete<{ success: boolean }>(`/data-sources/${id}`);
+  await generatedData<{ success: boolean }>(
+    DataSources.deleteDataSource({ path: { id } }),
+  );
 }
 
 export async function triggerCrawl(id: string): Promise<void> {
-  await apiPost<{ success: boolean; message: string }>(
-    `/data-sources/${id}/crawl`,
-    {},
+  await generatedData<{ success: boolean; message: string }>(
+    DataSources.triggerDataSourceCrawl({ path: { id } }),
   );
 }
 
@@ -151,12 +148,7 @@ export async function getDataSourceContent(
   page: number = 1,
   limit: number = 20,
 ): Promise<GetDataSourceContentResponse> {
-  const params = new URLSearchParams({
-    page: page.toString(),
-    limit: limit.toString(),
-  });
-
-  return apiGet<GetDataSourceContentResponse>(
-    `/data-sources/${id}/content?${params}`,
+  return generatedData<GetDataSourceContentResponse>(
+    DataSources.getDataSourceContent({ path: { id }, query: { page, limit } }),
   );
 }

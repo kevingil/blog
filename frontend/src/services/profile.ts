@@ -1,4 +1,5 @@
-import { apiGet, apiPut } from '@/services/authenticatedFetch';
+import { Profile } from '@/client';
+import { generatedData } from '@/services/generatedClient';
 
 /**
  * Public profile that can be either a user or organization
@@ -65,7 +66,7 @@ export interface SiteSettingsUpdateRequest {
  */
 export async function getPublicProfile(): Promise<PublicProfile | null> {
   try {
-    return await apiGet<PublicProfile>('/profile/public', { skipAuth: true });
+    return await generatedData<PublicProfile>(Profile.getPublicProfile());
   } catch (error: any) {
     if (error.status === 404) {
       return null;
@@ -80,7 +81,7 @@ export async function getPublicProfile(): Promise<PublicProfile | null> {
  */
 export async function getMyProfile(): Promise<UserProfile | null> {
   try {
-    return await apiGet<UserProfile>('/profile');
+    return await generatedData<UserProfile>(Profile.getMyProfile());
   } catch (error: any) {
     console.error('Error fetching my profile:', error);
     return null;
@@ -92,7 +93,7 @@ export async function getMyProfile(): Promise<UserProfile | null> {
  */
 export async function updateProfile(data: ProfileUpdateRequest): Promise<UserProfile | null> {
   try {
-    return await apiPut<UserProfile>('/profile', data);
+    return await generatedData<UserProfile>(Profile.updateProfile({ body: data }));
   } catch (error: any) {
     console.error('Error updating profile:', error);
     throw error;
@@ -104,7 +105,7 @@ export async function updateProfile(data: ProfileUpdateRequest): Promise<UserPro
  */
 export async function getSiteSettings(): Promise<SiteSettings | null> {
   try {
-    return await apiGet<SiteSettings>('/profile/settings');
+    return await generatedData<SiteSettings>(Profile.getSiteSettings());
   } catch (error: any) {
     console.error('Error fetching site settings:', error);
     return null;
@@ -116,7 +117,7 @@ export async function getSiteSettings(): Promise<SiteSettings | null> {
  */
 export async function updateSiteSettings(data: SiteSettingsUpdateRequest): Promise<SiteSettings | null> {
   try {
-    return await apiPut<SiteSettings>('/profile/settings', data);
+    return await generatedData<SiteSettings>(Profile.updateSiteSettings({ body: data }));
   } catch (error: any) {
     console.error('Error updating site settings:', error);
     throw error;

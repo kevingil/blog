@@ -2,7 +2,7 @@
 
 import { type Client, formDataBodySerializer, type Options as Options2, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { DeleteAgentConversationsByArticleIdData, DeleteAgentConversationsByArticleIdErrors, DeleteAgentConversationsByArticleIdResponses, DeleteAuthAccountData, DeleteAuthAccountErrors, DeleteAuthAccountResponses, DeleteBlogArticlesByIdData, DeleteBlogArticlesByIdErrors, DeleteBlogArticlesByIdResponses, DeleteDashboardPagesByIdData, DeleteDashboardPagesByIdErrors, DeleteDashboardPagesByIdResponses, DeleteOrganizationsByIdData, DeleteOrganizationsByIdErrors, DeleteOrganizationsByIdResponses, DeleteProjectsByIdData, DeleteProjectsByIdErrors, DeleteProjectsByIdResponses, DeleteSourcesBySourceIdData, DeleteSourcesBySourceIdErrors, DeleteSourcesBySourceIdResponses, DeleteStorageByKeyData, DeleteStorageByKeyErrors, DeleteStorageByKeyResponses, GetAgentArtifactsByArticleIdPendingData, GetAgentArtifactsByArticleIdPendingErrors, GetAgentArtifactsByArticleIdPendingResponses, GetAgentConversationsByArticleIdData, GetAgentConversationsByArticleIdErrors, GetAgentConversationsByArticleIdResponses, GetBlogArticlesByIdRecommendedData, GetBlogArticlesByIdRecommendedErrors, GetBlogArticlesByIdRecommendedResponses, GetBlogArticlesBySlugData, GetBlogArticlesBySlugErrors, GetBlogArticlesBySlugResponses, GetBlogArticlesBySlugVersionsData, GetBlogArticlesBySlugVersionsErrors, GetBlogArticlesBySlugVersionsResponses, GetBlogArticlesData, GetBlogArticlesErrors, GetBlogArticlesResponses, GetBlogArticlesSearchData, GetBlogArticlesSearchErrors, GetBlogArticlesSearchResponses, GetBlogArticlesVersionsByVersionIdData, GetBlogArticlesVersionsByVersionIdErrors, GetBlogArticlesVersionsByVersionIdResponses, GetBlogTagsPopularData, GetBlogTagsPopularErrors, GetBlogTagsPopularResponses, GetDashboardPagesByIdData, GetDashboardPagesByIdErrors, GetDashboardPagesByIdResponses, GetDashboardPagesData, GetDashboardPagesErrors, GetDashboardPagesResponses, GetDashboardSourcesData, GetDashboardSourcesErrors, GetDashboardSourcesResponses, GetOrganizationsByIdData, GetOrganizationsByIdErrors, GetOrganizationsByIdResponses, GetOrganizationsData, GetOrganizationsErrors, GetOrganizationsResponses, GetPagesBySlugData, GetPagesBySlugErrors, GetPagesBySlugResponses, GetProfileData, GetProfileErrors, GetProfilePublicData, GetProfilePublicErrors, GetProfilePublicResponses, GetProfileResponses, GetProfileSettingsData, GetProfileSettingsErrors, GetProfileSettingsResponses, GetProjectsByIdData, GetProjectsByIdErrors, GetProjectsByIdResponses, GetProjectsData, GetProjectsErrors, GetProjectsResponses, GetSourcesArticleByArticleIdData, GetSourcesArticleByArticleIdErrors, GetSourcesArticleByArticleIdResponses, GetSourcesArticleByArticleIdSearchData, GetSourcesArticleByArticleIdSearchErrors, GetSourcesArticleByArticleIdSearchResponses, GetSourcesBySourceIdData, GetSourcesBySourceIdErrors, GetSourcesBySourceIdResponses, GetStorageFilesData, GetStorageFilesErrors, GetStorageFilesResponses, PostAgentArtifactsByMessageIdAcceptData, PostAgentArtifactsByMessageIdAcceptErrors, PostAgentArtifactsByMessageIdAcceptResponses, PostAgentArtifactsByMessageIdRejectData, PostAgentArtifactsByMessageIdRejectErrors, PostAgentArtifactsByMessageIdRejectResponses, PostAgentData, PostAgentErrors, PostAgentResponses, PostAuthLoginData, PostAuthLoginErrors, PostAuthLoginResponses, PostAuthLogoutData, PostAuthLogoutResponses, PostAuthRegisterData, PostAuthRegisterErrors, PostAuthRegisterResponses, PostBlogArticlesBySlugPublishData, PostBlogArticlesBySlugPublishErrors, PostBlogArticlesBySlugPublishResponses, PostBlogArticlesBySlugRevertByVersionIdData, PostBlogArticlesBySlugRevertByVersionIdErrors, PostBlogArticlesBySlugRevertByVersionIdResponses, PostBlogArticlesBySlugUnpublishData, PostBlogArticlesBySlugUnpublishErrors, PostBlogArticlesBySlugUnpublishResponses, PostBlogArticlesBySlugUpdateData, PostBlogArticlesBySlugUpdateErrors, PostBlogArticlesBySlugUpdateResponses, PostBlogArticlesData, PostBlogArticlesErrors, PostBlogArticlesResponses, PostBlogGenerateData, PostBlogGenerateErrors, PostBlogGenerateResponses, PostDashboardPagesData, PostDashboardPagesErrors, PostDashboardPagesResponses, PostOrganizationsByIdJoinData, PostOrganizationsByIdJoinErrors, PostOrganizationsByIdJoinResponses, PostOrganizationsData, PostOrganizationsErrors, PostOrganizationsLeaveData, PostOrganizationsLeaveErrors, PostOrganizationsLeaveResponses, PostOrganizationsResponses, PostProjectsData, PostProjectsErrors, PostProjectsResponses, PostSourcesData, PostSourcesErrors, PostSourcesResponses, PostSourcesScrapeData, PostSourcesScrapeErrors, PostSourcesScrapeResponses, PostStorageFoldersData, PostStorageFoldersErrors, PostStorageFoldersResponses, PostStorageUploadData, PostStorageUploadErrors, PostStorageUploadResponses, PutAuthAccountData, PutAuthAccountErrors, PutAuthAccountResponses, PutAuthPasswordData, PutAuthPasswordErrors, PutAuthPasswordResponses, PutBlogByIdUpdateData, PutBlogByIdUpdateErrors, PutBlogByIdUpdateResponses, PutDashboardPagesByIdData, PutDashboardPagesByIdErrors, PutDashboardPagesByIdResponses, PutOrganizationsByIdData, PutOrganizationsByIdErrors, PutOrganizationsByIdResponses, PutProfileData, PutProfileErrors, PutProfileResponses, PutProfileSettingsData, PutProfileSettingsErrors, PutProfileSettingsResponses, PutProjectsByIdData, PutProjectsByIdErrors, PutProjectsByIdResponses, PutSourcesBySourceIdData, PutSourcesBySourceIdErrors, PutSourcesBySourceIdResponses, PutStorageFoldersData, PutStorageFoldersErrors, PutStorageFoldersResponses } from './types.gen';
+import type { AcceptArtifactData, AcceptArtifactErrors, AcceptArtifactResponses, AuthDeleteAccountData, AuthDeleteAccountErrors, AuthDeleteAccountResponses, AuthLoginData, AuthLoginErrors, AuthLoginResponses, AuthLogoutData, AuthLogoutResponses, AuthRegisterData, AuthRegisterErrors, AuthRegisterResponses, AuthUpdateAccountData, AuthUpdateAccountErrors, AuthUpdateAccountResponses, AuthUpdatePasswordData, AuthUpdatePasswordErrors, AuthUpdatePasswordResponses, ClearConversationHistoryData, ClearConversationHistoryErrors, ClearConversationHistoryResponses, ConnectWebSocketData, ConnectWebSocketErrors, CreateArticleData, CreateArticleErrors, CreateArticleResponses, CreateDataSourceData, CreateDataSourceErrors, CreateDataSourceResponses, CreateInsightTopicData, CreateInsightTopicErrors, CreateInsightTopicResponses, CreateOrganizationData, CreateOrganizationErrors, CreateOrganizationResponses, CreatePageData, CreatePageErrors, CreatePageResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateSourceData, CreateSourceErrors, CreateSourceResponses, CreateStorageFolderData, CreateStorageFolderErrors, CreateStorageFolderResponses, DeleteArticleData, DeleteArticleErrors, DeleteArticleResponses, DeleteDataSourceData, DeleteDataSourceErrors, DeleteDataSourceResponses, DeleteInsightData, DeleteInsightErrors, DeleteInsightResponses, DeleteInsightTopicData, DeleteInsightTopicErrors, DeleteInsightTopicResponses, DeleteOrganizationData, DeleteOrganizationErrors, DeleteOrganizationResponses, DeletePageData, DeletePageErrors, DeletePageResponses, DeleteProjectData, DeleteProjectErrors, DeleteProjectResponses, DeleteSourceData, DeleteSourceErrors, DeleteSourceResponses, DeleteStorageFileData, DeleteStorageFileErrors, DeleteStorageFileResponses, DiscoverDataSourcesData, DiscoverDataSourcesErrors, DiscoverDataSourcesResponses, GenerateArticleData, GenerateArticleErrors, GenerateArticleResponses, GenerateImageData, GenerateImageErrors, GenerateImageResponses, GetAllWorkerStatusData, GetAllWorkerStatusErrors, GetAllWorkerStatusResponses, GetArticleDataData, GetArticleDataErrors, GetArticleDataResponses, GetArticlesData, GetArticleSourcesData, GetArticleSourcesErrors, GetArticleSourcesResponses, GetArticlesResponses, GetArticleVersionData, GetArticleVersionResponses, GetConversationHistoryData, GetConversationHistoryErrors, GetConversationHistoryResponses, GetDataSourceContentData, GetDataSourceContentErrors, GetDataSourceContentResponses, GetDataSourceData, GetDataSourceErrors, GetDataSourceResponses, GetImageGenerationData, GetImageGenerationErrors, GetImageGenerationResponses, GetImageGenerationStatusData, GetImageGenerationStatusErrors, GetImageGenerationStatusResponses, GetInsightData, GetInsightErrors, GetInsightResponses, GetInsightTopicData, GetInsightTopicErrors, GetInsightTopicResponses, GetMyProfileData, GetMyProfileErrors, GetMyProfileResponses, GetOrganizationData, GetOrganizationErrors, GetOrganizationResponses, GetPageByIdData, GetPageByIdErrors, GetPageByIdResponses, GetPageBySlugData, GetPageBySlugErrors, GetPageBySlugResponses, GetPendingArtifactsData, GetPendingArtifactsErrors, GetPendingArtifactsResponses, GetPopularTagsData, GetPopularTagsResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetPublicProfileData, GetPublicProfileErrors, GetPublicProfileResponses, GetRecentInsightContentData, GetRecentInsightContentErrors, GetRecentInsightContentResponses, GetRecommendedArticlesData, GetRecommendedArticlesResponses, GetRunningWorkersData, GetRunningWorkersErrors, GetRunningWorkersResponses, GetSiteSettingsData, GetSiteSettingsErrors, GetSiteSettingsResponses, GetSourceData, GetSourceErrors, GetSourceResponses, GetTaskRunData, GetTaskRunErrors, GetTaskRunResponses, GetUnreadInsightCountData, GetUnreadInsightCountErrors, GetUnreadInsightCountResponses, GetWorkerStatusData, GetWorkerStatusErrors, GetWorkerStatusResponses, HealthCheckData, HealthCheckResponses, JoinOrganizationData, JoinOrganizationErrors, JoinOrganizationResponses, LeaveOrganizationData, LeaveOrganizationErrors, LeaveOrganizationResponses, ListAllSourcesData, ListAllSourcesErrors, ListAllSourcesResponses, ListArticleVersionsData, ListArticleVersionsResponses, ListDataSourcesData, ListDataSourcesErrors, ListDataSourcesResponses, ListInsightsData, ListInsightsErrors, ListInsightsResponses, ListInsightTopicsData, ListInsightTopicsErrors, ListInsightTopicsResponses, ListOrganizationsData, ListOrganizationsErrors, ListOrganizationsResponses, ListPagesData, ListPagesErrors, ListPagesResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListStorageFilesData, ListStorageFilesErrors, ListStorageFilesResponses, ListTaskRunEventsData, ListTaskRunEventsErrors, ListTaskRunEventsResponses, ListTaskRunsData, ListTaskRunsErrors, ListTaskRunsResponses, MarkInsightReadData, MarkInsightReadErrors, MarkInsightReadResponses, PublishArticleData, PublishArticleResponses, RecommendDataSourcesData, RecommendDataSourcesErrors, RecommendDataSourcesResponses, RejectArtifactData, RejectArtifactErrors, RejectArtifactResponses, RevertArticleToVersionData, RevertArticleToVersionResponses, RootStatusData, RootStatusResponses, RunWorkerData, RunWorkerErrors, RunWorkerResponses, ScrapeAndCreateSourceData, ScrapeAndCreateSourceErrors, ScrapeAndCreateSourceResponses, SearchArticlesData, SearchArticlesErrors, SearchArticlesResponses, SearchInsightContentData, SearchInsightContentErrors, SearchInsightContentResponses, SearchInsightsData, SearchInsightsErrors, SearchInsightsResponses, SearchSimilarSourcesData, SearchSimilarSourcesErrors, SearchSimilarSourcesResponses, StopWorkerData, StopWorkerErrors, StopWorkerResponses, SubmitAgentRequestData, SubmitAgentRequestErrors, SubmitAgentRequestResponses, ToggleInsightPinnedData, ToggleInsightPinnedErrors, ToggleInsightPinnedResponses, TriggerDataSourceCrawlData, TriggerDataSourceCrawlErrors, TriggerDataSourceCrawlResponses, UnpublishArticleData, UnpublishArticleResponses, UpdateArticleData, UpdateArticleErrors, UpdateArticleResponses, UpdateArticleWithContextData, UpdateArticleWithContextErrors, UpdateArticleWithContextResponses, UpdateDataSourceData, UpdateDataSourceErrors, UpdateDataSourceResponses, UpdateInsightTopicData, UpdateInsightTopicErrors, UpdateInsightTopicResponses, UpdateOrganizationData, UpdateOrganizationErrors, UpdateOrganizationResponses, UpdatePageData, UpdatePageErrors, UpdatePageResponses, UpdateProfileData, UpdateProfileErrors, UpdateProfileResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateSiteSettingsData, UpdateSiteSettingsErrors, UpdateSiteSettingsResponses, UpdateSourceData, UpdateSourceErrors, UpdateSourceResponses, UpdateStorageFolderData, UpdateStorageFolderErrors, UpdateStorageFolderResponses, UploadStorageFileData, UploadStorageFileErrors, UploadStorageFileResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean> = Options2<TData, ThrowOnError> & {
     /**
@@ -18,15 +18,20 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
     meta?: Record<string, unknown>;
 };
 
+export class System {
+    public static rootStatus<ThrowOnError extends boolean = false>(options?: Options<RootStatusData, ThrowOnError>) {
+        return (options?.client ?? client).get<RootStatusResponses, unknown, ThrowOnError>({ url: '/', ...options });
+    }
+
+    public static healthCheck<ThrowOnError extends boolean = false>(options?: Options<HealthCheckData, ThrowOnError>) {
+        return (options?.client ?? client).get<HealthCheckResponses, unknown, ThrowOnError>({ url: '/health', ...options });
+    }
+}
+
 export class Agent {
-    /**
-     * Submit agent request
-     *
-     * Submit a chat request to the AI agent for processing
-     */
-    public static postAgent<ThrowOnError extends boolean = false>(options: Options<PostAgentData, ThrowOnError>) {
-        return (options.client ?? client).post<PostAgentResponses, PostAgentErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+    public static submitAgentRequest<ThrowOnError extends boolean = false>(options: Options<SubmitAgentRequestData, ThrowOnError>) {
+        return (options.client ?? client).post<SubmitAgentRequestResponses, SubmitAgentRequestErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/agent',
             ...options,
             headers: {
@@ -35,28 +40,18 @@ export class Agent {
             }
         });
     }
-    
-    /**
-     * Get pending artifacts
-     *
-     * Get all pending artifacts for an article
-     */
-    public static getAgentArtifactsByArticleIdPending<ThrowOnError extends boolean = false>(options: Options<GetAgentArtifactsByArticleIdPendingData, ThrowOnError>) {
-        return (options.client ?? client).get<GetAgentArtifactsByArticleIdPendingResponses, GetAgentArtifactsByArticleIdPendingErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static getPendingArtifacts<ThrowOnError extends boolean = false>(options: Options<GetPendingArtifactsData, ThrowOnError>) {
+        return (options.client ?? client).get<GetPendingArtifactsResponses, GetPendingArtifactsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/agent/artifacts/{articleId}/pending',
             ...options
         });
     }
-    
-    /**
-     * Accept artifact
-     *
-     * Accept a pending artifact
-     */
-    public static postAgentArtifactsByMessageIdAccept<ThrowOnError extends boolean = false>(options: Options<PostAgentArtifactsByMessageIdAcceptData, ThrowOnError>) {
-        return (options.client ?? client).post<PostAgentArtifactsByMessageIdAcceptResponses, PostAgentArtifactsByMessageIdAcceptErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static acceptArtifact<ThrowOnError extends boolean = false>(options: Options<AcceptArtifactData, ThrowOnError>) {
+        return (options.client ?? client).post<AcceptArtifactResponses, AcceptArtifactErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/agent/artifacts/{messageId}/accept',
             ...options,
             headers: {
@@ -65,15 +60,10 @@ export class Agent {
             }
         });
     }
-    
-    /**
-     * Reject artifact
-     *
-     * Reject a pending artifact
-     */
-    public static postAgentArtifactsByMessageIdReject<ThrowOnError extends boolean = false>(options: Options<PostAgentArtifactsByMessageIdRejectData, ThrowOnError>) {
-        return (options.client ?? client).post<PostAgentArtifactsByMessageIdRejectResponses, PostAgentArtifactsByMessageIdRejectErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static rejectArtifact<ThrowOnError extends boolean = false>(options: Options<RejectArtifactData, ThrowOnError>) {
+        return (options.client ?? client).post<RejectArtifactResponses, RejectArtifactErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/agent/artifacts/{messageId}/reject',
             ...options,
             headers: {
@@ -82,43 +72,32 @@ export class Agent {
             }
         });
     }
-    
-    /**
-     * Clear conversation history
-     *
-     * Clear all chat messages for an article
-     */
-    public static deleteAgentConversationsByArticleId<ThrowOnError extends boolean = false>(options: Options<DeleteAgentConversationsByArticleIdData, ThrowOnError>) {
-        return (options.client ?? client).delete<DeleteAgentConversationsByArticleIdResponses, DeleteAgentConversationsByArticleIdErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static clearConversationHistory<ThrowOnError extends boolean = false>(options: Options<ClearConversationHistoryData, ThrowOnError>) {
+        return (options.client ?? client).delete<ClearConversationHistoryResponses, ClearConversationHistoryErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/agent/conversations/{articleId}',
             ...options
         });
     }
-    
-    /**
-     * Get conversation history
-     *
-     * Get the chat history for an article
-     */
-    public static getAgentConversationsByArticleId<ThrowOnError extends boolean = false>(options: Options<GetAgentConversationsByArticleIdData, ThrowOnError>) {
-        return (options.client ?? client).get<GetAgentConversationsByArticleIdResponses, GetAgentConversationsByArticleIdErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static getConversationHistory<ThrowOnError extends boolean = false>(options: Options<GetConversationHistoryData, ThrowOnError>) {
+        return (options.client ?? client).get<GetConversationHistoryResponses, GetConversationHistoryErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/agent/conversations/{articleId}',
             ...options
         });
+    }
+
+    public static connectWebSocket<ThrowOnError extends boolean = false>(options?: Options<ConnectWebSocketData, ThrowOnError>) {
+        return (options?.client ?? client).get<unknown, ConnectWebSocketErrors, ThrowOnError>({ url: '/websocket', ...options });
     }
 }
 
 export class Auth {
-    /**
-     * Delete account
-     *
-     * Permanently delete current user's account
-     */
-    public static deleteAuthAccount<ThrowOnError extends boolean = false>(options: Options<DeleteAuthAccountData, ThrowOnError>) {
-        return (options.client ?? client).delete<DeleteAuthAccountResponses, DeleteAuthAccountErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+    public static authDeleteAccount<ThrowOnError extends boolean = false>(options: Options<AuthDeleteAccountData, ThrowOnError>) {
+        return (options.client ?? client).delete<AuthDeleteAccountResponses, AuthDeleteAccountErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/auth/account',
             ...options,
             headers: {
@@ -127,15 +106,10 @@ export class Auth {
             }
         });
     }
-    
-    /**
-     * Update account
-     *
-     * Update current user's account details
-     */
-    public static putAuthAccount<ThrowOnError extends boolean = false>(options: Options<PutAuthAccountData, ThrowOnError>) {
-        return (options.client ?? client).put<PutAuthAccountResponses, PutAuthAccountErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static authUpdateAccount<ThrowOnError extends boolean = false>(options: Options<AuthUpdateAccountData, ThrowOnError>) {
+        return (options.client ?? client).put<AuthUpdateAccountResponses, AuthUpdateAccountErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/auth/account',
             ...options,
             headers: {
@@ -144,14 +118,9 @@ export class Auth {
             }
         });
     }
-    
-    /**
-     * User login
-     *
-     * Authenticate user and return JWT token
-     */
-    public static postAuthLogin<ThrowOnError extends boolean = false>(options: Options<PostAuthLoginData, ThrowOnError>) {
-        return (options.client ?? client).post<PostAuthLoginResponses, PostAuthLoginErrors, ThrowOnError>({
+
+    public static authLogin<ThrowOnError extends boolean = false>(options: Options<AuthLoginData, ThrowOnError>) {
+        return (options.client ?? client).post<AuthLoginResponses, AuthLoginErrors, ThrowOnError>({
             url: '/auth/login',
             ...options,
             headers: {
@@ -160,28 +129,14 @@ export class Auth {
             }
         });
     }
-    
-    /**
-     * User logout
-     *
-     * Logout current user session
-     */
-    public static postAuthLogout<ThrowOnError extends boolean = false>(options?: Options<PostAuthLogoutData, ThrowOnError>) {
-        return (options?.client ?? client).post<PostAuthLogoutResponses, unknown, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
-            url: '/auth/logout',
-            ...options
-        });
+
+    public static authLogout<ThrowOnError extends boolean = false>(options?: Options<AuthLogoutData, ThrowOnError>) {
+        return (options?.client ?? client).post<AuthLogoutResponses, unknown, ThrowOnError>({ url: '/auth/logout', ...options });
     }
-    
-    /**
-     * Update password
-     *
-     * Update current user's password
-     */
-    public static putAuthPassword<ThrowOnError extends boolean = false>(options: Options<PutAuthPasswordData, ThrowOnError>) {
-        return (options.client ?? client).put<PutAuthPasswordResponses, PutAuthPasswordErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static authUpdatePassword<ThrowOnError extends boolean = false>(options: Options<AuthUpdatePasswordData, ThrowOnError>) {
+        return (options.client ?? client).put<AuthUpdatePasswordResponses, AuthUpdatePasswordErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/auth/password',
             ...options,
             headers: {
@@ -190,14 +145,9 @@ export class Auth {
             }
         });
     }
-    
-    /**
-     * User registration
-     *
-     * Register a new user account
-     */
-    public static postAuthRegister<ThrowOnError extends boolean = false>(options: Options<PostAuthRegisterData, ThrowOnError>) {
-        return (options.client ?? client).post<PostAuthRegisterResponses, PostAuthRegisterErrors, ThrowOnError>({
+
+    public static authRegister<ThrowOnError extends boolean = false>(options: Options<AuthRegisterData, ThrowOnError>) {
+        return (options.client ?? client).post<AuthRegisterResponses, AuthRegisterErrors, ThrowOnError>({
             url: '/auth/register',
             ...options,
             headers: {
@@ -209,23 +159,13 @@ export class Auth {
 }
 
 export class Articles {
-    /**
-     * List articles
-     *
-     * Get a paginated list of articles with optional filtering
-     */
-    public static getBlogArticles<ThrowOnError extends boolean = false>(options?: Options<GetBlogArticlesData, ThrowOnError>) {
-        return (options?.client ?? client).get<GetBlogArticlesResponses, GetBlogArticlesErrors, ThrowOnError>({ url: '/blog/articles', ...options });
+    public static getArticles<ThrowOnError extends boolean = false>(options?: Options<GetArticlesData, ThrowOnError>) {
+        return (options?.client ?? client).get<GetArticlesResponses, unknown, ThrowOnError>({ url: '/blog/articles', ...options });
     }
-    
-    /**
-     * Create new article
-     *
-     * Create a new blog article
-     */
-    public static postBlogArticles<ThrowOnError extends boolean = false>(options: Options<PostBlogArticlesData, ThrowOnError>) {
-        return (options.client ?? client).post<PostBlogArticlesResponses, PostBlogArticlesErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static createArticle<ThrowOnError extends boolean = false>(options: Options<CreateArticleData, ThrowOnError>) {
+        return (options.client ?? client).post<CreateArticleResponses, CreateArticleErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/blog/articles',
             ...options,
             headers: {
@@ -234,107 +174,66 @@ export class Articles {
             }
         });
     }
-    
-    /**
-     * Search articles
-     *
-     * Search articles by query string
-     */
-    public static getBlogArticlesSearch<ThrowOnError extends boolean = false>(options: Options<GetBlogArticlesSearchData, ThrowOnError>) {
-        return (options.client ?? client).get<GetBlogArticlesSearchResponses, GetBlogArticlesSearchErrors, ThrowOnError>({ url: '/blog/articles/search', ...options });
+
+    public static searchArticles<ThrowOnError extends boolean = false>(options: Options<SearchArticlesData, ThrowOnError>) {
+        return (options.client ?? client).get<SearchArticlesResponses, SearchArticlesErrors, ThrowOnError>({ url: '/blog/articles/search', ...options });
     }
-    
-    /**
-     * Get article version
-     *
-     * Get a specific version of an article
-     */
-    public static getBlogArticlesVersionsByVersionId<ThrowOnError extends boolean = false>(options: Options<GetBlogArticlesVersionsByVersionIdData, ThrowOnError>) {
-        return (options.client ?? client).get<GetBlogArticlesVersionsByVersionIdResponses, GetBlogArticlesVersionsByVersionIdErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static getArticleVersion<ThrowOnError extends boolean = false>(options: Options<GetArticleVersionData, ThrowOnError>) {
+        return (options.client ?? client).get<GetArticleVersionResponses, unknown, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/blog/articles/versions/{versionId}',
             ...options
         });
     }
-    
-    /**
-     * Delete article
-     *
-     * Permanently delete an article
-     */
-    public static deleteBlogArticlesById<ThrowOnError extends boolean = false>(options: Options<DeleteBlogArticlesByIdData, ThrowOnError>) {
-        return (options.client ?? client).delete<DeleteBlogArticlesByIdResponses, DeleteBlogArticlesByIdErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
-            url: '/blog/articles/{id}',
+
+    public static getRecommendedArticles<ThrowOnError extends boolean = false>(options: Options<GetRecommendedArticlesData, ThrowOnError>) {
+        return (options.client ?? client).get<GetRecommendedArticlesResponses, unknown, ThrowOnError>({ url: '/blog/articles/{id}/recommended', ...options });
+    }
+
+    public static deleteArticle<ThrowOnError extends boolean = false>(options: Options<DeleteArticleData, ThrowOnError>) {
+        return (options.client ?? client).delete<DeleteArticleResponses, DeleteArticleErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/blog/articles/{slug}',
             ...options
         });
     }
-    
-    /**
-     * Get recommended articles
-     *
-     * Get articles recommended based on the current article
-     */
-    public static getBlogArticlesByIdRecommended<ThrowOnError extends boolean = false>(options: Options<GetBlogArticlesByIdRecommendedData, ThrowOnError>) {
-        return (options.client ?? client).get<GetBlogArticlesByIdRecommendedResponses, GetBlogArticlesByIdRecommendedErrors, ThrowOnError>({ url: '/blog/articles/{id}/recommended', ...options });
+
+    public static getArticleData<ThrowOnError extends boolean = false>(options: Options<GetArticleDataData, ThrowOnError>) {
+        return (options.client ?? client).get<GetArticleDataResponses, GetArticleDataErrors, ThrowOnError>({ url: '/blog/articles/{slug}', ...options });
     }
-    
-    /**
-     * Get article by slug
-     *
-     * Get a single article by its slug
-     */
-    public static getBlogArticlesBySlug<ThrowOnError extends boolean = false>(options: Options<GetBlogArticlesBySlugData, ThrowOnError>) {
-        return (options.client ?? client).get<GetBlogArticlesBySlugResponses, GetBlogArticlesBySlugErrors, ThrowOnError>({ url: '/blog/articles/{slug}', ...options });
-    }
-    
-    /**
-     * Publish article
-     *
-     * Publish an article's draft to make it publicly visible
-     */
-    public static postBlogArticlesBySlugPublish<ThrowOnError extends boolean = false>(options: Options<PostBlogArticlesBySlugPublishData, ThrowOnError>) {
-        return (options.client ?? client).post<PostBlogArticlesBySlugPublishResponses, PostBlogArticlesBySlugPublishErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static publishArticle<ThrowOnError extends boolean = false>(options: Options<PublishArticleData, ThrowOnError>) {
+        return (options.client ?? client).post<PublishArticleResponses, unknown, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/blog/articles/{slug}/publish',
-            ...options
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
         });
     }
-    
-    /**
-     * Revert article to version
-     *
-     * Revert an article's draft to a previous version
-     */
-    public static postBlogArticlesBySlugRevertByVersionId<ThrowOnError extends boolean = false>(options: Options<PostBlogArticlesBySlugRevertByVersionIdData, ThrowOnError>) {
-        return (options.client ?? client).post<PostBlogArticlesBySlugRevertByVersionIdResponses, PostBlogArticlesBySlugRevertByVersionIdErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static revertArticleToVersion<ThrowOnError extends boolean = false>(options: Options<RevertArticleToVersionData, ThrowOnError>) {
+        return (options.client ?? client).post<RevertArticleToVersionResponses, unknown, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/blog/articles/{slug}/revert/{versionId}',
             ...options
         });
     }
-    
-    /**
-     * Unpublish article
-     *
-     * Unpublish an article, making it no longer publicly visible
-     */
-    public static postBlogArticlesBySlugUnpublish<ThrowOnError extends boolean = false>(options: Options<PostBlogArticlesBySlugUnpublishData, ThrowOnError>) {
-        return (options.client ?? client).post<PostBlogArticlesBySlugUnpublishResponses, PostBlogArticlesBySlugUnpublishErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static unpublishArticle<ThrowOnError extends boolean = false>(options: Options<UnpublishArticleData, ThrowOnError>) {
+        return (options.client ?? client).post<UnpublishArticleResponses, unknown, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/blog/articles/{slug}/unpublish',
             ...options
         });
     }
-    
-    /**
-     * Update article draft
-     *
-     * Update the draft content of an existing article
-     */
-    public static postBlogArticlesBySlugUpdate<ThrowOnError extends boolean = false>(options: Options<PostBlogArticlesBySlugUpdateData, ThrowOnError>) {
-        return (options.client ?? client).post<PostBlogArticlesBySlugUpdateResponses, PostBlogArticlesBySlugUpdateErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static updateArticle<ThrowOnError extends boolean = false>(options: Options<UpdateArticleData, ThrowOnError>) {
+        return (options.client ?? client).post<UpdateArticleResponses, UpdateArticleErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/blog/articles/{slug}/update',
             ...options,
             headers: {
@@ -343,28 +242,18 @@ export class Articles {
             }
         });
     }
-    
-    /**
-     * List article versions
-     *
-     * Get all versions of an article
-     */
-    public static getBlogArticlesBySlugVersions<ThrowOnError extends boolean = false>(options: Options<GetBlogArticlesBySlugVersionsData, ThrowOnError>) {
-        return (options.client ?? client).get<GetBlogArticlesBySlugVersionsResponses, GetBlogArticlesBySlugVersionsErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static listArticleVersions<ThrowOnError extends boolean = false>(options: Options<ListArticleVersionsData, ThrowOnError>) {
+        return (options.client ?? client).get<ListArticleVersionsResponses, unknown, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/blog/articles/{slug}/versions',
             ...options
         });
     }
-    
-    /**
-     * Generate article with AI
-     *
-     * Generate a new blog article using AI based on the provided prompt
-     */
-    public static postBlogGenerate<ThrowOnError extends boolean = false>(options: Options<PostBlogGenerateData, ThrowOnError>) {
-        return (options.client ?? client).post<PostBlogGenerateResponses, PostBlogGenerateErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static generateArticle<ThrowOnError extends boolean = false>(options: Options<GenerateArticleData, ThrowOnError>) {
+        return (options.client ?? client).post<GenerateArticleResponses, GenerateArticleErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/blog/generate',
             ...options,
             headers: {
@@ -373,24 +262,14 @@ export class Articles {
             }
         });
     }
-    
-    /**
-     * Get popular tags
-     *
-     * Get a list of most used tags
-     */
-    public static getBlogTagsPopular<ThrowOnError extends boolean = false>(options?: Options<GetBlogTagsPopularData, ThrowOnError>) {
-        return (options?.client ?? client).get<GetBlogTagsPopularResponses, GetBlogTagsPopularErrors, ThrowOnError>({ url: '/blog/tags/popular', ...options });
+
+    public static getPopularTags<ThrowOnError extends boolean = false>(options?: Options<GetPopularTagsData, ThrowOnError>) {
+        return (options?.client ?? client).get<GetPopularTagsResponses, unknown, ThrowOnError>({ url: '/blog/tags/popular', ...options });
     }
-    
-    /**
-     * Update article with AI context
-     *
-     * Update article using AI-powered context-aware editing
-     */
-    public static putBlogByIdUpdate<ThrowOnError extends boolean = false>(options: Options<PutBlogByIdUpdateData, ThrowOnError>) {
-        return (options.client ?? client).put<PutBlogByIdUpdateResponses, PutBlogByIdUpdateErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static updateArticleWithContext<ThrowOnError extends boolean = false>(options: Options<UpdateArticleWithContextData, ThrowOnError>) {
+        return (options.client ?? client).put<UpdateArticleWithContextResponses, UpdateArticleWithContextErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/blog/{id}/update',
             ...options
         });
@@ -398,27 +277,17 @@ export class Articles {
 }
 
 export class Pages {
-    /**
-     * List pages
-     *
-     * Get a paginated list of pages (dashboard)
-     */
-    public static getDashboardPages<ThrowOnError extends boolean = false>(options?: Options<GetDashboardPagesData, ThrowOnError>) {
-        return (options?.client ?? client).get<GetDashboardPagesResponses, GetDashboardPagesErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+    public static listPages<ThrowOnError extends boolean = false>(options?: Options<ListPagesData, ThrowOnError>) {
+        return (options?.client ?? client).get<ListPagesResponses, ListPagesErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/dashboard/pages',
             ...options
         });
     }
-    
-    /**
-     * Create page
-     *
-     * Create a new page
-     */
-    public static postDashboardPages<ThrowOnError extends boolean = false>(options: Options<PostDashboardPagesData, ThrowOnError>) {
-        return (options.client ?? client).post<PostDashboardPagesResponses, PostDashboardPagesErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static createPage<ThrowOnError extends boolean = false>(options: Options<CreatePageData, ThrowOnError>) {
+        return (options.client ?? client).post<CreatePageResponses, CreatePageErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/dashboard/pages',
             ...options,
             headers: {
@@ -427,41 +296,26 @@ export class Pages {
             }
         });
     }
-    
-    /**
-     * Delete page
-     *
-     * Delete a page by ID
-     */
-    public static deleteDashboardPagesById<ThrowOnError extends boolean = false>(options: Options<DeleteDashboardPagesByIdData, ThrowOnError>) {
-        return (options.client ?? client).delete<DeleteDashboardPagesByIdResponses, DeleteDashboardPagesByIdErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static deletePage<ThrowOnError extends boolean = false>(options: Options<DeletePageData, ThrowOnError>) {
+        return (options.client ?? client).delete<DeletePageResponses, DeletePageErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/dashboard/pages/{id}',
             ...options
         });
     }
-    
-    /**
-     * Get page by ID
-     *
-     * Get a page by its ID (dashboard)
-     */
-    public static getDashboardPagesById<ThrowOnError extends boolean = false>(options: Options<GetDashboardPagesByIdData, ThrowOnError>) {
-        return (options.client ?? client).get<GetDashboardPagesByIdResponses, GetDashboardPagesByIdErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static getPageById<ThrowOnError extends boolean = false>(options: Options<GetPageByIdData, ThrowOnError>) {
+        return (options.client ?? client).get<GetPageByIdResponses, GetPageByIdErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/dashboard/pages/{id}',
             ...options
         });
     }
-    
-    /**
-     * Update page
-     *
-     * Update an existing page
-     */
-    public static putDashboardPagesById<ThrowOnError extends boolean = false>(options: Options<PutDashboardPagesByIdData, ThrowOnError>) {
-        return (options.client ?? client).put<PutDashboardPagesByIdResponses, PutDashboardPagesByIdErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static updatePage<ThrowOnError extends boolean = false>(options: Options<UpdatePageData, ThrowOnError>) {
+        return (options.client ?? client).put<UpdatePageResponses, UpdatePageErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/dashboard/pages/{id}',
             ...options,
             headers: {
@@ -470,39 +324,24 @@ export class Pages {
             }
         });
     }
-    
-    /**
-     * Get page by slug
-     *
-     * Get a public page by its slug
-     */
-    public static getPagesBySlug<ThrowOnError extends boolean = false>(options: Options<GetPagesBySlugData, ThrowOnError>) {
-        return (options.client ?? client).get<GetPagesBySlugResponses, GetPagesBySlugErrors, ThrowOnError>({ url: '/pages/{slug}', ...options });
+
+    public static getPageBySlug<ThrowOnError extends boolean = false>(options: Options<GetPageBySlugData, ThrowOnError>) {
+        return (options.client ?? client).get<GetPageBySlugResponses, GetPageBySlugErrors, ThrowOnError>({ url: '/pages/{slug}', ...options });
     }
 }
 
 export class Sources {
-    /**
-     * List all sources
-     *
-     * Get a paginated list of all sources
-     */
-    public static getDashboardSources<ThrowOnError extends boolean = false>(options?: Options<GetDashboardSourcesData, ThrowOnError>) {
-        return (options?.client ?? client).get<GetDashboardSourcesResponses, GetDashboardSourcesErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+    public static listAllSources<ThrowOnError extends boolean = false>(options?: Options<ListAllSourcesData, ThrowOnError>) {
+        return (options?.client ?? client).get<ListAllSourcesResponses, ListAllSourcesErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/dashboard/sources',
             ...options
         });
     }
-    
-    /**
-     * Create source
-     *
-     * Create a new article source
-     */
-    public static postSources<ThrowOnError extends boolean = false>(options: Options<PostSourcesData, ThrowOnError>) {
-        return (options.client ?? client).post<PostSourcesResponses, PostSourcesErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static createSource<ThrowOnError extends boolean = false>(options: Options<CreateSourceData, ThrowOnError>) {
+        return (options.client ?? client).post<CreateSourceResponses, CreateSourceErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/sources',
             ...options,
             headers: {
@@ -511,41 +350,26 @@ export class Sources {
             }
         });
     }
-    
-    /**
-     * Get article sources
-     *
-     * Get all sources for an article
-     */
-    public static getSourcesArticleByArticleId<ThrowOnError extends boolean = false>(options: Options<GetSourcesArticleByArticleIdData, ThrowOnError>) {
-        return (options.client ?? client).get<GetSourcesArticleByArticleIdResponses, GetSourcesArticleByArticleIdErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static getArticleSources<ThrowOnError extends boolean = false>(options: Options<GetArticleSourcesData, ThrowOnError>) {
+        return (options.client ?? client).get<GetArticleSourcesResponses, GetArticleSourcesErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/sources/article/{articleId}',
             ...options
         });
     }
-    
-    /**
-     * Search similar sources
-     *
-     * Search for similar sources within an article using semantic search
-     */
-    public static getSourcesArticleByArticleIdSearch<ThrowOnError extends boolean = false>(options: Options<GetSourcesArticleByArticleIdSearchData, ThrowOnError>) {
-        return (options.client ?? client).get<GetSourcesArticleByArticleIdSearchResponses, GetSourcesArticleByArticleIdSearchErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static searchSimilarSources<ThrowOnError extends boolean = false>(options: Options<SearchSimilarSourcesData, ThrowOnError>) {
+        return (options.client ?? client).get<SearchSimilarSourcesResponses, SearchSimilarSourcesErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/sources/article/{articleId}/search',
             ...options
         });
     }
-    
-    /**
-     * Scrape and create source
-     *
-     * Scrape a URL and create a source from it
-     */
-    public static postSourcesScrape<ThrowOnError extends boolean = false>(options: Options<PostSourcesScrapeData, ThrowOnError>) {
-        return (options.client ?? client).post<PostSourcesScrapeResponses, PostSourcesScrapeErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static scrapeAndCreateSource<ThrowOnError extends boolean = false>(options: Options<ScrapeAndCreateSourceData, ThrowOnError>) {
+        return (options.client ?? client).post<ScrapeAndCreateSourceResponses, ScrapeAndCreateSourceErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/sources/scrape',
             ...options,
             headers: {
@@ -554,41 +378,26 @@ export class Sources {
             }
         });
     }
-    
-    /**
-     * Delete source
-     *
-     * Delete a source by ID
-     */
-    public static deleteSourcesBySourceId<ThrowOnError extends boolean = false>(options: Options<DeleteSourcesBySourceIdData, ThrowOnError>) {
-        return (options.client ?? client).delete<DeleteSourcesBySourceIdResponses, DeleteSourcesBySourceIdErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static deleteSource<ThrowOnError extends boolean = false>(options: Options<DeleteSourceData, ThrowOnError>) {
+        return (options.client ?? client).delete<DeleteSourceResponses, DeleteSourceErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/sources/{sourceId}',
             ...options
         });
     }
-    
-    /**
-     * Get source
-     *
-     * Get a source by ID
-     */
-    public static getSourcesBySourceId<ThrowOnError extends boolean = false>(options: Options<GetSourcesBySourceIdData, ThrowOnError>) {
-        return (options.client ?? client).get<GetSourcesBySourceIdResponses, GetSourcesBySourceIdErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static getSource<ThrowOnError extends boolean = false>(options: Options<GetSourceData, ThrowOnError>) {
+        return (options.client ?? client).get<GetSourceResponses, GetSourceErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/sources/{sourceId}',
             ...options
         });
     }
-    
-    /**
-     * Update source
-     *
-     * Update an existing source
-     */
-    public static putSourcesBySourceId<ThrowOnError extends boolean = false>(options: Options<PutSourcesBySourceIdData, ThrowOnError>) {
-        return (options.client ?? client).put<PutSourcesBySourceIdResponses, PutSourcesBySourceIdErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static updateSource<ThrowOnError extends boolean = false>(options: Options<UpdateSourceData, ThrowOnError>) {
+        return (options.client ?? client).put<UpdateSourceResponses, UpdateSourceErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/sources/{sourceId}',
             ...options,
             headers: {
@@ -599,24 +408,260 @@ export class Sources {
     }
 }
 
-export class Organizations {
-    /**
-     * List organizations
-     *
-     * Get a list of all organizations
-     */
-    public static getOrganizations<ThrowOnError extends boolean = false>(options?: Options<GetOrganizationsData, ThrowOnError>) {
-        return (options?.client ?? client).get<GetOrganizationsResponses, GetOrganizationsErrors, ThrowOnError>({ url: '/organizations', ...options });
+export class DataSources {
+    public static listDataSources<ThrowOnError extends boolean = false>(options?: Options<ListDataSourcesData, ThrowOnError>) {
+        return (options?.client ?? client).get<ListDataSourcesResponses, ListDataSourcesErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/data-sources',
+            ...options
+        });
     }
-    
-    /**
-     * Create organization
-     *
-     * Create a new organization
-     */
-    public static postOrganizations<ThrowOnError extends boolean = false>(options: Options<PostOrganizationsData, ThrowOnError>) {
-        return (options.client ?? client).post<PostOrganizationsResponses, PostOrganizationsErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static createDataSource<ThrowOnError extends boolean = false>(options: Options<CreateDataSourceData, ThrowOnError>) {
+        return (options.client ?? client).post<CreateDataSourceResponses, CreateDataSourceErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/data-sources',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    public static recommendDataSources<ThrowOnError extends boolean = false>(options: Options<RecommendDataSourcesData, ThrowOnError>) {
+        return (options.client ?? client).post<RecommendDataSourcesResponses, RecommendDataSourcesErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/data-sources/recommendations',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    public static discoverDataSources<ThrowOnError extends boolean = false>(options?: Options<DiscoverDataSourcesData, ThrowOnError>) {
+        return (options?.client ?? client).post<DiscoverDataSourcesResponses, DiscoverDataSourcesErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/data-sources/recommendations/discovery',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options?.headers
+            }
+        });
+    }
+
+    public static deleteDataSource<ThrowOnError extends boolean = false>(options: Options<DeleteDataSourceData, ThrowOnError>) {
+        return (options.client ?? client).delete<DeleteDataSourceResponses, DeleteDataSourceErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/data-sources/{id}',
+            ...options
+        });
+    }
+
+    public static getDataSource<ThrowOnError extends boolean = false>(options: Options<GetDataSourceData, ThrowOnError>) {
+        return (options.client ?? client).get<GetDataSourceResponses, GetDataSourceErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/data-sources/{id}',
+            ...options
+        });
+    }
+
+    public static updateDataSource<ThrowOnError extends boolean = false>(options: Options<UpdateDataSourceData, ThrowOnError>) {
+        return (options.client ?? client).put<UpdateDataSourceResponses, UpdateDataSourceErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/data-sources/{id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    public static getDataSourceContent<ThrowOnError extends boolean = false>(options: Options<GetDataSourceContentData, ThrowOnError>) {
+        return (options.client ?? client).get<GetDataSourceContentResponses, GetDataSourceContentErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/data-sources/{id}/content',
+            ...options
+        });
+    }
+
+    public static triggerDataSourceCrawl<ThrowOnError extends boolean = false>(options: Options<TriggerDataSourceCrawlData, ThrowOnError>) {
+        return (options.client ?? client).post<TriggerDataSourceCrawlResponses, TriggerDataSourceCrawlErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/data-sources/{id}/crawl',
+            ...options
+        });
+    }
+}
+
+export class Images {
+    public static generateImage<ThrowOnError extends boolean = false>(options: Options<GenerateImageData, ThrowOnError>) {
+        return (options.client ?? client).post<GenerateImageResponses, GenerateImageErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/images/generate',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    public static getImageGeneration<ThrowOnError extends boolean = false>(options: Options<GetImageGenerationData, ThrowOnError>) {
+        return (options.client ?? client).get<GetImageGenerationResponses, GetImageGenerationErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/images/{requestId}',
+            ...options
+        });
+    }
+
+    public static getImageGenerationStatus<ThrowOnError extends boolean = false>(options: Options<GetImageGenerationStatusData, ThrowOnError>) {
+        return (options.client ?? client).get<GetImageGenerationStatusResponses, GetImageGenerationStatusErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/images/{requestId}/status',
+            ...options
+        });
+    }
+}
+
+export class Insights {
+    public static listInsights<ThrowOnError extends boolean = false>(options?: Options<ListInsightsData, ThrowOnError>) {
+        return (options?.client ?? client).get<ListInsightsResponses, ListInsightsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/insights',
+            ...options
+        });
+    }
+
+    public static getRecentInsightContent<ThrowOnError extends boolean = false>(options?: Options<GetRecentInsightContentData, ThrowOnError>) {
+        return (options?.client ?? client).get<GetRecentInsightContentResponses, GetRecentInsightContentErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/insights/content/recent',
+            ...options
+        });
+    }
+
+    public static searchInsightContent<ThrowOnError extends boolean = false>(options?: Options<SearchInsightContentData, ThrowOnError>) {
+        return (options?.client ?? client).get<SearchInsightContentResponses, SearchInsightContentErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/insights/content/search',
+            ...options
+        });
+    }
+
+    public static searchInsights<ThrowOnError extends boolean = false>(options?: Options<SearchInsightsData, ThrowOnError>) {
+        return (options?.client ?? client).get<SearchInsightsResponses, SearchInsightsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/insights/search',
+            ...options
+        });
+    }
+
+    public static listInsightTopics<ThrowOnError extends boolean = false>(options?: Options<ListInsightTopicsData, ThrowOnError>) {
+        return (options?.client ?? client).get<ListInsightTopicsResponses, ListInsightTopicsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/insights/topics',
+            ...options
+        });
+    }
+
+    public static createInsightTopic<ThrowOnError extends boolean = false>(options: Options<CreateInsightTopicData, ThrowOnError>) {
+        return (options.client ?? client).post<CreateInsightTopicResponses, CreateInsightTopicErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/insights/topics',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    public static deleteInsightTopic<ThrowOnError extends boolean = false>(options: Options<DeleteInsightTopicData, ThrowOnError>) {
+        return (options.client ?? client).delete<DeleteInsightTopicResponses, DeleteInsightTopicErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/insights/topics/{id}',
+            ...options
+        });
+    }
+
+    public static getInsightTopic<ThrowOnError extends boolean = false>(options: Options<GetInsightTopicData, ThrowOnError>) {
+        return (options.client ?? client).get<GetInsightTopicResponses, GetInsightTopicErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/insights/topics/{id}',
+            ...options
+        });
+    }
+
+    public static updateInsightTopic<ThrowOnError extends boolean = false>(options: Options<UpdateInsightTopicData, ThrowOnError>) {
+        return (options.client ?? client).put<UpdateInsightTopicResponses, UpdateInsightTopicErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/insights/topics/{id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    public static getUnreadInsightCount<ThrowOnError extends boolean = false>(options?: Options<GetUnreadInsightCountData, ThrowOnError>) {
+        return (options?.client ?? client).get<GetUnreadInsightCountResponses, GetUnreadInsightCountErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/insights/unread-count',
+            ...options
+        });
+    }
+
+    public static deleteInsight<ThrowOnError extends boolean = false>(options: Options<DeleteInsightData, ThrowOnError>) {
+        return (options.client ?? client).delete<DeleteInsightResponses, DeleteInsightErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/insights/{id}',
+            ...options
+        });
+    }
+
+    public static getInsight<ThrowOnError extends boolean = false>(options: Options<GetInsightData, ThrowOnError>) {
+        return (options.client ?? client).get<GetInsightResponses, GetInsightErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/insights/{id}',
+            ...options
+        });
+    }
+
+    public static toggleInsightPinned<ThrowOnError extends boolean = false>(options: Options<ToggleInsightPinnedData, ThrowOnError>) {
+        return (options.client ?? client).post<ToggleInsightPinnedResponses, ToggleInsightPinnedErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/insights/{id}/pin',
+            ...options
+        });
+    }
+
+    public static markInsightRead<ThrowOnError extends boolean = false>(options: Options<MarkInsightReadData, ThrowOnError>) {
+        return (options.client ?? client).post<MarkInsightReadResponses, MarkInsightReadErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/insights/{id}/read',
+            ...options
+        });
+    }
+}
+
+export class Organizations {
+    public static listOrganizations<ThrowOnError extends boolean = false>(options?: Options<ListOrganizationsData, ThrowOnError>) {
+        return (options?.client ?? client).get<ListOrganizationsResponses, ListOrganizationsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/organizations',
+            ...options
+        });
+    }
+
+    public static createOrganization<ThrowOnError extends boolean = false>(options: Options<CreateOrganizationData, ThrowOnError>) {
+        return (options.client ?? client).post<CreateOrganizationResponses, CreateOrganizationErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/organizations',
             ...options,
             headers: {
@@ -625,50 +670,34 @@ export class Organizations {
             }
         });
     }
-    
-    /**
-     * Leave organization
-     *
-     * Leave the current organization
-     */
-    public static postOrganizationsLeave<ThrowOnError extends boolean = false>(options?: Options<PostOrganizationsLeaveData, ThrowOnError>) {
-        return (options?.client ?? client).post<PostOrganizationsLeaveResponses, PostOrganizationsLeaveErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static leaveOrganization<ThrowOnError extends boolean = false>(options?: Options<LeaveOrganizationData, ThrowOnError>) {
+        return (options?.client ?? client).post<LeaveOrganizationResponses, LeaveOrganizationErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/organizations/leave',
             ...options
         });
     }
-    
-    /**
-     * Delete organization
-     *
-     * Delete an organization by ID
-     */
-    public static deleteOrganizationsById<ThrowOnError extends boolean = false>(options: Options<DeleteOrganizationsByIdData, ThrowOnError>) {
-        return (options.client ?? client).delete<DeleteOrganizationsByIdResponses, DeleteOrganizationsByIdErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static deleteOrganization<ThrowOnError extends boolean = false>(options: Options<DeleteOrganizationData, ThrowOnError>) {
+        return (options.client ?? client).delete<DeleteOrganizationResponses, DeleteOrganizationErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/organizations/{id}',
             ...options
         });
     }
-    
-    /**
-     * Get organization
-     *
-     * Get an organization by ID
-     */
-    public static getOrganizationsById<ThrowOnError extends boolean = false>(options: Options<GetOrganizationsByIdData, ThrowOnError>) {
-        return (options.client ?? client).get<GetOrganizationsByIdResponses, GetOrganizationsByIdErrors, ThrowOnError>({ url: '/organizations/{id}', ...options });
+
+    public static getOrganization<ThrowOnError extends boolean = false>(options: Options<GetOrganizationData, ThrowOnError>) {
+        return (options.client ?? client).get<GetOrganizationResponses, GetOrganizationErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/organizations/{id}',
+            ...options
+        });
     }
-    
-    /**
-     * Update organization
-     *
-     * Update an existing organization
-     */
-    public static putOrganizationsById<ThrowOnError extends boolean = false>(options: Options<PutOrganizationsByIdData, ThrowOnError>) {
-        return (options.client ?? client).put<PutOrganizationsByIdResponses, PutOrganizationsByIdErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static updateOrganization<ThrowOnError extends boolean = false>(options: Options<UpdateOrganizationData, ThrowOnError>) {
+        return (options.client ?? client).put<UpdateOrganizationResponses, UpdateOrganizationErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/organizations/{id}',
             ...options,
             headers: {
@@ -677,15 +706,10 @@ export class Organizations {
             }
         });
     }
-    
-    /**
-     * Join organization
-     *
-     * Join an organization as the current user
-     */
-    public static postOrganizationsByIdJoin<ThrowOnError extends boolean = false>(options: Options<PostOrganizationsByIdJoinData, ThrowOnError>) {
-        return (options.client ?? client).post<PostOrganizationsByIdJoinResponses, PostOrganizationsByIdJoinErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static joinOrganization<ThrowOnError extends boolean = false>(options: Options<JoinOrganizationData, ThrowOnError>) {
+        return (options.client ?? client).post<JoinOrganizationResponses, JoinOrganizationErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/organizations/{id}/join',
             ...options
         });
@@ -693,27 +717,17 @@ export class Organizations {
 }
 
 export class Profile {
-    /**
-     * Get my profile
-     *
-     * Get the authenticated user's profile
-     */
-    public static getProfile<ThrowOnError extends boolean = false>(options?: Options<GetProfileData, ThrowOnError>) {
-        return (options?.client ?? client).get<GetProfileResponses, GetProfileErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+    public static getMyProfile<ThrowOnError extends boolean = false>(options?: Options<GetMyProfileData, ThrowOnError>) {
+        return (options?.client ?? client).get<GetMyProfileResponses, GetMyProfileErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/profile',
             ...options
         });
     }
-    
-    /**
-     * Update profile
-     *
-     * Update the authenticated user's profile
-     */
-    public static putProfile<ThrowOnError extends boolean = false>(options: Options<PutProfileData, ThrowOnError>) {
-        return (options.client ?? client).put<PutProfileResponses, PutProfileErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static updateProfile<ThrowOnError extends boolean = false>(options: Options<UpdateProfileData, ThrowOnError>) {
+        return (options.client ?? client).put<UpdateProfileResponses, UpdateProfileErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/profile',
             ...options,
             headers: {
@@ -722,33 +736,22 @@ export class Profile {
             }
         });
     }
-    
-    /**
-     * Get public profile
-     *
-     * Get the public profile information
-     */
-    public static getProfilePublic<ThrowOnError extends boolean = false>(options?: Options<GetProfilePublicData, ThrowOnError>) {
-        return (options?.client ?? client).get<GetProfilePublicResponses, GetProfilePublicErrors, ThrowOnError>({ url: '/profile/public', ...options });
+
+    public static getPublicProfile<ThrowOnError extends boolean = false>(options?: Options<GetPublicProfileData, ThrowOnError>) {
+        return (options?.client ?? client).get<GetPublicProfileResponses, GetPublicProfileErrors, ThrowOnError>({ url: '/profile/public', ...options });
     }
-    
-    /**
-     * Get site settings
-     *
-     * Get the site settings
-     */
-    public static getProfileSettings<ThrowOnError extends boolean = false>(options?: Options<GetProfileSettingsData, ThrowOnError>) {
-        return (options?.client ?? client).get<GetProfileSettingsResponses, GetProfileSettingsErrors, ThrowOnError>({ url: '/profile/settings', ...options });
+
+    public static getSiteSettings<ThrowOnError extends boolean = false>(options?: Options<GetSiteSettingsData, ThrowOnError>) {
+        return (options?.client ?? client).get<GetSiteSettingsResponses, GetSiteSettingsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/profile/settings',
+            ...options
+        });
     }
-    
-    /**
-     * Update site settings
-     *
-     * Update the site settings (admin only)
-     */
-    public static putProfileSettings<ThrowOnError extends boolean = false>(options: Options<PutProfileSettingsData, ThrowOnError>) {
-        return (options.client ?? client).put<PutProfileSettingsResponses, PutProfileSettingsErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static updateSiteSettings<ThrowOnError extends boolean = false>(options: Options<UpdateSiteSettingsData, ThrowOnError>) {
+        return (options.client ?? client).put<UpdateSiteSettingsResponses, UpdateSiteSettingsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/profile/settings',
             ...options,
             headers: {
@@ -760,23 +763,13 @@ export class Profile {
 }
 
 export class Projects {
-    /**
-     * List projects
-     *
-     * Get a paginated list of projects
-     */
-    public static getProjects<ThrowOnError extends boolean = false>(options?: Options<GetProjectsData, ThrowOnError>) {
-        return (options?.client ?? client).get<GetProjectsResponses, GetProjectsErrors, ThrowOnError>({ url: '/projects', ...options });
+    public static listProjects<ThrowOnError extends boolean = false>(options?: Options<ListProjectsData, ThrowOnError>) {
+        return (options?.client ?? client).get<ListProjectsResponses, ListProjectsErrors, ThrowOnError>({ url: '/projects', ...options });
     }
-    
-    /**
-     * Create project
-     *
-     * Create a new project
-     */
-    public static postProjects<ThrowOnError extends boolean = false>(options: Options<PostProjectsData, ThrowOnError>) {
-        return (options.client ?? client).post<PostProjectsResponses, PostProjectsErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static createProject<ThrowOnError extends boolean = false>(options: Options<CreateProjectData, ThrowOnError>) {
+        return (options.client ?? client).post<CreateProjectResponses, CreateProjectErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/projects',
             ...options,
             headers: {
@@ -785,37 +778,22 @@ export class Projects {
             }
         });
     }
-    
-    /**
-     * Delete project
-     *
-     * Delete a project by ID
-     */
-    public static deleteProjectsById<ThrowOnError extends boolean = false>(options: Options<DeleteProjectsByIdData, ThrowOnError>) {
-        return (options.client ?? client).delete<DeleteProjectsByIdResponses, DeleteProjectsByIdErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static deleteProject<ThrowOnError extends boolean = false>(options: Options<DeleteProjectData, ThrowOnError>) {
+        return (options.client ?? client).delete<DeleteProjectResponses, DeleteProjectErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/projects/{id}',
             ...options
         });
     }
-    
-    /**
-     * Get project
-     *
-     * Get a project by ID
-     */
-    public static getProjectsById<ThrowOnError extends boolean = false>(options: Options<GetProjectsByIdData, ThrowOnError>) {
-        return (options.client ?? client).get<GetProjectsByIdResponses, GetProjectsByIdErrors, ThrowOnError>({ url: '/projects/{id}', ...options });
+
+    public static getProject<ThrowOnError extends boolean = false>(options: Options<GetProjectData, ThrowOnError>) {
+        return (options.client ?? client).get<GetProjectResponses, GetProjectErrors, ThrowOnError>({ url: '/projects/{id}', ...options });
     }
-    
-    /**
-     * Update project
-     *
-     * Update an existing project
-     */
-    public static putProjectsById<ThrowOnError extends boolean = false>(options: Options<PutProjectsByIdData, ThrowOnError>) {
-        return (options.client ?? client).put<PutProjectsByIdResponses, PutProjectsByIdErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static updateProject<ThrowOnError extends boolean = false>(options: Options<UpdateProjectData, ThrowOnError>) {
+        return (options.client ?? client).put<UpdateProjectResponses, UpdateProjectErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/projects/{id}',
             ...options,
             headers: {
@@ -827,27 +805,17 @@ export class Projects {
 }
 
 export class Storage {
-    /**
-     * List files
-     *
-     * Get a list of files in storage
-     */
-    public static getStorageFiles<ThrowOnError extends boolean = false>(options?: Options<GetStorageFilesData, ThrowOnError>) {
-        return (options?.client ?? client).get<GetStorageFilesResponses, GetStorageFilesErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+    public static listStorageFiles<ThrowOnError extends boolean = false>(options?: Options<ListStorageFilesData, ThrowOnError>) {
+        return (options?.client ?? client).get<ListStorageFilesResponses, ListStorageFilesErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/storage/files',
             ...options
         });
     }
-    
-    /**
-     * Create folder
-     *
-     * Create a new folder in storage
-     */
-    public static postStorageFolders<ThrowOnError extends boolean = false>(options: Options<PostStorageFoldersData, ThrowOnError>) {
-        return (options.client ?? client).post<PostStorageFoldersResponses, PostStorageFoldersErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static createStorageFolder<ThrowOnError extends boolean = false>(options: Options<CreateStorageFolderData, ThrowOnError>) {
+        return (options.client ?? client).post<CreateStorageFolderResponses, CreateStorageFolderErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/storage/folders',
             ...options,
             headers: {
@@ -856,15 +824,10 @@ export class Storage {
             }
         });
     }
-    
-    /**
-     * Update folder
-     *
-     * Rename/move a folder in storage
-     */
-    public static putStorageFolders<ThrowOnError extends boolean = false>(options: Options<PutStorageFoldersData, ThrowOnError>) {
-        return (options.client ?? client).put<PutStorageFoldersResponses, PutStorageFoldersErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static updateStorageFolder<ThrowOnError extends boolean = false>(options: Options<UpdateStorageFolderData, ThrowOnError>) {
+        return (options.client ?? client).put<UpdateStorageFolderResponses, UpdateStorageFolderErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/storage/folders',
             ...options,
             headers: {
@@ -873,16 +836,11 @@ export class Storage {
             }
         });
     }
-    
-    /**
-     * Upload file
-     *
-     * Upload a file to storage
-     */
-    public static postStorageUpload<ThrowOnError extends boolean = false>(options: Options<PostStorageUploadData, ThrowOnError>) {
-        return (options.client ?? client).post<PostStorageUploadResponses, PostStorageUploadErrors, ThrowOnError>({
+
+    public static uploadStorageFile<ThrowOnError extends boolean = false>(options: Options<UploadStorageFileData, ThrowOnError>) {
+        return (options.client ?? client).post<UploadStorageFileResponses, UploadStorageFileErrors, ThrowOnError>({
             ...formDataBodySerializer,
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/storage/upload',
             ...options,
             headers: {
@@ -891,16 +849,79 @@ export class Storage {
             }
         });
     }
-    
-    /**
-     * Delete file
-     *
-     * Delete a file from storage
-     */
-    public static deleteStorageByKey<ThrowOnError extends boolean = false>(options: Options<DeleteStorageByKeyData, ThrowOnError>) {
-        return (options.client ?? client).delete<DeleteStorageByKeyResponses, DeleteStorageByKeyErrors, ThrowOnError>({
-            security: [{ name: 'Authorization', type: 'apiKey' }],
+
+    public static deleteStorageFile<ThrowOnError extends boolean = false>(options: Options<DeleteStorageFileData, ThrowOnError>) {
+        return (options.client ?? client).delete<DeleteStorageFileResponses, DeleteStorageFileErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/storage/{key}',
+            ...options
+        });
+    }
+}
+
+export class TaskRuns {
+    public static listTaskRuns<ThrowOnError extends boolean = false>(options?: Options<ListTaskRunsData, ThrowOnError>) {
+        return (options?.client ?? client).get<ListTaskRunsResponses, ListTaskRunsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/task-runs',
+            ...options
+        });
+    }
+
+    public static getTaskRun<ThrowOnError extends boolean = false>(options: Options<GetTaskRunData, ThrowOnError>) {
+        return (options.client ?? client).get<GetTaskRunResponses, GetTaskRunErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/task-runs/{id}',
+            ...options
+        });
+    }
+
+    public static listTaskRunEvents<ThrowOnError extends boolean = false>(options: Options<ListTaskRunEventsData, ThrowOnError>) {
+        return (options.client ?? client).get<ListTaskRunEventsResponses, ListTaskRunEventsErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/task-runs/{id}/events',
+            ...options
+        });
+    }
+}
+
+export class Workers {
+    public static getRunningWorkers<ThrowOnError extends boolean = false>(options?: Options<GetRunningWorkersData, ThrowOnError>) {
+        return (options?.client ?? client).get<GetRunningWorkersResponses, GetRunningWorkersErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/workers/running',
+            ...options
+        });
+    }
+
+    public static getAllWorkerStatus<ThrowOnError extends boolean = false>(options?: Options<GetAllWorkerStatusData, ThrowOnError>) {
+        return (options?.client ?? client).get<GetAllWorkerStatusResponses, GetAllWorkerStatusErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/workers/status',
+            ...options
+        });
+    }
+
+    public static runWorker<ThrowOnError extends boolean = false>(options: Options<RunWorkerData, ThrowOnError>) {
+        return (options.client ?? client).post<RunWorkerResponses, RunWorkerErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/workers/{name}/run',
+            ...options
+        });
+    }
+
+    public static getWorkerStatus<ThrowOnError extends boolean = false>(options: Options<GetWorkerStatusData, ThrowOnError>) {
+        return (options.client ?? client).get<GetWorkerStatusResponses, GetWorkerStatusErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/workers/{name}/status',
+            ...options
+        });
+    }
+
+    public static stopWorker<ThrowOnError extends boolean = false>(options: Options<StopWorkerData, ThrowOnError>) {
+        return (options.client ?? client).post<StopWorkerResponses, StopWorkerErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/workers/{name}/stop',
             ...options
         });
     }

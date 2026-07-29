@@ -1,0 +1,117 @@
+id	domain	method	path	auth	request	response_status_shape	omission_null_rules	frontend_consumers	swagger	classification
+HTTP-001	meta	GET	/	public	-	200 {message:"Blog Agent API"}	exact object	-	missing	active-contract
+HTTP-002	meta	GET	/health	public	-	200 {status:"ok"}	exact object	-	missing	active-contract
+HTTP-003	meta	GET	/swagger/*	public	-	Swagger UI assets	UI route	-	missing	active-contract
+HTTP-004	meta	GET	/api/openapi.json	public	-	200 OpenAPI JSON	exact generated document	frontend/openapi-ts.config.ts currently reads file	missing	active-contract
+HTTP-005	agent	POST	/agent	Bearer JWT	copilot.ChatRequest	200 copilot.ChatRequestResponse;400;401;500	runtime response uses requestId	frontend/src/components/blog/Editor.tsx	covered	active-contract
+WS-001	agent	GET	/websocket	public upgrade	SubscribeMessage	101; frames WS-002..WS-008	no handshake auth	frontend/src/hooks/use-session.ts;frontend/src/hooks/use-worker-statuses.ts;frontend/src/components/blog/Editor.tsx	missing	active-contract
+HTTP-006	agent	GET	/agent/conversations/{articleId}	Bearer JWT	path UUID;limit=50	200 {messages,article_id,total};400;401;500	exact runtime casing	frontend/src/services/conversations.ts	covered	active-contract
+HTTP-007	agent	DELETE	/agent/conversations/{articleId}	Bearer JWT	path UUID	200 {success};400;401;500	exact object	frontend/src/services/conversations.ts	covered	active-contract
+HTTP-008	agent	GET	/agent/artifacts/{articleId}/pending	Bearer JWT	path UUID	200 {artifacts};400;401;500	exact object	frontend/src/services/artifacts.ts	covered	active-contract
+HTTP-009	agent	POST	/agent/artifacts/{messageId}/accept	Bearer JWT	optional {feedback:string}	200 {success};400;401;500	feedback optional	frontend/src/services/artifacts.ts	covered	active-contract
+HTTP-010	agent	POST	/agent/artifacts/{messageId}/reject	Bearer JWT	optional {feedback:string}	200 {success};400;401;500	feedback optional	frontend/src/services/artifacts.ts	covered	active-contract
+HTTP-011	article	GET	/blog/articles/search	public	query required;page;tag;status;sortBy;sortOrder	200 ArticleListResponse;400;500	per runtime structs	frontend/src/services/blog.ts	covered	active-contract
+HTTP-012	article	GET	/blog/articles/{slug}	public	path slug	200 ArticleResponse;400;404;500	per runtime structs	frontend/src/services/blog.ts	covered	active-contract
+HTTP-013	article	GET	/blog/articles/{id}/recommended	public	path UUID	200 []ArticleResponse;400;404;500	empty list vs null preserved	frontend/src/services/blog.ts	covered	active-contract
+HTTP-014	article	GET	/blog/articles	public	page;articlesPerPage;tag;status;sortBy;sortOrder	200 ArticleListResponse;500	per runtime structs	frontend/src/services/blog.ts	covered	active-contract
+HTTP-015	article	GET	/blog/tags/popular	public	-	200 {tags:[]string};500	empty list vs null preserved	frontend/src/services/blog.ts	covered	active-contract
+HTTP-016	article	POST	/blog/generate	Bearer JWT	{prompt,title};either nonblank	200 {article,request_id};400;401;500	exact snake_case request_id	frontend/src/services/llm/articles.ts	covered	active-contract
+HTTP-017	article	PUT	/blog/{id}/update	Bearer JWT	path UUID;no body	200 article;400;401;404;500	per runtime structs	frontend/src/services/llm/articles.ts	covered	active-contract
+HTTP-018	article	POST	/blog/articles/{slug}/update	Bearer JWT	core/article.UpdateRequest	200 article;400;401;404;500	runtime DTO wins	frontend/src/services/blog.ts	covered	active-contract
+HTTP-019	article	POST	/blog/articles	Bearer JWT	core.article.CreateRequest	201 article;400;401;500	runtime requires authorId	frontend/src/services/blog.ts	covered	active-contract
+HTTP-020	article	DELETE	/blog/articles/{id}	Bearer JWT	path UUID	200 {success};400;401;404;500	exact object	frontend/src/services/blog.ts	covered	active-contract
+HTTP-021	article	POST	/blog/articles/{slug}/publish	Bearer JWT	optional {published_at:*int64}	200 article;400;401;404;500	body parse errors currently ignored	frontend/src/services/blog.ts	covered	active-contract
+HTTP-022	article	POST	/blog/articles/{slug}/unpublish	Bearer JWT	-	200 article;400;401;404;500	per runtime structs	frontend/src/services/blog.ts	covered	active-contract
+HTTP-023	article	GET	/blog/articles/{slug}/versions	Bearer JWT	path slug	200 version list;400;401;404;500	empty list vs null preserved	frontend/src/services/blog.ts	covered	active-contract
+HTTP-024	article	GET	/blog/articles/versions/{versionId}	Bearer JWT	path UUID	200 version;400;401;404;500	per runtime structs	frontend/src/services/blog.ts	covered	active-contract
+HTTP-025	article	POST	/blog/articles/{slug}/revert/{versionId}	Bearer JWT	path slug+UUID	200 article;400;401;404;500	per runtime structs	frontend/src/services/blog.ts	covered	active-contract
+HTTP-026	auth	POST	/auth/login	public	types.LoginRequest	200 types.LoginResponse;400;401	runtime camelCase fields	frontend/src/services/auth/auth.tsx	covered	active-contract
+HTTP-027	auth	POST	/auth/register	public	types.RegisterRequest	201 {message};400;409	security correction: validate name/email/password despite missing Go tags	-	covered	active-contract
+HTTP-028	auth	POST	/auth/logout	public	-	200 {message}	public despite Swagger security	frontend/src/services/auth/auth.tsx	covered	active-contract
+HTTP-029	auth	PUT	/auth/account	Bearer JWT	types.UpdateAccountRequest	200 {message};400;401	JSON and active-frontend multipart form	frontend/src/services/auth/auth.tsx	covered	active-contract
+HTTP-030	auth	PUT	/auth/password	Bearer JWT	types.UpdatePasswordRequest	200 {message};400;401	JSON or multipart; currentPassword/newPassword; min 6 and max 72 bytes	frontend/src/services/auth/auth.tsx	covered	active-contract
+HTTP-031	auth	DELETE	/auth/account	Bearer JWT	{password}	200 {message};400;401	JSON and active-frontend multipart form	frontend/src/services/auth/auth.tsx	covered	active-contract
+HTTP-032	datasource	GET	/data-sources	Bearer JWT	page=1;limit=20	200 []DataSourceResponse;401;500	empty list vs null preserved	frontend/src/services/dataSources.ts	missing	active-contract
+HTTP-033	datasource	POST	/data-sources	Bearer JWT	DataSourceCreateRequest	201 DataSourceResponse;400;401;500	per runtime DTO	frontend/src/services/dataSources.ts	missing	active-contract
+HTTP-034	datasource	POST	/data-sources/recommendations	Bearer JWT	DataSourceRecommendationRequest	200 DataSourceRecommendationsResponse;400;401;502	per runtime DTO	frontend/src/services/dataSources.ts	missing	active-contract
+HTTP-035	datasource	POST	/data-sources/recommendations/discovery	Bearer JWT	optional DataSourceDiscoveryRecommendationRequest	200 DataSourceRecommendationsResponse;400;401;502	body optional	frontend/src/services/dataSources.ts	missing	active-contract
+HTTP-036	datasource	GET	/data-sources/{id}	Bearer JWT	path UUID	200 DataSourceResponse;400;401;404;500	per runtime DTO	frontend/src/services/dataSources.ts	missing	active-contract
+HTTP-037	datasource	PUT	/data-sources/{id}	Bearer JWT	DataSourceUpdateRequest	200 DataSourceResponse;400;401;404;500	per runtime DTO	frontend/src/services/dataSources.ts	missing	active-contract
+HTTP-038	datasource	DELETE	/data-sources/{id}	Bearer JWT	path UUID	200 {success};400;401;404;500	exact object	frontend/src/services/dataSources.ts	missing	active-contract
+HTTP-039	datasource	POST	/data-sources/{id}/crawl	Bearer JWT	path UUID	200 {success,message};400;401;404;500	exact object	frontend/src/services/dataSources.ts	missing	active-contract
+HTTP-040	datasource	GET	/data-sources/{id}/content	Bearer JWT	path UUID;page;limit	200 {contents,total};400;401;404;500	exact object	frontend/src/services/dataSources.ts	missing	active-contract
+HTTP-041	insight	GET	/insights	Bearer JWT	filters;pagination	200 {insights,total};401;500	insight behavior nonblocking only	frontend/src/services/insights.ts	missing	active-contract
+HTTP-042	insight	GET	/insights/search	Bearer JWT	q required;limit	200 []InsightResponse;400;401;500	empty list vs null preserved	frontend/src/services/insights.ts	missing	active-contract
+HTTP-043	insight	GET	/insights/unread-count	Bearer JWT	-	200 {count};401;500	exact object	frontend/src/services/insights.ts	missing	active-contract
+HTTP-044	insight	GET	/insights/topics	Bearer JWT	-	200 []InsightTopicResponse;401;500	empty list vs null preserved	frontend/src/services/insights.ts	missing	active-contract
+HTTP-045	insight	POST	/insights/topics	Bearer JWT	InsightTopicCreateRequest	201 InsightTopicResponse;400;401;500	per runtime DTO	frontend/src/services/insights.ts	missing	active-contract
+HTTP-046	insight	GET	/insights/topics/{id}	Bearer JWT	path UUID	200 InsightTopicResponse;400;401;404;500	per runtime DTO	frontend/src/services/insights.ts	missing	active-contract
+HTTP-047	insight	PUT	/insights/topics/{id}	Bearer JWT	InsightTopicUpdateRequest	200 InsightTopicResponse;400;401;404;500	per runtime DTO	frontend/src/services/insights.ts	missing	active-contract
+HTTP-048	insight	DELETE	/insights/topics/{id}	Bearer JWT	path UUID	200 {success};400;401;404;500	exact object	frontend/src/services/insights.ts	missing	active-contract
+HTTP-049	insight	GET	/insights/content/search	Bearer JWT	q required;limit	200 []CrawledContentResponse;400;401;500	empty list vs null preserved	frontend/src/services/insights.ts	missing	active-contract
+HTTP-050	insight	GET	/insights/content/recent	Bearer JWT	limit	200 []CrawledContentResponse;401;500	empty list vs null preserved	frontend/src/services/insights.ts	missing	active-contract
+HTTP-051	insight	GET	/insights/{id}	Bearer JWT	path UUID	200 InsightWithSources;400;401;404;500	per runtime DTO	frontend/src/services/insights.ts	missing	active-contract
+HTTP-052	insight	DELETE	/insights/{id}	Bearer JWT	path UUID	200 {success};400;401;404;500	exact object	frontend/src/services/insights.ts	missing	active-contract
+HTTP-053	insight	POST	/insights/{id}/read	Bearer JWT	path UUID	200 {success};400;401;404;500	exact object	frontend/src/services/insights.ts	missing	active-contract
+HTTP-054	insight	POST	/insights/{id}/pin	Bearer JWT	path UUID	200 {success,is_pinned};400;401;404;500	exact object	frontend/src/services/insights.ts	missing	active-contract
+HTTP-055	organization	GET	/organizations	Bearer JWT	-	200 organizations;401;500	runtime protected despite Swagger	frontend/src/services/organization.ts	covered	active-contract
+HTTP-056	organization	POST	/organizations	Bearer JWT	types.OrganizationCreateRequest	201 organization;400;401;500	runtime DTO/social_links map	frontend/src/services/organization.ts	covered	active-contract
+HTTP-057	organization	GET	/organizations/{id}	Bearer JWT	path UUID	200 organization;400;401;404;500	runtime protected despite Swagger	frontend/src/services/organization.ts	covered	active-contract
+HTTP-058	organization	PUT	/organizations/{id}	Bearer JWT	types.OrganizationUpdateRequest	200 organization;400;401;404;500	runtime DTO	frontend/src/services/organization.ts	covered	active-contract
+HTTP-059	organization	DELETE	/organizations/{id}	Bearer JWT	path UUID	200 {success};400;401;404;500	exact object	frontend/src/services/organization.ts	covered	active-contract
+HTTP-060	organization	POST	/organizations/{id}/join	Bearer JWT	path UUID	200 {success};400;401;404;500	exact object	frontend/src/services/organization.ts	covered	active-contract
+HTTP-061	organization	POST	/organizations/leave	Bearer JWT	-	200 {success};401;500	exact object	frontend/src/services/organization.ts	covered	active-contract
+HTTP-062	page	GET	/pages/{slug}	public	path slug	200 page;400;404;500	per runtime DTO	frontend/src/services/pages.ts;frontend/src/services/user.ts	covered	active-contract
+HTTP-063	page	GET	/dashboard/pages	Bearer JWT	page;perPage;isPublished	200 page list;401;500	per runtime DTO	frontend/src/services/pages.ts	covered	active-contract
+HTTP-064	page	GET	/dashboard/pages/{id}	Bearer JWT	path UUID	200 page;400;401;404;500	per runtime DTO	frontend/src/services/pages.ts	covered	active-contract
+HTTP-065	page	POST	/dashboard/pages	Bearer JWT	types.PageCreateRequest	201 page;400;401;500	runtime includes description/image_url/meta_data	frontend/src/services/pages.ts	covered	active-contract
+HTTP-066	page	PUT	/dashboard/pages/{id}	Bearer JWT	types.PageUpdateRequest	200 page;400;401;404;500	runtime update has no slug	frontend/src/services/pages.ts	covered	active-contract
+HTTP-067	page	DELETE	/dashboard/pages/{id}	Bearer JWT	path UUID	200 {success};400;401;404;500	exact object	frontend/src/services/pages.ts	covered	active-contract
+HTTP-068	profile	GET	/profile/public	public	-	200 profile;500	per runtime DTO	frontend/src/services/profile.ts	covered	active-contract
+HTTP-069	profile	GET	/profile	Bearer JWT	-	200 profile;401;500	per runtime DTO	frontend/src/services/profile.ts	covered	active-contract
+HTTP-070	profile	PUT	/profile	Bearer JWT	ProfileUpdateRequest	200 profile;400;401;500	per runtime DTO	frontend/src/services/profile.ts	covered	active-contract
+HTTP-071	profile	GET	/profile/settings	Bearer JWT	-	200 settings;401;500	runtime protected despite Swagger	frontend/src/services/profile.ts	covered	active-contract
+HTTP-072	profile	PUT	/profile/settings	Bearer JWT+admin	SiteSettingsUpdateRequest	200 settings;400;401;403;500	admin check in handler	frontend/src/services/profile.ts	covered	active-contract
+HTTP-073	project	GET	/projects	public	page;perPage	200 {projects,total,current_page,per_page};500	runtime omits total_pages	frontend/src/services/projects.ts	covered	active-contract
+HTTP-074	project	GET	/projects/{id}	public	path UUID	200 {project,tags};400;404;500	nested runtime shape	frontend/src/services/projects.ts	covered	active-contract
+HTTP-075	project	POST	/projects	Bearer JWT	core.project.CreateRequest	201 project;400;401;500	runtime validation	frontend/src/services/projects.ts	covered	active-contract
+HTTP-076	project	PUT	/projects/{id}	Bearer JWT	core.project.UpdateRequest	200 project;400;401;404;500	runtime validation	frontend/src/services/projects.ts	covered	active-contract
+HTTP-077	project	DELETE	/projects/{id}	Bearer JWT	path UUID	200 {success};400;401;404;500	exact object	frontend/src/services/projects.ts	covered	active-contract
+HTTP-078	source	GET	/dashboard/sources	Bearer JWT	page;limit	200 {sources,total_pages,page};401;500	exact runtime shape	frontend/src/services/sources.ts	covered	active-contract
+HTTP-079	source	POST	/sources	Bearer JWT	core.source.CreateRequest	201 source;400;401;500	runtime DTO	frontend/src/services/sources.ts	covered	active-contract
+HTTP-080	source	POST	/sources/scrape	Bearer JWT	{article_id:UUID,url:string}	201 source;400;401;500	exact snake_case article_id	frontend/src/services/sources.ts	covered	active-contract
+HTTP-081	source	GET	/sources/article/{articleId}	Bearer JWT	path UUID	200 {sources};400;401;500	exact object	frontend/src/services/sources.ts	covered	active-contract
+HTTP-082	source	GET	/sources/article/{articleId}/search	Bearer JWT	path UUID;q required;limit=5	200 {sources,query};400;401;500	exact object	frontend/src/services/sources.ts	covered	active-contract
+HTTP-083	source	GET	/sources/{sourceId}	Bearer JWT	path UUID	200 source;400;401;404;500	per runtime DTO	frontend/src/services/sources.ts	covered	active-contract
+HTTP-084	source	PUT	/sources/{sourceId}	Bearer JWT	core.source.UpdateRequest	200 source;400;401;404;500	runtime DTO	frontend/src/services/sources.ts	covered	active-contract
+HTTP-085	source	DELETE	/sources/{sourceId}	Bearer JWT	path UUID	200 {success};400;401;404;500	exact object	frontend/src/services/sources.ts	covered	active-contract
+HTTP-086	storage	GET	/storage/files	Bearer JWT	prefix	200 files;401;500	per runtime adapter	frontend/src/services/storage/index.ts	covered	active-contract
+HTTP-087	storage	POST	/storage/upload	Bearer JWT	multipart key+file	200 {success,url,key};400;401;500	multipart limits pending fixture	frontend/src/services/storage/index.ts	covered	active-contract
+HTTP-088	storage	DELETE	/storage/{key}	Bearer JWT	path key	200 {success};400;401;500	exact object	frontend/src/services/storage/index.ts	covered	active-contract
+HTTP-089	storage	POST	/storage/folders	Bearer JWT	CreateFolderRequest	200 {success};400;401;500	exact object	frontend/src/services/storage/index.ts	covered	active-contract
+HTTP-090	storage	PUT	/storage/folders	Bearer JWT	UpdateFolderRequest	200 {success};400;401;500	exact object	frontend/src/services/storage/index.ts	covered	active-contract
+HTTP-091	taskrun	GET	/task-runs	Bearer JWT	task_name;status;kind;limit=50	200 TaskRunListResponse;401;500	per runtime DTO	frontend/src/services/taskRuns.ts	missing	active-contract
+HTTP-092	taskrun	GET	/task-runs/{id}	Bearer JWT	path UUID	200 TaskRunDetailResponse;400;401;404;500	per runtime DTO	frontend/src/services/taskRuns.ts	missing	active-contract
+HTTP-093	taskrun	GET	/task-runs/{id}/events	Bearer JWT	path UUID	200 {events};400;401;404;500	empty list vs null preserved	-	missing	active-contract
+HTTP-094	worker	GET	/workers/status	Bearer JWT	-	200 AllWorkersStatusResponse;401	per runtime DTO	frontend/src/services/workers.ts	missing	active-contract
+HTTP-095	worker	GET	/workers/running	Bearer JWT	-	200 {workers:[]string};401	empty list vs null preserved	frontend/src/services/workers.ts	missing	active-contract
+HTTP-096	worker	GET	/workers/{name}/status	Bearer JWT	path name	200 WorkerStatusResponse;401;404	per runtime DTO	frontend/src/services/workers.ts	missing	active-contract
+HTTP-097	worker	POST	/workers/{name}/run	Bearer JWT	path name	200 {started,message};400;401;404	exact object	frontend/src/services/workers.ts	missing	active-contract
+HTTP-098	worker	POST	/workers/{name}/stop	Bearer JWT	path name	200 {stopped,message};400;401;404	exact object	frontend/src/services/workers.ts	missing	active-contract
+WS-002	websocket	C->S	subscribe-request	upgraded	{action:"subscribe",requestId:nonempty,channel:""}	-	malformed or missing requestId silently ignored	Editor.tsx;use-session.ts	n/a	active-contract
+WS-003	websocket	S->C	request-missing	upgraded	-	{requestId,type:"error",error:"Request not found",done:true}	exact terminal frame	Editor.tsx	n/a	active-contract
+WS-004	websocket	S->C	agent-stream	upgraded	-	copilot.StreamResponse	server overwrites requestId;terminal on done/error	Editor.tsx	n/a	active-contract
+WS-005	websocket	C->S	subscribe-worker	upgraded	{action:"subscribe",channel:"worker-status"}	-	exact channel	use-worker-statuses.ts	n/a	active-contract
+WS-006	websocket	S->C	worker-ack	upgraded	-	{type:"subscribed",channel:"worker-status"}	no timestamp	use-worker-statuses.ts	n/a	active-contract
+WS-007	websocket	S->C	worker-status	upgraded	-	{type:"worker-status",worker_name,status,timestamp?}	initial omits timestamp and task_run_id;updates include timestamp	use-worker-statuses.ts	n/a	active-contract
+WS-008	websocket	C->S	unsubscribe-worker	upgraded	{action:"unsubscribe",channel:"worker-status"}	-	no ack	use-worker-statuses.ts	n/a	active-contract
+HTTP-099	image	POST	/images/generate	Bearer JWT	{prompt,article_id,generate_prompt}	202 {request_id};400;401;502	exact snake_case request and response	frontend/src/components/blog/Editor.tsx	covered	approved-change
+HTTP-100	image	GET	/images/{requestId}	Bearer JWT	path request ID	200 ImageGenerationResponse;401;404;500	per runtime DTO	frontend ImageLoader consumers	covered	approved-change
+HTTP-101	image	GET	/images/{requestId}/status	Bearer JWT	path request ID	200 ImageGenerationStatus;401;404;500	camelCase plus compatibility snake_case fields	frontend ImageLoader consumers	covered	approved-change
+RESOLVED-004	frontend	PUT	/blog/articles/{id}/context	Bearer JWT	frontend request	resolved to HTTP-017	frontend caller now uses generated updateArticleWithContext	frontend/src/components/blog/Editor.tsx	n/a	resolved-existing-contract
+REMOVED-005	frontend	GET	/auth/session	unknown	-	dead export removed	-	none	n/a	removed-dead-consumer
+REMOVED-006	frontend	POST	/auth/refresh	unknown	-	dead export removed	-	none	n/a	removed-dead-consumer
+REMOVED-007	frontend	GET	/auth/me	unknown	-	dead export removed	-	none	n/a	removed-dead-consumer
+REMOVED-008	frontend	GET	/blog/{id}/chat-history	unknown	path	dead export removed	-	none	n/a	removed-dead-consumer
+REMOVED-009	frontend	PUT	/pages/contact-me	unknown	body	dead export removed	-	none	n/a	removed-dead-consumer
+REMOVED-010	frontend	PUT	/pages/about-me	unknown	body	dead export removed	-	none	n/a	removed-dead-consumer

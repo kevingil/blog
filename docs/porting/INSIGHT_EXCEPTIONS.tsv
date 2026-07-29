@@ -1,0 +1,12 @@
+target	case_id	go_observed_result	rust_observed_result	removal_condition
+insights	TestService_GetInsightByID	pass	pass	Rust case and insight API parity case pass
+insights	TestService_ListInsights	pass	pass	Rust case and insight API parity case pass
+insights	TestService_CreateInsight	pass	pass	Rust case and insight API parity case pass
+insights	TestService_DeleteInsight	pass	pass	Rust case and insight API parity case pass
+insights	TestService_GetTopicByID	pass	pass	Rust case and insight API parity case pass
+insights	TestService_ListTopics	pass	pass	Rust case and insight API parity case pass
+insights	TestService_CreateTopic	pass	pass	Rust case and insight API parity case pass
+insights	TestService_DeleteTopic	pass	pass	Rust case and insight API parity case pass
+insights	TestService_MarkInsightAsRead	pass	pass	Rust case and insight API parity case pass
+insights	TestService_ToggleInsightPinned	pass	pass	Rust case and insight API parity case pass
+insights	TestService_ListAllTopics	pass	pass	Rust case and insight API parity case pass

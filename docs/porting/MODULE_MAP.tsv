@@ -1,0 +1,223 @@
+go_source	rust_destination	phase	status	approved_disposition
+backend-go/cmd/migrate_turso_to_postgres.go	backend-go/cmd/migrate_turso_to_postgres.go	4.2	parity-passed	Reviewed and retained only as a historical one-off Turso conversion utility; PostgreSQL-to-PostgreSQL cutover does not invoke it
+backend-go/docs/docs.go	backend/src/openapi.rs	4.8	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/main.go	backend/src/main.rs	4.8	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/agent/handlers.go	backend/src/api/agent/handlers.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/agent/routes.go	backend/src/api/agent/routes.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/article/handlers.go	backend/src/api/article/handlers.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/article/routes.go	backend/src/api/article/routes.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/auth/handlers.go	backend/src/api/auth/handlers.rs	4.7	parity-passed	Axum handlers preserve JSON envelopes and active multipart forms; stricter auth corrections are documented
+backend-go/pkg/api/auth/routes.go	backend/src/api/auth/routes.rs	4.7	parity-passed	Utoipa OpenApiRouter exposes all six auth operations and bearer security
+backend-go/pkg/api/datasource/handlers.go	backend/src/api/datasource/handlers.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/datasource/routes.go	backend/src/api/datasource/routes.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/dto/article.go	backend/src/api/article/dto.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/dto/auth.go	backend/src/api/auth/dto.rs	4.7	parity-passed	Serde and Utoipa DTOs preserve camelCase contracts with documented password safety corrections
+backend-go/pkg/api/dto/common.go	backend/src/api/response.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/dto/datasource.go	backend/src/api/datasource/dto.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/dto/insight.go	backend/src/api/insight/dto.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/dto/organization.go	backend/src/api/organization/dto.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/dto/page.go	backend/src/api/page/dto.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/dto/profile.go	backend/src/api/profile/dto.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/dto/project.go	backend/src/api/project/dto.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/dto/source.go	backend/src/api/source/dto.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/dto/storage.go	backend/src/api/storage/dto.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/dto/task_run.go	backend/src/api/taskrun/dto.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/dto/worker.go	backend/src/api/worker/dto.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/insight/handlers.go	backend/src/api/insight/handlers.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/insight/routes.go	backend/src/api/insight/routes.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/middleware/auth.go	backend/src/api/auth/handlers.rs;backend/src/core/auth/service.rs	4.7	parity-passed	Bearer extraction and HS256 token validation are endpoint-local and constructor-injected
+backend-go/pkg/api/middleware/context.go	backend/src/app.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/middleware/cors.go	backend/src/app.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/middleware/logging.go	backend/src/app.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/middleware/recovery.go	backend/src/app.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/middleware/security.go	backend/src/app.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/organization/handlers.go	backend/src/api/organization/handlers.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/organization/routes.go	backend/src/api/organization/routes.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/page/handlers.go	backend/src/api/page/handlers.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/page/routes.go	backend/src/api/page/routes.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/profile/handlers.go	backend/src/api/profile/handlers.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/profile/routes.go	backend/src/api/profile/routes.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/project/handlers.go	backend/src/api/project/handlers.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/project/routes.go	backend/src/api/project/routes.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/response/error_mapper.go	backend/src/api/response.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/response/response.go	backend/src/api/response.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/router.go	backend/src/app.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/source/handlers.go	backend/src/api/source/handlers.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/source/routes.go	backend/src/api/source/routes.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/storage/handlers.go	backend/src/api/storage/handlers.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/storage/routes.go	backend/src/api/storage/routes.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/taskrun/handlers.go	backend/src/api/taskrun/handlers.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/taskrun/routes.go	backend/src/api/taskrun/routes.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/validation/middleware.go	backend/src/api/request.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/validation/validator_test.go	backend/tests/support_http.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/validation/validator.go	backend/src/api/request.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/websocket/agent_streaming.go	backend/src/api/websocket/supervisor.rs;backend/src/api/websocket/ports.rs	4.7	parity-passed	Injected single-consumer streams preserve requestId overwrite, ordering, missing-request error, and terminal done/error behavior
+backend-go/pkg/api/websocket/connection.go	backend/src/api/websocket/connection.rs;backend/src/api/websocket/transport.rs	4.7	parity-passed	One writer preserves 256-frame FIFO drop-newest behavior, timing, liveness, and idempotent cancellation
+backend-go/pkg/api/websocket/manager.go	backend/src/api/websocket/supervisor.rs;backend/src/api/websocket/routes.rs	4.7	parity-passed	Application-owned supervisor enforces 1000 connections and bounded cancellation, abort, and full reap
+backend-go/pkg/api/websocket/types.go	backend/src/api/websocket/types.rs	4.7	parity-passed	Serde frames preserve request, worker status, timestamp, task-run, and omission rules for WS-002 through WS-008
+backend-go/pkg/api/worker/handlers.go	backend/src/api/worker/handlers.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/api/worker/routes.go	backend/src/api/worker/routes.rs	4.7	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/config/config.go	backend/src/config.rs	4.1	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/config/testhelper.go	backend/src/config.rs	4.1	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/constants/constants.go	backend/src/constants.rs	4.1	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/article/article.go	backend/src/core/article/types.rs	4.3	parity-passed	Domain article and version types preserve nullable array, JSON, vector, and timestamp representations
+backend-go/pkg/core/article/service_test.go	backend/tests/article_service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/article/service.go	backend/src/core/article/service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/auth/account.go	backend/src/core/auth/types.rs	4.3	parity-passed	Domain account types are independent of Diesel and Axum
+backend-go/pkg/core/auth/auth_test.go	backend/tests/auth.rs	4.3	parity-passed	Go bcrypt fixtures and HTTP auth boundaries covered
+backend-go/pkg/core/auth/service_test.go	backend/tests/auth.rs;backend/tests/auth_database.rs	4.3	parity-passed	Service races, validation, JWT, and PostgreSQL behavior covered
+backend-go/pkg/core/auth/service.go	backend/src/core/auth/service.rs	4.3	parity-passed	Constructor-injected repository with bounded bcrypt execution and atomic writes
+backend-go/pkg/core/chat/message_service.go	backend/src/core/chat/service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/copilot/config.go	backend/src/core/copilot/config.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/copilot/draft_service.go	backend/src/core/copilot/draft_service.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/copilot/manager.go	backend/src/core/copilot/manager.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/copilot/metadata/builder.go	backend/src/core/copilot/metadata.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/copilot/metadata/types.go	backend/src/core/copilot/metadata.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/copilot/metadata/validator.go	backend/src/core/copilot/metadata.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/copilot/types.go	backend/src/core/copilot/types.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/copilot/writer/prompts/context.go	backend/src/core/copilot/prompts.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/copilot/writer/prompts/editor.go	backend/src/core/copilot/prompts.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/copilot/writer/prompts/writer.go	backend/src/core/copilot/prompts.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/copilot/writer/writer.go	backend/src/core/copilot/writer.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/datasource/recommendation_service_test.go	backend/tests/datasource_service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/datasource/recommendation_service.go	backend/src/core/datasource/recommendation_service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/datasource/service_test.go	backend/tests/datasource_service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/datasource/service.go	backend/src/core/datasource/service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/errors.go	backend/src/error.rs	4.1	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/image/image.go	backend/src/core/image/types.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/image/service_test.go	backend/tests/image_service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/image/service.go	backend/src/core/image/service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/insight/service_test.go	backend/tests/insight_exceptions.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/insight/service.go	backend/src/core/insight/service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/ml/embeddings.go	backend/src/core/ml/embeddings.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/ml/llm/agent/agent-tool.go	backend/src/core/ml/llm/inventory.rs	4.5	parity-passed	Reviewed dormant: nested agent is not registered by the active blog copilot composition
+backend-go/pkg/core/ml/llm/agent/agent.go	backend/src/core/ml/llm/agent.rs	4.5	parity-passed	Bounded active agent loop is covered by ml_agent and copilot_manager
+backend-go/pkg/core/ml/llm/agent/mcp-tools.go	backend/src/core/ml/llm/inventory.rs	4.5	parity-passed	Reviewed dormant: active Go configuration has an empty MCP server map; inventory test locks that disposition
+backend-go/pkg/core/ml/llm/agent/tools.go	backend/src/core/ml/llm/inventory.rs	4.5	parity-passed	Reviewed dormant: coder and task agents are not registered by the active blog copilot composition
+backend-go/pkg/core/ml/llm/config/config.go	backend/src/config.rs;backend/src/core/copilot/config.rs;backend/src/core/ml/llm/models.rs	4.5	parity-passed	OpenAI and the active Groq insight provider are constructor-injected; the empty MCP server map remains inventory-only
+backend-go/pkg/core/ml/llm/logging/logging.go	backend/src/integrations/openai/client.rs	4.5	parity-passed	Provider failures and stream lifecycle use structured tracing without the Go process-global logger
+backend-go/pkg/core/ml/llm/message/message.go	backend/src/core/ml/llm/message.rs	4.5	parity-passed	Structured message and tool continuity is covered by ml_agent and openai_client
+backend-go/pkg/core/ml/llm/message/service.go	backend/src/core/ml/llm/session.rs	4.5	parity-passed	In-memory session/message store is covered by ml_agent and copilot_manager
+backend-go/pkg/core/ml/llm/models/anthropic.go	backend/src/core/ml/llm/models.rs	4.5	parity-passed	Provider-neutral Anthropic model identity is exercised by the deterministic provider adapter contract; the active chat composition still selects OpenAI
+backend-go/pkg/core/ml/llm/models/gemini.go	backend/src/core/ml/llm/models.rs	4.5	parity-passed	Provider-neutral Gemini model identity is exercised by the deterministic provider adapter contract; the active chat composition still selects OpenAI
+backend-go/pkg/core/ml/llm/models/groq.go	backend/src/core/ml/llm/models.rs;backend/src/bootstrap.rs	4.5	parity-passed	The active insight worker selects openai/gpt-oss-120b through the Groq Responses adapter with the Go max-output override of 2000
+backend-go/pkg/core/ml/llm/models/models.go	backend/src/core/ml/llm/models.rs	4.5	parity-passed	Active provider-neutral model contract is covered by ML service and provider tests
+backend-go/pkg/core/ml/llm/models/openai.go	backend/src/core/ml/llm/models.rs;backend/src/integrations/openai/client.rs	4.5	parity-passed	Active gpt-5.4-mini identity and API model are asserted by the provider fixture
+backend-go/pkg/core/ml/llm/models/vertexai.go	backend/src/core/ml/llm/models.rs	4.5	parity-passed	Provider-neutral Vertex AI model identity is exercised by the deterministic provider adapter contract; no active blog composition selects it
+backend-go/pkg/core/ml/llm/prompt/copilot.go	backend/src/core/ml/llm/prompt.rs	4.5	parity-passed	Registered-tool prompt contract is covered by ml_services
+backend-go/pkg/core/ml/llm/prompt/prompt.go	backend/src/core/ml/llm/prompt.rs	4.5	parity-passed	Only active chat and writer prompt selection is retained and covered
+backend-go/pkg/core/ml/llm/provider/anthropic.go	backend/src/integrations/llm/client.rs	4.5	parity-passed	Reqwest adapter preserves Anthropic messages, images, tools, thinking, SSE event order, usage, errors, and cancellation through deterministic fixtures
+backend-go/pkg/core/ml/llm/provider/gemini.go	backend/src/integrations/llm/client.rs	4.5	parity-passed	Reqwest adapter preserves Gemini contents, tool-call continuity, thinking, SSE event order, usage, errors, and cancellation through deterministic fixtures
+backend-go/pkg/core/ml/llm/provider/openai_test.go	backend/tests/openai_client.rs	4.5	parity-passed	Fixture asserts structured Responses input, SSE order, tool calls, usage, model, and cancellation ownership
+backend-go/pkg/core/ml/llm/provider/openai.go	backend/src/integrations/openai/client.rs;backend/src/integrations/llm/client.rs	4.5	parity-passed	Active OpenAI and Groq-compatible Responses adapters preserve structured history, SSE deltas, tools, usage, and cancellation
+backend-go/pkg/core/ml/llm/provider/provider.go	backend/src/core/ml/llm/provider.rs	4.5	parity-passed	Provider-neutral stream contract is covered by ml_agent and openai_client
+backend-go/pkg/core/ml/llm/provider/vertexai.go	backend/src/integrations/llm/client.rs	4.5	parity-passed	Reqwest adapter preserves Vertex publisher URLs, bearer authentication, Gemini content/tool contracts, SSE event order, usage, errors, and cancellation through deterministic fixtures
+backend-go/pkg/core/ml/llm/session/session.go	backend/src/core/ml/llm/session.rs	4.5	parity-passed	Session persistence and usage tracking are covered by ml_agent and copilot_manager
+backend-go/pkg/core/ml/llm/tools/edit.go	backend/src/core/ml/llm/inventory.rs	4.5	parity-passed	Reviewed retired: the entire Go edit-tool implementation is commented out and has no caller
+backend-go/pkg/core/ml/llm/tools/exa_answer.go	backend/src/core/ml/llm/tools.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/ml/llm/tools/exa_search.go	backend/src/core/ml/llm/tools.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/ml/llm/tools/exa_types.go	backend/src/core/ml/llm/tools.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/ml/llm/tools/fetch.go	backend/src/core/ml/llm/inventory.rs	4.5	parity-passed	Reviewed dormant: fetch is only registered by inactive nested coder and task agents
+backend-go/pkg/core/ml/llm/tools/insights.go	backend/src/core/ml/llm/inventory.rs	4.5	parity-passed	Reviewed dormant: insight tools are not registered by the active blog copilot manager
+backend-go/pkg/core/ml/llm/tools/markdown.go	backend/src/core/ml/llm/inventory.rs	4.5	parity-passed	Reviewed retired: helper is used only by the fully commented-out edit tool
+backend-go/pkg/core/ml/llm/tools/source_resources.go	backend/src/core/ml/llm/tools.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/ml/llm/tools/source_selection.go	backend/src/core/ml/llm/tools.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/ml/llm/tools/tools.go	backend/src/core/ml/llm/tools.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/ml/llm/tools/writing_test.go	backend/tests/ml_tools.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/ml/llm/tools/writing.go	backend/src/core/ml/llm/tools.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/ml/text/service.go	backend/src/core/ml/text.rs	4.5	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/organization/helpers_test.go	backend/tests/organization_service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/organization/organization.go	backend/src/core/organization/types.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/organization/service_test.go	backend/tests/organization_service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/organization/service.go	backend/src/core/organization/service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/page/page.go	backend/src/core/page/types.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/page/service_test.go	backend/tests/page_service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/page/service.go	backend/src/core/page/service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/profile/profile.go	backend/src/core/profile/types.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/profile/service_test.go	backend/tests/profile_service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/profile/service.go	backend/src/core/profile/service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/project/project.go	backend/src/core/project/types.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/project/service_test.go	backend/tests/project_service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/project/service.go	backend/src/core/project/service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/source/resource_service_test.go	backend/tests/source_service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/source/service_test.go	backend/tests/source_service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/source/service.go	backend/src/core/source/service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/source/source.go	backend/src/core/source/types.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/storage/service.go	backend/src/core/storage/service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/tag/service_test.go	backend/tests/tag_service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/tag/service.go	backend/src/core/tag/service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/tag/tag.go	backend/src/core/tag/types.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/taskrun/context.go	backend/src/core/taskrun/context.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/taskrun/service.go	backend/src/core/taskrun/service.rs	4.3	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/worker/crawler.go	backend/src/core/worker/crawl.rs	4.6	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/worker/discovery.go	backend/src/core/worker/discovery.rs	4.6	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/worker/insight_generator.go	backend/src/core/worker/insight.rs;backend/src/runtime/worker_adapters.rs	4.6	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/worker/manager.go	backend/src/core/worker/manager.rs	4.6	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/worker/pipeline_test.go	backend/tests/worker_domains.rs	4.6	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/worker/pipeline.go	backend/src/core/worker/pipeline.rs	4.6	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/worker/result.go	backend/src/core/worker/types.rs	4.6	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/core/worker/status.go	backend/src/core/worker/status.rs	4.6	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/database.go	backend/src/database/pool.rs;backend/src/bootstrap.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/models/account.go	backend/src/database/models/account.rs	4.2	parity-passed	Diesel account row preserves nullable profile and organization fields
+backend-go/pkg/database/models/article.go	backend/src/database/models/article.rs	4.2	parity-passed	Diesel rows preserve migration nullability and explicit array, JSON, and pgvector representations
+backend-go/pkg/database/models/chat_message.go	backend/src/database/models/chat_message.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/models/data_source.go	backend/src/database/models/data_source.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/models/files.go	backend/src/database/models/files.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/models/image.go	backend/src/database/models/image.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/models/organization.go	backend/src/database/models/organization.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/models/page.go	backend/src/database/models/page.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/models/project.go	backend/src/database/models/project.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/models/site_settings.go	backend/src/database/models/site_settings.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/models/source.go	backend/src/database/models/source.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/models/tag.go	backend/src/database/models/tag.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/models/task_run.go	backend/src/database/models/task_run.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/repository/account.go	backend/src/database/repository/account.rs	4.2	parity-passed	Async Diesel repository uses endpoint-scoped conditional writes
+backend-go/pkg/database/repository/article.go	backend/src/database/repository/article.rs	4.2	parity-passed	PostgreSQL parity covers reads, writes, search, ordering, versions, vector distance, advisory locking, and bounded owned side effects
+backend-go/pkg/database/repository/chat_message.go	backend/src/database/repository/chat_message.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/repository/content_topic_match.go	backend/src/database/repository/content_topic_match.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/repository/crawled_content.go	backend/src/database/repository/crawled_content.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/repository/data_source.go	backend/src/database/repository/data_source.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/repository/image.go	backend/src/database/repository/image.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/repository/insight_topic.go	backend/src/database/repository/insight_topic.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/repository/insight.go	backend/src/database/repository/insight.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/repository/organization.go	backend/src/database/repository/organization.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/repository/page.go	backend/src/database/repository/page.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/repository/project.go	backend/src/database/repository/project.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/repository/site_settings.go	backend/src/database/repository/site_settings.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/repository/source.go	backend/src/database/repository/source.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/repository/tag.go	backend/src/database/repository/tag.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/repository/task_run.go	backend/src/database/repository/task_run.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/database/repository/user_insight_status.go	backend/src/database/repository/user_insight_status.rs	4.2	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/integrations/exa/client.go	backend/src/integrations/exa/client.rs	4.4	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/integrations/openai/client.go	backend/src/integrations/openai/client.rs	4.4	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/integrations/s3/client.go	backend/src/integrations/s3/client.rs	4.4	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/telemetry/middleware.go	backend/src/app.rs	4.8	parity-passed	Reviewed dormant: Go main never registers this middleware; active Rust HTTP tracing uses Tower TraceLayer
+backend-go/pkg/telemetry/tracer.go	backend/src/main.rs	4.8	parity-passed	Reviewed dormant: Go main never initializes this optional OTLP provider; Rust retains structured tracing without inventing an active exporter
+backend-go/pkg/types/account.go	backend/src/core/auth/types.rs	4.1	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/types/article.go	backend/src/core/article/types.rs	4.1	parity-passed	Shared article transport-facing values are represented by reviewed domain types pending handler-specific DTO conversion
+backend-go/pkg/types/data_source.go	backend/src/core/datasource/types.rs	4.1	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/types/image.go	backend/src/core/image/types.rs	4.1	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/types/insight.go	backend/src/core/insight/types.rs	4.1	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/types/organization.go	backend/src/core/organization/types.rs	4.1	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/types/page.go	backend/src/core/page/types.rs	4.1	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/types/profile.go	backend/src/core/profile/types.rs	4.1	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/types/project.go	backend/src/core/project/types.rs	4.1	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/types/source.go	backend/src/core/source/types.rs	4.1	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/types/tag.go	backend/src/core/tag/types.rs	4.1	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/pkg/types/task_run.go	backend/src/core/taskrun/types.rs	4.1	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/testutil/mocks/account_repository.go	backend/tests/auth.rs	4.8	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/testutil/mocks/article_repository.go	backend/tests/article_service.rs	4.8	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/testutil/mocks/content_topic_match_repository.go	backend/tests/insight_exceptions.rs	4.8	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/testutil/mocks/crawled_content_repository.go	backend/tests/worker_adapters.rs	4.8	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/testutil/mocks/data_source_repository.go	backend/tests/datasource_service.rs	4.8	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/testutil/mocks/embedding_generator.go	backend/tests/ml_services.rs	4.8	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/testutil/mocks/image_repository.go	backend/tests/image_service.rs	4.8	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/testutil/mocks/insight_repository.go	backend/tests/insight_exceptions.rs	4.8	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/testutil/mocks/insight_topic_repository.go	backend/tests/insight_exceptions.rs	4.8	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/testutil/mocks/organization_repository.go	backend/tests/organization_service.rs	4.8	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/testutil/mocks/page_repository.go	backend/tests/page_service.rs	4.8	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/testutil/mocks/profile_repository.go	backend/tests/profile_service.rs	4.8	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/testutil/mocks/project_repository.go	backend/tests/project_service.rs	4.8	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/testutil/mocks/source_repository.go	backend/tests/source_service.rs	4.8	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/testutil/mocks/tag_repository.go	backend/tests/tag_service.rs	4.8	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger
+backend-go/testutil/mocks/user_insight_status_repository.go	backend/tests/insight_exceptions.rs	4.8	parity-passed	Rust destination is covered by the exact blocking test matrix and settled contract ledger

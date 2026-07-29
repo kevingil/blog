@@ -1,0 +1,48 @@
+id	go_source	resource	current_behavior	rust_owner	cancellation_shutdown	unresolved
+OWN-001	backend-go/main.go	signal goroutine	signal.Notify buffer 1; stops workers then Fiber	Application root CancellationToken and JoinSet	stop admission;cancel;bounded join;drop pool last	Go omits copilot,WS,DB cleanup; recorded lifecycle fix
+OWN-002	backend-go/pkg/database/database.go	dbInstance	mutable global;max open/idle 10	Application PgPool	consumers stop before pool drop	pooler/TLS/timeouts await Supabase baseline
+OWN-003	backend-go/pkg/api/auth/handlers.go	serviceOnce	lazy Auth singleton	AuthState Arc<AuthService>	no local shutdown	-
+OWN-004	backend-go/pkg/api/article/handlers.go	serviceOnce	lazy Article singleton	ArticleState Arc<ArticleService>	owned async side effects joined	also needs narrow copilot handle
+OWN-005	backend-go/pkg/api/datasource/handlers.go	serviceOnce	lazy DataSource singleton	DataSourceState Arc<DataSourceService>	borrowed handles	-
+OWN-006	backend-go/pkg/api/datasource/handlers.go	recommendationServiceOnce	lazy repo+Exa;env constructor	DataSourceState Arc<RecommendationService>	request/root cancellation	Exa config validated in bootstrap
+OWN-007	backend-go/pkg/api/insight/handlers.go	serviceOnce	lazy five repos+embedding	InsightState Arc<InsightService>shared client/pool	behavior exception does not exempt lifecycle
+OWN-008	backend-go/pkg/api/source/handlers.go	serviceOnce	lazy Source singleton	SourceState Arc<SourceService>request cancellation	fetch/PDF semantics require trial
+OWN-009	backend-go/pkg/api/project/handlers.go	serviceOnce	lazy Project singleton	ProjectState Arc<ProjectService>no local shutdown	-
+OWN-010	backend-go/pkg/api/page/handlers.go	serviceOnce	lazy Page singleton	PageState Arc<PageService>no local shutdown	-
+OWN-011	backend-go/pkg/api/organization/handlers.go	serviceOnce	lazy Organization singleton	OrganizationState Arc<OrganizationService>no local shutdown	-
+OWN-012	backend-go/pkg/api/profile/handlers.go	serviceOnce	lazy Profile singleton	ProfileState Arc<ProfileService>no local shutdown	-
+OWN-013	backend-go/pkg/api/agent/handlers.go	chatSvc	unsynchronized lazy mutable singleton	AgentState Arc<ChatService>database Application-owned	remove first-access race
+OWN-014	backend-go/pkg/api/taskrun/handlers.go	per-request service	recreates repo/service from global DB	TaskRunState Arc<TaskRunService>borrowed pool	remove invisible recreation
+OWN-015	backend-go/pkg/api/worker/handlers.go	manager globals	two global accessors	WorkerState manager+status handles	cancel/join before state drop	no global accessors
+OWN-016	backend-go/pkg/core/storage/service.go	clientOnce	S3 singleton	StorageState Arc<StorageService>cancel calls;drop after services	-
+OWN-017	backend-go/pkg/core/copilot/manager.go	globalManager	unsynchronized lazy incomplete fallback	bootstrap Arc<CopilotManager>	shutdown and join all requests	remove request-time partial init
+OWN-018	backend-go/pkg/core/copilot/manager.go	requests map	RWMutex registry	CopilotManager short lock/actor	no guard across await	check+insert must be atomic
+OWN-019	backend-go/pkg/core/copilot/manager.go	request task	detached;10m context timeout	OwnedRequest token+JoinHandle	root/request/timeout cancel;join	request outlives initiating POST
+OWN-020	backend-go/pkg/core/copilot/manager.go	ResponseChan	capacity 100 blocking sends;single receiver	bounded mpsc capacity 100	cancel-aware sends;close after producers	decide explicit single-subscriber behavior
+OWN-021	backend-go/pkg/core/copilot/manager.go	timeout monitor	15s ticks;1m/2m thinking;activity never updated	request-owned interval task	token stops;joined	full-buffer send can strand Go
+OWN-022	backend-go/pkg/core/copilot/manager.go	cleanup timer	unowned 15m AfterFunc	CopilotManager cleanup task	root cancels timer	active count includes retained completions
+OWN-023	backend-go/pkg/core/copilot/manager.go	Shutdown	cancel then poll every 100ms	join stored handles	bounded join reports unfinished IDs	Go main never invokes
+OWN-024	backend-go/pkg/api/websocket/connection.go	socket writer	write goroutine;ping30s;write10s;read60s	ConnectionTask owns split socket	cancel;checked deadline;join or abort and reap	parity-passed with fair ping/data scheduling and one writer
+OWN-025	backend-go/pkg/api/websocket/connection.go	send channel	capacity256;drop newest when full	bounded mpsc try_send	cancel/drop terminates writer	parity-passed; closed sender cannot panic
+OWN-026	backend-go/pkg/api/websocket/connection.go	request set	RWMutex HashSet	supervisor owns one agent and worker registration per session	session close cancels and discards	parity-passed without a lock crossing await
+OWN-027	backend-go/pkg/api/websocket/connection.go	done/closeOnce	idempotent-ish close;can panic on send	CancellationToken+owned sender	idempotent cancel;owner closes	parity-passed
+OWN-028	backend-go/pkg/api/websocket/manager.go	manager maps	max1000 connections;subscriber map	WebSocketSupervisor single owner	close admission;cancel;bounded join;abort and reap	activated through the live public route and parity-passed
+OWN-029	backend-go/pkg/api/websocket/manager.go	worker broadcaster	unbuffered stop;second stop panic	injected WorkerStatusProvider receiver	session/root cancellation;owned stream task	live handler behavior chosen; temporary empty provider replaced in worker wave
+OWN-030	backend-go/pkg/api/websocket/manager.go	WritePump	untracked writer	supervisor JoinSet owns writer	session/root cancels;bounded join or abort and reap	parity-passed
+OWN-031	backend-go/pkg/api/websocket/manager.go	StreamToRequestContext	caller loop over channel	owned stream task with injected receiver	cancel or terminal joins	parity-passed
+OWN-032	backend-go/pkg/api/agent/handlers.go	active WS session	background ctx;read goroutine;worker child	supervisor-owned session task	disconnect/root cancel;bounded join or abort and reap	parity-passed; detached callback only hands off socket
+OWN-033	backend-go/pkg/api/agent/handlers.go	worker status stream	buffer100;initial snapshot+updates	injected receiver;subscribe before snapshot	session drop/unsubscribe cancels owned task	parity-passed; exactly one writer and ack then snapshot then updates
+OWN-034	backend-go/pkg/api/websocket/agent_streaming.go	agent stream	single receiver;blocks read loop	owned forwarding task	cancel, unsubscribe, replacement, or terminal joins	intentional lifecycle correction keeps reads cancellation-aware
+OWN-035	backend-go/pkg/core/worker/manager.go	globalManager	unsynchronized mutable global	bootstrap Arc<WorkerManager>	Application task owner	remove global
+OWN-036	backend-go/pkg/core/worker/status.go	globalStatusService	sync.Once process global	bootstrap Arc<StatusService>drop final sender last	remove test state leak
+OWN-037	backend-go/pkg/core/worker/status.go	status maps	RWMutex;broadcast while locked	short lock+tokio broadcast	no await under lock	lag resync policy explicit
+OWN-038	backend-go/pkg/core/worker/status.go	subscriber	buffer100;drop update for full	broadcast cap100+snapshot	drop receiver unsubscribes	verify drop-newest vs lag
+OWN-039	backend-go/pkg/core/worker/manager.go	running workers	check then detached insert allows duplicates	atomic map claim+JoinHandle	cancel and join	duplicate start defect fixed
+OWN-040	backend-go/pkg/core/worker/manager.go	cron	started with no schedules	Application optional scheduler	disabled default;join30s	trial-dependent scheduler
+OWN-041	backend-go/pkg/core/worker/manager.go	manual goroutines	detached;only CancelFunc stored	WorkerManager JoinSet	cancel and join all	Go stop may not await
+OWN-042	backend-go/pkg/core/worker/manager.go	task-run finalization	background ctx;discarded errors	worker-owned grace token	bounded durable attempt	retry/timeout needs decision
+OWN-043	backend-go/pkg/core/worker/crawler.go	CrawlWorker	clients/services/repos from globals	injected Arc ports	run token reaches DB/HTTP	provider requests currently ignore ctx
+OWN-044	backend-go/pkg/core/worker/discovery.go	DiscoveryWorker	Exa+service;repo from global	injected ports	run token cancels	remove env/global reads
+OWN-045	backend-go/pkg/core/worker/insight_generator.go	InsightWorker	optional provider failure silently skipped	injected optional configured port	run token cancels	invalid configured provider fails startup
+OWN-046	backend-go/pkg/core/worker/pipeline.go	PipelineWorker	manager back-pointer;buffer100 status	Weak manager command handle	parent cancels child;join	avoid Arc cycle;verify missed status
+OWN-047	backend-go/pkg/core/taskrun/context.go	Tracker	context value service+run UUID	typed TaskRunTracker	explicit caller token	no global/service locator
