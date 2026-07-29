@@ -1,4 +1,4 @@
-# Goose-to-Diesel Migration Adoption
+# Diesel Migration Adoption
 
 The seven Goose SQL bodies are mechanically copied to same-version Diesel
 directories. The extraction convention hashes exact bytes after
@@ -35,29 +35,29 @@ The clean-database comparison passed with canonical fingerprint
 `81fa7f13268ae949c1c627f62ea860d4fe7dfb72698a4f40c5b4706cadd07b29`
 on both sides. The reference runner was Goose `v3.27.1`; the Rust runner used
 Diesel migrations `2.3.1`. The parity PostgreSQL runtime is 17.4 and the local
-pgvector extension is 0.8.2. The adoption command was then rehearsed against
-the disposable Goose database; it inserted all seven Diesel ledger rows
-without altering the Goose ledger or application schema, and
-`diesel migration pending` returned `false`.
+pgvector extension is 0.8.2. The stamping command was then rehearsed against
+the disposable database; it inserted all seven Diesel ledger rows without
+altering the application schema, and `diesel migration pending` returned
+`false`.
 
 The legacy article-version Down restores `article.title` without `NOT NULL`.
 This known source defect means that intermediate down-state does not
 fingerprint-equal the exact pre-Up state. Preserve it; do not silently repair
 the historical SQL during the port.
 
-## Existing Supabase database adoption
+## Existing Supabase database stamping
 
-Adoption never runs DDL. It must:
+`stamp-diesel-migrations` is a one-time command for the existing database. It
+does not run the application migrations because their tables already exist. It
+must:
 
-1. Inspect the actual `goose_db_version` table columns, types, defaults,
-   constraints, and rows. The repository does not pin Goose, so an unknown
-   ledger shape is a hard stop.
-2. For an approved event ledger, select the latest row per nonzero version and
-   require exactly the seven expected versions, all applied, with no unknown
-   versions.
-3. Validate the exact application schema/extension fingerprint and the checked
-   source-body hashes above. Goose itself stores no SQL hash.
-4. In one transaction, create Diesel's exact ledger and insert the seven
+1. Acquire a transaction-scoped PostgreSQL advisory lock.
+2. Refuse to continue if Diesel's migration ledger already exists.
+3. Validate the existing tables, columns, types, nullability, defaults,
+   constraints, indexes, and required extensions against the canonical
+   fingerprint produced by applying the checked-in Diesel migrations to a clean
+   database.
+4. In the same transaction, create Diesel's exact ledger and insert the seven
    version strings:
 
    ```sql
@@ -67,10 +67,19 @@ Adoption never runs DDL. It must:
    );
    ```
 
-5. Leave `goose_db_version` untouched and require Diesel pending to be empty.
+5. Require `migrate` to report no pending work before the first Render deploy.
 
-If the Goose ledger is absent, malformed, partially applied, or includes an
-unknown version, adoption aborts. A similar schema is never sufficient to stamp
-history. Rehearse against an approved schema-identical disposable clone before
-Supabase. The later Fly-to-Render compute move reuses this database and does no
-second adoption or data transfer.
+Any legacy migration ledger is ignored and left untouched; it is historical
+metadata, not an input to Diesel stamping. If the application schema differs in
+any checked detail, the transaction aborts before creating the Diesel ledger.
+Rehearse against an approved schema-identical disposable clone before Supabase.
+Run the stamp once against Supabase before the first Render deploy:
+
+```sh
+cd backend
+DATABASE_URL='postgresql://...' cargo run --locked --release \
+  --bin stamp-diesel-migrations
+```
+
+The later Fly-to-Render compute move reuses this database and does no second
+adoption or data transfer.
