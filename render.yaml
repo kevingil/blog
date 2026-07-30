@@ -8,9 +8,6 @@ services:
     name: blog-backend
     runtime: docker
     plan: starter
-    # Oregon is Render's closest region to the existing Fly SJC deployment.
-    # Confirm the Supabase region before the first Blueprint sync because this
-    # value cannot be changed after service creation.
     region: oregon
     repo: https://github.com/kevingil/blog
     branch: main
