@@ -106,11 +106,3 @@ bootstrap -> AppState -> typed FromRef substates
 Application-owned cancellation tokens and task sets cover the HTTP server,
 article/image queues, copilot requests and WebSocket bridges, workers, and
 graceful SIGINT/SIGTERM shutdown.
-
-## Deployment
-
-Fly.io remains the current compute target and deploys the Rust image only after
-CI succeeds for the exact `main` commit. PostgreSQL remains on Supabase. The
-container has no Fly-specific runtime dependency, so the planned compute move
-to a simple Render service can reuse the same image and adopted Supabase
-database after staging verification.

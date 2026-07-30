@@ -42,4 +42,4 @@ main
 .plans/
 
 # Rust build output
-/backend/target/
+backend/target/
