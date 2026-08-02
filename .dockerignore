@@ -23,8 +23,10 @@
 **/.vscode
 **/.idea
 
-# .env file
+# Local environment files must never enter a Docker build context.
 **/.env
+*.env
+**/*.env
 .git
 .plans
 backend/target

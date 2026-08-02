@@ -27,15 +27,27 @@ the production Supabase database.
 
 ## Development
 
-The Rust backend requires the settings shown in `docker-compose.yml`:
-`DATABASE_URL`, `AUTH_SECRET`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`,
-`EXA_API_KEY`, `EXA_BASE_URL`, `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`,
-`S3_ACCESS_KEY_SECRET`, `S3_BUCKET`, and `S3_URL_PREFIX`.
+Docker Compose is the hermetic default and needs no environment file. For a
+native backend, copy the tracked local profile and start only its dependencies:
 
 ```bash
-cd backend
-cargo run --locked --bin blog-backend
+cp env/local.env.example env/local.env
+docker compose up -d db external-fixtures object-storage object-storage-init
+./scripts/with-env.sh env/local.env \
+  cargo run --manifest-path backend/Cargo.toml --locked --bin blog-backend
 ```
+
+The profiles under `env/` are explicit local command inputs:
+
+- `local.env` connects native processes to local Docker dependencies.
+- `testing.env` supplies only local fixture and test-database settings.
+- `production.env` is for deliberate local access to Supabase and production
+  services. It must never contain `TEST_DATABASE_URL`.
+
+Copy the corresponding `*.env.example` file to create a profile. Real `*.env`
+files are ignored by Git and excluded from Docker build contexts. Render remains
+the production source of environment variables and does not use these files.
+See [`env/README.md`](env/README.md) for the command convention.
 
 ```bash
 cd frontend
@@ -49,9 +61,17 @@ The blocking Rust matrix is partitioned into exact targets so failures identify
 their owning domain:
 
 ```bash
-./scripts/test-rust.sh blocking
-./scripts/test-rust.sh insights
+cp env/testing.env.example env/testing.env
+docker compose --profile test up -d \
+  test-db test-migrate external-fixtures object-storage object-storage-init
+./scripts/with-env.sh env/testing.env \
+  cargo test --manifest-path backend/Cargo.toml --locked --test article_service
 ```
+
+Select only the targeted test required for the change. The broader maintained
+test scripts remain available for explicit release verification. The test
+profile uses a separate `blog_test` PostgreSQL database on port `55433`; it does
+not reuse the normal local `blog` database.
 
 Run the same blocking matrix in the pinned Docker environment:
 

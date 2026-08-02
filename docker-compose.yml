@@ -6,6 +6,12 @@ x-db-environment: &db-environment
   POSTGRES_DB: blog
   TZ: UTC
 
+x-test-db-environment: &test-db-environment
+  POSTGRES_USER: blog
+  POSTGRES_PASSWORD: blog
+  POSTGRES_DB: blog_test
+  TZ: UTC
+
 x-api-environment: &api-environment
   DATABASE_URL: postgres://blog:blog@db:5432/blog
   AUTH_SECRET: local-test-secret-that-is-not-used-in-production
@@ -77,6 +83,25 @@ services:
     volumes:
       - blog-rust-db:/var/lib/postgresql/data
 
+  test-db:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: docker/postgres/Dockerfile
+      args:
+        POSTGRES_VERSION: "17.4"
+        PGVECTOR_VERSION: "0.8.2"
+    environment: *test-db-environment
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blog -d blog_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "55433:5432"
+    volumes:
+      - blog-rust-test-db:/var/lib/postgresql/data
+
   migrate:
     build:
       context: .
@@ -85,6 +110,19 @@ services:
     environment: *api-environment
     depends_on:
       db:
+        condition: service_healthy
+    restart: "no"
+
+  test-migrate:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["/usr/local/bin/migrate"]
+    environment:
+      DATABASE_URL: postgres://blog:blog@test-db:5432/blog_test
+    depends_on:
+      test-db:
         condition: service_healthy
     restart: "no"
 
@@ -114,8 +152,8 @@ services:
       context: .
       dockerfile: docker/test/Dockerfile
     environment:
-      DATABASE_URL: postgres://blog:blog@db:5432/blog
-      TEST_DATABASE_URL: postgres://blog:blog@db:5432/blog
+      DATABASE_URL: postgres://blog:blog@test-db:5432/blog_test
+      TEST_DATABASE_URL: postgres://blog:blog@test-db:5432/blog_test
       AUTH_SECRET: local-test-secret-that-is-not-used-in-production
       OPENAI_API_KEY: local-fixture-key
       OPENAI_BASE_URL: http://external-fixtures:8090/v1
@@ -130,7 +168,7 @@ services:
       S3_URL_PREFIX: http://localhost:9000/blog
       TEST_S3_ENDPOINT: http://object-storage:9000
     depends_on:
-      migrate:
+      test-migrate:
         condition: service_completed_successfully
       object-storage-init:
         condition: service_completed_successfully
@@ -144,11 +182,11 @@ services:
       dockerfile: docker/test/Dockerfile
     command: ["/app/scripts/test-rust.sh", "insights"]
     environment:
-      DATABASE_URL: postgres://blog:blog@db:5432/blog
-      TEST_DATABASE_URL: postgres://blog:blog@db:5432/blog
+      DATABASE_URL: postgres://blog:blog@test-db:5432/blog_test
+      TEST_DATABASE_URL: postgres://blog:blog@test-db:5432/blog_test
       AUTH_SECRET: local-test-secret-that-is-not-used-in-production
     depends_on:
-      migrate:
+      test-migrate:
         condition: service_completed_successfully
 
   frontend:
@@ -165,4 +203,5 @@ services:
 
 volumes:
   blog-rust-db:
+  blog-rust-test-db:
   blog-rust-object-storage:

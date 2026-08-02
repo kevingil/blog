@@ -73,12 +73,37 @@ Any legacy migration ledger is ignored and left untouched; it is historical
 metadata, not an input to Diesel stamping. If the application schema differs in
 any checked detail, the transaction aborts before creating the Diesel ledger.
 Rehearse against an approved schema-identical disposable clone before Supabase.
-Run the stamp once against Supabase before the first Render deploy:
+Store the production connection string in ignored `env/production.env` by
+copying `env/production.env.example`. Build the exact image intended for Render,
+then verify its schema fingerprint:
 
 ```sh
-cd backend
-DATABASE_URL='postgresql://...' cargo run --locked --release \
-  --bin stamp-diesel-migrations
+docker build -t blog-backend:migration-stamp .
+docker run --rm \
+  --env-file env/production.env \
+  --entrypoint /usr/local/bin/schema-fingerprint \
+  blog-backend:migration-stamp
+```
+
+The fingerprint must be exactly
+`81fa7f13268ae949c1c627f62ea860d4fe7dfb72698a4f40c5b4706cadd07b29`.
+After verifying the target and backup, stamp the existing schema once:
+
+```sh
+docker run --rm \
+  --env-file env/production.env \
+  --entrypoint /usr/local/bin/stamp-diesel-migrations \
+  blog-backend:migration-stamp
+```
+
+Finally, require the normal migration entrypoint to exit successfully with no
+pending application DDL:
+
+```sh
+docker run --rm \
+  --env-file env/production.env \
+  --entrypoint /usr/local/bin/migrate \
+  blog-backend:migration-stamp
 ```
 
 The later Fly-to-Render compute move reuses this database and does no second
