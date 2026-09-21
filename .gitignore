@@ -32,8 +32,10 @@ main
 # OS X generated file
 .DS_Store
 
-# Cursor
-.cursor/plans/
+# Agent tooling
+.cursor/
+.claude/
+.codex/
 
 # Internal docs
 .docs/
