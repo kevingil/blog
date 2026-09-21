@@ -1,0 +1,12 @@
+{
+  "name": "Blog Copilot (Docker Compose)",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "ports": [
+    { "name": "frontend", "port": 3000 },
+    { "name": "api", "port": 8080 },
+    { "name": "minio-s3", "port": 9000 },
+    { "name": "minio-console", "port": 9001 },
+    { "name": "external-fixtures", "port": 8090 }
+  ]
+}
