@@ -95,6 +95,21 @@ services:
         condition: service_healthy
     restart: "no"
 
+  seed:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["/usr/local/bin/seed"]
+    environment:
+      <<: *api-environment
+      SEED_FILE: /seed/verification.json
+    volumes:
+      - ./seed/verification.json:/seed/verification.json:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
   api:
     build:
       context: .
@@ -102,6 +117,8 @@ services:
     environment: *api-environment
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      seed:
         condition: service_completed_successfully
       object-storage-init:
         condition: service_completed_successfully

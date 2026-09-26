@@ -1,0 +1,18 @@
+{
+  "author": {
+    "name": "Ada Lovelace",
+    "email": "ada@example.test",
+    "password": "VerifyStack123!",
+    "bio": "Verification author for a fresh local database. The first account is the site superuser and the public author.",
+    "email_public": "ada@example.test",
+    "meta_description": "Local verification author",
+    "social_links": {
+      "website": "https://example.test"
+    }
+  },
+  "article": {
+    "slug": "verification-note",
+    "title": "Verification note",
+    "content": "This published note is seeded so an agent can confirm the local API and database are serving project data."
+  }
+}
