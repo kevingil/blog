@@ -6,7 +6,10 @@ use std::{
 use axum::{
     Json, Router,
     body::{Body, Bytes},
-    extract::State,
+    extract::{
+        State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
+    },
     http::{Response, header::CONTENT_TYPE},
     response::IntoResponse,
     routing::{get, post},
@@ -28,6 +31,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/images/generations", post(images))
         .route("/v1/audio/transcriptions", post(transcriptions))
         .route("/v1/audio/speech", post(speech))
+        .route("/v1/live/sessions", get(live_sessions))
         .route("/search", post(exa_search))
         .route("/findSimilar", post(exa_search))
         .route("/answer", post(exa_answer))
@@ -146,7 +150,73 @@ async fn transcriptions(State(state): State<FixtureState>, body: Bytes) -> Json<
     Json(json!({ "text": "Fixture voice note" }))
 }
 
-async fn speech(State(state): State<FixtureState>, Json(request): Json<Value>) -> impl IntoResponse {
+async fn live_sessions(upgrade: WebSocketUpgrade) -> impl IntoResponse {
+    upgrade.on_upgrade(handle_live_session)
+}
+
+async fn handle_live_session(mut socket: WebSocket) {
+    while let Some(Ok(message)) = socket.recv().await {
+        let Message::Text(text) = message else {
+            continue;
+        };
+        let Ok(event) = serde_json::from_str::<Value>(text.as_str()) else {
+            continue;
+        };
+        let kind = event.get("type").and_then(Value::as_str).unwrap_or("");
+        let reply = match kind {
+            "session.start" => json!({
+                "type": "session.started",
+                "session": {"id": "live_fixture", "model": "gpt-live-1"}
+            }),
+            "session.input_audio.append" => {
+                let _ = send_live(
+                    &mut socket,
+                    json!({
+                        "type": "session.input_transcript.delta",
+                        "delta": "tighten the intro"
+                    }),
+                )
+                .await;
+                json!({
+                    "type": "session.delegation.created",
+                    "delegation": {"id": "del_fixture", "target": "client", "offset_ms": 0}
+                })
+            }
+            "session.commentary.append" => {
+                let content = event.get("content").and_then(Value::as_str).unwrap_or("");
+                let _ = send_live(
+                    &mut socket,
+                    json!({
+                        "type": "session.output_transcript.delta",
+                        "delta": content
+                    }),
+                )
+                .await;
+                json!({
+                    "type": "session.output_audio.delta",
+                    "delta": "AAA="
+                })
+            }
+            "session.thinking.append" => json!({
+                "type": "session.thinking.appended",
+                "client_event_id": event.get("event_id").cloned().unwrap_or(Value::Null)
+            }),
+            _ => continue,
+        };
+        if send_live(&mut socket, reply).await.is_err() {
+            break;
+        }
+    }
+}
+
+async fn send_live(socket: &mut WebSocket, event: Value) -> Result<(), axum::Error> {
+    socket.send(Message::Text(event.to_string().into())).await
+}
+
+async fn speech(
+    State(state): State<FixtureState>,
+    Json(request): Json<Value>,
+) -> impl IntoResponse {
     record(&state, "/v1/audio/speech", &request).await;
     (
         [(CONTENT_TYPE, "audio/wav")],

@@ -16,6 +16,7 @@ use super::{
         list_agent_tools, list_mcp_connectors, refresh_mcp_connector, reject_artifact,
         submit_agent_request, submit_conversation_turn, update_agent_skill, update_mcp_connector,
     },
+    live::{__path_live_session, live_session},
     state::AgentState,
 };
 
@@ -28,6 +29,7 @@ where
     OpenApiRouter::new()
         .routes(routes!(submit_agent_request))
         .routes(routes!(submit_conversation_turn))
+        .routes(routes!(live_session))
         .routes(routes!(list_agent_tools))
         .routes(routes!(list_mcp_connectors, create_mcp_connector))
         .routes(routes!(update_mcp_connector, delete_mcp_connector))

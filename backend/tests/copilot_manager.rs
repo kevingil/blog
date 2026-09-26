@@ -275,9 +275,62 @@ async fn voice_turn_emits_transcript_and_speech_into_the_same_session() {
         .unwrap_or_default();
     assert!(persisted.iter().any(|message| {
         message.role == "user"
-            && message
-                .meta_data
-                .as_ref()
-                .is_some_and(|value| value.get("input_channel").and_then(|item| item.as_str()) == Some("voice"))
+            && message.meta_data.as_ref().is_some_and(|value| {
+                value.get("input_channel").and_then(|item| item.as_str()) == Some("voice")
+            })
+    }));
+}
+
+#[tokio::test]
+async fn live_turn_keeps_the_transcript_and_skips_speech_synthesis() {
+    let store = Arc::new(InMemorySessionStore::default());
+    let agent = Agent::new(
+        Arc::new(FinalProvider {
+            model: Model::openai("fixture", "fixture", 1_024, false),
+        }),
+        store.clone(),
+        Vec::new(),
+    );
+    let chat = Arc::new(MemoryChat::default());
+    let manager = CopilotManager::new(
+        agent,
+        store as Arc<dyn SessionStore>,
+        chat.clone(),
+        None,
+        None,
+        CopilotConfig::new(2, 1, 16, 15).unwrap_or_default(),
+        CancellationToken::new(),
+        Some(Arc::new(FixtureSpeech)),
+        None,
+    );
+    let request_id = manager
+        .submit(ChatRequest {
+            message: "tighten the intro".to_owned(),
+            document_content: String::new(),
+            document_markdown: "draft".to_owned(),
+            article_id: Uuid::new_v4().to_string(),
+            channel: "live".to_owned(),
+        })
+        .await
+        .unwrap_or_default();
+    let mut stream = manager
+        .take_response_stream(&request_id)
+        .expect("live stream");
+    let mut event_types = Vec::new();
+    while let Some(event) = stream.recv().await {
+        event_types.push(event.event_type);
+    }
+    assert!(event_types.contains(&"transcript".to_owned()));
+    assert!(!event_types.contains(&"speech".to_owned()));
+    let persisted = chat
+        .messages
+        .lock()
+        .map(|messages| messages.clone())
+        .unwrap_or_default();
+    assert!(persisted.iter().any(|message| {
+        message.role == "user"
+            && message.meta_data.as_ref().is_some_and(|value| {
+                value.get("input_channel").and_then(|item| item.as_str()) == Some("voice")
+            })
     }));
 }

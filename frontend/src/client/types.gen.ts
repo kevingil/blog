@@ -1913,6 +1913,24 @@ export type GetConversationHistoryResponses = {
 
 export type GetConversationHistoryResponse = GetConversationHistoryResponses[keyof GetConversationHistoryResponses];
 
+export type ConnectLiveSessionData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent/live';
+};
+
+export type ConnectLiveSessionErrors = {
+    /**
+     * Invalid WebSocket upgrade headers
+     */
+    400: unknown;
+    /**
+     * Connection cannot be upgraded
+     */
+    426: unknown;
+};
+
 export type ListAgentSkillsData = {
     body?: never;
     path?: never;

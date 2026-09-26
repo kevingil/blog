@@ -867,6 +867,25 @@
         ]
       }
     },
+    "/agent/live": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "connectLiveSession",
+        "responses": {
+          "101": {
+            "description": "GPT-Live session switching protocols"
+          },
+          "400": {
+            "description": "Invalid WebSocket upgrade headers"
+          },
+          "426": {
+            "description": "Connection cannot be upgraded"
+          }
+        }
+      }
+    },
     "/agent/skills": {
       "get": {
         "tags": [

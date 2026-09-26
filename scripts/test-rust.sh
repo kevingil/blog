@@ -20,6 +20,7 @@ case "$mode" in
       conversation_service \
       copilot_contract \
       copilot_manager \
+      live_session \
       data_domain_http \
       datasource_repository \
       datasource_service \

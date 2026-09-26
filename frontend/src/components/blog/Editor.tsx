@@ -10,7 +10,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { VITE_API_BASE_URL } from "@/services/constants";
 import { isAuthError } from '@/services/authenticatedFetch';
 import { submitAgentRequest } from '@/services/agent';
-import { submitConversationTurn } from '@/services/conversation';
 import { McpConnectorsSettings } from './McpConnectorsSettings';
 import { useConversation } from '@/hooks/use-conversation';
 
@@ -431,6 +430,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [chatInput, setChatInput] = useState('');
   const [inputMode, setInputMode] = useState<'text' | 'conversation'>('text');
   const playSpeechRef = useRef<(audioBase64: string, mimeType?: string) => Promise<void>>(async () => {});
+  const sendLiveTextRef = useRef<(text: string) => void>(() => {});
+  const liveUserIndexRef = useRef<number | null>(null);
+  const pendingLiveStreamRef = useRef<{ requestId: string; assistantIndex: number } | null>(null);
+  const startedLiveRequestsRef = useRef(new Set<string>());
   const [isThinking, setIsThinking] = useState(false);
   const [thinkingMessage, setThinkingMessage] = useState<string>('Thinking...');
   const chatMessagesRef = useRef<HTMLDivElement>(null);
@@ -1000,6 +1003,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       return;
     }
 
+    if (inputMode === 'conversation') {
+      setChatInput('');
+      sendLiveTextRef.current(text);
+      return;
+    }
+
     await sendChatWithMessage(text);
   };
 
@@ -1010,15 +1019,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         throw new Error('Article ID is required');
       }
       
-      // Submit the request with single message - backend loads context from DB
-      const result = inputMode === 'conversation'
-        ? await submitConversationTurn({
-            message: messageText,
-            documentContent: documentContent,
-            documentMarkdown: documentMarkdown || '',
-            articleId: article.article.id,
-          })
-        : await submitAgentRequest({
+      const result = await submitAgentRequest({
             message: messageText,
             documentContent: documentContent,
             documentMarkdown: documentMarkdown || '',
@@ -1516,55 +1517,58 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
   const conversation = useConversation({
     enabled: inputMode === 'conversation' && !isNew && Boolean(article?.article?.id),
-    busy: chatLoading,
-    onUtterance: async (audioBase64, mimeType) => {
-      if (!article?.article?.id) {
-        return;
-      }
-      const extra = chatInput.trim();
-      setChatInput('');
-      const currentContent = getValues('content') || '';
-      const userTextPlaceholder = extra || 'Listening…';
-      const baseMessages = [...chatMessages, { role: 'user', content: userTextPlaceholder, channel: 'voice' } as ChatMessage];
-      const assistantIndex = baseMessages.length;
-      setChatMessages([...baseMessages, { role: 'assistant', content: '' } as ChatMessage]);
-      setChatLoading(true);
-      try {
-        const result = await submitConversationTurn({
-          articleId: article.article.id,
-          documentContent: currentContent,
-          documentMarkdown: currentContent,
-          message: extra,
-          audioBase64,
-          mimeType,
-        });
-        const spoken = result.transcript || extra;
-        if (spoken) {
-          setChatMessages((prev) =>
-            prev.map((message, index) =>
-              index === assistantIndex - 1
-                ? { ...message, content: spoken, channel: 'voice' }
-                : message
-            )
-          );
+    articleId: article?.article?.id,
+    getDocument: () => {
+      const content = getValues('content') || '';
+      return { content, markdown: content };
+    },
+    onUserTranscript: (text) => {
+      setChatMessages((prev) => {
+        const index = liveUserIndexRef.current;
+        if (index != null && prev[index]?.role === 'user') {
+          const next = [...prev];
+          next[index] = { ...next[index], content: text, channel: 'voice' };
+          return next;
         }
-        if (!result.requestId) {
-          throw new Error('No request ID received');
+        liveUserIndexRef.current = prev.length;
+        return [...prev, { role: 'user', content: text, channel: 'voice' } as ChatMessage];
+      });
+    },
+    onDelegation: (requestId, message) => {
+      setChatMessages((prev) => {
+        const index = liveUserIndexRef.current;
+        let next = [...prev];
+        if (index != null && next[index]?.role === 'user') {
+          next[index] = { ...next[index], content: message, channel: 'voice' };
+        } else {
+          next = [...next, { role: 'user', content: message, channel: 'voice' } as ChatMessage];
         }
-        await streamChatResponse(result.requestId, assistantIndex, false);
-      } catch (error) {
-        setChatMessages((prev) => prev.slice(0, -2));
-        toast({
-          title: "Conversation error",
-          description: error instanceof Error ? error.message : "Could not process speech",
-          variant: "destructive",
-        });
-      } finally {
-        setChatLoading(false);
-      }
+        liveUserIndexRef.current = null;
+        pendingLiveStreamRef.current = { requestId, assistantIndex: next.length };
+        return [...next, { role: 'assistant', content: '' } as ChatMessage];
+      });
     },
   });
-  playSpeechRef.current = conversation.playSpeech;
+  sendLiveTextRef.current = conversation.sendText;
+
+  useEffect(() => {
+    const pending = pendingLiveStreamRef.current;
+    if (!pending || startedLiveRequestsRef.current.has(pending.requestId)) {
+      return;
+    }
+    pendingLiveStreamRef.current = null;
+    startedLiveRequestsRef.current.add(pending.requestId);
+    setChatLoading(true);
+    void streamChatResponse(pending.requestId, pending.assistantIndex, false)
+      .catch((streamError: unknown) => {
+        toast({
+          title: "Conversation error",
+          description: streamError instanceof Error ? streamError.message : "Could not run the live turn",
+          variant: "destructive",
+        });
+      })
+      .finally(() => setChatLoading(false));
+  });
 
   // Auto-subscribe to an in-flight generation session when arriving from /blog/generate.
   const consumedRequestIdRef = useRef<string | null>(null);
@@ -2328,14 +2332,16 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               </Button>
             </div>
             {inputMode === 'conversation' && (
-              <span className="text-[11px] text-muted-foreground">
+              <span className="max-w-[240px] truncate text-[11px] text-muted-foreground">
                 {conversation.error
                   ? conversation.error
-                  : conversation.state === 'speaking'
-                    ? 'Speaking…'
-                    : conversation.state === 'recording'
-                      ? 'Listening to you…'
-                      : 'Live · send a link anytime'}
+                  : conversation.caption
+                    ? conversation.caption
+                    : conversation.state === 'connecting'
+                      ? 'Connecting to GPT-Live…'
+                      : conversation.state === 'speaking'
+                        ? 'Speaking…'
+                        : 'GPT-Live · talk, or paste a link'}
               </span>
             )}
           </div>
@@ -2349,7 +2355,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             <PromptInputTextarea
               placeholder={
                 inputMode === 'conversation'
-                  ? "Talk, or paste a link the voice agent should see…"
+                  ? "Talk with GPT-Live, or paste a link it should see…"
                   : "Ask the assistant or click a quick action above…"
               }
               className="min-h-[44px]"

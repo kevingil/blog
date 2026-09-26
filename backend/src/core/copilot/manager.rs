@@ -24,8 +24,8 @@ use crate::{
             SessionStore, TextContent, ToolContext, ToolResult,
         },
         skill::SkillContextPort,
-        speech::SpeechPort,
         source::{Source, SourceService},
+        speech::SpeechPort,
     },
     error::AppError,
 };
@@ -182,7 +182,7 @@ impl CopilotManager {
                 Some(
                     MetadataBuilder::new()
                         .with_context(context)
-                        .with_input_channel(normalized_channel(&request.channel))
+                        .with_input_channel(persisted_input_channel(&request.channel))
                         .build(),
                 ),
             )
@@ -373,7 +373,11 @@ impl CopilotManager {
             prompt.push_str("\n\n");
             prompt.push_str(&skill_prompt);
         }
-        if normalized_channel(&request.channel) == "voice" {
+        if is_live_channel(&request.channel) {
+            prompt.push_str(
+                "\n\nYou are the backend for a GPT-Live voice session. The user hears a separate voice model. Use tools to edit, research, and act. Return a short factual result the voice model can paraphrase. Do not write a long speech.",
+            );
+        } else if is_direct_voice(&request.channel) {
             prompt.push_str(
                 "\n\nYou are in a live spoken conversation. Keep spoken replies brief and natural. Use tools when you need to edit, research, or act; the user can see those tool calls in the chat beside this conversation.",
             );
@@ -407,7 +411,7 @@ async fn process_run(
         event.data = Some(json!({"snapshot_version_id": snapshot_id}));
         send_stream(&sender, &cancellation, event).await?;
     }
-    if normalized_channel(&request.channel) == "voice" {
+    if is_spoken_input(&request.channel) {
         let mut transcript = StreamResponse::new(&request_id, "transcript");
         transcript.content = request.message.clone();
         transcript.role = "user".to_owned();
@@ -521,8 +525,15 @@ async fn process_run(
                         stream.iteration = iteration;
                         stream.step_index = current_step.unwrap_or_default();
                         send_stream(&sender, &cancellation, stream).await?;
-                        speak_if_voice(&manager, &request, &request_id, &spoken, &sender, &cancellation)
-                            .await?;
+                        speak_if_voice(
+                            &manager,
+                            &request,
+                            &request_id,
+                            &spoken,
+                            &sender,
+                            &cancellation,
+                        )
+                        .await?;
                         steps.clear();
                         current_step = None;
                     } else {
@@ -1103,7 +1114,7 @@ async fn speak_if_voice(
     sender: &mpsc::Sender<StreamResponse>,
     cancellation: &CancellationToken,
 ) -> Result<(), ManagerError> {
-    if normalized_channel(&request.channel) != "voice" || text.trim().is_empty() {
+    if !is_direct_voice(&request.channel) || text.trim().is_empty() {
         return Ok(());
     }
     let Some(manager) = manager.upgrade() else {
@@ -1124,8 +1135,20 @@ async fn speak_if_voice(
     send_stream(sender, cancellation, event).await
 }
 
-fn normalized_channel(channel: &str) -> &str {
-    if channel.trim().eq_ignore_ascii_case("voice") {
+fn is_direct_voice(channel: &str) -> bool {
+    channel.trim().eq_ignore_ascii_case("voice")
+}
+
+fn is_live_channel(channel: &str) -> bool {
+    channel.trim().eq_ignore_ascii_case("live")
+}
+
+fn is_spoken_input(channel: &str) -> bool {
+    is_direct_voice(channel) || is_live_channel(channel)
+}
+
+fn persisted_input_channel(channel: &str) -> &'static str {
+    if is_spoken_input(channel) {
         "voice"
     } else {
         "text"

@@ -5,6 +5,7 @@ HTTP-003	meta	GET	/swagger/*	public	-	Swagger UI assets	UI route	-	missing	activ
 HTTP-004	meta	GET	/api/openapi.json	public	-	200 OpenAPI JSON	exact generated document	frontend/openapi-ts.config.ts currently reads file	missing	active-contract
 HTTP-005	agent	POST	/agent	Bearer JWT	copilot.ChatRequest	200 copilot.ChatRequestResponse;400;401;500	runtime response uses requestId	frontend/src/components/blog/Editor.tsx	covered	active-contract
 WS-001	agent	GET	/websocket	public upgrade	SubscribeMessage	101; frames WS-002..WS-008	no handshake auth	frontend/src/hooks/use-session.ts;frontend/src/hooks/use-worker-statuses.ts;frontend/src/components/blog/Editor.tsx	missing	active-contract
+WS-009	agent	GET	/agent/live	public upgrade	JSON start/audio/text/context/stop	101; frames started,transcript,audio,delegation,error	no handshake auth; GPT-Live client delegation	frontend/src/hooks/use-conversation.ts;frontend/src/components/blog/Editor.tsx	missing	active-contract
 HTTP-006	agent	GET	/agent/conversations/{articleId}	Bearer JWT	path UUID;limit=50	200 {messages,article_id,total};400;401;500	exact runtime casing	frontend/src/services/conversations.ts	covered	active-contract
 HTTP-007	agent	DELETE	/agent/conversations/{articleId}	Bearer JWT	path UUID	200 {success};400;401;500	exact object	frontend/src/services/conversations.ts	covered	active-contract
 HTTP-008	agent	GET	/agent/artifacts/{articleId}/pending	Bearer JWT	path UUID	200 {artifacts};400;401;500	exact object	frontend/src/services/artifacts.ts	covered	active-contract

@@ -22,6 +22,7 @@ use blog_backend::{
         auth::{Account, AccountId, AccountRepository, AuthService},
         chat::{ChatMessage, ChatMessageRepository, ChatMessageService},
         conversation::ConversationService,
+        live::LivePorts,
         mcp::{InMemoryMcpConnectorRepository, McpConnectorService},
         ml::llm::ToolRegistry,
         skill::{InMemorySkillRepository, SkillService},
@@ -544,6 +545,7 @@ fn fixture() -> TestResult<Fixture> {
                 Arc::new(InMemorySkillRepository::default()),
                 CancellationToken::new(),
             ),
+            LivePorts::disconnected(),
         ),
         auth: AuthState::new(auth_service),
         storage: StorageState::new(Arc::new(StorageService::new(
@@ -1040,11 +1042,7 @@ fn support_openapi_has_stable_operations_security_and_multipart_contract() -> Te
     let document = serde_json::to_value(document)?;
     let operations = [
         ("/agent", "post", "submitAgentRequest"),
-        (
-            "/agent/conversation/turn",
-            "post",
-            "submitConversationTurn",
-        ),
+        ("/agent/conversation/turn", "post", "submitConversationTurn"),
         ("/agent/tools", "get", "listAgentTools"),
         ("/agent/connectors", "get", "listMcpConnectors"),
         ("/agent/connectors", "post", "createMcpConnector"),
@@ -1106,6 +1104,9 @@ fn support_openapi_has_stable_operations_security_and_multipart_contract() -> Te
         assert_eq!(operation["operationId"], operation_id);
         assert_eq!(operation["security"][0]["bearerAuth"], json!([]));
     }
+    let live = &document["paths"]["/agent/live"]["get"];
+    assert_eq!(live["operationId"], "connectLiveSession");
+    assert!(live["responses"].get("101").is_some());
     assert!(
         document["paths"]["/storage/upload"]["post"]["requestBody"]["content"]
             ["multipart/form-data"]

@@ -40,8 +40,8 @@ use crate::{
         datasource::{DataSourceService, RecommendationService},
         image::ImageService,
         insight::InsightService,
+        live::LivePorts,
         mcp::McpConnectorService,
-        skill::SkillService,
         ml::{
             TextGenerationService,
             llm::{
@@ -54,6 +54,7 @@ use crate::{
         page::PageService,
         profile::ProfileService,
         project::ProjectService,
+        skill::SkillService,
         source::SourceService,
         storage::StorageService,
         taskrun::TaskRunService,
@@ -64,16 +65,15 @@ use crate::{
     },
     database::pool::create_pool,
     database::repository::{
-        account::DieselAccountRepository, article::DieselArticleRepository,
-        chat_message::DieselChatMessageRepository,
+        account::DieselAccountRepository, agent_skill::DieselSkillRepository,
+        article::DieselArticleRepository, chat_message::DieselChatMessageRepository,
         content_topic_match::DieselContentTopicMatchRepository,
         crawled_content::DieselCrawledContentRepository, data_source::DieselDataSourceRepository,
         image::DieselImageRepository, insight::DieselInsightRepository,
-        insight_topic::DieselInsightTopicRepository, organization::DieselOrganizationRepository,
-        page::DieselPageRepository, project::DieselProjectRepository,
-        site_settings::DieselSiteSettingsRepository, source::DieselSourceRepository,
-        agent_skill::DieselSkillRepository,
-        mcp_connector::DieselMcpConnectorRepository, tag::DieselTagRepository,
+        insight_topic::DieselInsightTopicRepository, mcp_connector::DieselMcpConnectorRepository,
+        organization::DieselOrganizationRepository, page::DieselPageRepository,
+        project::DieselProjectRepository, site_settings::DieselSiteSettingsRepository,
+        source::DieselSourceRepository, tag::DieselTagRepository,
         task_run::DieselTaskRunRepository, user_insight_status::DieselUserInsightStatusRepository,
     },
     integrations::{
@@ -81,8 +81,9 @@ use crate::{
         s3::S3ObjectStore,
     },
     runtime::{
-        AgentQueueWorker, CombinedAgentStreamProvider, CopilotRuntime, INSIGHT_INSTRUCTIONS,
-        ImageQueueWorker, RuntimeAgentQueue, RuntimeImageQueue, RuntimeInsightGenerator,
+        AgentQueueWorker, CombinedAgentStreamProvider, CopilotLiveHarness, CopilotRuntime,
+        INSIGHT_INSTRUCTIONS, ImageQueueWorker, RuntimeAgentQueue, RuntimeImageQueue,
+        RuntimeInsightGenerator,
     },
     server,
 };
@@ -315,6 +316,7 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         Arc::new(DieselSkillRepository::new(pool.clone())),
         cancellation.child_token(),
     );
+    let live_upstream = openai.clone();
     let copilot_manager = CopilotManager::new(
         Agent::with_registry(openai.clone(), session_store.clone(), registry.clone()),
         session_store,
@@ -328,6 +330,7 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         Some(skills.clone()),
     );
     let copilot = CopilotRuntime::new(copilot_manager);
+    let live = LivePorts::new(CopilotLiveHarness::new(copilot.clone()), live_upstream);
     let agent_streams =
         CombinedAgentStreamProvider::new(copilot.clone(), article_generation_queue.clone());
     let websocket_config = WebSocketConfig {
@@ -352,6 +355,7 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
                 conversation,
                 registry,
                 skills,
+                live,
             ),
             article,
             datasource,
