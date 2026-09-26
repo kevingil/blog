@@ -12,8 +12,12 @@ use crate::{
 
 use super::{
     dto::{
-        ArtifactFeedbackRequest, ChatRequest, ChatRequestResponse, ConversationHistoryResponse,
-        ConversationQuery, PendingArtifactsResponse, SuccessFlagResponse,
+        AgentToolListResponse, AgentToolResponse, ArtifactFeedbackRequest, ChatRequest,
+        ChatRequestResponse, ConnectorListResponse, ConnectorRefreshResponse, ConnectorResponse,
+        ConnectorUpdateRequest, ConnectorWriteRequest, ConversationHistoryResponse,
+        ConversationQuery, ConversationTurnRequest, ConversationTurnResponse,
+        PendingArtifactsResponse, SkillListResponse, SkillResponse, SkillUpdateRequest,
+        SkillWriteRequest, SuccessFlagResponse,
     },
     state::AgentState,
 };
@@ -53,6 +57,312 @@ pub async fn submit_agent_request(
     Ok(Json(SuccessResponse::new(ChatRequestResponse {
         request_id,
         status: "processing".to_owned(),
+    })))
+}
+
+#[utoipa::path(
+    post,
+    path = "/agent/conversation/turn",
+    request_body = ConversationTurnRequest,
+    responses(
+        (status = 200, body = SuccessResponse<ConversationTurnResponse>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "agent",
+    operation_id = "submitConversationTurn"
+)]
+pub async fn submit_conversation_turn(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<AgentState>,
+    JsonBody(request): JsonBody<ConversationTurnRequest>,
+) -> ApiResult<ConversationTurnResponse> {
+    if request.article_id.is_empty() {
+        return Err(AppError::InvalidInput(
+            "articleId is a required field".to_owned(),
+        ));
+    }
+    let turn = state
+        .conversation()?
+        .prepare_turn(&request.message, &request.audio_base64, &request.mime_type)
+        .await?;
+    let request_id = state
+        .requests()?
+        .submit(ChatRequest {
+            message: turn.message,
+            document_content: request.document_content,
+            document_markdown: request.document_markdown,
+            article_id: request.article_id,
+            channel: turn.channel.clone(),
+        })
+        .await?;
+    Ok(Json(SuccessResponse::new(ConversationTurnResponse {
+        request_id,
+        status: "processing".to_owned(),
+        transcript: turn.transcript,
+        channel: turn.channel,
+    })))
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent/tools",
+    responses(
+        (status = 200, body = SuccessResponse<AgentToolListResponse>),
+        (status = 401, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "agent",
+    operation_id = "listAgentTools"
+)]
+pub async fn list_agent_tools(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<AgentState>,
+) -> ApiResult<AgentToolListResponse> {
+    let tools = state
+        .registry()?
+        .describe()
+        .into_iter()
+        .map(AgentToolResponse::from)
+        .collect();
+    Ok(Json(SuccessResponse::new(AgentToolListResponse { tools })))
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent/connectors",
+    responses(
+        (status = 200, body = SuccessResponse<ConnectorListResponse>),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "agent",
+    operation_id = "listMcpConnectors"
+)]
+pub async fn list_mcp_connectors(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<AgentState>,
+) -> ApiResult<ConnectorListResponse> {
+    let connectors = state
+        .connectors()?
+        .list()
+        .await?
+        .into_iter()
+        .map(ConnectorResponse::from)
+        .collect();
+    Ok(Json(SuccessResponse::new(ConnectorListResponse {
+        connectors,
+    })))
+}
+
+#[utoipa::path(
+    post,
+    path = "/agent/connectors",
+    request_body = ConnectorWriteRequest,
+    responses(
+        (status = 200, body = SuccessResponse<ConnectorResponse>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "agent",
+    operation_id = "createMcpConnector"
+)]
+pub async fn create_mcp_connector(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<AgentState>,
+    JsonBody(request): JsonBody<ConnectorWriteRequest>,
+) -> ApiResult<ConnectorResponse> {
+    let connector = state.connectors()?.create(request.into()).await?;
+    Ok(Json(SuccessResponse::new(connector.into())))
+}
+
+#[utoipa::path(
+    patch,
+    path = "/agent/connectors/{connectorId}",
+    params(("connectorId" = String, Path)),
+    request_body = ConnectorUpdateRequest,
+    responses(
+        (status = 200, body = SuccessResponse<ConnectorResponse>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 404, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "agent",
+    operation_id = "updateMcpConnector"
+)]
+pub async fn update_mcp_connector(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<AgentState>,
+    Path(connector_id): Path<String>,
+    JsonBody(request): JsonBody<ConnectorUpdateRequest>,
+) -> ApiResult<ConnectorResponse> {
+    let id = parse_connector_id(&connector_id)?;
+    let connector = state.connectors()?.update(id, request.into()).await?;
+    Ok(Json(SuccessResponse::new(connector.into())))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/agent/connectors/{connectorId}",
+    params(("connectorId" = String, Path)),
+    responses(
+        (status = 200, body = SuccessResponse<SuccessFlagResponse>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 404, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "agent",
+    operation_id = "deleteMcpConnector"
+)]
+pub async fn delete_mcp_connector(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<AgentState>,
+    Path(connector_id): Path<String>,
+) -> ApiResult<SuccessFlagResponse> {
+    let id = parse_connector_id(&connector_id)?;
+    state.connectors()?.delete(id).await?;
+    Ok(Json(SuccessResponse::new(SuccessFlagResponse {
+        success: true,
+    })))
+}
+
+#[utoipa::path(
+    post,
+    path = "/agent/connectors/{connectorId}/refresh",
+    params(("connectorId" = String, Path)),
+    responses(
+        (status = 200, body = SuccessResponse<ConnectorRefreshResponse>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 404, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "agent",
+    operation_id = "refreshMcpConnector"
+)]
+pub async fn refresh_mcp_connector(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<AgentState>,
+    Path(connector_id): Path<String>,
+) -> ApiResult<ConnectorRefreshResponse> {
+    let id = parse_connector_id(&connector_id)?;
+    let refresh = state.connectors()?.refresh(id).await?;
+    Ok(Json(SuccessResponse::new(ConnectorRefreshResponse {
+        connector_id: refresh.connector_id.to_string(),
+        tool_names: refresh.tool_names,
+    })))
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent/skills",
+    responses(
+        (status = 200, body = SuccessResponse<SkillListResponse>),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "agent",
+    operation_id = "listAgentSkills"
+)]
+pub async fn list_agent_skills(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<AgentState>,
+) -> ApiResult<SkillListResponse> {
+    let skills = state
+        .skills()?
+        .list()
+        .await?
+        .into_iter()
+        .map(SkillResponse::from)
+        .collect();
+    Ok(Json(SuccessResponse::new(SkillListResponse { skills })))
+}
+
+#[utoipa::path(
+    post,
+    path = "/agent/skills",
+    request_body = SkillWriteRequest,
+    responses(
+        (status = 200, body = SuccessResponse<SkillResponse>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "agent",
+    operation_id = "createAgentSkill"
+)]
+pub async fn create_agent_skill(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<AgentState>,
+    JsonBody(request): JsonBody<SkillWriteRequest>,
+) -> ApiResult<SkillResponse> {
+    let skill = state.skills()?.create(request.into()).await?;
+    Ok(Json(SuccessResponse::new(skill.into())))
+}
+
+#[utoipa::path(
+    patch,
+    path = "/agent/skills/{skillId}",
+    params(("skillId" = String, Path)),
+    request_body = SkillUpdateRequest,
+    responses(
+        (status = 200, body = SuccessResponse<SkillResponse>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 404, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "agent",
+    operation_id = "updateAgentSkill"
+)]
+pub async fn update_agent_skill(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<AgentState>,
+    Path(skill_id): Path<String>,
+    JsonBody(request): JsonBody<SkillUpdateRequest>,
+) -> ApiResult<SkillResponse> {
+    let id = parse_skill_id(&skill_id)?;
+    let skill = state.skills()?.update(id, request.into()).await?;
+    Ok(Json(SuccessResponse::new(skill.into())))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/agent/skills/{skillId}",
+    params(("skillId" = String, Path)),
+    responses(
+        (status = 200, body = SuccessResponse<SuccessFlagResponse>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 404, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "agent",
+    operation_id = "deleteAgentSkill"
+)]
+pub async fn delete_agent_skill(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<AgentState>,
+    Path(skill_id): Path<String>,
+) -> ApiResult<SuccessFlagResponse> {
+    let id = parse_skill_id(&skill_id)?;
+    state.skills()?.delete(id).await?;
+    Ok(Json(SuccessResponse::new(SuccessFlagResponse {
+        success: true,
     })))
 }
 
@@ -232,6 +542,15 @@ pub async fn reject_artifact(
     Ok(Json(SuccessResponse::new(SuccessFlagResponse {
         success: true,
     })))
+}
+
+fn parse_connector_id(connector_id: &str) -> Result<Uuid, AppError> {
+    Uuid::parse_str(connector_id)
+        .map_err(|_| AppError::InvalidInput("Invalid connector ID".to_owned()))
+}
+
+fn parse_skill_id(skill_id: &str) -> Result<Uuid, AppError> {
+    Uuid::parse_str(skill_id).map_err(|_| AppError::InvalidInput("Invalid skill ID".to_owned()))
 }
 
 fn parse_message_id(message_id: &str) -> Result<Uuid, AppError> {

@@ -11,10 +11,12 @@ use blog_backend::{
             Agent, FinishReason, InMemorySessionStore, LlmMessage, Model, Provider, ProviderError,
             ProviderEvent, ProviderResponse, SessionStore, TokenUsage, Tool,
         },
+        speech::{SpeechAudio, SpeechPort, silent_wav},
     },
     error::AppError,
 };
 use chrono::Utc;
+use serde_json::Value;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -143,6 +145,8 @@ async fn manager_persists_messages_streams_snapshot_and_shuts_down_owned_tasks()
         Some(Arc::new(SnapshotService { snapshot })),
         CopilotConfig::new(2, 1, 16, 15).unwrap_or_default(),
         CancellationToken::new(),
+        None,
+        None,
     );
     let article_id = Uuid::new_v4();
     let request_id = manager
@@ -151,6 +155,7 @@ async fn manager_persists_messages_streams_snapshot_and_shuts_down_owned_tasks()
             document_content: String::new(),
             document_markdown: "draft".to_owned(),
             article_id: article_id.to_string(),
+            channel: "text".to_owned(),
         })
         .await
         .unwrap_or_default();
@@ -193,4 +198,86 @@ async fn manager_persists_messages_streams_snapshot_and_shuts_down_owned_tasks()
             .is_ok()
     );
     assert_eq!(manager.active_requests(), 0);
+}
+
+struct FixtureSpeech;
+
+#[async_trait]
+impl SpeechPort for FixtureSpeech {
+    async fn transcribe(&self, _audio: &[u8], _mime_type: &str) -> Result<String, AppError> {
+        Ok("tighten the intro".to_owned())
+    }
+
+    async fn synthesize(&self, text: &str) -> Result<SpeechAudio, AppError> {
+        Ok(SpeechAudio {
+            bytes: silent_wav(),
+            mime_type: format!("audio/wav;text={text}"),
+        })
+    }
+}
+
+#[tokio::test]
+async fn voice_turn_emits_transcript_and_speech_into_the_same_session() {
+    let store = Arc::new(InMemorySessionStore::default());
+    let agent = Agent::new(
+        Arc::new(FinalProvider {
+            model: Model::openai("fixture", "fixture", 1_024, false),
+        }),
+        store.clone(),
+        Vec::new(),
+    );
+    let chat = Arc::new(MemoryChat::default());
+    let manager = CopilotManager::new(
+        agent,
+        store as Arc<dyn SessionStore>,
+        chat.clone(),
+        None,
+        None,
+        CopilotConfig::new(2, 1, 16, 15).unwrap_or_default(),
+        CancellationToken::new(),
+        Some(Arc::new(FixtureSpeech)),
+        None,
+    );
+    let article_id = Uuid::new_v4();
+    let request_id = manager
+        .submit(ChatRequest {
+            message: "tighten the intro".to_owned(),
+            document_content: String::new(),
+            document_markdown: "draft".to_owned(),
+            article_id: article_id.to_string(),
+            channel: "voice".to_owned(),
+        })
+        .await
+        .unwrap_or_default();
+    let mut stream = manager
+        .take_response_stream(&request_id)
+        .expect("voice stream");
+    let mut event_types = Vec::new();
+    let mut spoke = false;
+    while let Some(event) = stream.recv().await {
+        if event.event_type == "speech" {
+            spoke = event
+                .data
+                .as_ref()
+                .and_then(|data| data.get("audioBase64"))
+                .and_then(Value::as_str)
+                .is_some_and(|value| !value.is_empty());
+        }
+        event_types.push(event.event_type);
+    }
+    assert!(event_types.contains(&"transcript".to_owned()));
+    assert!(event_types.contains(&"speech".to_owned()));
+    assert!(spoke);
+    let persisted = chat
+        .messages
+        .lock()
+        .map(|messages| messages.clone())
+        .unwrap_or_default();
+    assert!(persisted.iter().any(|message| {
+        message.role == "user"
+            && message
+                .meta_data
+                .as_ref()
+                .is_some_and(|value| value.get("input_channel").and_then(|item| item.as_str()) == Some("voice"))
+    }));
 }

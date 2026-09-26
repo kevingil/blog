@@ -31,9 +31,16 @@ pub fn copilot_prompt(available_tools: &[String]) -> String {
         ("generate_image_prompt", "Create image generation prompts"),
     ];
     let mut tool_table = String::from("| Tool | Purpose |\n|------|---------|\n");
+    let mut known = BTreeSet::new();
     for (name, description) in definitions {
         if tools.contains(name) {
+            known.insert(name);
             tool_table.push_str(&format!("| **{name}** | {description} |\n"));
+        }
+    }
+    for name in &tools {
+        if !known.contains(name) {
+            tool_table.push_str(&format!("| **{name}** | MCP connector tool |\n"));
         }
     }
 
@@ -161,6 +168,7 @@ Update after each edit.
 - Write/draft/generate article request → draft directly with replace_lines, even when the document is empty
 - Direct edit request ("remove X", "add Y") → read, then edit
 - Broad improvement or "make a plan" → read, research, plan, confirm, select sources if needed, edit
-- Typo/grammar fix → just do it"###
+- Typo/grammar fix → just do it
+- Custom skills may appear under **Active skills** in the user turn. Follow them when they apply."###
     )
 }

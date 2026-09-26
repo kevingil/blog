@@ -291,6 +291,117 @@ impl OpenAiClient {
             .map(GeneratedImage::Bytes)
             .map_err(|_| AppError::External)
     }
+
+    pub async fn transcribe_audio(
+        &self,
+        audio: &[u8],
+        mime_type: &str,
+    ) -> Result<String, AppError> {
+        if !self.is_configured() {
+            return Err(AppError::External);
+        }
+        if audio.is_empty() {
+            return Err(AppError::InvalidInput("audio is empty".to_owned()));
+        }
+        let filename = audio_filename(mime_type);
+        let part = reqwest::multipart::Part::bytes(audio.to_vec())
+            .file_name(filename)
+            .mime_str(if mime_type.trim().is_empty() {
+                "application/octet-stream"
+            } else {
+                mime_type
+            })
+            .map_err(|_| AppError::InvalidInput("invalid audio mime type".to_owned()))?;
+        let form = reqwest::multipart::Form::new()
+            .text("model", "whisper-1")
+            .part("file", part);
+        let response = self
+            .client
+            .post(format!("{}/audio/transcriptions", self.base_url))
+            .bearer_auth(self.api_key.expose_secret())
+            .multipart(form)
+            .send()
+            .await
+            .map_err(|_| AppError::External)?;
+        if !response.status().is_success() {
+            return Err(AppError::External);
+        }
+        let body: TranscriptionResponse = response.json().await.map_err(|_| AppError::External)?;
+        if body.text.trim().is_empty() {
+            Err(AppError::External)
+        } else {
+            Ok(body.text)
+        }
+    }
+
+    pub async fn synthesize_speech(&self, text: &str) -> Result<crate::core::speech::SpeechAudio, AppError> {
+        if !self.is_configured() {
+            return Err(AppError::External);
+        }
+        if text.trim().is_empty() {
+            return Err(AppError::InvalidInput("speech text is empty".to_owned()));
+        }
+        let response = self
+            .client
+            .post(format!("{}/audio/speech", self.base_url))
+            .bearer_auth(self.api_key.expose_secret())
+            .json(&SpeechRequest {
+                model: "gpt-4o-mini-tts",
+                input: text,
+                voice: "alloy",
+                format: "wav",
+            })
+            .send()
+            .await
+            .map_err(|_| AppError::External)?;
+        if !response.status().is_success() {
+            return Err(AppError::External);
+        }
+        let bytes = response.bytes().await.map_err(|_| AppError::External)?;
+        if bytes.is_empty() {
+            return Err(AppError::External);
+        }
+        Ok(crate::core::speech::SpeechAudio {
+            bytes: bytes.to_vec(),
+            mime_type: "audio/wav".to_owned(),
+        })
+    }
+}
+
+#[async_trait]
+impl crate::core::speech::SpeechPort for OpenAiClient {
+    async fn transcribe(&self, audio: &[u8], mime_type: &str) -> Result<String, AppError> {
+        self.transcribe_audio(audio, mime_type).await
+    }
+
+    async fn synthesize(&self, text: &str) -> Result<crate::core::speech::SpeechAudio, AppError> {
+        self.synthesize_speech(text).await
+    }
+}
+
+fn audio_filename(mime_type: &str) -> &'static str {
+    if mime_type.contains("wav") {
+        "speech.wav"
+    } else if mime_type.contains("mpeg") || mime_type.contains("mp3") {
+        "speech.mp3"
+    } else if mime_type.contains("ogg") {
+        "speech.ogg"
+    } else {
+        "speech.webm"
+    }
+}
+
+#[derive(Deserialize)]
+struct TranscriptionResponse {
+    text: String,
+}
+
+#[derive(Serialize)]
+struct SpeechRequest<'a> {
+    model: &'a str,
+    input: &'a str,
+    voice: &'a str,
+    format: &'a str,
 }
 
 #[derive(Serialize)]

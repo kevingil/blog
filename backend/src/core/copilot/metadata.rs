@@ -70,6 +70,11 @@ impl MetadataBuilder {
         self
     }
 
+    pub fn with_input_channel(mut self, channel: impl Into<String>) -> Self {
+        self.metadata.input_channel = channel.into();
+        self
+    }
+
     pub fn build(self) -> MessageMetadata {
         self.metadata
     }

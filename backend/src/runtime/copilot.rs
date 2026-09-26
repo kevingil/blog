@@ -68,6 +68,7 @@ impl AgentRequestQueue for CopilotRuntime {
                 document_content: request.document_content,
                 document_markdown: request.document_markdown,
                 article_id: request.article_id,
+                channel: request.channel,
             })
             .await
             .map_err(manager_error)

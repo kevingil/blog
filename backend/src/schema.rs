@@ -225,6 +225,44 @@ diesel::table! {
     use diesel::sql_types::*;
     use pgvector::sql_types::*;
 
+    agent_skill (id) {
+        id -> Uuid,
+        #[max_length = 255]
+        name -> Varchar,
+        description -> Nullable<Text>,
+        instructions -> Text,
+        enabled -> Bool,
+        created_at -> Nullable<Timestamptz>,
+        updated_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use pgvector::sql_types::*;
+
+    mcp_connector (id) {
+        id -> Uuid,
+        #[max_length = 255]
+        name -> Varchar,
+        #[max_length = 20]
+        transport -> Varchar,
+        command -> Nullable<Text>,
+        args -> Jsonb,
+        url -> Nullable<Text>,
+        headers -> Jsonb,
+        env -> Jsonb,
+        enabled -> Bool,
+        last_error -> Nullable<Text>,
+        created_at -> Nullable<Timestamptz>,
+        updated_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use pgvector::sql_types::*;
+
     insight (id) {
         id -> Uuid,
         organization_id -> Nullable<Uuid>,
@@ -469,6 +507,7 @@ diesel::joinable!(user_insight_status -> insight (insight_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     account,
+    agent_skill,
     article,
     article_source,
     article_version,
@@ -480,6 +519,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     imagen_request,
     insight,
     insight_topic,
+    mcp_connector,
     organization,
     page,
     project,

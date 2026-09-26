@@ -11,7 +11,7 @@ use tokio_util::sync::CancellationToken;
 use super::{
     Attachment, ContentPart, FinishReason, LlmMessage, MessageRole, Model, Provider, ProviderError,
     ProviderEventType, SessionStore, TextContent, TokenUsage, Tool, ToolCallRequest, ToolContext,
-    ToolResult,
+    ToolRegistry, ToolResult,
 };
 
 const MAX_ITERATIONS: usize = 25;
@@ -90,7 +90,7 @@ pub struct AgentRun {
 pub struct Agent {
     provider: Arc<dyn Provider>,
     store: Arc<dyn SessionStore>,
-    tools: Vec<Arc<dyn Tool>>,
+    registry: Arc<ToolRegistry>,
     active: Mutex<HashMap<String, CancellationToken>>,
 }
 
@@ -100,12 +100,24 @@ impl Agent {
         store: Arc<dyn SessionStore>,
         tools: Vec<Arc<dyn Tool>>,
     ) -> Arc<Self> {
+        Self::with_registry(provider, store, ToolRegistry::from_builtin(tools))
+    }
+
+    pub fn with_registry(
+        provider: Arc<dyn Provider>,
+        store: Arc<dyn SessionStore>,
+        registry: Arc<ToolRegistry>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             provider,
             store,
-            tools,
+            registry,
             active: Mutex::new(HashMap::new()),
         })
+    }
+
+    pub fn registry(&self) -> Arc<ToolRegistry> {
+        self.registry.clone()
     }
 
     pub fn model(&self) -> Model {
@@ -230,9 +242,10 @@ impl Agent {
             ensure_not_cancelled(&cancellation)?;
             send_event(&events, &cancellation, AgentEvent::thinking(iteration)).await?;
 
+            let tools = self.registry.snapshot();
             let mut provider_events = self
                 .provider
-                .stream_response(cancellation.clone(), history.clone(), self.tools.clone())
+                .stream_response(cancellation.clone(), history.clone(), tools)
                 .await
                 .map_err(provider_error)?;
             let mut assistant = self
@@ -436,12 +449,13 @@ impl Agent {
         context: ToolContext,
         calls: Vec<super::ToolCall>,
     ) -> Vec<ToolResult> {
+        let tools = self.registry.snapshot();
         let resolved = calls
             .iter()
             .map(|call| {
                 (
                     call.clone(),
-                    self.tools
+                    tools
                         .iter()
                         .find(|tool| tool.info().name == call.name)
                         .cloned(),
