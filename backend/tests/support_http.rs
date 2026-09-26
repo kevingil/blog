@@ -24,6 +24,7 @@ use blog_backend::{
         conversation::ConversationService,
         mcp::{InMemoryMcpConnectorRepository, McpConnectorService},
         ml::llm::ToolRegistry,
+        skill::{InMemorySkillRepository, SkillService},
         speech::{SpeechAudio, SpeechPort, silent_wav},
         storage::{ObjectListing, ObjectStore, StorageService},
         taskrun::{
@@ -539,6 +540,10 @@ fn fixture() -> TestResult<Fixture> {
             ),
             ConversationService::new(Arc::new(FixtureSpeech)),
             ToolRegistry::from_builtin(Vec::new()),
+            SkillService::new(
+                Arc::new(InMemorySkillRepository::default()),
+                CancellationToken::new(),
+            ),
         ),
         auth: AuthState::new(auth_service),
         storage: StorageState::new(Arc::new(StorageService::new(
@@ -803,7 +808,7 @@ async fn agent_harness_accepts_voice_turns_and_manages_mcp_connectors() -> TestR
     assert_eq!(updated["data"]["name"], "Docs search");
 
     let (status, deleted) = call(
-        fixture.router,
+        fixture.router.clone(),
         Method::DELETE,
         &format!("/agent/connectors/{connector_id}"),
         None,
@@ -813,6 +818,65 @@ async fn agent_harness_accepts_voice_turns_and_manages_mcp_connectors() -> TestR
     .await?;
     assert_eq!(status, StatusCode::OK, "{deleted}");
     assert_eq!(deleted["data"]["success"], true);
+
+    let (status, skill) = call(
+        fixture.router.clone(),
+        Method::POST,
+        "/agent/skills",
+        Some("application/json"),
+        json!({
+            "name": "Editorial voice",
+            "description": "Keep a calm informational tone",
+            "instructions": "Avoid hype. Prefer concrete claims.",
+            "enabled": true
+        })
+        .to_string(),
+        Some(&fixture.bearer),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{skill}");
+    assert_eq!(skill["data"]["name"], "Editorial voice");
+    assert_eq!(skill["data"]["enabled"], true);
+    let skill_id = skill["data"]["id"]
+        .as_str()
+        .ok_or("skill id missing")?
+        .to_owned();
+
+    let (status, skills) = call(
+        fixture.router.clone(),
+        Method::GET,
+        "/agent/skills",
+        None,
+        Body::empty(),
+        Some(&fixture.bearer),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{skills}");
+    assert_eq!(skills["data"]["skills"][0]["id"], skill_id);
+
+    let (status, updated_skill) = call(
+        fixture.router.clone(),
+        Method::PATCH,
+        &format!("/agent/skills/{skill_id}"),
+        Some("application/json"),
+        json!({"enabled": false}).to_string(),
+        Some(&fixture.bearer),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{updated_skill}");
+    assert_eq!(updated_skill["data"]["enabled"], false);
+
+    let (status, deleted_skill) = call(
+        fixture.router,
+        Method::DELETE,
+        &format!("/agent/skills/{skill_id}"),
+        None,
+        Body::empty(),
+        Some(&fixture.bearer),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{deleted_skill}");
+    assert_eq!(deleted_skill["data"]["success"], true);
     Ok(())
 }
 
@@ -999,6 +1063,10 @@ fn support_openapi_has_stable_operations_security_and_multipart_contract() -> Te
             "post",
             "refreshMcpConnector",
         ),
+        ("/agent/skills", "get", "listAgentSkills"),
+        ("/agent/skills", "post", "createAgentSkill"),
+        ("/agent/skills/{skillId}", "patch", "updateAgentSkill"),
+        ("/agent/skills/{skillId}", "delete", "deleteAgentSkill"),
         (
             "/agent/conversations/{articleId}",
             "get",

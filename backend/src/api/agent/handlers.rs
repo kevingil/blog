@@ -16,7 +16,8 @@ use super::{
         ChatRequestResponse, ConnectorListResponse, ConnectorRefreshResponse, ConnectorResponse,
         ConnectorUpdateRequest, ConnectorWriteRequest, ConversationHistoryResponse,
         ConversationQuery, ConversationTurnRequest, ConversationTurnResponse,
-        PendingArtifactsResponse, SuccessFlagResponse,
+        PendingArtifactsResponse, SkillListResponse, SkillResponse, SkillUpdateRequest,
+        SkillWriteRequest, SuccessFlagResponse,
     },
     state::AgentState,
 };
@@ -264,6 +265,109 @@ pub async fn refresh_mcp_connector(
 
 #[utoipa::path(
     get,
+    path = "/agent/skills",
+    responses(
+        (status = 200, body = SuccessResponse<SkillListResponse>),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "agent",
+    operation_id = "listAgentSkills"
+)]
+pub async fn list_agent_skills(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<AgentState>,
+) -> ApiResult<SkillListResponse> {
+    let skills = state
+        .skills()?
+        .list()
+        .await?
+        .into_iter()
+        .map(SkillResponse::from)
+        .collect();
+    Ok(Json(SuccessResponse::new(SkillListResponse { skills })))
+}
+
+#[utoipa::path(
+    post,
+    path = "/agent/skills",
+    request_body = SkillWriteRequest,
+    responses(
+        (status = 200, body = SuccessResponse<SkillResponse>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "agent",
+    operation_id = "createAgentSkill"
+)]
+pub async fn create_agent_skill(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<AgentState>,
+    JsonBody(request): JsonBody<SkillWriteRequest>,
+) -> ApiResult<SkillResponse> {
+    let skill = state.skills()?.create(request.into()).await?;
+    Ok(Json(SuccessResponse::new(skill.into())))
+}
+
+#[utoipa::path(
+    patch,
+    path = "/agent/skills/{skillId}",
+    params(("skillId" = String, Path)),
+    request_body = SkillUpdateRequest,
+    responses(
+        (status = 200, body = SuccessResponse<SkillResponse>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 404, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "agent",
+    operation_id = "updateAgentSkill"
+)]
+pub async fn update_agent_skill(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<AgentState>,
+    Path(skill_id): Path<String>,
+    JsonBody(request): JsonBody<SkillUpdateRequest>,
+) -> ApiResult<SkillResponse> {
+    let id = parse_skill_id(&skill_id)?;
+    let skill = state.skills()?.update(id, request.into()).await?;
+    Ok(Json(SuccessResponse::new(skill.into())))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/agent/skills/{skillId}",
+    params(("skillId" = String, Path)),
+    responses(
+        (status = 200, body = SuccessResponse<SuccessFlagResponse>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 404, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "agent",
+    operation_id = "deleteAgentSkill"
+)]
+pub async fn delete_agent_skill(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<AgentState>,
+    Path(skill_id): Path<String>,
+) -> ApiResult<SuccessFlagResponse> {
+    let id = parse_skill_id(&skill_id)?;
+    state.skills()?.delete(id).await?;
+    Ok(Json(SuccessResponse::new(SuccessFlagResponse {
+        success: true,
+    })))
+}
+
+#[utoipa::path(
+    get,
     path = "/agent/conversations/{articleId}",
     params(
         ("articleId" = String, Path),
@@ -443,6 +547,10 @@ pub async fn reject_artifact(
 fn parse_connector_id(connector_id: &str) -> Result<Uuid, AppError> {
     Uuid::parse_str(connector_id)
         .map_err(|_| AppError::InvalidInput("Invalid connector ID".to_owned()))
+}
+
+fn parse_skill_id(skill_id: &str) -> Result<Uuid, AppError> {
+    Uuid::parse_str(skill_id).map_err(|_| AppError::InvalidInput("Invalid skill ID".to_owned()))
 }
 
 fn parse_message_id(message_id: &str) -> Result<Uuid, AppError> {

@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use crate::{
     core::{
         chat::ChatMessageService, conversation::ConversationService, mcp::McpConnectorService,
-        ml::llm::ToolRegistry,
+        ml::llm::ToolRegistry, skill::SkillService,
     },
     error::AppError,
 };
@@ -24,6 +24,7 @@ pub struct AgentState {
     connectors: Arc<McpConnectorService>,
     conversation: Arc<ConversationService>,
     registry: Arc<ToolRegistry>,
+    skills: Arc<SkillService>,
 }
 
 impl AgentState {
@@ -33,6 +34,7 @@ impl AgentState {
         connectors: Arc<McpConnectorService>,
         conversation: Arc<ConversationService>,
         registry: Arc<ToolRegistry>,
+        skills: Arc<SkillService>,
     ) -> Self {
         Self {
             chat,
@@ -40,6 +42,7 @@ impl AgentState {
             connectors,
             conversation,
             registry,
+            skills,
         }
     }
 
@@ -61,5 +64,9 @@ impl AgentState {
 
     pub fn registry(&self) -> Result<&ToolRegistry, AppError> {
         Ok(&self.registry)
+    }
+
+    pub fn skills(&self) -> Result<&SkillService, AppError> {
+        Ok(&self.skills)
     }
 }

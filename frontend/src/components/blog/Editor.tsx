@@ -2058,7 +2058,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     <DrawerHeader>
                       <DrawerTitle>Chat Settings</DrawerTitle>
                       <DrawerDescription>
-                        Manage your chat assistant settings
+                        Skills, MCP connectors, and chat history
                       </DrawerDescription>
                     </DrawerHeader>
                     <div className="p-4 space-y-4 overflow-y-auto">

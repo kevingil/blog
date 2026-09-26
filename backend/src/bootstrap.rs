@@ -41,6 +41,7 @@ use crate::{
         image::ImageService,
         insight::InsightService,
         mcp::McpConnectorService,
+        skill::SkillService,
         ml::{
             TextGenerationService,
             llm::{
@@ -71,6 +72,7 @@ use crate::{
         insight_topic::DieselInsightTopicRepository, organization::DieselOrganizationRepository,
         page::DieselPageRepository, project::DieselProjectRepository,
         site_settings::DieselSiteSettingsRepository, source::DieselSourceRepository,
+        agent_skill::DieselSkillRepository,
         mcp_connector::DieselMcpConnectorRepository, tag::DieselTagRepository,
         task_run::DieselTaskRunRepository, user_insight_status::DieselUserInsightStatusRepository,
     },
@@ -309,6 +311,10 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         tracing::warn!(%error, "failed to refresh MCP connectors at startup");
     }
     let conversation = ConversationService::new(openai.clone());
+    let skills = SkillService::new(
+        Arc::new(DieselSkillRepository::new(pool.clone())),
+        cancellation.child_token(),
+    );
     let copilot_manager = CopilotManager::new(
         Agent::with_registry(openai.clone(), session_store.clone(), registry.clone()),
         session_store,
@@ -319,6 +325,7 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
             .map_err(|error| anyhow::anyhow!("invalid copilot configuration: {error}"))?,
         cancellation.child_token(),
         Some(openai),
+        Some(skills.clone()),
     );
     let copilot = CopilotRuntime::new(copilot_manager);
     let agent_streams =
@@ -344,6 +351,7 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
                 connectors,
                 conversation,
                 registry,
+                skills,
             ),
             article,
             datasource,

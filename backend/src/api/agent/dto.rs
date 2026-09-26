@@ -9,6 +9,7 @@ use crate::core::{
     chat::ChatMessage,
     mcp::{CreateMcpConnector, McpConnector, UpdateMcpConnector},
     ml::llm::RegisteredTool,
+    skill::{AgentSkill, CreateAgentSkill, UpdateAgentSkill},
 };
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
@@ -241,6 +242,80 @@ impl From<RegisteredTool> for AgentToolResponse {
 #[serde(rename_all = "camelCase")]
 pub struct AgentToolListResponse {
     pub tools: Vec<AgentToolResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillResponse {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub instructions: String,
+    pub enabled: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+impl From<AgentSkill> for SkillResponse {
+    fn from(skill: AgentSkill) -> Self {
+        Self {
+            id: skill.id.to_string(),
+            name: skill.name,
+            description: skill.description,
+            instructions: skill.instructions,
+            enabled: skill.enabled,
+            created_at: timestamp_or_zero(skill.created_at),
+            updated_at: timestamp_or_zero(skill.updated_at),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillWriteRequest {
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    pub instructions: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+impl From<SkillWriteRequest> for CreateAgentSkill {
+    fn from(request: SkillWriteRequest) -> Self {
+        Self {
+            name: request.name,
+            description: request.description,
+            instructions: request.instructions,
+            enabled: request.enabled,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillUpdateRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub instructions: Option<String>,
+    pub enabled: Option<bool>,
+}
+
+impl From<SkillUpdateRequest> for UpdateAgentSkill {
+    fn from(request: SkillUpdateRequest) -> Self {
+        Self {
+            name: request.name,
+            description: request.description,
+            instructions: request.instructions,
+            enabled: request.enabled,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillListResponse {
+    pub skills: Vec<SkillResponse>,
 }
 
 fn default_true() -> bool {

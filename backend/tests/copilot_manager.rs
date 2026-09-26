@@ -146,6 +146,7 @@ async fn manager_persists_messages_streams_snapshot_and_shuts_down_owned_tasks()
         CopilotConfig::new(2, 1, 16, 15).unwrap_or_default(),
         CancellationToken::new(),
         None,
+        None,
     );
     let article_id = Uuid::new_v4();
     let request_id = manager
@@ -235,6 +236,7 @@ async fn voice_turn_emits_transcript_and_speech_into_the_same_session() {
         CopilotConfig::new(2, 1, 16, 15).unwrap_or_default(),
         CancellationToken::new(),
         Some(Arc::new(FixtureSpeech)),
+        None,
     );
     let article_id = Uuid::new_v4();
     let request_id = manager

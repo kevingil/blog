@@ -225,6 +225,22 @@ diesel::table! {
     use diesel::sql_types::*;
     use pgvector::sql_types::*;
 
+    agent_skill (id) {
+        id -> Uuid,
+        #[max_length = 255]
+        name -> Varchar,
+        description -> Nullable<Text>,
+        instructions -> Text,
+        enabled -> Bool,
+        created_at -> Nullable<Timestamptz>,
+        updated_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use pgvector::sql_types::*;
+
     mcp_connector (id) {
         id -> Uuid,
         #[max_length = 255]
@@ -491,6 +507,7 @@ diesel::joinable!(user_insight_status -> insight (insight_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     account,
+    agent_skill,
     article,
     article_source,
     article_version,

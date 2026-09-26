@@ -13,6 +13,7 @@ pub mod page;
 pub mod profile;
 pub mod project;
 pub mod source;
+pub mod skill;
 pub mod speech;
 pub mod storage;
 pub mod tag;

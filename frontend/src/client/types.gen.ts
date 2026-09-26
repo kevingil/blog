@@ -718,6 +718,34 @@ export type SiteSettingsUpdateRequest = {
     public_organization_id?: string | null;
 };
 
+export type SkillListResponse = {
+    skills: Array<SkillResponse>;
+};
+
+export type SkillResponse = {
+    id: string;
+    name: string;
+    description: string;
+    instructions: string;
+    enabled: boolean;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type SkillUpdateRequest = {
+    name?: string | null;
+    description?: string | null;
+    instructions?: string | null;
+    enabled?: boolean | null;
+};
+
+export type SkillWriteRequest = {
+    name: string;
+    description?: string;
+    instructions: string;
+    enabled?: boolean;
+};
+
 export type SourceListResponse = {
     sources: Array<SourceWithArticleResponse>;
     total_pages: number;
@@ -1209,6 +1237,24 @@ export type SuccessResponseSiteSettingsResponse = {
         public_profile_type: string;
         public_user_id?: string | null;
         public_organization_id?: string | null;
+    };
+};
+
+export type SuccessResponseSkillListResponse = {
+    data: {
+        skills: Array<SkillResponse>;
+    };
+};
+
+export type SuccessResponseSkillResponse = {
+    data: {
+        id: string;
+        name: string;
+        description: string;
+        instructions: string;
+        enabled: boolean;
+        createdAt: string;
+        updatedAt: string;
     };
 };
 
@@ -1866,6 +1912,95 @@ export type GetConversationHistoryResponses = {
 };
 
 export type GetConversationHistoryResponse = GetConversationHistoryResponses[keyof GetConversationHistoryResponses];
+
+export type ListAgentSkillsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent/skills';
+};
+
+export type ListAgentSkillsErrors = {
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type ListAgentSkillsError = ListAgentSkillsErrors[keyof ListAgentSkillsErrors];
+
+export type ListAgentSkillsResponses = {
+    200: SuccessResponseSkillListResponse;
+};
+
+export type ListAgentSkillsResponse = ListAgentSkillsResponses[keyof ListAgentSkillsResponses];
+
+export type CreateAgentSkillData = {
+    body: SkillWriteRequest;
+    path?: never;
+    query?: never;
+    url: '/agent/skills';
+};
+
+export type CreateAgentSkillErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type CreateAgentSkillError = CreateAgentSkillErrors[keyof CreateAgentSkillErrors];
+
+export type CreateAgentSkillResponses = {
+    200: SuccessResponseSkillResponse;
+};
+
+export type CreateAgentSkillResponse = CreateAgentSkillResponses[keyof CreateAgentSkillResponses];
+
+export type DeleteAgentSkillData = {
+    body?: never;
+    path: {
+        skillId: string;
+    };
+    query?: never;
+    url: '/agent/skills/{skillId}';
+};
+
+export type DeleteAgentSkillErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type DeleteAgentSkillError = DeleteAgentSkillErrors[keyof DeleteAgentSkillErrors];
+
+export type DeleteAgentSkillResponses = {
+    200: SuccessResponseSuccessFlagResponse;
+};
+
+export type DeleteAgentSkillResponse = DeleteAgentSkillResponses[keyof DeleteAgentSkillResponses];
+
+export type UpdateAgentSkillData = {
+    body: SkillUpdateRequest;
+    path: {
+        skillId: string;
+    };
+    query?: never;
+    url: '/agent/skills/{skillId}';
+};
+
+export type UpdateAgentSkillErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type UpdateAgentSkillError = UpdateAgentSkillErrors[keyof UpdateAgentSkillErrors];
+
+export type UpdateAgentSkillResponses = {
+    200: SuccessResponseSkillResponse;
+};
+
+export type UpdateAgentSkillResponse = UpdateAgentSkillResponses[keyof UpdateAgentSkillResponses];
 
 export type ListAgentToolsData = {
     body?: never;

@@ -23,6 +23,7 @@ use crate::{
             Agent, AgentError, AgentEvent, AgentEventType, ContentPart, LlmMessage, MessageRole,
             SessionStore, TextContent, ToolContext, ToolResult,
         },
+        skill::SkillContextPort,
         speech::SpeechPort,
         source::{Source, SourceService},
     },
@@ -112,6 +113,7 @@ pub struct CopilotManager {
     sources: Option<Arc<dyn SourceContextPort>>,
     drafts: Option<Arc<dyn ArticleDraftService>>,
     speech: Option<Arc<dyn SpeechPort>>,
+    skills: Option<Arc<dyn SkillContextPort>>,
     config: CopilotConfig,
     root_cancellation: CancellationToken,
     requests: Mutex<HashMap<String, RequestEntry>>,
@@ -127,6 +129,7 @@ impl CopilotManager {
         config: CopilotConfig,
         root_cancellation: CancellationToken,
         speech: Option<Arc<dyn SpeechPort>>,
+        skills: Option<Arc<dyn SkillContextPort>>,
     ) -> Arc<Self> {
         Arc::new(Self {
             agent,
@@ -135,6 +138,7 @@ impl CopilotManager {
             sources,
             drafts,
             speech,
+            skills,
             config,
             root_cancellation,
             requests: Mutex::new(HashMap::new()),
@@ -361,6 +365,13 @@ impl CopilotManager {
                 prompt.push_str("\n\n");
                 prompt.push_str(&source_context);
             }
+        }
+        if let Some(skills) = &self.skills
+            && let Ok(skill_prompt) = skills.active_prompt().await
+            && !skill_prompt.is_empty()
+        {
+            prompt.push_str("\n\n");
+            prompt.push_str(&skill_prompt);
         }
         if normalized_channel(&request.channel) == "voice" {
             prompt.push_str(
