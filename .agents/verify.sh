@@ -8,24 +8,34 @@ cd "$(dirname "$0")/.."
 SUDO=""
 if [ "$(id -u)" -ne 0 ]; then SUDO="sudo"; fi
 
-fail() {
-  echo "verify.sh: $*" >&2
-  exit 1
+wait_for() {
+  local name="$1"
+  local attempts="${2:-30}"
+  shift 2
+  local i=0
+  while [ "$i" -lt "$attempts" ]; do
+    if "$@" >/dev/null 2>&1; then
+      echo "ok  $name"
+      return 0
+    fi
+    i=$((i + 1))
+    sleep 1
+  done
+  echo "verify.sh: $name did not become ready" >&2
+  return 1
 }
 
-echo "Checking API health at http://localhost:8080/health..."
-curl -fsS http://localhost:8080/health >/dev/null || fail "API health check failed"
+wait_for "API http://localhost:8080/health" 30 \
+  curl -fsS http://localhost:8080/health
 
-echo "Checking frontend at http://localhost:3000/..."
-curl -fsS -o /dev/null http://localhost:3000/ || fail "frontend did not respond"
+wait_for "frontend http://localhost:3000/" 30 \
+  curl -fsS -o /dev/null http://localhost:3000/
 
-echo "Checking Postgres on localhost:55432..."
-$SUDO docker compose exec -T db pg_isready -U blog -d blog >/dev/null \
-  || fail "Postgres is not ready (expected blog/blog on localhost:55432)"
+wait_for "Postgres localhost:55432" 30 \
+  $SUDO docker compose exec -T db pg_isready -U blog -d blog
 
-echo "Checking object storage at http://localhost:9000/minio/health/live..."
-curl -fsS http://localhost:9000/minio/health/live >/dev/null \
-  || fail "MinIO health check failed"
+wait_for "MinIO http://localhost:9000/minio/health/live" 30 \
+  curl -fsS http://localhost:9000/minio/health/live
 
 echo
 echo "Stack is healthy."
