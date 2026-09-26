@@ -42,7 +42,29 @@ bash .agents/start.sh     # ensure the daemon is up, bring the stack up, wait fo
 ```
 
 `install.sh` is one-time host/dependency setup; `start.sh` is the per-boot
-command that launches the stack.
+command that launches the stack and fails if `/health` never comes up.
+`verify.sh` re-checks API, frontend, Postgres (`localhost:55432`), and MinIO.
+
+## First-run author
+
+`seed/verification.json` is project data, applied by the `seed` compose service
+after migrations when the database has no accounts. That file's author is
+inserted as `admin` and set as the public profile (`site_settings.public_user_id`).
+
+The checked-in example signs in as `ada@example.test` / `VerifyStack123!` and
+publishes `verification-note`.
+
+If that file is missing or has no `author`, the first account created through
+`POST /auth/register` becomes `admin` and the public author. Later accounts
+stay `user`. Seed does not run again once any account exists.
+
+Host-side Rust tests that talk to the running stack:
+
+```bash
+TEST_DATABASE_URL=postgres://blog:blog@localhost:55432/blog \
+TEST_S3_ENDPOINT=http://localhost:9000 \
+  ./scripts/test-rust.sh blocking
+```
 
 ## Test
 

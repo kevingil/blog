@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use diesel::{
     ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper,
     result::{DatabaseErrorKind, Error as DieselError},
+    sql_types::Uuid as SqlUuid,
 };
 use diesel_async::RunQueryDsl;
 
@@ -124,6 +125,34 @@ impl AccountRepository for DieselAccountRepository {
         .execute(&mut connection)
         .await
         .map(|affected| affected > 0)
+        .map_err(map_diesel_error)
+    }
+
+    async fn count(&self) -> Result<i64, AppError> {
+        let mut connection = self.connection().await?;
+        account::table
+            .count()
+            .get_result(&mut connection)
+            .await
+            .map_err(map_diesel_error)
+    }
+
+    async fn assign_public_author(&self, id: AccountId) -> Result<(), AppError> {
+        let mut connection = self.connection().await?;
+        diesel::sql_query(
+            "UPDATE account SET email_public = email, updated_at = NOW() WHERE id = $1 AND email_public IS NULL",
+        )
+        .bind::<SqlUuid, _>(id.0)
+        .execute(&mut connection)
+        .await
+        .map_err(map_diesel_error)?;
+        diesel::sql_query(
+            "UPDATE site_settings SET public_profile_type = 'user', public_user_id = $1, updated_at = NOW() WHERE id = 1 AND public_user_id IS NULL",
+        )
+        .bind::<SqlUuid, _>(id.0)
+        .execute(&mut connection)
+        .await
+        .map(|_| ())
         .map_err(map_diesel_error)
     }
 }

@@ -11,6 +11,7 @@ pub mod openapi;
 pub mod runtime;
 pub mod schema;
 pub mod server;
+pub mod setup;
 pub mod telemetry;
 pub mod types;
 
