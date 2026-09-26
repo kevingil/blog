@@ -49,6 +49,7 @@ export type ChatMessage = {
   id?: string;
   role: 'user' | 'assistant' | 'tool';
   content: string;
+  channel?: 'text' | 'voice';
   diffState?: 'accepted' | 'rejected';
   diffPreview?: {
     oldText: string;

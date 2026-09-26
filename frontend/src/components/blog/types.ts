@@ -99,6 +99,8 @@ export type StreamEventType =
   | 'user'
   | 'system'
   | 'thinking'
+  | 'transcript'
+  | 'speech'
   | 'error'
   | 'done';
 
@@ -213,6 +215,7 @@ export interface MessageMetaData {
   tool_execution?: ToolExecution;
   context?: MessageContext;
   user_action?: UserAction;
+  input_channel?: 'text' | 'voice';
 }
 
 /**

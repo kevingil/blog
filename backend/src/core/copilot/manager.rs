@@ -23,6 +23,7 @@ use crate::{
             Agent, AgentError, AgentEvent, AgentEventType, ContentPart, LlmMessage, MessageRole,
             SessionStore, TextContent, ToolContext, ToolResult,
         },
+        speech::SpeechPort,
         source::{Source, SourceService},
     },
     error::AppError,
@@ -110,6 +111,7 @@ pub struct CopilotManager {
     chat: Arc<dyn ChatPersistencePort>,
     sources: Option<Arc<dyn SourceContextPort>>,
     drafts: Option<Arc<dyn ArticleDraftService>>,
+    speech: Option<Arc<dyn SpeechPort>>,
     config: CopilotConfig,
     root_cancellation: CancellationToken,
     requests: Mutex<HashMap<String, RequestEntry>>,
@@ -124,6 +126,7 @@ impl CopilotManager {
         drafts: Option<Arc<dyn ArticleDraftService>>,
         config: CopilotConfig,
         root_cancellation: CancellationToken,
+        speech: Option<Arc<dyn SpeechPort>>,
     ) -> Arc<Self> {
         Arc::new(Self {
             agent,
@@ -131,6 +134,7 @@ impl CopilotManager {
             chat,
             sources,
             drafts,
+            speech,
             config,
             root_cancellation,
             requests: Mutex::new(HashMap::new()),
@@ -171,7 +175,12 @@ impl CopilotManager {
                 article_id,
                 "user",
                 &request.message,
-                Some(MetadataBuilder::new().with_context(context).build()),
+                Some(
+                    MetadataBuilder::new()
+                        .with_context(context)
+                        .with_input_channel(normalized_channel(&request.channel))
+                        .build(),
+                ),
             )
             .await
             .map_err(|_| ManagerError::Dependency)?;
@@ -353,6 +362,11 @@ impl CopilotManager {
                 prompt.push_str(&source_context);
             }
         }
+        if normalized_channel(&request.channel) == "voice" {
+            prompt.push_str(
+                "\n\nYou are in a live spoken conversation. Keep spoken replies brief and natural. Use tools when you need to edit, research, or act; the user can see those tool calls in the chat beside this conversation.",
+            );
+        }
         prompt
     }
 }
@@ -381,6 +395,12 @@ async fn process_run(
         let mut event = StreamResponse::new(&request_id, "turn_started");
         event.data = Some(json!({"snapshot_version_id": snapshot_id}));
         send_stream(&sender, &cancellation, event).await?;
+    }
+    if normalized_channel(&request.channel) == "voice" {
+        let mut transcript = StreamResponse::new(&request_id, "transcript");
+        transcript.content = request.message.clone();
+        transcript.role = "user".to_owned();
+        send_stream(&sender, &cancellation, transcript).await?;
     }
     drop(manager_ref);
 
@@ -484,14 +504,26 @@ async fn process_run(
                             &steps,
                         )
                         .await;
+                        let spoken = message.text();
                         let mut stream = StreamResponse::new(&request_id, "text");
-                        stream.content = message.text();
+                        stream.content = spoken.clone();
                         stream.iteration = iteration;
                         stream.step_index = current_step.unwrap_or_default();
                         send_stream(&sender, &cancellation, stream).await?;
+                        speak_if_voice(&manager, &request, &request_id, &spoken, &sender, &cancellation)
+                            .await?;
                         steps.clear();
                         current_step = None;
                     } else {
+                        speak_if_voice(
+                            &manager,
+                            &request,
+                            &request_id,
+                            &message.text(),
+                            &sender,
+                            &cancellation,
+                        )
+                        .await?;
                         for call in calls {
                             let input = serde_json::from_str(&call.input)
                                 .unwrap_or_else(|_| json!({"raw": call.input}));
@@ -840,6 +872,12 @@ async fn persist_tool_result(
                 .and_then(Value::as_i64)
                 .unwrap_or(0)
         ),
+        _ if !tool_name.is_empty() => parsed
+            .get("content")
+            .and_then(Value::as_str)
+            .filter(|content| !content.is_empty())
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| format!("🔧 {tool_name} completed")),
         _ => return None,
     };
     manager
@@ -1043,6 +1081,43 @@ fn truncate_chars(value: &str, limit: usize) -> String {
         format!("{prefix}...")
     } else {
         prefix
+    }
+}
+
+async fn speak_if_voice(
+    manager: &Weak<CopilotManager>,
+    request: &ChatRequest,
+    request_id: &str,
+    text: &str,
+    sender: &mpsc::Sender<StreamResponse>,
+    cancellation: &CancellationToken,
+) -> Result<(), ManagerError> {
+    if normalized_channel(&request.channel) != "voice" || text.trim().is_empty() {
+        return Ok(());
+    }
+    let Some(manager) = manager.upgrade() else {
+        return Ok(());
+    };
+    let Some(speech) = &manager.speech else {
+        return Ok(());
+    };
+    let Ok(audio) = speech.synthesize(text).await else {
+        return Ok(());
+    };
+    let mut event = StreamResponse::new(request_id, "speech");
+    event.content = text.to_owned();
+    event.data = Some(json!({
+        "audioBase64": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, audio.bytes),
+        "mimeType": audio.mime_type,
+    }));
+    send_stream(sender, cancellation, event).await
+}
+
+fn normalized_channel(channel: &str) -> &str {
+    if channel.trim().eq_ignore_ascii_case("voice") {
+        "voice"
+    } else {
+        "text"
     }
 }
 

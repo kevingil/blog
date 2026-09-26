@@ -4,12 +4,15 @@ import { useAuth } from '@/services/auth/auth';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, ArrowUp, Square, Settings, Trash2 } from "lucide-react"
+import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, ArrowUp, Square, Settings, Trash2, Mic, Keyboard } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { VITE_API_BASE_URL } from "@/services/constants";
 import { isAuthError } from '@/services/authenticatedFetch';
 import { submitAgentRequest } from '@/services/agent';
+import { submitConversationTurn } from '@/services/conversation';
+import { McpConnectorsSettings } from './McpConnectorsSettings';
+import { useConversation } from '@/hooks/use-conversation';
 
 // Editor modules
 import { EditorTabs } from './editor/EditorTabs';
@@ -109,6 +112,7 @@ function mapConversationMessages(messages: any[]): ChatMessage[] {
       id: msg.id,
       role: msg.role,
       content: msg.content,
+      channel: msg.meta_data?.input_channel === 'voice' ? 'voice' : 'text',
       meta_data: msg.meta_data,
       created_at: msg.created_at,
     };
@@ -425,6 +429,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatInput, setChatInput] = useState('');
+  const [inputMode, setInputMode] = useState<'text' | 'conversation'>('text');
+  const playSpeechRef = useRef<(audioBase64: string, mimeType?: string) => Promise<void>>(async () => {});
   const [isThinking, setIsThinking] = useState(false);
   const [thinkingMessage, setThinkingMessage] = useState<string>('Thinking...');
   const chatMessagesRef = useRef<HTMLDivElement>(null);
@@ -975,7 +981,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     const isEditRequest = /\b(rewrite|edit|improve|change|update|fix|enhance|modify)\b/i.test(text);
 
     // Show original user message in UI
-    const baseMessages = [...chatMessages, { role: 'user', content: text } as ChatMessage];
+    const baseMessages = [...chatMessages, { role: 'user', content: text, channel: inputMode } as ChatMessage];
     setChatMessages(baseMessages);
     setChatInput(''); // Clear the input state
 
@@ -1005,12 +1011,20 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       }
       
       // Submit the request with single message - backend loads context from DB
-      const result = await submitAgentRequest({
-        message: messageText,  // Single message string
-        documentContent: documentContent,
-        documentMarkdown: documentMarkdown || '',  // Markdown version for agent editing
-        articleId: article.article.id  // Required for loading context
-      });
+      const result = inputMode === 'conversation'
+        ? await submitConversationTurn({
+            message: messageText,
+            documentContent: documentContent,
+            documentMarkdown: documentMarkdown || '',
+            articleId: article.article.id,
+          })
+        : await submitAgentRequest({
+            message: messageText,
+            documentContent: documentContent,
+            documentMarkdown: documentMarkdown || '',
+            articleId: article.article.id,
+            channel: 'text',
+          });
       
       if (!result.requestId) {
         throw new Error('No request ID received');
@@ -1097,6 +1111,24 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 pendingNewDocumentRef.current = '';
                 if (msg.data?.snapshot_version_id) {
                   setTurnSnapshotVersionId(msg.data.snapshot_version_id);
+                }
+                break;
+
+              case 'transcript':
+                if (msg.content) {
+                  setChatMessages((prev) => {
+                    const lastUser = [...prev].reverse().find((item) => item.role === 'user');
+                    if (lastUser && lastUser.content === msg.content) {
+                      return prev;
+                    }
+                    return prev;
+                  });
+                }
+                break;
+
+              case 'speech':
+                if (msg.data?.audioBase64) {
+                  void playSpeechRef.current(msg.data.audioBase64, msg.data.mimeType);
                 }
                 break;
 
@@ -1481,6 +1513,58 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       }, 120000); // 2 minutes timeout
     });
   };
+
+  const conversation = useConversation({
+    enabled: inputMode === 'conversation' && !isNew && Boolean(article?.article?.id),
+    busy: chatLoading,
+    onUtterance: async (audioBase64, mimeType) => {
+      if (!article?.article?.id) {
+        return;
+      }
+      const extra = chatInput.trim();
+      setChatInput('');
+      const currentContent = getValues('content') || '';
+      const userTextPlaceholder = extra || 'Listening…';
+      const baseMessages = [...chatMessages, { role: 'user', content: userTextPlaceholder, channel: 'voice' } as ChatMessage];
+      const assistantIndex = baseMessages.length;
+      setChatMessages([...baseMessages, { role: 'assistant', content: '' } as ChatMessage]);
+      setChatLoading(true);
+      try {
+        const result = await submitConversationTurn({
+          articleId: article.article.id,
+          documentContent: currentContent,
+          documentMarkdown: currentContent,
+          message: extra,
+          audioBase64,
+          mimeType,
+        });
+        const spoken = result.transcript || extra;
+        if (spoken) {
+          setChatMessages((prev) =>
+            prev.map((message, index) =>
+              index === assistantIndex - 1
+                ? { ...message, content: spoken, channel: 'voice' }
+                : message
+            )
+          );
+        }
+        if (!result.requestId) {
+          throw new Error('No request ID received');
+        }
+        await streamChatResponse(result.requestId, assistantIndex, false);
+      } catch (error) {
+        setChatMessages((prev) => prev.slice(0, -2));
+        toast({
+          title: "Conversation error",
+          description: error instanceof Error ? error.message : "Could not process speech",
+          variant: "destructive",
+        });
+      } finally {
+        setChatLoading(false);
+      }
+    },
+  });
+  playSpeechRef.current = conversation.playSpeech;
 
   // Auto-subscribe to an in-flight generation session when arriving from /blog/generate.
   const consumedRequestIdRef = useRef<string | null>(null);
@@ -1977,7 +2061,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         Manage your chat assistant settings
                       </DrawerDescription>
                     </DrawerHeader>
-                    <div className="p-4 space-y-4">
+                    <div className="p-4 space-y-4 overflow-y-auto">
+                      <McpConnectorsSettings />
                       <div className="flex items-center justify-between p-4 border rounded-lg">
                         <div className="space-y-1">
                           <p className="font-medium">Clear Chat History</p>
@@ -2199,6 +2284,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   return (
                     <div key={i} className="w-full flex justify-end">
                       <div className="max-w-xs whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-sm bg-primary text-primary-foreground">
+                        {m.channel === 'voice' && (
+                          <span className="mr-1 inline-flex align-middle opacity-80">
+                            <Mic className="h-3 w-3" />
+                          </span>
+                        )}
                         {m.content}
                       </div>
                     </div>
@@ -2213,6 +2303,42 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             )}
           </div>
         <div className="p-2 space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="inline-flex rounded-md border p-0.5">
+              <Button
+                type="button"
+                size="sm"
+                variant={inputMode === 'text' ? 'default' : 'ghost'}
+                className="h-7 px-2 text-xs"
+                onClick={() => setInputMode('text')}
+              >
+                <Keyboard className="h-3.5 w-3.5 mr-1" />
+                Text
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={inputMode === 'conversation' ? 'default' : 'ghost'}
+                className="h-7 px-2 text-xs"
+                disabled={isNew || !article?.article?.id}
+                onClick={() => setInputMode('conversation')}
+              >
+                <Mic className="h-3.5 w-3.5 mr-1" />
+                Conversation
+              </Button>
+            </div>
+            {inputMode === 'conversation' && (
+              <span className="text-[11px] text-muted-foreground">
+                {conversation.error
+                  ? conversation.error
+                  : conversation.state === 'speaking'
+                    ? 'Speaking…'
+                    : conversation.state === 'recording'
+                      ? 'Listening to you…'
+                      : 'Live · send a link anytime'}
+              </span>
+            )}
+          </div>
           <PromptInput
             value={chatInput}
             onValueChange={setChatInput}
@@ -2221,7 +2347,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             className="flex-1"
           >
             <PromptInputTextarea
-              placeholder="Ask the assistant or click a quick action above…"
+              placeholder={
+                inputMode === 'conversation'
+                  ? "Talk, or paste a link the voice agent should see…"
+                  : "Ask the assistant or click a quick action above…"
+              }
               className="min-h-[44px]"
             />
             <PromptInputActions className="justify-end pt-2">

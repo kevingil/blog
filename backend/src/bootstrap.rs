@@ -35,16 +35,18 @@ use crate::{
         article::{ArticleRepository, ArticleService},
         auth::AuthService,
         chat::ChatMessageService,
+        conversation::ConversationService,
         copilot::{ArticleDraftAdapter, CopilotConfig, CopilotManager},
         datasource::{DataSourceService, RecommendationService},
         image::ImageService,
         insight::InsightService,
+        mcp::McpConnectorService,
         ml::{
             TextGenerationService,
             llm::{
                 Agent, AskQuestionTool, GenerateImagePromptTool, GetRelevantSourcesTool,
                 InMemorySessionStore, Model, ModelProvider, ReadDocumentTool, ReplaceLinesTool,
-                SearchWebSourcesTool, SelectSourcesForEditTool, SessionStore, Tool,
+                SearchWebSourcesTool, SelectSourcesForEditTool, SessionStore, Tool, ToolRegistry,
             },
         },
         organization::OrganizationService,
@@ -69,8 +71,8 @@ use crate::{
         insight_topic::DieselInsightTopicRepository, organization::DieselOrganizationRepository,
         page::DieselPageRepository, project::DieselProjectRepository,
         site_settings::DieselSiteSettingsRepository, source::DieselSourceRepository,
-        tag::DieselTagRepository, task_run::DieselTaskRunRepository,
-        user_insight_status::DieselUserInsightStatusRepository,
+        mcp_connector::DieselMcpConnectorRepository, tag::DieselTagRepository,
+        task_run::DieselTaskRunRepository, user_insight_status::DieselUserInsightStatusRepository,
     },
     integrations::{
         exa::ExaClient, fetch::HttpFetchExtract, llm::GroqClient, openai::OpenAiClient,
@@ -297,8 +299,18 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         Arc::new(GetRelevantSourcesTool::new(source_service.clone())),
         Arc::new(SelectSourcesForEditTool::new(source_service.clone())),
     ];
+    let registry = ToolRegistry::from_builtin(tools);
+    let connectors = McpConnectorService::new(
+        Arc::new(DieselMcpConnectorRepository::new(pool.clone())),
+        registry.clone(),
+        cancellation.child_token(),
+    );
+    if let Err(error) = connectors.refresh_enabled().await {
+        tracing::warn!(%error, "failed to refresh MCP connectors at startup");
+    }
+    let conversation = ConversationService::new(openai.clone());
     let copilot_manager = CopilotManager::new(
-        Agent::new(openai, session_store.clone(), tools),
+        Agent::with_registry(openai.clone(), session_store.clone(), registry.clone()),
         session_store,
         chat.clone(),
         Some(source_service),
@@ -306,6 +318,7 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         CopilotConfig::from_env()
             .map_err(|error| anyhow::anyhow!("invalid copilot configuration: {error}"))?,
         cancellation.child_token(),
+        Some(openai),
     );
     let copilot = CopilotRuntime::new(copilot_manager);
     let agent_streams =
@@ -325,7 +338,13 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         auth,
         websocket_handle,
         AppDependencies {
-            agent: AgentState::new(chat, copilot.clone()),
+            agent: AgentState::new(
+                chat,
+                copilot.clone(),
+                connectors,
+                conversation,
+                registry,
+            ),
             article,
             datasource,
             image,

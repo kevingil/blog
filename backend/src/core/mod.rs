@@ -1,7 +1,9 @@
 pub mod article;
 pub mod auth;
 pub mod chat;
+pub mod conversation;
 pub mod copilot;
+pub mod mcp;
 pub mod datasource;
 pub mod image;
 pub mod insight;
@@ -11,6 +13,7 @@ pub mod page;
 pub mod profile;
 pub mod project;
 pub mod source;
+pub mod speech;
 pub mod storage;
 pub mod tag;
 pub mod taskrun;

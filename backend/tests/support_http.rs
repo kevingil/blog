@@ -10,6 +10,7 @@ use axum::{
     extract::FromRef,
     http::{Method, Request, StatusCode, header::CONTENT_TYPE},
 };
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use blog_backend::{
     api::{
         agent::{self, AgentRequestQueue, AgentState, ChatRequest},
@@ -20,6 +21,10 @@ use blog_backend::{
     core::{
         auth::{Account, AccountId, AccountRepository, AuthService},
         chat::{ChatMessage, ChatMessageRepository, ChatMessageService},
+        conversation::ConversationService,
+        mcp::{InMemoryMcpConnectorRepository, McpConnectorService},
+        ml::llm::ToolRegistry,
+        speech::{SpeechAudio, SpeechPort, silent_wav},
         storage::{ObjectListing, ObjectStore, StorageService},
         taskrun::{
             TaskRun, TaskRunEvent, TaskRunFilter, TaskRunRepository, TaskRunService, TaskRunStep,
@@ -36,6 +41,22 @@ use uuid::Uuid;
 
 const TEST_SECRET: &str = "support-http-secret";
 type TestResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
+
+struct FixtureSpeech;
+
+#[async_trait]
+impl SpeechPort for FixtureSpeech {
+    async fn transcribe(&self, _audio: &[u8], _mime_type: &str) -> Result<String, AppError> {
+        Ok("Fixture voice note".to_owned())
+    }
+
+    async fn synthesize(&self, _text: &str) -> Result<SpeechAudio, AppError> {
+        Ok(SpeechAudio {
+            bytes: silent_wav(),
+            mime_type: "audio/wav".to_owned(),
+        })
+    }
+}
 
 #[derive(Clone)]
 struct HttpState {
@@ -511,6 +532,13 @@ fn fixture() -> TestResult<Fixture> {
                 CancellationToken::new(),
             )),
             requests.clone(),
+            McpConnectorService::new(
+                Arc::new(InMemoryMcpConnectorRepository::default()),
+                ToolRegistry::from_builtin(Vec::new()),
+                CancellationToken::new(),
+            ),
+            ConversationService::new(Arc::new(FixtureSpeech)),
+            ToolRegistry::from_builtin(Vec::new()),
         ),
         auth: AuthState::new(auth_service),
         storage: StorageState::new(Arc::new(StorageService::new(
@@ -685,6 +713,110 @@ async fn agent_routes_preserve_submission_history_and_artifact_contracts() -> Te
 }
 
 #[tokio::test]
+async fn agent_harness_accepts_voice_turns_and_manages_mcp_connectors() -> TestResult {
+    let fixture = fixture()?;
+    let (status, turn) = call(
+        fixture.router.clone(),
+        Method::POST,
+        "/agent/conversation/turn",
+        Some("application/json"),
+        json!({
+            "articleId": fixture.article_id,
+            "message": "https://example.com/notes",
+            "documentMarkdown": "draft",
+            "audioBase64": STANDARD.encode(silent_wav()),
+            "mimeType": "audio/wav"
+        })
+        .to_string(),
+        Some(&fixture.bearer),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{turn}");
+    assert_eq!(turn["data"]["requestId"], "request-123");
+    assert_eq!(turn["data"]["transcript"], "Fixture voice note");
+    assert_eq!(turn["data"]["channel"], "voice");
+    {
+        let queued = lock(&fixture.requests.values);
+        let last = queued.last().ok_or("voice turn was not queued")?;
+        assert_eq!(last.channel, "voice");
+        assert!(last.message.contains("Fixture voice note"));
+        assert!(last.message.contains("https://example.com/notes"));
+    }
+
+    let (status, tools) = call(
+        fixture.router.clone(),
+        Method::GET,
+        "/agent/tools",
+        None,
+        Body::empty(),
+        Some(&fixture.bearer),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{tools}");
+    assert_eq!(tools["data"]["tools"], json!([]));
+
+    let (status, created) = call(
+        fixture.router.clone(),
+        Method::POST,
+        "/agent/connectors",
+        Some("application/json"),
+        json!({
+            "name": "Docs",
+            "transport": "http",
+            "url": "http://127.0.0.1:9/mcp",
+            "enabled": false
+        })
+        .to_string(),
+        Some(&fixture.bearer),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{created}");
+    assert_eq!(created["data"]["name"], "Docs");
+    assert_eq!(created["data"]["enabled"], false);
+    let connector_id = created["data"]["id"]
+        .as_str()
+        .ok_or("connector id missing")?
+        .to_owned();
+
+    let (status, listed) = call(
+        fixture.router.clone(),
+        Method::GET,
+        "/agent/connectors",
+        None,
+        Body::empty(),
+        Some(&fixture.bearer),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{listed}");
+    assert_eq!(listed["data"]["connectors"][0]["id"], connector_id);
+
+    let (status, updated) = call(
+        fixture.router.clone(),
+        Method::PATCH,
+        &format!("/agent/connectors/{connector_id}"),
+        Some("application/json"),
+        json!({"enabled": false, "name": "Docs search"}).to_string(),
+        Some(&fixture.bearer),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{updated}");
+    assert_eq!(updated["data"]["name"], "Docs search");
+
+    let (status, deleted) = call(
+        fixture.router,
+        Method::DELETE,
+        &format!("/agent/connectors/{connector_id}"),
+        None,
+        Body::empty(),
+        Some(&fixture.bearer),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{deleted}");
+    assert_eq!(deleted["data"]["success"], true);
+    Ok(())
+}
+
+#[tokio::test]
 async fn storage_routes_preserve_multipart_keys_urls_and_folder_methods() -> TestResult {
     let fixture = fixture()?;
     let (status, listed) = call(
@@ -844,6 +976,29 @@ fn support_openapi_has_stable_operations_security_and_multipart_contract() -> Te
     let document = serde_json::to_value(document)?;
     let operations = [
         ("/agent", "post", "submitAgentRequest"),
+        (
+            "/agent/conversation/turn",
+            "post",
+            "submitConversationTurn",
+        ),
+        ("/agent/tools", "get", "listAgentTools"),
+        ("/agent/connectors", "get", "listMcpConnectors"),
+        ("/agent/connectors", "post", "createMcpConnector"),
+        (
+            "/agent/connectors/{connectorId}",
+            "patch",
+            "updateMcpConnector",
+        ),
+        (
+            "/agent/connectors/{connectorId}",
+            "delete",
+            "deleteMcpConnector",
+        ),
+        (
+            "/agent/connectors/{connectorId}/refresh",
+            "post",
+            "refreshMcpConnector",
+        ),
         (
             "/agent/conversations/{articleId}",
             "get",

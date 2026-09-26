@@ -5,7 +5,7 @@ use std::{
 
 use axum::{
     Json, Router,
-    body::Body,
+    body::{Body, Bytes},
     extract::State,
     http::{Response, header::CONTENT_TYPE},
     response::IntoResponse,
@@ -26,6 +26,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/embeddings", post(embeddings))
         .route("/v1/responses", post(responses))
         .route("/v1/images/generations", post(images))
+        .route("/v1/audio/transcriptions", post(transcriptions))
+        .route("/v1/audio/speech", post(speech))
         .route("/search", post(exa_search))
         .route("/findSimilar", post(exa_search))
         .route("/answer", post(exa_answer))
@@ -132,6 +134,24 @@ async fn responses(
         "usage": {"input_tokens": 4, "output_tokens": 4}
     }))
     .into_response()
+}
+
+async fn transcriptions(State(state): State<FixtureState>, body: Bytes) -> Json<Value> {
+    record(
+        &state,
+        "/v1/audio/transcriptions",
+        &json!({"bytes": body.len()}),
+    )
+    .await;
+    Json(json!({ "text": "Fixture voice note" }))
+}
+
+async fn speech(State(state): State<FixtureState>, Json(request): Json<Value>) -> impl IntoResponse {
+    record(&state, "/v1/audio/speech", &request).await;
+    (
+        [(CONTENT_TYPE, "audio/wav")],
+        blog_backend::core::speech::silent_wav(),
+    )
 }
 
 async fn fixture_image() -> ([(&'static str, &'static str); 1], &'static str) {
