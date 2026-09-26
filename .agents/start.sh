@@ -39,21 +39,21 @@ echo "Bringing up the stack (frontend, API, Postgres+pgvector, MinIO, fixtures).
 $SUDO docker compose up --build -d
 
 echo "Waiting for the API to become healthy..."
+healthy=0
 for _ in $(seq 1 90); do
   if curl -fsS http://localhost:8080/health >/dev/null 2>&1; then
     echo "API healthy at http://localhost:8080/health"
+    healthy=1
     break
   fi
   sleep 2
 done
 
-$SUDO docker compose ps
-cat <<'EOF'
+if [ "$healthy" -ne 1 ]; then
+  echo "API did not become healthy within 180s" >&2
+  $SUDO docker compose ps >&2 || true
+  $SUDO docker compose logs --tail=80 >&2 || true
+  exit 1
+fi
 
-Blog Copilot is running:
-  Frontend:      http://localhost:3000
-  API:           http://localhost:8080
-  Health:        http://localhost:8080/health
-  Swagger UI:    http://localhost:8080/swagger
-  MinIO console: http://localhost:9001
-EOF
+bash .agents/verify.sh

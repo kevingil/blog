@@ -42,7 +42,16 @@ bash .agents/start.sh     # ensure the daemon is up, bring the stack up, wait fo
 ```
 
 `install.sh` is one-time host/dependency setup; `start.sh` is the per-boot
-command that launches the stack.
+command that launches the stack and fails if `/health` never comes up.
+`verify.sh` re-checks API, frontend, Postgres (`localhost:55432`), and MinIO.
+
+Host-side Rust tests that talk to the running stack:
+
+```bash
+TEST_DATABASE_URL=postgres://blog:blog@localhost:55432/blog \
+TEST_S3_ENDPOINT=http://localhost:9000 \
+  ./scripts/test-rust.sh blocking
+```
 
 ## Test
 
