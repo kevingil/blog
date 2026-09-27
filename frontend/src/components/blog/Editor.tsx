@@ -10,7 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { VITE_API_BASE_URL } from "@/services/constants";
 import { isAuthError } from '@/services/authenticatedFetch';
 import { submitAgentRequest } from '@/services/agent';
-import { McpConnectorsSettings } from './McpConnectorsSettings';
+import { AgentSettings } from './AgentSettings';
 import { useConversation } from '@/hooks/use-conversation';
 
 // Editor modules
@@ -2056,17 +2056,18 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       size="sm"
                     >
                       <Settings className="h-4 w-4" />
+                      Agent
                     </Button>
                   </DrawerTrigger>
                   <DrawerContent>
                     <DrawerHeader>
-                      <DrawerTitle>Chat Settings</DrawerTitle>
+                      <DrawerTitle>Agent</DrawerTitle>
                       <DrawerDescription>
-                        Skills, MCP connectors, and chat history
+                        Agent settings for skills, connectors, and chat history
                       </DrawerDescription>
                     </DrawerHeader>
                     <div className="p-4 space-y-4 overflow-y-auto">
-                      <McpConnectorsSettings />
+                      <AgentSettings />
                       <div className="flex items-center justify-between p-4 border rounded-lg">
                         <div className="space-y-1">
                           <p className="font-medium">Clear Chat History</p>

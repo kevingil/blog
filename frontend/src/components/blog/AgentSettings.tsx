@@ -29,7 +29,7 @@ import {
   updateAgentSkill,
 } from "@/services/skills";
 
-export function McpConnectorsSettings() {
+export function AgentSettings() {
   return (
     <div className="space-y-6">
       <SkillsSettings />
@@ -214,7 +214,7 @@ function ConnectorsSettings() {
           MCP connectors
         </p>
         <p className="text-sm text-muted-foreground">
-          Add stdio, SSE, or HTTP MCP servers. Their tools join the writing agent harness.
+          Add stdio, SSE, or HTTP MCP servers. Their tools join this agent.
         </p>
       </div>
 
@@ -379,7 +379,7 @@ function HarnessTools() {
         </div>
       </div>
       <div className="space-y-1">
-        <p className="text-sm font-medium">Harness tools</p>
+        <p className="text-sm font-medium">Agent tools</p>
         <div className="flex flex-wrap gap-1">
           {(toolsQuery.data?.tools ?? []).map((tool) => (
             <span
