@@ -1061,6 +1061,13 @@ fn support_openapi_has_stable_operations_security_and_multipart_contract() -> Te
             "post",
             "refreshMcpConnector",
         ),
+        ("/agent/connector-presets", "get", "listConnectorPresets"),
+        (
+            "/agent/connector-presets/{presetId}/connect",
+            "post",
+            "connectConnectorPreset",
+        ),
+        ("/agent/connectors/oauth", "post", "connectOauthMcp"),
         ("/agent/skills", "get", "listAgentSkills"),
         ("/agent/skills", "post", "createAgentSkill"),
         ("/agent/skills/{skillId}", "patch", "updateAgentSkill"),

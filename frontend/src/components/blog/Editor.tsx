@@ -4,13 +4,13 @@ import { useAuth } from '@/services/auth/auth';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, ArrowUp, Square, Settings, Trash2, Mic, Keyboard } from "lucide-react"
+import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, ArrowUp, Square, Trash2, Mic, Keyboard } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { VITE_API_BASE_URL } from "@/services/constants";
 import { isAuthError } from '@/services/authenticatedFetch';
 import { submitAgentRequest } from '@/services/agent';
-import { AgentSettings } from './AgentSettings';
+import { addedTextRanges, type TextRange } from '@/lib/added-text';
 import { useConversation } from '@/hooks/use-conversation';
 
 // Editor modules
@@ -80,7 +80,7 @@ import {
   ReasoningStep 
 } from "@/components/prompt-kit/chain-of-thought";
 import { cn } from '@/lib/utils';
-import { FileDiff, Wrench, BookOpen, FileSearch, PlusCircle, FileText, ImageIcon } from "lucide-react";
+import { Wrench, BookOpen, FileSearch, PlusCircle, FileText, ImageIcon } from "lucide-react";
 import { 
   updateArticle, 
   getArticle, 
@@ -437,7 +437,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [isThinking, setIsThinking] = useState(false);
   const [thinkingMessage, setThinkingMessage] = useState<string>('Thinking...');
   const chatMessagesRef = useRef<HTMLDivElement>(null);
-  const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
   const [clearingChat, setClearingChat] = useState(false);
   const [expandedTable, setExpandedTable] = useState<React.ReactNode | null>(null);
   
@@ -696,6 +695,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       
       setSelectedVersion(null);
       setShowVersions(false);
+      setAddedRanges([]);
     },
     onError: (error) => {
       console.error('Error reverting to version:', error);
@@ -724,57 +724,18 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   /* --------------------------------------------------------------------- */
   /* Markdown Editor Setup                                                 */
   /* --------------------------------------------------------------------- */
-  const [diffing, setDiffing] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('edit');
-  const [turnSnapshotVersionId, setTurnSnapshotVersionId] = useState<string>('');
+  const [addedRanges, setAddedRanges] = useState<TextRange[]>([]);
 
-  // Turn-level state: refs so WebSocket handlers always read the latest value
-  const turnOriginalDocRef = useRef<string>('');
-  const pendingNewDocumentRef = useRef<string>('');
-
-  // Content update handler -- called by CodeMirror on user edits
   const onContentChange = (md: string) => {
-    if (!diffing) {
-      setValue('content', md);
-    }
+    setAddedRanges([]);
+    setValue('content', md);
   };
 
-  const acceptDiff = () => {
-    // Content is already set (the agent applied it). Just clear diff state.
-    setDiffing(false);
-    setActiveTab('edit');
-    turnOriginalDocRef.current = '';
-    pendingNewDocumentRef.current = '';
-    setTurnSnapshotVersionId('');
-  };
-
-  const rejectDiff = async () => {
-    const revertContent = turnOriginalDocRef.current;
-    if (!revertContent) {
-      setDiffing(false);
-      setActiveTab('edit');
-      return;
-    }
-
-    // If we have a backend snapshot, revert the DB too
-    if (turnSnapshotVersionId && blogSlug) {
-      try {
-        const reverted = await revertToVersion(blogSlug as string, turnSnapshotVersionId);
-        const revertedContent = reverted.article?.draft_content || revertContent;
-        setValue('content', revertedContent);
-      } catch (err) {
-        console.error('[Editor] Failed to revert backend to snapshot:', err);
-        setValue('content', revertContent);
-      }
-    } else {
-      setValue('content', revertContent);
-    }
-
-    setDiffing(false);
-    setActiveTab('edit');
-    turnOriginalDocRef.current = '';
-    pendingNewDocumentRef.current = '';
-    setTurnSnapshotVersionId('');
+  const applyAgentMarkdown = (next: string) => {
+    const previous = getValues('content') || '';
+    setValue('content', next);
+    setAddedRanges(addedTextRanges(previous, next));
   };
 
   if (!user) {
@@ -878,13 +839,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
-        // Don't save if already saving
         if (createArticleMutation.isPending || updateArticleMutation.isPending) {
           return;
-        }
-        // Reject pending diff changes before saving
-        if (diffing) {
-          rejectDiff();
         }
         handleSubmit((data) => onSubmit(data, false))();
       }
@@ -892,7 +848,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [diffing, rejectDiff, handleSubmit, createArticleMutation.isPending, updateArticleMutation.isPending]);
+  }, [handleSubmit, createArticleMutation.isPending, updateArticleMutation.isPending]);
 
   const onSubmit = async (data: ArticleFormData, returnToDashboard: boolean = true) => {
     if (!user) {
@@ -942,10 +898,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       const result = await updateArticleWithContext(article.article.id);
       
       if (result.success && result.content) {
-        applyMarkdownEdit(result.content);
+        applyAgentMarkdown(result.content);
         setChatMessages((prev) => [
           ...prev,
-          { role: 'assistant', content: '📋 I\'ve prepared a full-document rewrite. Review the changes in the Diff tab.' }
+          { role: 'assistant', content: 'I updated the draft. New text is highlighted in the editor. Use History to restore an earlier version.' }
         ]);
       }
     } catch (error) {
@@ -956,16 +912,26 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   };
 
-  // Apply text edit from AI assistant (markdown-based str_replace)
-  // Renders both old and new markdown to HTML, then uses character-by-character
-  // comparison in the diff-highlighter to find the exact edit boundaries.
-  // Apply a markdown edit from an artifact action (user clicks "Apply" on a tool result card)
-  const applyMarkdownEdit = (newMarkdown: string) => {
-    turnOriginalDocRef.current = getValues('content') || '';
-    setValue('content', newMarkdown);
-    pendingNewDocumentRef.current = newMarkdown;
-    setDiffing(true);
-    setActiveTab('diff');
+  const clearChat = async () => {
+    if (!article?.article?.id) return;
+    setClearingChat(true);
+    try {
+      await clearConversationHistory(article.article.id);
+      setChatMessages([getInitialGreetingMessage()]);
+      toast({
+        title: "Chat cleared",
+        description: "Your conversation history has been reset.",
+      });
+    } catch (error) {
+      console.error('Failed to clear chat history:', error);
+      toast({
+        title: "Error",
+        description: "Failed to clear chat history. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setClearingChat(false);
+    }
   };
 
   const sendChatWithMessage = async (message: string) => {
@@ -1106,13 +1072,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           if (msg.type) {
             switch (msg.type) {
               case 'turn_started':
-                // Capture the current markdown content as the turn baseline for diff.
-                // Uses a ref (not state) so the done handler always reads the latest value.
-                turnOriginalDocRef.current = getValues('content') || '';
-                pendingNewDocumentRef.current = '';
-                if (msg.data?.snapshot_version_id) {
-                  setTurnSnapshotVersionId(msg.data.snapshot_version_id);
-                }
                 break;
 
               case 'transcript':
@@ -1356,14 +1315,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     // Silently apply edits -- content is markdown, set directly via form
                     if (toolName === 'replace_lines' && isNewMessage && !isError) {
                       if (toolResult.new_markdown) {
-                        setValue('content', toolResult.new_markdown);
-                        pendingNewDocumentRef.current = toolResult.new_markdown;
+                        applyAgentMarkdown(toolResult.new_markdown);
                       }
                       setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
                     } else if (toolName === 'rewrite_document' && isNewMessage && !isError) {
                       if (toolResult.new_content) {
-                        setValue('content', toolResult.new_content);
-                        pendingNewDocumentRef.current = toolResult.new_content;
+                        applyAgentMarkdown(toolResult.new_content);
                       }
                       setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
                     }
@@ -1425,16 +1382,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 });
                 
                 ws.close();
-                
-                // Auto-switch to Diff tab if agent made edits during this turn
-                if (turnOriginalDocRef.current && pendingNewDocumentRef.current) {
-                  if (pendingNewDocumentRef.current !== turnOriginalDocRef.current) {
-                    setDiffing(true);
-                    setActiveTab('diff');
-                    console.debug('[Agent] done: switching to diff tab');
-                  }
-                }
-                
                 resolve();
                 break;
                 
@@ -1918,9 +1865,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 <Button
                   type="button"
                   onClick={() => {
-                    if (diffing) {
-                      rejectDiff();
-                    }
                     handleSubmit((data) => onSubmit(data, false))();
                   }}
                   disabled={createArticleMutation.isPending || updateArticleMutation.isPending}
@@ -2045,76 +1989,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   Regenerate
                 </Button>
               )}
-
-              {/* Settings Button */}
-              {!isNew && (
-                <Drawer open={showSettingsDrawer} onOpenChange={setShowSettingsDrawer} direction="right">
-                  <DrawerTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                    >
-                      <Settings className="h-4 w-4" />
-                      Agent
-                    </Button>
-                  </DrawerTrigger>
-                  <DrawerContent>
-                    <DrawerHeader>
-                      <DrawerTitle>Agent</DrawerTitle>
-                      <DrawerDescription>
-                        Agent settings for skills, connectors, and chat history
-                      </DrawerDescription>
-                    </DrawerHeader>
-                    <div className="p-4 space-y-4 overflow-y-auto">
-                      <AgentSettings />
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="space-y-1">
-                          <p className="font-medium">Clear Chat History</p>
-                          <p className="text-sm text-muted-foreground">
-                            Remove all messages and start fresh with a new conversation
-                          </p>
-                        </div>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          disabled={clearingChat}
-                          onClick={async () => {
-                            if (!article?.article?.id) return;
-                            setClearingChat(true);
-                            try {
-                              await clearConversationHistory(article.article.id);
-                              setChatMessages([getInitialGreetingMessage()]);
-                              toast({
-                                title: "Chat cleared",
-                                description: "Your conversation history has been reset.",
-                              });
-                              setShowSettingsDrawer(false);
-                            } catch (error) {
-                              console.error('Failed to clear chat history:', error);
-                              toast({
-                                title: "Error",
-                                description: "Failed to clear chat history. Please try again.",
-                                variant: "destructive",
-                              });
-                            } finally {
-                              setClearingChat(false);
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          {clearingChat ? 'Clearing...' : 'Clear'}
-                        </Button>
-                      </div>
-                    </div>
-                    <DrawerFooter>
-                      <DrawerClose asChild>
-                        <Button variant="outline">Close</Button>
-                      </DrawerClose>
-                    </DrawerFooter>
-                  </DrawerContent>
-                </Drawer>
-              )}
             </div>
 
           <form className="flex-1 flex flex-col min-h-0 min-w-0">
@@ -2122,12 +1996,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 <EditorTabs
                   content={watchedContent || ''}
                   onChange={onContentChange}
-                  originalContent={turnOriginalDocRef.current}
-                  diffing={diffing}
+                  highlights={addedRanges}
                   activeTab={activeTab}
                   onTabChange={setActiveTab}
-                  onAccept={acceptDiff}
-                  onReject={rejectDiff}
                   title={watchedTitle}
                   authorName={user?.name}
                   imageUrl={previewImageUrl}
@@ -2201,7 +2072,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                       const result = call.result;
                                       const newMd = (result.new_markdown || result.new_content) as string;
                                       if (newMd) {
-                                        applyMarkdownEdit(newMd);
+                                        applyAgentMarkdown(newMd);
                                       }
                                     }
                                   }}
@@ -2332,6 +2203,19 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 Conversation
               </Button>
             </div>
+            {!isNew && article?.article?.id && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs"
+                disabled={clearingChat}
+                onClick={clearChat}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                {clearingChat ? 'Clearing…' : 'Clear chat'}
+              </Button>
+            )}
             {inputMode === 'conversation' && (
               <span className="max-w-[240px] truncate text-[11px] text-muted-foreground">
                 {conversation.error
@@ -2390,8 +2274,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           <DrawerHeader>
             <DrawerTitle>Version History</DrawerTitle>
             <DrawerDescription>
+              Saved on the server before each agent edit. Revert restores that draft.
               {versionsData && (
-                <span>{versionsData.draft_count} drafts, {versionsData.published_count} published</span>
+                <span className="block mt-1">{versionsData.draft_count} drafts, {versionsData.published_count} published</span>
               )}
             </DrawerDescription>
           </DrawerHeader>
@@ -2476,10 +2361,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             </div>
             <div>
               <h4 className="font-medium mb-1 text-sm">Content Preview</h4>
-              <div 
-                className="prose prose-sm dark:prose-invert max-h-64 overflow-y-auto border rounded p-3 text-sm"
-                dangerouslySetInnerHTML={{ __html: selectedVersion?.content || '' }} 
-              />
+              <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap border rounded p-3 text-sm">
+                {selectedVersion?.content}
+              </pre>
             </div>
             {selectedVersion?.image_url && (
               <div>

@@ -356,7 +356,8 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
                 registry,
                 skills,
                 live,
-            ),
+            )
+            .with_mcp_oauth_base_url(config.mcp_oauth_base_url.clone()),
             article,
             datasource,
             image,

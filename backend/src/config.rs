@@ -23,6 +23,7 @@ pub struct Config {
     pub s3_secret_access_key: SecretString,
     pub s3_bucket: String,
     pub s3_url_prefix: String,
+    pub mcp_oauth_base_url: String,
 }
 
 #[derive(Debug, Error)]
@@ -82,6 +83,7 @@ impl Config {
             s3_secret_access_key: SecretString::from(s3_secret_access_key),
             s3_bucket,
             s3_url_prefix,
+            mcp_oauth_base_url: std::env::var("MCP_OAUTH_BASE_URL").unwrap_or_default(),
         })
     }
 }

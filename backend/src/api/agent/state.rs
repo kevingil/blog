@@ -26,6 +26,7 @@ pub struct AgentState {
     registry: Arc<ToolRegistry>,
     skills: Arc<SkillService>,
     live: LivePorts,
+    mcp_oauth_base_url: String,
 }
 
 impl AgentState {
@@ -46,7 +47,13 @@ impl AgentState {
             registry,
             skills,
             live,
+            mcp_oauth_base_url: String::new(),
         }
+    }
+
+    pub fn with_mcp_oauth_base_url(mut self, url: String) -> Self {
+        self.mcp_oauth_base_url = url;
+        self
     }
 
     pub fn chat(&self) -> Result<&ChatMessageService, AppError> {
@@ -75,5 +82,9 @@ impl AgentState {
 
     pub fn live(&self) -> LivePorts {
         self.live.clone()
+    }
+
+    pub fn mcp_oauth_base_url(&self) -> &str {
+        &self.mcp_oauth_base_url
     }
 }

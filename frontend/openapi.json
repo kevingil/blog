@@ -325,6 +325,116 @@
         ]
       }
     },
+    "/agent/connector-presets": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "listConnectorPresets",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_ConnectorPresetListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent/connector-presets/{presetId}/connect": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "connectConnectorPreset",
+        "parameters": [
+          {
+            "name": "presetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_OauthConnectResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/agent/connectors": {
       "get": {
         "tags": [
@@ -391,6 +501,71 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SuccessResponse_ConnectorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent/connectors/oauth": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "connectOauthMcp",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OauthConnectorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_OauthConnectResponse"
                 }
               }
             }
@@ -7699,6 +7874,59 @@
           }
         }
       },
+      "ConnectorPresetListResponse": {
+        "type": "object",
+        "required": [
+          "presets"
+        ],
+        "properties": {
+          "presets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectorPresetResponse"
+            }
+          }
+        }
+      },
+      "ConnectorPresetResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "officialUrl",
+          "url",
+          "connected",
+          "connectorId",
+          "lastError"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "officialUrl": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "connected": {
+            "type": "boolean"
+          },
+          "connectorId": {
+            "type": "string"
+          },
+          "lastError": {
+            "type": "string"
+          }
+        }
+      },
       "ConnectorRefreshResponse": {
         "type": "object",
         "required": [
@@ -9142,6 +9370,46 @@
         ],
         "properties": {
           "message": {
+            "type": "string"
+          }
+        }
+      },
+      "OauthConnectResponse": {
+        "type": "object",
+        "required": [
+          "connected",
+          "authorizationUrl"
+        ],
+        "properties": {
+          "connected": {
+            "type": "boolean"
+          },
+          "authorizationUrl": {
+            "type": "string"
+          },
+          "connector": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConnectorResponse"
+              }
+            ]
+          }
+        }
+      },
+      "OauthConnectorRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "url"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "url": {
             "type": "string"
           }
         }
@@ -10642,6 +10910,28 @@
           }
         }
       },
+      "SuccessResponse_ConnectorPresetListResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "presets"
+            ],
+            "properties": {
+              "presets": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ConnectorPresetResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "SuccessResponse_ConnectorRefreshResponse": {
         "type": "object",
         "required": [
@@ -11433,6 +11723,39 @@
             "properties": {
               "message": {
                 "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "SuccessResponse_OauthConnectResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "connected",
+              "authorizationUrl"
+            ],
+            "properties": {
+              "connected": {
+                "type": "boolean"
+              },
+              "authorizationUrl": {
+                "type": "string"
+              },
+              "connector": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ConnectorResponse"
+                  }
+                ]
               }
             }
           }

@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use axum::{
     Json,
     body::Bytes,
@@ -7,17 +9,22 @@ use uuid::Uuid;
 
 use crate::{
     api::{auth::AuthenticatedAccount, request::JsonBody, response::SuccessResponse},
+    core::mcp::{
+        CreateMcpConnector, PRESETS, TRANSPORT_HTTP, connect_custom, connect_preset,
+        preset_server_url,
+    },
     error::AppError,
 };
 
 use super::{
     dto::{
         AgentToolListResponse, AgentToolResponse, ArtifactFeedbackRequest, ChatRequest,
-        ChatRequestResponse, ConnectorListResponse, ConnectorRefreshResponse, ConnectorResponse,
+        ChatRequestResponse, ConnectorListResponse, ConnectorPresetListResponse,
+        ConnectorPresetResponse, ConnectorRefreshResponse, ConnectorResponse,
         ConnectorUpdateRequest, ConnectorWriteRequest, ConversationHistoryResponse,
-        ConversationQuery, ConversationTurnRequest, ConversationTurnResponse,
-        PendingArtifactsResponse, SkillListResponse, SkillResponse, SkillUpdateRequest,
-        SkillWriteRequest, SuccessFlagResponse,
+        ConversationQuery, ConversationTurnRequest, ConversationTurnResponse, OauthConnectResponse,
+        OauthConnectorRequest, PendingArtifactsResponse, SkillListResponse, SkillResponse,
+        SkillUpdateRequest, SkillWriteRequest, SuccessFlagResponse,
     },
     state::AgentState,
 };
@@ -261,6 +268,154 @@ pub async fn refresh_mcp_connector(
         connector_id: refresh.connector_id.to_string(),
         tool_names: refresh.tool_names,
     })))
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent/connector-presets",
+    responses(
+        (status = 200, body = SuccessResponse<ConnectorPresetListResponse>),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "agent",
+    operation_id = "listConnectorPresets"
+)]
+pub async fn list_connector_presets(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<AgentState>,
+) -> ApiResult<ConnectorPresetListResponse> {
+    let oauth_base = state.mcp_oauth_base_url();
+    let connectors = state.connectors()?.list().await?;
+    let presets = PRESETS
+        .iter()
+        .map(|preset| {
+            let url = preset_server_url(preset, oauth_base);
+            let connected = connectors.iter().find(|connector| {
+                connector.env.get("preset_id").map(String::as_str) == Some(preset.id)
+                    || connector.url == url
+            });
+            ConnectorPresetResponse {
+                id: preset.id.to_owned(),
+                name: preset.name.to_owned(),
+                description: preset.description.to_owned(),
+                official_url: preset.official_url.to_owned(),
+                url,
+                connected: connected.is_some(),
+                connector_id: connected
+                    .map(|connector| connector.id.to_string())
+                    .unwrap_or_default(),
+                last_error: connected
+                    .map(|connector| connector.last_error.clone())
+                    .unwrap_or_default(),
+            }
+        })
+        .collect();
+    Ok(Json(SuccessResponse::new(ConnectorPresetListResponse {
+        presets,
+    })))
+}
+
+#[utoipa::path(
+    post,
+    path = "/agent/connector-presets/{presetId}/connect",
+    params(("presetId" = String, Path)),
+    responses(
+        (status = 200, body = SuccessResponse<OauthConnectResponse>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "agent",
+    operation_id = "connectConnectorPreset"
+)]
+pub async fn connect_connector_preset(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<AgentState>,
+    Path(preset_id): Path<String>,
+) -> ApiResult<OauthConnectResponse> {
+    let plan = connect_preset(&preset_id, state.mcp_oauth_base_url())?;
+    let response = apply_connect_plan(&state, plan, Some(preset_id)).await?;
+    Ok(Json(SuccessResponse::new(response)))
+}
+
+#[utoipa::path(
+    post,
+    path = "/agent/connectors/oauth",
+    request_body = OauthConnectorRequest,
+    responses(
+        (status = 200, body = SuccessResponse<OauthConnectResponse>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "agent",
+    operation_id = "connectOauthMcp"
+)]
+pub async fn connect_oauth_mcp(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<AgentState>,
+    JsonBody(request): JsonBody<OauthConnectorRequest>,
+) -> ApiResult<OauthConnectResponse> {
+    let plan = connect_custom(&request.name, &request.url, state.mcp_oauth_base_url())?;
+    let response = apply_connect_plan(&state, plan, None).await?;
+    Ok(Json(SuccessResponse::new(response)))
+}
+
+async fn apply_connect_plan(
+    state: &AgentState,
+    plan: crate::core::mcp::ConnectPlan,
+    preset_id: Option<String>,
+) -> Result<OauthConnectResponse, AppError> {
+    if plan.needs_authorization {
+        return Ok(OauthConnectResponse {
+            connected: false,
+            authorization_url: plan.authorization_url,
+            connector: None,
+        });
+    }
+    let connectors = state.connectors()?.list().await?;
+    if let Some(existing) = connectors.into_iter().find(|connector| {
+        preset_id
+            .as_deref()
+            .is_some_and(|id| connector.env.get("preset_id").map(String::as_str) == Some(id))
+            || connector.url == plan.url
+    }) {
+        return Ok(OauthConnectResponse {
+            connected: true,
+            authorization_url: String::new(),
+            connector: Some(existing.into()),
+        });
+    }
+    let mut headers = BTreeMap::new();
+    if let Some(value) = plan.authorization_header {
+        headers.insert("Authorization".to_owned(), value);
+    }
+    let mut env = BTreeMap::new();
+    if let Some(id) = preset_id {
+        env.insert("preset_id".to_owned(), id);
+    }
+    let created = state
+        .connectors()?
+        .create(CreateMcpConnector {
+            name: plan.name,
+            transport: TRANSPORT_HTTP.to_owned(),
+            command: String::new(),
+            args: Vec::new(),
+            url: plan.url,
+            headers,
+            env,
+            enabled: true,
+        })
+        .await?;
+    Ok(OauthConnectResponse {
+        connected: true,
+        authorization_url: String::new(),
+        connector: Some(created.into()),
+    })
 }
 
 #[utoipa::path(

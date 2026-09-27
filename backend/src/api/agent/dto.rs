@@ -222,6 +222,40 @@ pub struct ConnectorRefreshResponse {
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct ConnectorPresetResponse {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub official_url: String,
+    pub url: String,
+    pub connected: bool,
+    pub connector_id: String,
+    pub last_error: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorPresetListResponse {
+    pub presets: Vec<ConnectorPresetResponse>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct OauthConnectorRequest {
+    pub name: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct OauthConnectResponse {
+    pub connected: bool,
+    pub authorization_url: String,
+    pub connector: Option<ConnectorResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentToolResponse {
     pub name: String,
     pub description: String,

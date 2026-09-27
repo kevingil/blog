@@ -5,15 +5,17 @@ use crate::api::auth::AuthState;
 
 use super::{
     handlers::{
-        __path_accept_artifact, __path_clear_conversation_history, __path_create_agent_skill,
-        __path_create_mcp_connector, __path_delete_agent_skill, __path_delete_mcp_connector,
-        __path_get_conversation_history, __path_get_pending_artifacts, __path_list_agent_skills,
-        __path_list_agent_tools, __path_list_mcp_connectors, __path_refresh_mcp_connector,
+        __path_accept_artifact, __path_clear_conversation_history, __path_connect_connector_preset,
+        __path_connect_oauth_mcp, __path_create_agent_skill, __path_create_mcp_connector,
+        __path_delete_agent_skill, __path_delete_mcp_connector, __path_get_conversation_history,
+        __path_get_pending_artifacts, __path_list_agent_skills, __path_list_agent_tools,
+        __path_list_connector_presets, __path_list_mcp_connectors, __path_refresh_mcp_connector,
         __path_reject_artifact, __path_submit_agent_request, __path_submit_conversation_turn,
         __path_update_agent_skill, __path_update_mcp_connector, accept_artifact,
-        clear_conversation_history, create_agent_skill, create_mcp_connector, delete_agent_skill,
-        delete_mcp_connector, get_conversation_history, get_pending_artifacts, list_agent_skills,
-        list_agent_tools, list_mcp_connectors, refresh_mcp_connector, reject_artifact,
+        clear_conversation_history, connect_connector_preset, connect_oauth_mcp,
+        create_agent_skill, create_mcp_connector, delete_agent_skill, delete_mcp_connector,
+        get_conversation_history, get_pending_artifacts, list_agent_skills, list_agent_tools,
+        list_connector_presets, list_mcp_connectors, refresh_mcp_connector, reject_artifact,
         submit_agent_request, submit_conversation_turn, update_agent_skill, update_mcp_connector,
     },
     live::{__path_live_session, live_session},
@@ -34,6 +36,9 @@ where
         .routes(routes!(list_mcp_connectors, create_mcp_connector))
         .routes(routes!(update_mcp_connector, delete_mcp_connector))
         .routes(routes!(refresh_mcp_connector))
+        .routes(routes!(list_connector_presets))
+        .routes(routes!(connect_connector_preset))
+        .routes(routes!(connect_oauth_mcp))
         .routes(routes!(list_agent_skills, create_agent_skill))
         .routes(routes!(update_agent_skill, delete_agent_skill))
         .routes(routes!(

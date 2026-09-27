@@ -30,6 +30,7 @@ case "$mode" in
       image_http \
       image_service \
       ml_agent \
+      mcp_presets \
       mcp_registry \
       skill_service \
       ml_research_tools \

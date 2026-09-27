@@ -109,6 +109,9 @@ WS-008	websocket	C->S	unsubscribe-worker	upgraded	{action:"unsubscribe",channel:
 HTTP-099	image	POST	/images/generate	Bearer JWT	{prompt,article_id,generate_prompt}	202 {request_id};400;401;502	exact snake_case request and response	frontend/src/components/blog/Editor.tsx	covered	approved-change
 HTTP-100	image	GET	/images/{requestId}	Bearer JWT	path request ID	200 ImageGenerationResponse;401;404;500	per runtime DTO	frontend ImageLoader consumers	covered	approved-change
 HTTP-101	image	GET	/images/{requestId}/status	Bearer JWT	path request ID	200 ImageGenerationStatus;401;404;500	camelCase plus compatibility snake_case fields	frontend ImageLoader consumers	covered	approved-change
+HTTP-102	agent	GET	/agent/connector-presets	Bearer JWT	-	200 {presets};401;500	camelCase preset catalog	frontend/src/routes/dashboard/connectors.tsx	covered	active-contract
+HTTP-103	agent	POST	/agent/connector-presets/{presetId}/connect	Bearer JWT	path preset id	200 {connected,authorizationUrl,connector};400;401;500	immediate connect when MCP_OAUTH_BASE_URL is set; otherwise authorizationUrl	frontend/src/routes/dashboard/connectors.tsx	covered	active-contract
+HTTP-104	agent	POST	/agent/connectors/oauth	Bearer JWT	{name,url}	200 {connected,authorizationUrl,connector};400;401;500	http(s) MCP URL; local fixture host connects immediately	frontend/src/routes/dashboard/connectors.tsx	covered	active-contract
 RESOLVED-004	frontend	PUT	/blog/articles/{id}/context	Bearer JWT	frontend request	resolved to HTTP-017	frontend caller now uses generated updateArticleWithContext	frontend/src/components/blog/Editor.tsx	n/a	resolved-existing-contract
 REMOVED-005	frontend	GET	/auth/session	unknown	-	dead export removed	-	none	n/a	removed-dead-consumer
 REMOVED-006	frontend	POST	/auth/refresh	unknown	-	dead export removed	-	none	n/a	removed-dead-consumer
