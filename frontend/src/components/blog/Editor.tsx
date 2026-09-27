@@ -2287,7 +2287,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               </div>
             ) : versionsData?.versions.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
-                No versions yet. Save the article to create versions.
+                No versions yet. Saving the draft stores one here.
               </div>
             ) : (
               <div className="space-y-2">

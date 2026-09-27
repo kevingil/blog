@@ -381,6 +381,12 @@ impl ArticleService {
         if article.draft_title != request.title {
             article.slug = self.unique_slug(&request.title, Some(article_id)).await?;
         }
+        let draft_changed = article.draft_title != request.title
+            || article.draft_content != request.content
+            || article.draft_image_url != request.image_url;
+        if draft_changed {
+            self.articles.create_draft_snapshot(article_id).await?;
+        }
         article.draft_title = request.title;
         article.draft_content = request.content.clone();
         article.draft_image_url = request.image_url;
@@ -410,9 +416,13 @@ impl ArticleService {
     pub async fn update_with_context(&self, article_id: Uuid) -> Result<Article, AppError> {
         let mut article = self.articles.find_by_id(article_id).await?;
         let writer = self.context_writer.as_ref().ok_or(AppError::External)?;
-        article.draft_content = writer.update_with_context(&article).await?;
-        article.updated_at = Some(Utc::now());
-        self.articles.save(&mut article).await?;
+        let updated = writer.update_with_context(&article).await?;
+        if updated != article.draft_content {
+            self.articles.create_draft_snapshot(article_id).await?;
+            article.draft_content = updated;
+            article.updated_at = Some(Utc::now());
+            self.articles.save(&mut article).await?;
+        }
         Ok(article)
     }
 

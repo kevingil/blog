@@ -194,8 +194,34 @@ impl ArticleRepository for MemoryArticles {
         Ok(())
     }
 
-    async fn create_draft_snapshot(&self, _article_id: Uuid) -> Result<Uuid, AppError> {
-        Ok(Uuid::new_v4())
+    async fn create_draft_snapshot(&self, article_id: Uuid) -> Result<Uuid, AppError> {
+        let article = self.find_by_id(article_id).await?;
+        let mut versions = self.versions.lock().expect("versions lock");
+        let version_number = i32::try_from(
+            versions
+                .values()
+                .filter(|version| version.article_id == article_id)
+                .count(),
+        )
+        .expect("version count fits i32")
+            + 1;
+        let id = Uuid::new_v4();
+        versions.insert(
+            id,
+            ArticleVersion {
+                id,
+                article_id,
+                version_number,
+                status: "draft".to_owned(),
+                title: article.draft_title,
+                content: article.draft_content,
+                image_url: article.draft_image_url,
+                embedding: Vec::new(),
+                edited_by: Some(article.author_id),
+                created_at: Some(Utc::now()),
+            },
+        );
+        Ok(id)
     }
 
     async fn update_draft_content(
@@ -672,6 +698,13 @@ async fn update_publish_unpublish_and_delete_preserve_lifecycle() {
         .expect("update");
     assert_eq!(updated.article.slug, "updated-title");
     assert!(updated.article.published_at.is_some());
+    let versions = service
+        .list_versions(id)
+        .await
+        .expect("versions after save");
+    assert_eq!(versions.total, 1);
+    assert_eq!(versions.versions[0].title, "Initial Title");
+    assert_eq!(versions.versions[0].content, "Complete article content");
 
     let published_at = Utc::now();
     let published = service
