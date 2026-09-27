@@ -1,67 +1,96 @@
-use blog_backend::core::mcp::{PRESETS, connect_custom, connect_preset, preset_server_url};
+use blog_backend::core::mcp::{
+    McpOauth, PRESETS, authorization_server_metadata_url, authorize_url, code_challenge,
+    preset_by_id, resource_metadata_url, split_origin_path, validate_mcp_server,
+};
 
 #[test]
-fn fixture_base_connects_presets_without_a_browser() {
-    let notion = connect_preset("notion", "http://external-fixtures:8090/").expect("notion");
-    assert_eq!(notion.url, "http://external-fixtures:8090/mcp/notion");
+fn presets_use_the_official_oauth_servers() {
+    let notion = preset_by_id("notion").expect("notion");
+    assert_eq!(notion.official_url, "https://mcp.notion.com/mcp");
+    assert_eq!(preset_by_id("granola").expect("granola").name, "Granola");
     assert_eq!(
-        notion.authorization_header.as_deref(),
-        Some("Bearer fixture")
+        preset_by_id("fireflies").expect("fireflies").official_url,
+        "https://api.fireflies.ai/mcp"
     );
-    assert!(!notion.needs_authorization);
-
-    let granola = connect_preset("granola", "http://external-fixtures:8090").expect("granola");
-    assert_eq!(granola.name, "Granola");
-    assert_eq!(granola.url, "http://external-fixtures:8090/mcp/granola");
-
-    let fireflies =
-        connect_preset("fireflies", "http://external-fixtures:8090").expect("fireflies");
-    assert_eq!(fireflies.url, "http://external-fixtures:8090/mcp/fireflies");
+    assert_eq!(PRESETS.len(), 3);
+    assert!(preset_by_id("unknown").is_err());
 }
 
 #[test]
-fn official_presets_ask_the_provider_to_sign_in() {
-    let granola = connect_preset("granola", "").expect("granola");
-    assert_eq!(granola.url, "https://mcp.granola.ai/mcp");
-    assert!(granola.needs_authorization);
-    assert_eq!(granola.authorization_url, "https://mcp.granola.ai/mcp");
-    assert!(granola.authorization_header.is_none());
-
-    let notion = PRESETS
-        .iter()
-        .find(|preset| preset.id == "notion")
-        .expect("notion");
-    assert_eq!(preset_server_url(notion, ""), "https://mcp.notion.com/mcp");
+fn custom_server_requires_a_name_and_http_url() {
+    let (name, url) = validate_mcp_server(" Team wiki ", "https://example.com/mcp").expect("ok");
+    assert_eq!(name, "Team wiki");
+    assert_eq!(url, "https://example.com/mcp");
+    assert!(validate_mcp_server("  ", "https://example.com/mcp").is_err());
+    assert!(validate_mcp_server("Docs", "stdio://local").is_err());
 }
 
 #[test]
-fn custom_oauth_server_uses_the_fixture_only_on_that_host() {
-    let local = connect_custom(
-        "Docs",
-        "http://external-fixtures:8090/mcp/docs",
-        "http://external-fixtures:8090",
-    )
-    .expect("local");
-    assert!(!local.needs_authorization);
+fn pkce_s256_matches_the_rfc_vector() {
+    let challenge = code_challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk");
+    assert_eq!(challenge, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
+}
+
+#[test]
+fn discovery_reads_the_resource_metadata_challenge() {
+    let header = concat!(
+        r#"Bearer realm="OAuth", resource_metadata="https://mcp.notion.com/.well-known/oauth-protected-resource/mcp", "#,
+        r#"error="invalid_token""#
+    );
     assert_eq!(
-        local.authorization_header.as_deref(),
-        Some("Bearer fixture")
+        resource_metadata_url(header).as_deref(),
+        Some("https://mcp.notion.com/.well-known/oauth-protected-resource/mcp")
     );
-
-    let remote = connect_custom(
-        "Linear",
-        "https://mcp.linear.app/mcp",
-        "http://external-fixtures:8090",
-    )
-    .expect("remote");
-    assert!(remote.needs_authorization);
-    assert_eq!(remote.authorization_url, "https://mcp.linear.app/mcp");
-    assert_eq!(remote.url, "https://mcp.linear.app/mcp");
+    assert!(resource_metadata_url(r#"Bearer realm="OAuth""#).is_none());
 }
 
 #[test]
-fn custom_oauth_rejects_a_missing_name_or_url() {
-    assert!(connect_custom("  ", "https://example.com/mcp", "").is_err());
-    assert!(connect_custom("Docs", "stdio://local", "").is_err());
-    assert!(connect_preset("unknown", "").is_err());
+fn authorize_url_uses_pkce_and_the_mcp_resource() {
+    let url = authorize_url(
+        "https://mcp.notion.com/authorize",
+        "client",
+        "http://localhost:8080/agent/connectors/oauth/callback",
+        "challenge",
+        "state",
+        &["default".to_owned()],
+        "https://mcp.notion.com/mcp",
+    );
+    assert!(url.starts_with("https://mcp.notion.com/authorize?"));
+    assert!(url.contains("response_type=code"));
+    assert!(url.contains("code_challenge_method=S256"));
+    assert!(url.contains("code_challenge=challenge"));
+    assert!(url.contains("resource=https%3A%2F%2Fmcp.notion.com%2Fmcp"));
+    assert!(url.contains("scope=default"));
+    assert!(url.contains(
+        "redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fagent%2Fconnectors%2Foauth%2Fcallback"
+    ));
+}
+
+#[test]
+fn metadata_urls_follow_the_issuer_and_resource_path() {
+    assert_eq!(
+        authorization_server_metadata_url("https://api.fireflies.ai/"),
+        "https://api.fireflies.ai/.well-known/oauth-authorization-server"
+    );
+    assert_eq!(
+        split_origin_path("https://mcp.notion.com/mcp").expect("split"),
+        ("https://mcp.notion.com".to_owned(), "/mcp".to_owned())
+    );
+    assert_eq!(
+        split_origin_path("https://mcp.granola.ai/mcp?x=1").expect("split"),
+        ("https://mcp.granola.ai".to_owned(), "/mcp".to_owned())
+    );
+}
+
+#[test]
+fn redirect_targets_the_public_api_and_app() {
+    let oauth = McpOauth::new("http://localhost:8080/", "http://localhost:3000/");
+    assert_eq!(
+        oauth.redirect_uri(),
+        "http://localhost:8080/agent/connectors/oauth/callback"
+    );
+    assert_eq!(
+        oauth.app_connectors_url(),
+        "http://localhost:3000/dashboard/connectors"
+    );
 }

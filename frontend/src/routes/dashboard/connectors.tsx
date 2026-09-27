@@ -32,6 +32,28 @@ function ConnectorsPage() {
     setPageTitle("Connectors");
   }, [setPageTitle]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get("connected");
+    const oauthError = params.get("oauth_error");
+    if (!connected && !oauthError) {
+      return;
+    }
+    window.history.replaceState({}, "", window.location.pathname);
+    if (connected) {
+      toast({ title: `${connected} connected` });
+      void queryClient.invalidateQueries({ queryKey: ["connector-presets"] });
+      void queryClient.invalidateQueries({ queryKey: ["mcp-connectors"] });
+      void queryClient.invalidateQueries({ queryKey: ["agent-tools"] });
+      return;
+    }
+    toast({
+      title: "Could not connect",
+      description: oauthError ?? "Sign-in did not finish",
+      variant: "destructive",
+    });
+  }, [queryClient, toast]);
+
   const presetsQuery = useQuery({
     queryKey: ["connector-presets"],
     queryFn: listConnectorPresets,
@@ -51,17 +73,13 @@ function ConnectorsPage() {
     label: string,
     result: { connected: boolean; authorizationUrl: string },
   ) => {
+    if (result.authorizationUrl) {
+      window.location.assign(result.authorizationUrl);
+      return;
+    }
     if (result.connected) {
       await invalidate();
       toast({ title: `${label} connected` });
-      return;
-    }
-    if (result.authorizationUrl) {
-      window.open(result.authorizationUrl, "_blank", "noopener,noreferrer");
-      toast({
-        title: `Sign in to ${label}`,
-        description: "Finish sign-in with the provider, then click Connect again.",
-      });
     }
   };
 
@@ -79,7 +97,7 @@ function ConnectorsPage() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Connectors</h1>
         <p className="text-sm text-muted-foreground">
-          Sources of context for the agent. Connect a preset with one click, or add any other OAuth MCP server.
+          Sources of context for the agent. Connect opens the provider sign-in for Notion, Granola, Fireflies, or any other OAuth MCP server.
         </p>
       </div>
 

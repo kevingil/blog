@@ -357,7 +357,7 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
                 skills,
                 live,
             )
-            .with_mcp_oauth_base_url(config.mcp_oauth_base_url.clone()),
+            .with_public_urls(config.public_api_url.clone(), config.public_app_url.clone()),
             article,
             datasource,
             image,

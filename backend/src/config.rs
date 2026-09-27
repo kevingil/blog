@@ -23,7 +23,8 @@ pub struct Config {
     pub s3_secret_access_key: SecretString,
     pub s3_bucket: String,
     pub s3_url_prefix: String,
-    pub mcp_oauth_base_url: String,
+    pub public_api_url: String,
+    pub public_app_url: String,
 }
 
 #[derive(Debug, Error)]
@@ -83,7 +84,10 @@ impl Config {
             s3_secret_access_key: SecretString::from(s3_secret_access_key),
             s3_bucket,
             s3_url_prefix,
-            mcp_oauth_base_url: std::env::var("MCP_OAUTH_BASE_URL").unwrap_or_default(),
+            public_api_url: std::env::var("PUBLIC_API_URL")
+                .unwrap_or_else(|_| "http://localhost:8080".to_owned()),
+            public_app_url: std::env::var("PUBLIC_APP_URL")
+                .unwrap_or_else(|_| "http://localhost:3000".to_owned()),
         })
     }
 }

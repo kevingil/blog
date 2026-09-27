@@ -1114,6 +1114,10 @@ fn support_openapi_has_stable_operations_security_and_multipart_contract() -> Te
     let live = &document["paths"]["/agent/live"]["get"];
     assert_eq!(live["operationId"], "connectLiveSession");
     assert!(live["responses"].get("101").is_some());
+    let callback = &document["paths"]["/agent/connectors/oauth/callback"]["get"];
+    assert_eq!(callback["operationId"], "completeOauthConnector");
+    assert!(callback["responses"].get("302").is_some());
+    assert!(callback.get("security").is_none() || callback["security"].is_null());
     assert!(
         document["paths"]["/storage/upload"]["post"]["requestBody"]["content"]
             ["multipart/form-data"]

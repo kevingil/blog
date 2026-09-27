@@ -1876,6 +1876,25 @@ export type ConnectOauthMcpResponses = {
 
 export type ConnectOauthMcpResponse = ConnectOauthMcpResponses[keyof ConnectOauthMcpResponses];
 
+export type CompleteOauthConnectorData = {
+    body?: never;
+    path?: never;
+    query?: {
+        code?: string;
+        state?: string;
+        error?: string;
+        error_description?: string;
+    };
+    url: '/agent/connectors/oauth/callback';
+};
+
+export type CompleteOauthConnectorErrors = {
+    /**
+     * The sign-in query could not be read
+     */
+    400: unknown;
+};
+
 export type DeleteMcpConnectorData = {
     body?: never;
     path: {

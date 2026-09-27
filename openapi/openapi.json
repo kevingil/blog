@@ -608,6 +608,56 @@
         ]
       }
     },
+    "/agent/connectors/oauth/callback": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "completeOauthConnector",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "error_description",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirects to the connectors page after sign-in"
+          },
+          "400": {
+            "description": "The sign-in query could not be read"
+          }
+        }
+      }
+    },
     "/agent/connectors/{connectorId}": {
       "delete": {
         "tags": [
