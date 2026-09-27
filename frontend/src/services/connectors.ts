@@ -2,10 +2,13 @@ import { Agent } from "@/client";
 import type {
   AgentToolListResponse,
   ConnectorListResponse,
+  ConnectorPresetListResponse,
   ConnectorRefreshResponse,
   ConnectorResponse,
   ConnectorUpdateRequest,
   ConnectorWriteRequest,
+  OauthConnectResponse,
+  OauthConnectorRequest,
 } from "@/client";
 import { generatedData } from "./generatedClient";
 
@@ -50,5 +53,25 @@ export async function refreshMcpConnector(
 ): Promise<ConnectorRefreshResponse> {
   return generatedData<ConnectorRefreshResponse>(
     Agent.refreshMcpConnector({ path: { connectorId } }),
+  );
+}
+
+export async function listConnectorPresets(): Promise<ConnectorPresetListResponse> {
+  return generatedData<ConnectorPresetListResponse>(Agent.listConnectorPresets());
+}
+
+export async function connectConnectorPreset(
+  presetId: string,
+): Promise<OauthConnectResponse> {
+  return generatedData<OauthConnectResponse>(
+    Agent.connectConnectorPreset({ path: { presetId } }),
+  );
+}
+
+export async function connectOauthMcp(
+  request: OauthConnectorRequest,
+): Promise<OauthConnectResponse> {
+  return generatedData<OauthConnectResponse>(
+    Agent.connectOauthMcp({ body: request }),
   );
 }

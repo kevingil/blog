@@ -1,10 +1,12 @@
 use std::{
+    collections::HashMap,
     mem,
     sync::{Arc, Mutex},
     time::Duration,
 };
 
 use async_trait::async_trait;
+use serde_json::Value;
 use tokio::{sync::mpsc, task::JoinSet};
 
 use crate::{
@@ -12,13 +14,23 @@ use crate::{
         agent::{AgentRequestQueue, ChatRequest},
         websocket::{AgentStreamEvent, AgentStreamProvider},
     },
-    core::copilot::{CopilotManager, ManagerError},
+    core::{
+        copilot::{CopilotManager, ManagerError},
+        live::{LiveHarness, LiveTurn, LiveTurnHandle},
+    },
     error::AppError,
 };
 
 pub struct CopilotRuntime {
     manager: Arc<CopilotManager>,
     bridges: Mutex<JoinSet<()>>,
+    shared: Mutex<HashMap<String, Arc<Mutex<SharedTurn>>>>,
+}
+
+struct SharedTurn {
+    history: Vec<AgentStreamEvent>,
+    subscribers: Vec<mpsc::UnboundedSender<AgentStreamEvent>>,
+    finished: bool,
 }
 
 impl CopilotRuntime {
@@ -26,6 +38,7 @@ impl CopilotRuntime {
         Arc::new(Self {
             manager,
             bridges: Mutex::new(JoinSet::new()),
+            shared: Mutex::new(HashMap::new()),
         })
     }
 
@@ -77,32 +90,135 @@ impl AgentRequestQueue for CopilotRuntime {
 
 impl AgentStreamProvider for CopilotRuntime {
     fn take_response_stream(&self, request_id: &str) -> Option<mpsc::Receiver<AgentStreamEvent>> {
+        self.forward_shared(request_id)
+    }
+}
+
+impl CopilotRuntime {
+    fn forward_shared(&self, request_id: &str) -> Option<mpsc::Receiver<AgentStreamEvent>> {
         self.prune_bridges().ok()?;
-        let mut source = self.manager.take_response_stream(request_id).ok()?;
+        let shared = self.shared_turn(request_id)?;
+        let mut source = attach_subscriber(&shared)?;
         let (sender, receiver) = mpsc::channel(100);
         let manager = self.manager.clone();
         let task_request_id = request_id.to_owned();
         let task = async move {
             while let Some(event) = source.recv().await {
-                let value = match serde_json::to_value(event) {
-                    Ok(value) => value,
-                    Err(error) => {
-                        tracing::error!(%error, "failed to serialize copilot stream event");
-                        break;
-                    }
-                };
-                let Some(event) = AgentStreamEvent::from_value(value) else {
-                    tracing::error!("copilot stream event was not a JSON object");
-                    break;
-                };
                 if sender.send(event).await.is_err() {
-                    let _ = manager.cancel_request(&task_request_id);
+                    let others = shared
+                        .lock()
+                        .map(|turn| turn.subscribers.len())
+                        .unwrap_or(0);
+                    if others <= 1 {
+                        let _ = manager.cancel_request(&task_request_id);
+                    }
                     break;
                 }
             }
         };
         self.bridges.lock().ok()?.spawn(task);
         Some(receiver)
+    }
+
+    fn shared_turn(&self, request_id: &str) -> Option<Arc<Mutex<SharedTurn>>> {
+        let mut turns = self.shared.lock().ok()?;
+        if let Some(existing) = turns.get(request_id) {
+            return Some(existing.clone());
+        }
+        let mut source = self.manager.take_response_stream(request_id).ok()?;
+        let shared = Arc::new(Mutex::new(SharedTurn {
+            history: Vec::new(),
+            subscribers: Vec::new(),
+            finished: false,
+        }));
+        turns.insert(request_id.to_owned(), shared.clone());
+        drop(turns);
+        let publisher = shared.clone();
+        let task = async move {
+            while let Some(event) = source.recv().await {
+                let value = match serde_json::to_value(&event) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        tracing::error!(%error, "failed to serialize copilot stream event");
+                        break;
+                    }
+                };
+                let Some(agent_event) = AgentStreamEvent::from_value(value) else {
+                    tracing::error!("copilot stream event was not a JSON object");
+                    break;
+                };
+                let Ok(mut turn) = publisher.lock() else {
+                    break;
+                };
+                turn.history.push(agent_event.clone());
+                turn.subscribers
+                    .retain(|subscriber| subscriber.send(agent_event.clone()).is_ok());
+            }
+            if let Ok(mut turn) = publisher.lock() {
+                turn.finished = true;
+                turn.subscribers.clear();
+            }
+        };
+        self.bridges.lock().ok()?.spawn(task);
+        Some(shared)
+    }
+}
+
+fn attach_subscriber(
+    shared: &Arc<Mutex<SharedTurn>>,
+) -> Option<mpsc::UnboundedReceiver<AgentStreamEvent>> {
+    let (sender, receiver) = mpsc::unbounded_channel();
+    let mut turn = shared.lock().ok()?;
+    for event in &turn.history {
+        let _ = sender.send(event.clone());
+    }
+    if !turn.finished {
+        turn.subscribers.push(sender);
+    }
+    Some(receiver)
+}
+
+pub struct CopilotLiveHarness {
+    runtime: Arc<CopilotRuntime>,
+}
+
+impl CopilotLiveHarness {
+    pub fn new(runtime: Arc<CopilotRuntime>) -> Arc<Self> {
+        Arc::new(Self { runtime })
+    }
+}
+
+#[async_trait]
+impl LiveHarness for CopilotLiveHarness {
+    async fn run_turn(&self, turn: LiveTurn) -> Result<LiveTurnHandle, AppError> {
+        let request_id = self
+            .runtime
+            .submit(ChatRequest {
+                message: turn.message,
+                document_content: turn.document_content,
+                document_markdown: turn.document_markdown,
+                article_id: turn.article_id,
+                channel: "live".to_owned(),
+            })
+            .await?;
+        let events = self
+            .runtime
+            .forward_shared(&request_id)
+            .ok_or_else(|| AppError::Conflict("request stream already taken".to_owned()))?;
+        let (sender, receiver) = mpsc::channel(64);
+        tokio::spawn(async move {
+            let mut events = events;
+            while let Some(event) = events.recv().await {
+                let value = Value::Object(event.fields().clone());
+                if sender.send(value).await.is_err() {
+                    break;
+                }
+            }
+        });
+        Ok(LiveTurnHandle {
+            request_id,
+            events: receiver,
+        })
     }
 }
 

@@ -27,10 +27,60 @@ the production Supabase database.
 
 ## Development
 
-The Rust backend requires the settings shown in `docker-compose.yml`:
-`DATABASE_URL`, `AUTH_SECRET`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`,
-`EXA_API_KEY`, `EXA_BASE_URL`, `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`,
-`S3_ACCESS_KEY_SECRET`, `S3_BUCKET`, and `S3_URL_PREFIX`.
+Put these in `backend/.env` and `frontend/.env`. Each process loads the file from its own directory.
+
+Backend, required:
+
+```env
+DATABASE_URL=postgres://blog:blog@localhost:55432/blog
+AUTH_SECRET=local-test-secret-that-is-not-used-in-production
+S3_ENDPOINT=http://localhost:9000
+S3_ACCESS_KEY_ID=blog
+S3_ACCESS_KEY_SECRET=blog-local-secret
+S3_BUCKET=blog
+S3_URL_PREFIX=http://localhost:9000/blog
+```
+
+Backend, optional:
+
+```env
+HOST=0.0.0.0
+PORT=8080
+ALLOWED_ORIGINS=http://localhost:3000
+OPENAI_API_KEY=local-fixture-key
+OPENAI_BASE_URL=http://localhost:8090/v1
+GROQ_API_KEY=local-fixture-key
+GROQ_BASE_URL=http://localhost:8090/v1
+EXA_API_KEY=local-fixture-key
+EXA_BASE_URL=http://localhost:8090
+PUBLIC_API_URL=http://localhost:8080
+PUBLIC_APP_URL=http://localhost:3000
+```
+
+Unset model URLs fall back to `https://api.openai.com/v1`, `https://api.groq.com/openai/v1`, and `https://api.exa.ai`. `PUBLIC_API_URL` and `PUBLIC_APP_URL` are the browser-visible origins used when an MCP connector starts OAuth.
+
+Frontend. `VITE_API_BASE_URL` and `VITE_WS_URL` are optional and already default to the values below. Upload previews need `VITE_PUBLIC_S3_URL_PREFIX`.
+
+```env
+VITE_API_BASE_URL=http://localhost:8080
+VITE_WS_URL=ws://localhost:8080/websocket
+VITE_PUBLIC_S3_URL_PREFIX=http://localhost:9000/blog
+```
+
+Apply pending Diesel migrations. `migrate` reads `DATABASE_URL` from the environment or `backend/.env` and records applied versions in `__diesel_schema_migrations`:
+
+```bash
+cd backend
+cargo run --locked --bin migrate
+```
+
+`docker compose up` runs that migrator before the API starts. A database that already has the Goose schema through `20260315000000` gets a Diesel ledger once, then `migrate` applies anything newer:
+
+```bash
+cd backend
+cargo run --locked --bin stamp-diesel-migrations
+cargo run --locked --bin migrate
+```
 
 ```bash
 cd backend

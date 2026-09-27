@@ -4,8 +4,12 @@ use async_trait::async_trait;
 
 use crate::{
     core::{
-        chat::ChatMessageService, conversation::ConversationService, mcp::McpConnectorService,
-        ml::llm::ToolRegistry, skill::SkillService,
+        chat::ChatMessageService,
+        conversation::ConversationService,
+        live::LivePorts,
+        mcp::{McpConnectorService, McpOauth},
+        ml::llm::ToolRegistry,
+        skill::SkillService,
     },
     error::AppError,
 };
@@ -25,6 +29,8 @@ pub struct AgentState {
     conversation: Arc<ConversationService>,
     registry: Arc<ToolRegistry>,
     skills: Arc<SkillService>,
+    live: LivePorts,
+    mcp_oauth: McpOauth,
 }
 
 impl AgentState {
@@ -35,6 +41,7 @@ impl AgentState {
         conversation: Arc<ConversationService>,
         registry: Arc<ToolRegistry>,
         skills: Arc<SkillService>,
+        live: LivePorts,
     ) -> Self {
         Self {
             chat,
@@ -43,7 +50,18 @@ impl AgentState {
             conversation,
             registry,
             skills,
+            live,
+            mcp_oauth: McpOauth::new("http://localhost:8080", "http://localhost:3000"),
         }
+    }
+
+    pub fn with_public_urls(
+        mut self,
+        api_url: impl Into<String>,
+        app_url: impl Into<String>,
+    ) -> Self {
+        self.mcp_oauth = McpOauth::new(api_url, app_url);
+        self
     }
 
     pub fn chat(&self) -> Result<&ChatMessageService, AppError> {
@@ -68,5 +86,13 @@ impl AgentState {
 
     pub fn skills(&self) -> Result<&SkillService, AppError> {
         Ok(&self.skills)
+    }
+
+    pub fn live(&self) -> LivePorts {
+        self.live.clone()
+    }
+
+    pub fn mcp_oauth(&self) -> &McpOauth {
+        &self.mcp_oauth
     }
 }

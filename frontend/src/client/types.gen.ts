@@ -114,6 +114,21 @@ export type ConnectorListResponse = {
     connectors: Array<ConnectorResponse>;
 };
 
+export type ConnectorPresetListResponse = {
+    presets: Array<ConnectorPresetResponse>;
+};
+
+export type ConnectorPresetResponse = {
+    id: string;
+    name: string;
+    description: string;
+    officialUrl: string;
+    url: string;
+    connected: boolean;
+    connectorId: string;
+    lastError: string;
+};
+
 export type ConnectorRefreshResponse = {
     connectorId: string;
     toolNames: Array<string>;
@@ -491,6 +506,17 @@ export type LoginResponse = {
 
 export type MessageResponse = {
     message: string;
+};
+
+export type OauthConnectResponse = {
+    connected: boolean;
+    authorizationUrl: string;
+    connector?: null | ConnectorResponse;
+};
+
+export type OauthConnectorRequest = {
+    name: string;
+    url: string;
 };
 
 export type OrganizationCreateRequest = {
@@ -887,6 +913,12 @@ export type SuccessResponseConnectorListResponse = {
     };
 };
 
+export type SuccessResponseConnectorPresetListResponse = {
+    data: {
+        presets: Array<ConnectorPresetResponse>;
+    };
+};
+
 export type SuccessResponseConnectorRefreshResponse = {
     data: {
         connectorId: string;
@@ -1088,6 +1120,14 @@ export type SuccessResponseLoginResponse = {
 export type SuccessResponseMessageResponse = {
     data: {
         message: string;
+    };
+};
+
+export type SuccessResponseOauthConnectResponse = {
+    data: {
+        connected: boolean;
+        authorizationUrl: string;
+        connector?: null | ConnectorResponse;
     };
 };
 
@@ -1731,6 +1771,49 @@ export type RejectArtifactResponses = {
 
 export type RejectArtifactResponse = RejectArtifactResponses[keyof RejectArtifactResponses];
 
+export type ListConnectorPresetsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent/connector-presets';
+};
+
+export type ListConnectorPresetsErrors = {
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type ListConnectorPresetsError = ListConnectorPresetsErrors[keyof ListConnectorPresetsErrors];
+
+export type ListConnectorPresetsResponses = {
+    200: SuccessResponseConnectorPresetListResponse;
+};
+
+export type ListConnectorPresetsResponse = ListConnectorPresetsResponses[keyof ListConnectorPresetsResponses];
+
+export type ConnectConnectorPresetData = {
+    body?: never;
+    path: {
+        presetId: string;
+    };
+    query?: never;
+    url: '/agent/connector-presets/{presetId}/connect';
+};
+
+export type ConnectConnectorPresetErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type ConnectConnectorPresetError = ConnectConnectorPresetErrors[keyof ConnectConnectorPresetErrors];
+
+export type ConnectConnectorPresetResponses = {
+    200: SuccessResponseOauthConnectResponse;
+};
+
+export type ConnectConnectorPresetResponse = ConnectConnectorPresetResponses[keyof ConnectConnectorPresetResponses];
+
 export type ListMcpConnectorsData = {
     body?: never;
     path?: never;
@@ -1771,6 +1854,46 @@ export type CreateMcpConnectorResponses = {
 };
 
 export type CreateMcpConnectorResponse = CreateMcpConnectorResponses[keyof CreateMcpConnectorResponses];
+
+export type ConnectOauthMcpData = {
+    body: OauthConnectorRequest;
+    path?: never;
+    query?: never;
+    url: '/agent/connectors/oauth';
+};
+
+export type ConnectOauthMcpErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type ConnectOauthMcpError = ConnectOauthMcpErrors[keyof ConnectOauthMcpErrors];
+
+export type ConnectOauthMcpResponses = {
+    200: SuccessResponseOauthConnectResponse;
+};
+
+export type ConnectOauthMcpResponse = ConnectOauthMcpResponses[keyof ConnectOauthMcpResponses];
+
+export type CompleteOauthConnectorData = {
+    body?: never;
+    path?: never;
+    query?: {
+        code?: string;
+        state?: string;
+        error?: string;
+        error_description?: string;
+    };
+    url: '/agent/connectors/oauth/callback';
+};
+
+export type CompleteOauthConnectorErrors = {
+    /**
+     * The sign-in query could not be read
+     */
+    400: unknown;
+};
 
 export type DeleteMcpConnectorData = {
     body?: never;
@@ -1912,6 +2035,24 @@ export type GetConversationHistoryResponses = {
 };
 
 export type GetConversationHistoryResponse = GetConversationHistoryResponses[keyof GetConversationHistoryResponses];
+
+export type ConnectLiveSessionData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent/live';
+};
+
+export type ConnectLiveSessionErrors = {
+    /**
+     * Invalid WebSocket upgrade headers
+     */
+    400: unknown;
+    /**
+     * Connection cannot be upgraded
+     */
+    426: unknown;
+};
 
 export type ListAgentSkillsData = {
     body?: never;

@@ -128,6 +128,7 @@ pub struct ConnectorResponse {
 
 impl From<McpConnector> for ConnectorResponse {
     fn from(connector: McpConnector) -> Self {
+        let (headers, env) = redact_connector_secrets(connector.headers, connector.env);
         Self {
             id: connector.id.to_string(),
             name: connector.name,
@@ -135,14 +136,31 @@ impl From<McpConnector> for ConnectorResponse {
             command: connector.command,
             args: connector.args,
             url: connector.url,
-            headers: connector.headers,
-            env: connector.env,
+            headers,
+            env,
             enabled: connector.enabled,
             last_error: connector.last_error,
             created_at: timestamp_or_zero(connector.created_at),
             updated_at: timestamp_or_zero(connector.updated_at),
         }
     }
+}
+
+fn redact_connector_secrets(
+    mut headers: BTreeMap<String, String>,
+    mut env: BTreeMap<String, String>,
+) -> (BTreeMap<String, String>, BTreeMap<String, String>) {
+    for (key, value) in headers.iter_mut() {
+        if key.eq_ignore_ascii_case("authorization") && !value.is_empty() {
+            *value = "redacted".to_owned();
+        }
+    }
+    for key in ["oauth_refresh_token", "oauth_client_secret"] {
+        if env.contains_key(key) {
+            env.insert(key.to_owned(), "redacted".to_owned());
+        }
+    }
+    (headers, env)
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
@@ -218,6 +236,49 @@ pub struct ConnectorListResponse {
 pub struct ConnectorRefreshResponse {
     pub connector_id: String,
     pub tool_names: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorPresetResponse {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub official_url: String,
+    pub url: String,
+    pub connected: bool,
+    pub connector_id: String,
+    pub last_error: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectorPresetListResponse {
+    pub presets: Vec<ConnectorPresetResponse>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct OauthCallbackQuery {
+    pub code: Option<String>,
+    pub state: Option<String>,
+    pub error: Option<String>,
+    pub error_description: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct OauthConnectorRequest {
+    pub name: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct OauthConnectResponse {
+    pub connected: bool,
+    pub authorization_url: String,
+    pub connector: Option<ConnectorResponse>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -327,4 +388,45 @@ fn timestamp_or_zero(timestamp: Option<DateTime<Utc>>) -> String {
         || "0001-01-01T00:00:00Z".to_owned(),
         |value| value.to_rfc3339_opts(SecondsFormat::AutoSi, true),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    #[test]
+    fn connector_response_hides_provider_tokens() {
+        let mut headers = BTreeMap::new();
+        headers.insert("Authorization".to_owned(), "Bearer secret".to_owned());
+        let mut env = BTreeMap::new();
+        env.insert("preset_id".to_owned(), "notion".to_owned());
+        env.insert("oauth_refresh_token".to_owned(), "refresh".to_owned());
+        let response = ConnectorResponse::from(McpConnector {
+            id: Uuid::nil(),
+            name: "Notion".to_owned(),
+            transport: "http".to_owned(),
+            command: String::new(),
+            args: Vec::new(),
+            url: "https://mcp.notion.com/mcp".to_owned(),
+            headers,
+            env,
+            enabled: true,
+            last_error: String::new(),
+            created_at: None,
+            updated_at: None,
+        });
+        assert_eq!(
+            response.headers.get("Authorization").map(String::as_str),
+            Some("redacted")
+        );
+        assert_eq!(
+            response.env.get("preset_id").map(String::as_str),
+            Some("notion")
+        );
+        assert_eq!(
+            response.env.get("oauth_refresh_token").map(String::as_str),
+            Some("redacted")
+        );
+    }
 }

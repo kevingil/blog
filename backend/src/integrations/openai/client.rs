@@ -132,6 +132,10 @@ impl OpenAiClient {
         !self.api_key.expose_secret().is_empty()
     }
 
+    pub(crate) fn live_credentials(&self) -> (&str, &str) {
+        (&self.base_url, self.api_key.expose_secret())
+    }
+
     pub async fn generate_embedding(&self, text: &str) -> Result<Vec<f32>, AppError> {
         if !self.is_configured() {
             return Err(AppError::External);
@@ -334,7 +338,10 @@ impl OpenAiClient {
         }
     }
 
-    pub async fn synthesize_speech(&self, text: &str) -> Result<crate::core::speech::SpeechAudio, AppError> {
+    pub async fn synthesize_speech(
+        &self,
+        text: &str,
+    ) -> Result<crate::core::speech::SpeechAudio, AppError> {
         if !self.is_configured() {
             return Err(AppError::External);
         }
