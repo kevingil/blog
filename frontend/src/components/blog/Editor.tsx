@@ -530,11 +530,16 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       tags: string[];
       publish: boolean;
       authorId: string;
+      external_url?: string | null;
     }) => createArticle(data),
-    onSuccess: () => {
+    onSuccess: (response) => {
       toast({ title: "Success", description: "Article created successfully." });
       queryClient.invalidateQueries({ queryKey: ['articles'] });
-      navigate({ to: '/dashboard/blog' });
+      if (response.article.external_url && response.article.slug) {
+        navigate({ to: `/dashboard/blog/edit/${response.article.slug}` });
+      } else {
+        navigate({ to: '/dashboard/blog' });
+      }
     },
     onError: (error) => {
       console.error('Error creating article:', error);
@@ -552,6 +557,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         content: string;
         image_url?: string;
         tags: string[];
+        external_url?: string | null;
       };
       returnToDashboard?: boolean;
     }) => updateArticle(data.slug, data.updateData),
@@ -614,12 +620,16 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       if (variables.returnToDashboard) {
         navigate({ to: '/dashboard/blog' });
       } else {
-        // If we are *not* navigating away, refresh local state:
-        const data = variables.updateData;
-        setValue('title', data.title);
-        setValue('content', data.content);
-        setValue('image_url', data.image_url || '');
-        setValue('tags', data.tags);
+        const saved = response.article;
+        setValue('title', saved.draft_title || '');
+        setValue('content', saved.draft_content || '');
+        setValue('image_url', saved.draft_image_url || '');
+        setValue('external_url', saved.external_url || '');
+        setValue('tags', variables.updateData.tags);
+        if (saved.draft_image_url) {
+          setStagedImageUrl(saved.draft_image_url);
+          setPreviewImageUrl(saved.draft_image_url);
+        }
       }
     },
     onError: (error) => {
@@ -691,6 +701,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         content: revertedContent,
         image_url: response.article.draft_image_url || '',
         tags: tagNames,
+        external_url: response.article.external_url || '',
       });
       
       setSelectedVersion(null);
@@ -711,6 +722,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       content: '',
       image_url: '',
       tags: [],
+      external_url: '',
     }
   });
 
@@ -718,6 +730,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const watchedTags = useWatch({ control, name: 'tags' });
   const watchedContent = useWatch({ control, name: 'content' });
   const watchedTitle = useWatch({ control, name: 'title' });
+  const watchedExternalUrl = useWatch({ control, name: 'external_url' });
 
   const [imagePrompt, setImagePrompt] = useState<string | null>(DEFAULT_IMAGE_PROMPT[Math.floor(Math.random() * DEFAULT_IMAGE_PROMPT.length)]);
 
@@ -766,6 +779,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         content: loadedContent,
         image_url: article.article.draft_image_url || '',
         tags: tagNames,
+        external_url: article.article.external_url || '',
       } as ArticleFormData;
       reset(newValues);
       
@@ -789,6 +803,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         content: '',
         image_url: '',
         tags: [],
+        external_url: '',
       };
       reset(blank);
       setImageVersions([]);
@@ -862,6 +877,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       ? stagedImageUrl
       : formImageUrl;
 
+    const externalUrl = data.external_url?.trim() || null;
+
     if (isNew) {
       // New articles are created as drafts by default
       // Use publishArticle() separately to publish
@@ -872,6 +889,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         tags: data.tags,
         publish: false, // Save as draft, publish is a separate action
         authorId: String(user.id),
+        external_url: externalUrl,
       });
     } else {
       // Updates always go to draft_* fields
@@ -881,6 +899,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         content: data.content, // Markdown content
         image_url: finalImageUrl || undefined,
         tags: data.tags,
+        external_url: externalUrl,
       };
       
       updateArticleMutation.mutate({
@@ -1914,6 +1933,50 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     <div className="text-xs text-muted-foreground">
                       Tags help categorize your article and make it easier to find. Press Enter or comma to add a tag.
                     </div>
+                  </div>
+                  <DrawerFooter>
+                    <DrawerClose asChild>
+                      <Button variant="outline" className="w-full">Done</Button>
+                    </DrawerClose>
+                  </DrawerFooter>
+                </DrawerContent>
+              </Drawer>
+
+              <Drawer direction="right">
+                <DrawerTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <ExternalLinkIcon className="h-4 w-4" />
+                    External
+                    {watchedExternalUrl?.trim() && (
+                      <Badge variant="secondary" className="ml-1">
+                        on
+                      </Badge>
+                    )}
+                  </Button>
+                </DrawerTrigger>
+                <DrawerContent className="w-full sm:max-w-sm ml-auto">
+                  <DrawerHeader>
+                    <DrawerTitle>External link</DrawerTitle>
+                    <DrawerDescription>
+                      Point this article at a post published somewhere else. Readers open that link in a new tab. Clear the link and save to keep the article on this site.
+                    </DrawerDescription>
+                  </DrawerHeader>
+                  <div className="space-y-2 px-4">
+                    <label htmlFor="external-article-url" className="text-sm font-medium">
+                      Article link
+                    </label>
+                    <Input
+                      id="external-article-url"
+                      type="url"
+                      placeholder="https://example.com/blog/post"
+                      {...register('external_url')}
+                    />
+                    {errors.external_url && (
+                      <p className="text-sm text-destructive">{errors.external_url.message}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Saving with a new link stores it, and fills in a title, preview, and cover when those are still empty.
+                    </p>
                   </div>
                   <DrawerFooter>
                     <DrawerClose asChild>

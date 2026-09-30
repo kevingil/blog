@@ -29,6 +29,7 @@ pub struct ArticleRow {
     pub published_embedding: Option<Vector>,
     pub current_draft_version_id: Option<Uuid>,
     pub current_published_version_id: Option<Uuid>,
+    pub external_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Insertable)]
@@ -53,6 +54,7 @@ pub struct NewArticleRow {
     pub published_embedding: Option<Vector>,
     pub current_draft_version_id: Option<Uuid>,
     pub current_published_version_id: Option<Uuid>,
+    pub external_url: Option<String>,
 }
 
 #[derive(Debug, AsChangeset)]
@@ -76,6 +78,7 @@ pub struct ArticleChangeset {
     pub published_embedding: Option<Option<Vector>>,
     pub current_draft_version_id: Option<Option<Uuid>>,
     pub current_published_version_id: Option<Option<Uuid>>,
+    pub external_url: Option<Option<String>>,
 }
 
 #[derive(Debug, Clone, Queryable, Selectable, Identifiable)]

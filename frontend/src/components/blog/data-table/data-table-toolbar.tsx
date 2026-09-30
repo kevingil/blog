@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { X, Filter, Plus, Sparkles } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
   searchQuery: string;

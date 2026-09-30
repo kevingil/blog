@@ -27,6 +27,9 @@ pub struct Article {
     pub session_memory: Option<BTreeMap<String, Value>>,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
+    /// Set when this row points at the author's post on another site.
+    #[serde(default)]
+    pub external_url: Option<String>,
 }
 
 impl Article {

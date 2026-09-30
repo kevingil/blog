@@ -105,10 +105,21 @@ impl ObjectStore for S3ObjectStore {
     }
 
     async fn put(&self, key: &str, data: Vec<u8>) -> Result<(), AppError> {
+        self.put_with_content_type(key, data, "application/octet-stream")
+            .await
+    }
+
+    async fn put_with_content_type(
+        &self,
+        key: &str,
+        data: Vec<u8>,
+        content_type: &str,
+    ) -> Result<(), AppError> {
         self.client
             .put_object()
             .bucket(&self.bucket)
             .key(key)
+            .content_type(content_type)
             .body(ByteStream::from(data))
             .send()
             .await
