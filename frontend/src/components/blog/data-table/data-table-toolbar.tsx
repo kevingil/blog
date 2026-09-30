@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { X, Filter, Plus, Sparkles } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import { ExternalBlogDialog } from "@/components/blog/ExternalBlogDialog";
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
@@ -91,6 +92,7 @@ export function DataTableToolbar<TData>({
             Generate
           </Button>
         </Link>
+        <ExternalBlogDialog />
         <Link to="/dashboard/blog/new">
           <Button>
             <Plus className="mr-2 h-4 w-4" />

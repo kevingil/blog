@@ -53,6 +53,7 @@ diesel::table! {
         published_embedding -> Nullable<Vector>,
         current_draft_version_id -> Nullable<Uuid>,
         current_published_version_id -> Nullable<Uuid>,
+        external_url -> Nullable<Text>,
     }
 }
 

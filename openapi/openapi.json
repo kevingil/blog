@@ -1930,6 +1930,71 @@
         ]
       }
     },
+    "/blog/articles/external": {
+      "post": {
+        "tags": [
+          "articles"
+        ],
+        "operationId": "createExternalArticle",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExternalArticle"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_ArticleListItem"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/blog/articles/search": {
       "get": {
         "tags": [
@@ -7680,6 +7745,13 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "external_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set when this row points at the author's post on another site."
           }
         }
       },
@@ -8381,6 +8453,17 @@
           "authorId": {
             "type": "string",
             "format": "uuid"
+          }
+        }
+      },
+      "CreateExternalArticle": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string"
           }
         }
       },
@@ -10151,6 +10234,12 @@
               "string",
               "null"
             ]
+          },
+          "external_url": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -10769,6 +10858,13 @@
                   "null"
                 ],
                 "format": "date-time"
+              },
+              "external_url": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Set when this row points at the author's post on another site."
               }
             }
           }
@@ -11863,6 +11959,12 @@
                       "format": "date-time"
                     },
                     "author": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "external_url": {
                       "type": [
                         "string",
                         "null"

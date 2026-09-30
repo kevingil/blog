@@ -1,5 +1,6 @@
 import { ArticleListItem, ArticleData, RecommendedArticle, ArticleVersion, ArticleVersionListResponse } from '@/services/types';
 import { Articles, Images } from '@/client';
+import { client } from '@/client/client.gen';
 import type { ArticleVersionListResponse as GeneratedArticleVersionListResponse } from '@/client';
 import { generatedData } from '@/services/generatedClient';
 
@@ -106,6 +107,17 @@ export async function getArticleById(blogId: string): Promise<ArticleListItem | 
     }
     throw error;
   }
+}
+
+export async function createExternalArticle(url: string): Promise<ArticleListItem> {
+  return generatedData<ArticleListItem>(
+    client.post({
+      url: '/blog/articles/external',
+      body: { url },
+      headers: { 'Content-Type': 'application/json' },
+      security: [{ scheme: 'bearer', type: 'http' }],
+    }),
+  );
 }
 
 export async function createArticle(article: {

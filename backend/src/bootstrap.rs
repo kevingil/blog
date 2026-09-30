@@ -32,7 +32,7 @@ use crate::{
     config::Config,
     constants::BACKGROUND_SHUTDOWN_TIMEOUT,
     core::{
-        article::{ArticleRepository, ArticleService},
+        article::{ArticleRepository, ArticleService, ObjectImageCache},
         auth::AuthService,
         chat::ChatMessageService,
         conversation::ConversationService,
@@ -77,7 +77,10 @@ use crate::{
         task_run::DieselTaskRunRepository, user_insight_status::DieselUserInsightStatusRepository,
     },
     integrations::{
-        exa::ExaClient, fetch::HttpFetchExtract, llm::GroqClient, openai::OpenAiClient,
+        exa::ExaClient,
+        fetch::{HttpExternalPages, HttpFetchExtract},
+        llm::GroqClient,
+        openai::OpenAiClient,
         s3::S3ObjectStore,
     },
     runtime::{
@@ -163,7 +166,14 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
     let article_service = Arc::new(
         ArticleService::new(articles.clone(), accounts.clone(), tags.clone())
             .with_embedding_provider(openai.clone())
-            .with_context_writer(openai.clone()),
+            .with_context_writer(openai.clone())
+            .with_external_blogs(
+                Arc::new(HttpExternalPages::new()?),
+                Arc::new(ObjectImageCache::new(
+                    object_store.clone(),
+                    config.s3_url_prefix.clone(),
+                )),
+            ),
     );
     let (article_generation_queue, agent_worker) =
         RuntimeAgentQueue::new(chat.clone(), article_service.clone(), openai.clone());

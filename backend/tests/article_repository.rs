@@ -64,6 +64,7 @@ fn article_fixture(
         session_memory: Some(memory),
         created_at: None,
         updated_at: None,
+        external_url: None,
     }
 }
 

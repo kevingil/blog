@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { getArticleData, getRecommendedArticles } from '@/services/blog';
 import hljs from 'highlight.js';
 import { createFileRoute } from '@tanstack/react-router';
-import { ArticleData, RecommendedArticle, isPublished, getDisplayTitle, getDisplayContent, getDisplayImageUrl } from '@/services/types';
+import { ArticleData, RecommendedArticle, isPublished, getDisplayTitle, getDisplayContent, getDisplayImageUrl, externalArticleUrl } from '@/services/types';
 import { Link } from "@tanstack/react-router"
 import { cn } from "@/lib/utils"
 
@@ -90,6 +90,14 @@ export default function Page() {
     loadData();
   }, [blogSlug]);
 
+  const externalUrl = externalArticleUrl(articleData?.article);
+
+  useEffect(() => {
+    if (externalUrl) {
+      window.location.replace(externalUrl);
+    }
+  }, [externalUrl]);
+
   useEffect(() => {
     // Trigger recommended articles animation after main article loads
     const timer = setTimeout(() => {
@@ -97,6 +105,23 @@ export default function Page() {
     }, 500); // Delay after main article animation
     return () => clearTimeout(timer);
   }, [articleData]);
+
+  if (externalUrl) {
+    return (
+      <div className="container mx-auto py-16">
+        <meta httpEquiv="refresh" content={`0;url=${externalUrl}`} />
+        <article className="max-w-xl mx-auto bg-card/60 text-card-foreground rounded-xl border border-border/60 p-8 shadow-lg">
+          <p className="text-sm text-muted-foreground mb-2">Opening the original article</p>
+          <h1 className="text-2xl font-semibold mb-4">
+            {getDisplayTitle(articleData!.article)}
+          </h1>
+          <a href={externalUrl} className="text-primary underline underline-offset-4">
+            Continue to the article
+          </a>
+        </article>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-8" ref={articleRef}>
@@ -214,8 +239,9 @@ function RecommendedArticles({ slug, articleData }: { slug: string, articleData:
   
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      {recommendedArticles?.map((article: RecommendedArticle, index: number) => (
-        <Link key={article.slug} to="/blog/$blogSlug" params={{ blogSlug: article.slug }} >
+      {recommendedArticles?.map((article: RecommendedArticle, index: number) => {
+        const externalUrl = externalArticleUrl(article);
+        const card = (
         <Card className="p-0" animationDelay={index * 100}>
           {article.image_url && (
             <img
@@ -237,8 +263,20 @@ function RecommendedArticles({ slug, articleData }: { slug: string, articleData:
             </p>
           </CardContent>
         </Card>
+        );
+        if (externalUrl) {
+          return (
+            <a key={article.slug} href={externalUrl} target="_blank" rel="noopener noreferrer">
+              {card}
+            </a>
+          );
+        }
+        return (
+        <Link key={article.slug} to="/blog/$blogSlug" params={{ blogSlug: article.slug }} >
+          {card}
         </Link>
-      ))}
+        );
+      })}
     </div>
   );
 }

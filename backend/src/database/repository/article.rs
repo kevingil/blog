@@ -310,6 +310,17 @@ impl ArticleRepository for DieselArticleRepository {
             .map_err(map_diesel_error)
     }
 
+    async fn external_url_exists(&self, url: &str) -> Result<bool, AppError> {
+        let mut connection = self.connection().await?;
+        article::table
+            .filter(article::external_url.eq(url))
+            .select(count_star())
+            .first::<i64>(&mut connection)
+            .await
+            .map(|count| count > 0)
+            .map_err(map_diesel_error)
+    }
+
     async fn save_draft(&self, value: &mut Article) -> Result<(), AppError> {
         let reservation = self.reserve_version()?;
         let now = Utc::now();
@@ -1116,6 +1127,7 @@ fn new_article_row(
         published_embedding: vector_or_none(&value.published_embedding),
         current_draft_version_id: value.current_draft_version_id,
         current_published_version_id: value.current_published_version_id,
+        external_url: value.external_url.clone(),
     }
 }
 
@@ -1145,6 +1157,7 @@ fn article_changeset(
             .then(|| vector_or_none(&value.published_embedding)),
         current_draft_version_id: Some(value.current_draft_version_id),
         current_published_version_id: Some(value.current_published_version_id),
+        external_url: Some(value.external_url.clone()),
     }
 }
 
@@ -1180,6 +1193,7 @@ impl TryFrom<ArticleRow> for Article {
             session_memory: session_memory_from_database(row.session_memory),
             created_at: row.created_at,
             updated_at: row.updated_at,
+            external_url: row.external_url.filter(|url| !url.is_empty()),
         })
     }
 }

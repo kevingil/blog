@@ -9,7 +9,8 @@ use blog_backend::{
     core::{
         article::{
             Article, ArticleListOptions, ArticleRepository, ArticleSearchOptions, ArticleService,
-            ArticleVersion, CreateArticle, UpdateArticle, generate_slug,
+            ArticleVersion, CreateArticle, CreateExternalArticle, ExternalImage, ExternalImageCache,
+            ExternalPage, ExternalPagePort, UpdateArticle, generate_slug,
         },
         auth::{Account, AccountId, AccountRepository},
         tag::{Tag, TagRepository},
@@ -138,6 +139,15 @@ impl ArticleRepository for MemoryArticles {
             .expect("articles lock")
             .values()
             .any(|article| article.slug == slug && Some(article.id) != exclude_id))
+    }
+
+    async fn external_url_exists(&self, url: &str) -> Result<bool, AppError> {
+        Ok(self
+            .articles
+            .lock()
+            .expect("articles lock")
+            .values()
+            .any(|article| article.external_url.as_deref() == Some(url)))
     }
 
     async fn save_draft(&self, article: &mut Article) -> Result<(), AppError> {
@@ -443,6 +453,7 @@ fn article(id: Uuid, author_id: Uuid, title: &str, tags: Vec<i64>) -> Article {
         session_memory: None,
         created_at: Some(Utc::now()),
         updated_at: Some(Utc::now()),
+        external_url: None,
     }
 }
 
@@ -772,6 +783,111 @@ async fn version_listing_lookup_and_revert_are_scoped_to_the_article() {
     assert_eq!(reverted.article.draft_title, "Old Title");
 }
 
+struct StaticPage {
+    page: ExternalPage,
+}
+
+#[async_trait]
+impl ExternalPagePort for StaticPage {
+    async fn load(&self, _url: &str) -> Result<ExternalPage, AppError> {
+        Ok(self.page.clone())
+    }
+}
+
+#[derive(Default)]
+struct MemoryImageCache {
+    stored: Mutex<Vec<(String, String, usize)>>,
+}
+
+#[async_trait]
+impl ExternalImageCache for MemoryImageCache {
+    async fn store(
+        &self,
+        key: &str,
+        content_type: &str,
+        bytes: Vec<u8>,
+    ) -> Result<String, AppError> {
+        self.stored.lock().expect("image cache").push((
+            key.to_owned(),
+            content_type.to_owned(),
+            bytes.len(),
+        ));
+        Ok(format!("http://cdn.local/{key}"))
+    }
+}
+
+#[tokio::test]
+async fn create_external_publishes_cached_image_and_excerpt() {
+    let (articles, accounts, _, service) = fixture();
+    let author_id = Uuid::new_v4();
+    accounts
+        .accounts
+        .lock()
+        .expect("accounts lock")
+        .insert(AccountId(author_id), account(author_id, "Ada"));
+    let images = Arc::new(MemoryImageCache::default());
+    let service = service.with_external_blogs(
+        Arc::new(StaticPage {
+            page: ExternalPage {
+                url: "https://www.sellscale.com/blog-posts/our-agentic-engineering-org".to_owned(),
+                title: "Our Agentic Engineering Org".to_owned(),
+                excerpt: "Every engineering team runs some version of the same cycle.".to_owned(),
+                image: Some(ExternalImage {
+                    bytes: vec![0xFF, 0xD8, 0xFF, 0x00],
+                    content_type: "image/jpeg".to_owned(),
+                    extension: "jpg".to_owned(),
+                }),
+                published_at: Some(Utc::now()),
+            },
+        }),
+        images.clone(),
+    );
+
+    let created = service
+        .create_external(
+            author_id,
+            CreateExternalArticle {
+                url: "https://www.sellscale.com/blog-posts/our-agentic-engineering-org".to_owned(),
+            },
+        )
+        .await
+        .expect("create external");
+
+    assert_eq!(
+        created.article.external_url.as_deref(),
+        Some("https://www.sellscale.com/blog-posts/our-agentic-engineering-org")
+    );
+    assert_eq!(
+        created.article.published_title.as_deref(),
+        Some("Our Agentic Engineering Org")
+    );
+    assert!(
+        created
+            .article
+            .published_content
+            .as_deref()
+            .unwrap_or_default()
+            .contains("same cycle")
+    );
+    assert!(created.article.published_at.is_some());
+    let image_url = created.article.published_image_url.clone().unwrap();
+    assert!(image_url.starts_with("http://cdn.local/external-blogs/"));
+    assert!(image_url.ends_with(".jpg"));
+    assert_eq!(created.article.draft_image_url, image_url);
+    assert_eq!(images.stored.lock().expect("image cache").len(), 1);
+    assert_eq!(articles.articles.lock().expect("articles lock").len(), 1);
+
+    let duplicate = service
+        .create_external(
+            author_id,
+            CreateExternalArticle {
+                url: "https://www.sellscale.com/blog-posts/our-agentic-engineering-org".to_owned(),
+            },
+        )
+        .await;
+    assert!(matches!(duplicate, Err(AppError::Conflict(_))));
+}
+
 #[test]
 fn slug_generation_matches_go_normalization() {
     assert_eq!(generate_slug("Hello,   WORLD!"), "hello-world");
@@ -797,6 +913,11 @@ fn article_openapi_exposes_all_fifteen_stable_operations() {
         ("put", "/blog/{id}/update", "updateArticleWithContext"),
         ("post", "/blog/articles/{slug}/update", "updateArticle"),
         ("post", "/blog/articles", "createArticle"),
+        (
+            "post",
+            "/blog/articles/external",
+            "createExternalArticle",
+        ),
         ("delete", "/blog/articles/{slug}", "deleteArticle"),
         ("post", "/blog/articles/{slug}/publish", "publishArticle"),
         (

@@ -23,6 +23,7 @@ export interface Article {
   session_memory?: Record<string, any>;
   created_at: string;
   updated_at: string;
+  external_url?: string | null;
 }
 
 // Version history types
@@ -57,6 +58,14 @@ export function getDisplayTitle(article: Article | ArticleListItem['article'], p
 export function getDisplayContent(article: Article | ArticleListItem['article'], preferPublished = true): string {
   if (preferPublished && article.published_content) return article.published_content;
   return article.draft_content;
+}
+
+export function externalArticleUrl(
+  article: { external_url?: string | null } | null | undefined,
+): string | null {
+  const url = article?.external_url?.trim();
+  if (!url || !/^https?:\/\//i.test(url)) return null;
+  return url;
 }
 
 export function getDisplayImageUrl(article: Article | ArticleListItem['article'], preferPublished = true): string {
@@ -185,6 +194,7 @@ export type ArticleListItem = {
     tag_ids?: number[];
     imagen_request_id?: string | null;
     session_memory?: Record<string, any>;
+    external_url?: string | null;
   };
   author: {
     id: string;
@@ -221,6 +231,7 @@ export type RecommendedArticle = {
   published_at: string | null;
   created_at: string;
   author: string | null;
+  external_url?: string | null;
 }
 
 export type ArticleRow = {

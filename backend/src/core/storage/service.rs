@@ -12,6 +12,15 @@ use super::{FileData, FolderData, ObjectListing};
 pub trait ObjectStore: Send + Sync {
     async fn list(&self, prefix: &str, delimiter: Option<&str>) -> Result<ObjectListing, AppError>;
     async fn put(&self, key: &str, data: Vec<u8>) -> Result<(), AppError>;
+    async fn put_with_content_type(
+        &self,
+        key: &str,
+        data: Vec<u8>,
+        content_type: &str,
+    ) -> Result<(), AppError> {
+        let _ = content_type;
+        self.put(key, data).await
+    }
     async fn delete(&self, key: &str) -> Result<(), AppError>;
     async fn copy(&self, source_key: &str, destination_key: &str) -> Result<(), AppError>;
 }

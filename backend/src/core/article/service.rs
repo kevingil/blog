@@ -15,7 +15,10 @@ use crate::{
     error::AppError,
 };
 
-use super::{Article, ArticleListOptions, ArticleRepository, ArticleSearchOptions, ArticleVersion};
+use super::{
+    Article, ArticleListOptions, ArticleRepository, ArticleSearchOptions, ArticleVersion,
+    ExternalImageCache, ExternalPagePort,
+};
 
 pub const ITEMS_PER_PAGE: i64 = 6;
 
@@ -50,6 +53,8 @@ pub struct RecommendedArticle {
     pub published_at: Option<DateTime<Utc>>,
     pub created_at: Option<DateTime<Utc>>,
     pub author: Option<String>,
+    #[serde(default)]
+    pub external_url: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
@@ -117,6 +122,11 @@ pub struct UpdateArticle {
     pub published_at: Option<i64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, ToSchema)]
+pub struct CreateExternalArticle {
+    pub url: String,
+}
+
 #[async_trait]
 pub trait ArticleEmbeddingProvider: Send + Sync {
     async fn generate_embedding(&self, content: &str) -> Result<Vec<f32>, AppError>;
@@ -134,6 +144,8 @@ pub struct ArticleService {
     tags: Arc<dyn TagRepository>,
     embeddings: Option<Arc<dyn ArticleEmbeddingProvider>>,
     context_writer: Option<Arc<dyn ArticleContextWriter>>,
+    external_pages: Option<Arc<dyn ExternalPagePort>>,
+    image_cache: Option<Arc<dyn ExternalImageCache>>,
 }
 
 impl ArticleService {
@@ -148,6 +160,8 @@ impl ArticleService {
             tags,
             embeddings: None,
             context_writer: None,
+            external_pages: None,
+            image_cache: None,
         }
     }
 
@@ -158,6 +172,16 @@ impl ArticleService {
 
     pub fn with_context_writer(mut self, writer: Arc<dyn ArticleContextWriter>) -> Self {
         self.context_writer = Some(writer);
+        self
+    }
+
+    pub fn with_external_blogs(
+        mut self,
+        pages: Arc<dyn ExternalPagePort>,
+        images: Arc<dyn ExternalImageCache>,
+    ) -> Self {
+        self.external_pages = Some(pages);
+        self.image_cache = Some(images);
         self
     }
 
@@ -288,6 +312,7 @@ impl ArticleService {
                 published_at: article.published_at,
                 created_at: article.created_at,
                 author,
+                external_url: article.external_url.clone(),
             });
         }
         Ok(recommended)
@@ -364,6 +389,57 @@ impl ArticleService {
             article.published_content = Some(request.content);
             article.published_image_url = Some(request.image_url);
             article.published_at = Some(now);
+        }
+        let id = article.id;
+        self.articles.save(&mut article).await?;
+        self.get_by_id(id).await
+    }
+
+    pub async fn create_external(
+        &self,
+        author_id: Uuid,
+        request: CreateExternalArticle,
+    ) -> Result<ArticleListItem, AppError> {
+        let pages = self
+            .external_pages
+            .as_ref()
+            .ok_or_else(|| AppError::InvalidInput("external blogs are unavailable".to_owned()))?;
+        let images = self
+            .image_cache
+            .as_ref()
+            .ok_or_else(|| AppError::InvalidInput("external blogs are unavailable".to_owned()))?;
+        let url = request.url.trim();
+        if url.is_empty() {
+            return Err(AppError::InvalidInput("url is required".to_owned()));
+        }
+        let page = pages.load(url).await?;
+        if self.articles.external_url_exists(&page.url).await? {
+            return Err(AppError::Conflict(
+                "an external blog for this link already exists".to_owned(),
+            ));
+        }
+        let title = fit_title(&page.title);
+        let excerpt = fit_excerpt(&page.excerpt);
+        validate_article_fields(&title, &excerpt, "", &[])?;
+        let now = Utc::now();
+        let mut article = new_article(
+            self.unique_slug(&title, None).await?,
+            title.clone(),
+            excerpt.clone(),
+            String::new(),
+            author_id,
+            Vec::new(),
+            now,
+        );
+        article.external_url = Some(page.url);
+        article.published_title = Some(title);
+        article.published_content = Some(excerpt);
+        article.published_at = Some(page.published_at.unwrap_or(now));
+        if let Some(image) = page.image {
+            let key = format!("external-blogs/{}.{}", article.id, image.extension);
+            let stored = images.store(&key, &image.content_type, image.bytes).await?;
+            article.draft_image_url = stored.clone();
+            article.published_image_url = Some(stored);
         }
         let id = article.id;
         self.articles.save(&mut article).await?;
@@ -578,6 +654,26 @@ fn new_article(
         session_memory: None,
         created_at: Some(now),
         updated_at: Some(now),
+        external_url: None,
+    }
+}
+
+fn fit_title(title: &str) -> String {
+    let title = title.trim();
+    if title.chars().count() <= 200 {
+        return title.to_owned();
+    }
+    let mut shortened: String = title.chars().take(197).collect();
+    shortened.push_str("...");
+    shortened
+}
+
+fn fit_excerpt(excerpt: &str) -> String {
+    let excerpt = excerpt.trim();
+    if excerpt.chars().count() >= 10 {
+        excerpt.to_owned()
+    } else {
+        format!("{excerpt} Read the original article.")
     }
 }
 
