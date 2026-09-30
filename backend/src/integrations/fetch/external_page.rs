@@ -356,6 +356,9 @@ fn accept_prose(raw: &str) -> Option<String> {
     {
         return None;
     }
+    if text.starts_with(['.', ',', ';', ':', ')', ']', '!', '?']) {
+        return None;
+    }
     let sentence = text.contains(". ")
         || text.contains("? ")
         || text.contains("! ")
@@ -681,7 +684,7 @@ mod tests {
 
     const MODULE: &str = r#"
         var r={title:`Our Agentic Engineering Org`,coverImage:{src:`/blog/covers/our-agentic-engineering-org-velocity-tunnel.jpg`,alt:`A front-facing race car surrounded by violet and magenta motion blur with green accents`}};
-        function i(){return (0,n.jsx)(r.p,{children:`Every engineering team runs some version of the same cycle. Something breaks or slows down. Somebody notices. Somebody establishes what happened, writes it up, decides how urgent it is, and eventually a fix lands. Repeat.`})}
+        function i(){return (0,n.jsx)(r.p,{children:[`Every engineering team runs some version of the same cycle. Something breaks or slows down. Somebody notices. Somebody establishes what happened, writes it up, decides how urgent it is, and eventually a fix lands. Repeat.`,` . Most of it is investigation and contextualizing information that should not lead the preview.`]})}
     "#;
 
     #[test]
@@ -713,6 +716,7 @@ mod tests {
         let excerpt = prose_excerpt(MODULE);
         assert!(excerpt.starts_with("Every engineering team runs some version of the same cycle"));
         assert!(!excerpt.contains(".jpg"));
+        assert!(!excerpt.contains("should not lead"));
     }
 
     #[test]
