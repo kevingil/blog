@@ -27,8 +27,11 @@ use tracing::error;
 use uuid::Uuid;
 
 use crate::{
-    core::article::{
-        Article, ArticleListOptions, ArticleRepository, ArticleSearchOptions, ArticleVersion,
+    core::{
+        article::{
+            Article, ArticleListOptions, ArticleRepository, ArticleSearchOptions, ArticleVersion,
+        },
+        storage::UploadRepository,
     },
     database::{
         models::article::{
@@ -76,28 +79,28 @@ impl DieselArticleRepository {
 impl ArticleRepository for DieselArticleRepository {
     async fn find_by_id(&self, id: Uuid) -> Result<Article, AppError> {
         let mut connection = self.connection().await?;
-        article::table
+        let row = article::table
             .find(id)
             .select(ArticleRow::as_select())
             .first::<ArticleRow>(&mut connection)
             .await
             .optional()
             .map_err(map_diesel_error)?
-            .ok_or(AppError::NotFound)?
-            .try_into()
+            .ok_or(AppError::NotFound)?;
+        self.hydrate_one(row).await
     }
 
     async fn find_by_slug(&self, slug: &str) -> Result<Article, AppError> {
         let mut connection = self.connection().await?;
-        article::table
+        let row = article::table
             .filter(article::slug.eq(slug))
             .select(ArticleRow::as_select())
             .first::<ArticleRow>(&mut connection)
             .await
             .optional()
             .map_err(map_diesel_error)?
-            .ok_or(AppError::NotFound)?
-            .try_into()
+            .ok_or(AppError::NotFound)?;
+        self.hydrate_one(row).await
     }
 
     async fn list(&self, options: ArticleListOptions) -> Result<(Vec<Article>, i64), AppError> {
@@ -158,7 +161,7 @@ impl ArticleRepository for DieselArticleRepository {
             .load::<ArticleRow>(&mut connection)
             .await
             .map_err(map_diesel_error)?;
-        Ok((articles_from_rows(rows)?, total))
+        Ok((self.hydrate_many(rows).await?, total))
     }
 
     async fn search(&self, options: ArticleSearchOptions) -> Result<(Vec<Article>, i64), AppError> {
@@ -209,7 +212,7 @@ impl ArticleRepository for DieselArticleRepository {
             .load::<ArticleRow>(&mut connection)
             .await
             .map_err(map_diesel_error)?;
-        Ok((articles_from_rows(rows)?, total))
+        Ok((self.hydrate_many(rows).await?, total))
     }
 
     async fn search_by_embedding(
@@ -226,7 +229,7 @@ impl ArticleRepository for DieselArticleRepository {
             .load::<ArticleRow>(&mut connection)
             .await
             .map_err(map_diesel_error)?;
-        articles_from_rows(rows)
+        self.hydrate_many(rows).await
     }
 
     async fn save(&self, value: &mut Article) -> Result<(), AppError> {
@@ -339,6 +342,7 @@ impl ArticleRepository for DieselArticleRepository {
                 article::draft_title.eq(&value.draft_title),
                 article::draft_content.eq(&value.draft_content),
                 article::draft_image_url.eq(&value.draft_image_url),
+                article::draft_upload_file_id.eq(value.draft_upload_file_id),
                 article::updated_at.eq(now),
             ))
             .execute(&mut connection)
@@ -366,6 +370,7 @@ impl ArticleRepository for DieselArticleRepository {
                 article::published_title.eq(Some(value.draft_title.clone())),
                 article::published_content.eq(Some(value.draft_content.clone())),
                 article::published_image_url.eq(Some(value.draft_image_url.clone())),
+                article::published_upload_file_id.eq(value.draft_upload_file_id),
                 article::published_embedding.eq(embedding),
                 article::published_at.eq(Some(published_at)),
                 article::updated_at.eq(now),
@@ -377,6 +382,8 @@ impl ArticleRepository for DieselArticleRepository {
         value.published_title = Some(value.draft_title.clone());
         value.published_content = Some(value.draft_content.clone());
         value.published_image_url = Some(value.draft_image_url.clone());
+        value.published_upload_file_id = value.draft_upload_file_id;
+        value.published_image = value.draft_image.clone();
         value.published_embedding.clone_from(&value.draft_embedding);
         value.published_at = Some(published_at);
         value.updated_at = Some(now);
@@ -394,6 +401,7 @@ impl ArticleRepository for DieselArticleRepository {
                 article::published_title.eq::<Option<String>>(None),
                 article::published_content.eq::<Option<String>>(None),
                 article::published_image_url.eq::<Option<String>>(None),
+                article::published_upload_file_id.eq::<Option<Uuid>>(None),
                 article::published_embedding.eq::<Option<Vector>>(None),
                 article::published_at.eq::<Option<DateTime<Utc>>>(None),
                 article::current_published_version_id.eq::<Option<Uuid>>(None),
@@ -406,6 +414,8 @@ impl ArticleRepository for DieselArticleRepository {
         value.published_title = None;
         value.published_content = None;
         value.published_image_url = None;
+        value.published_upload_file_id = None;
+        value.published_image = None;
         value.published_embedding.clear();
         value.published_at = None;
         value.current_published_version_id = None;
@@ -455,6 +465,7 @@ impl ArticleRepository for DieselArticleRepository {
                 article::draft_title.eq(&version.title),
                 article::draft_content.eq(&version.content),
                 article::draft_image_url.eq(&version.image_url),
+                article::draft_upload_file_id.eq(version.upload_file_id),
                 article::draft_embedding.eq(embedding),
                 article::updated_at.eq(now),
             ))
@@ -469,6 +480,7 @@ impl ArticleRepository for DieselArticleRepository {
                 title: version.title,
                 content: version.content,
                 image_url: version.image_url,
+                upload_file_id: version.upload_file_id,
                 embedding: version.embedding,
                 status: VersionStatus::Draft,
                 edited_by: None,
@@ -496,6 +508,7 @@ impl ArticleRepository for DieselArticleRepository {
                         title: value.draft_title.unwrap_or_default(),
                         content: value.draft_content.unwrap_or_default(),
                         image_url: value.draft_image_url.unwrap_or_default(),
+                        upload_file_id: value.draft_upload_file_id,
                         embedding: value
                             .draft_embedding
                             .map_or_else(Vec::new, |vector| vector.to_vec()),
@@ -601,6 +614,7 @@ struct VersionInput {
     title: String,
     content: String,
     image_url: String,
+    upload_file_id: Option<Uuid>,
     embedding: Vec<f32>,
     status: VersionStatus,
     edited_by: Option<Uuid>,
@@ -613,6 +627,7 @@ impl VersionInput {
             title: value.draft_title.clone(),
             content: value.draft_content.clone(),
             image_url: value.draft_image_url.clone(),
+            upload_file_id: value.draft_upload_file_id,
             embedding: value.draft_embedding.clone(),
             status: VersionStatus::Draft,
             edited_by,
@@ -681,6 +696,7 @@ async fn insert_version_and_update_pointer(
         content: Some(input.content),
         image_url: Some(input.image_url),
         embedding: vector_or_none(&input.embedding),
+        upload_file_id: input.upload_file_id,
         edited_by: input.edited_by,
         created_at: Utc::now(),
     };
@@ -1137,6 +1153,8 @@ fn new_article_row(
         current_draft_version_id: value.current_draft_version_id,
         current_published_version_id: value.current_published_version_id,
         external_url: value.external_url.clone(),
+        draft_upload_file_id: value.draft_upload_file_id,
+        published_upload_file_id: value.published_upload_file_id,
     }
 }
 
@@ -1167,6 +1185,8 @@ fn article_changeset(
         current_draft_version_id: Some(value.current_draft_version_id),
         current_published_version_id: Some(value.current_published_version_id),
         external_url: Some(value.external_url.clone()),
+        draft_upload_file_id: Some(value.draft_upload_file_id),
+        published_upload_file_id: Some(value.published_upload_file_id),
     }
 }
 
@@ -1203,6 +1223,11 @@ impl TryFrom<ArticleRow> for Article {
             created_at: row.created_at,
             updated_at: row.updated_at,
             external_url: row.external_url.filter(|url| !url.is_empty()),
+            draft_upload_file_id: row.draft_upload_file_id,
+            published_upload_file_id: row.published_upload_file_id,
+            draft_image: None,
+            published_image: None,
+            body_images: Vec::new(),
         })
     }
 }
@@ -1222,7 +1247,68 @@ impl From<ArticleVersionRow> for ArticleVersion {
                 .map_or_else(Vec::new, |vector| vector.to_vec()),
             edited_by: row.edited_by,
             created_at: row.created_at,
+            upload_file_id: row.upload_file_id,
         }
+    }
+}
+
+impl DieselArticleRepository {
+    async fn hydrate_one(&self, row: ArticleRow) -> Result<Article, AppError> {
+        let mut articles = self.hydrate_many(vec![row]).await?;
+        articles.pop().ok_or(AppError::Database)
+    }
+
+    async fn hydrate_many(&self, rows: Vec<ArticleRow>) -> Result<Vec<Article>, AppError> {
+        let mut articles = articles_from_rows(rows)?;
+        if articles.is_empty() {
+            return Ok(articles);
+        }
+        let uploads = crate::database::repository::upload::DieselUploadRepository::new(self.pool.clone());
+        let ids = articles
+            .iter()
+            .flat_map(|article| {
+                [
+                    article.draft_upload_file_id,
+                    article.published_upload_file_id,
+                ]
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        let by_id = crate::database::repository::upload::asset_map(uploads.find_by_ids(&ids).await?);
+        let mut urls = Vec::new();
+        for article in &articles {
+            urls.extend(crate::database::repository::upload::markdown_image_urls(
+                &article.draft_content,
+            ));
+            if let Some(content) = &article.published_content {
+                urls.extend(crate::database::repository::upload::markdown_image_urls(content));
+            }
+        }
+        let body_files = uploads.find_by_public_urls(&urls).await?;
+        for article in &mut articles {
+            article.draft_image = article
+                .draft_upload_file_id
+                .and_then(|id| by_id.get(&id).cloned());
+            article.published_image = article
+                .published_upload_file_id
+                .and_then(|id| by_id.get(&id).cloned());
+            let draft_urls =
+                crate::database::repository::upload::markdown_image_urls(&article.draft_content);
+            let published_urls = article
+                .published_content
+                .as_deref()
+                .map(crate::database::repository::upload::markdown_image_urls)
+                .unwrap_or_default();
+            article.body_images = body_files
+                .iter()
+                .filter(|file| {
+                    draft_urls.iter().any(|url| url == &file.public_url)
+                        || published_urls.iter().any(|url| url == &file.public_url)
+                })
+                .map(crate::core::storage::UploadFile::asset)
+                .collect();
+        }
+        Ok(articles)
     }
 }
 
@@ -1335,6 +1421,7 @@ mod background_task_tests {
                 title: "late".to_owned(),
                 content: String::new(),
                 image_url: String::new(),
+                upload_file_id: None,
                 embedding: Vec::new(),
                 status: VersionStatus::Draft,
                 edited_by: None,

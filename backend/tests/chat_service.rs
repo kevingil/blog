@@ -223,6 +223,7 @@ async fn metadata_json_keeps_go_field_names_and_omission_rules() {
             visible: false,
         }),
         steps: vec![],
+        input_channel: String::new(),
     };
     let encoded = serde_json::to_value(metadata);
     assert!(encoded.is_ok());

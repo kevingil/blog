@@ -84,6 +84,8 @@ fn page(slug: &str, title: &str, published: bool) -> Page {
         is_published: published,
         created_at: None,
         updated_at: None,
+        upload_file_id: None,
+        image: None,
     }
 }
 
@@ -160,6 +162,7 @@ async fn page_create_preserves_success_and_duplicate_slug_cases() {
         image_url: String::new(),
         meta_data: None,
         is_published: true,
+        image_upload_id: None,
     };
     let created = service.create(request.clone()).await;
     assert!(matches!(created, Ok(ref page) if page.title == "New Page" && page.is_published));

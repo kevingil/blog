@@ -112,6 +112,7 @@ export async function createArticle(article: {
   title: string;
   content: string;
   image_url?: string;
+  image_upload_id?: string;
   tags: string[];
   publish: boolean;  // true = publish immediately, false = save as draft only
   authorId: string;
@@ -127,6 +128,7 @@ export async function updateArticle(slug: string, article: {
   title: string;       // Updates draft_title
   content: string;     // Updates draft_content
   image_url?: string;  // Updates draft_image_url
+  image_upload_id?: string;
   tags: string[];
   external_url?: string | null;
 }): Promise<ArticleListItem> {

@@ -25,6 +25,7 @@ pub struct AccountRow {
     pub social_links: Option<Value>,
     pub meta_description: Option<String>,
     pub organization_id: Option<Uuid>,
+    pub profile_upload_file_id: Option<Uuid>,
 }
 
 #[derive(Debug, Insertable)]

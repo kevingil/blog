@@ -49,6 +49,8 @@ async fn page_postgres_repository_preserves_defaults_json_filters_and_full_updat
         is_published: false,
         created_at: None,
         updated_at: None,
+        upload_file_id: None,
+        image: None,
     };
     repository.save(&mut value).await?;
 

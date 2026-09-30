@@ -1,8 +1,6 @@
 # Blog Copilot
 
 An agentic blog editor with a React/Bun frontend and an Axum/Rust backend.
-The legacy Go backend is no longer vendored. Its pinned source reference and
-the retained porting evidence live in `docs/porting/`.
 
 ![Blog Copilot](frontend/public/IMG_2718.png)
 
@@ -121,9 +119,6 @@ remain in this repository:
 docker compose -f docker-compose.parity.yml up --build \
   --abort-on-container-exit --exit-code-from contract-tests contract-tests
 ```
-
-Porting evidence, contract classifications, migration adoption instructions,
-and task ownership live in `docs/porting/`.
 
 ## OpenAPI and frontend client
 

@@ -16,4 +16,5 @@ pub mod site_settings;
 pub mod source;
 pub mod tag;
 pub mod task_run;
+pub mod upload;
 pub mod user_insight_status;

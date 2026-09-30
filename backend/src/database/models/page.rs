@@ -19,6 +19,7 @@ pub struct PageRow {
     pub is_published: Option<bool>,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
+    pub upload_file_id: Option<Uuid>,
 }
 
 #[derive(Debug, Insertable)]
@@ -32,6 +33,7 @@ pub struct NewPageRow<'a> {
     pub image_url: &'a str,
     pub meta_data: Option<Value>,
     pub is_published: Option<bool>,
+    pub upload_file_id: Option<Uuid>,
 }
 
 impl TryFrom<PageRow> for Page {
@@ -54,6 +56,8 @@ impl TryFrom<PageRow> for Page {
             is_published: row.is_published.unwrap_or(false),
             created_at: row.created_at,
             updated_at: row.updated_at,
+            upload_file_id: row.upload_file_id,
+            image: None,
         })
     }
 }

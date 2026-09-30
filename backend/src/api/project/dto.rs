@@ -46,6 +46,8 @@ pub struct ProjectCreateRequest {
     pub image_url: String,
     #[serde(default, deserialize_with = "null_default")]
     pub url: String,
+    #[serde(default)]
+    pub image_upload_id: Option<Uuid>,
 }
 
 impl ProjectCreateRequest {
@@ -76,6 +78,7 @@ impl ProjectCreateRequest {
             tags: self.tags,
             image_url: self.image_url,
             url: self.url,
+            image_upload_id: self.image_upload_id,
         })
     }
 }
@@ -88,6 +91,8 @@ pub struct ProjectUpdateRequest {
     pub tags: Option<Vec<String>>,
     pub image_url: Option<String>,
     pub url: Option<String>,
+    #[serde(default)]
+    pub image_upload_id: Option<Uuid>,
 }
 
 impl ProjectUpdateRequest {
@@ -128,6 +133,7 @@ impl ProjectUpdateRequest {
             tags: self.tags,
             image_url: self.image_url,
             url: self.url,
+            image_upload_id: self.image_upload_id,
         })
     }
 }
@@ -146,6 +152,10 @@ pub struct ProjectResponse {
     pub url: String,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upload_file_id: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<crate::core::storage::ImageAsset>,
 }
 
 impl From<CoreProject> for ProjectResponse {
@@ -160,6 +170,8 @@ impl From<CoreProject> for ProjectResponse {
             url: value.url,
             created_at: timestamp(value.created_at),
             updated_at: timestamp(value.updated_at),
+            upload_file_id: value.upload_file_id,
+            image: value.image,
         }
     }
 }

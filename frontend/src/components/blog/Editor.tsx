@@ -17,6 +17,7 @@ import { useConversation } from '@/hooks/use-conversation';
 import { EditorTabs } from './editor/EditorTabs';
 import { ImageLoader } from './editor/ImageLoader';
 import { ImagePickerFromUploads } from './editor/ImagePickerFromUploads';
+import { BlurhashImage } from '@/components/media/BlurhashImage';
 import { turndownService } from './editor/turndown';
 import { 
   DEFAULT_IMAGE_PROMPT, 
@@ -379,13 +380,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [publishDrawerOpen, setPublishDrawerOpen] = useState(false);
   
   // Image versioning state
-  const [imageVersions, setImageVersions] = useState<Array<{ url: string; prompt?: string; timestamp: number }>>([]);
+  const [imageVersions, setImageVersions] = useState<Array<{ url: string; prompt?: string; timestamp: number; uploadId?: string; blurhash?: string | null }>>([]);
   const [currentVersionIndex, setCurrentVersionIndex] = useState(-1);
   const [previewImageUrl, setPreviewImageUrl] = useState<string>('');
+  const currentHeader = currentVersionIndex >= 0 ? imageVersions[currentVersionIndex] : undefined;
 
   // Image versioning functions
-  const addImageVersion = (url: string, prompt?: string) => {
-    const newVersion = { url, prompt, timestamp: Date.now() };
+  const addImageVersion = (url: string, prompt?: string, asset?: { uploadId?: string; blurhash?: string | null }) => {
+    const newVersion = { url, prompt, timestamp: Date.now(), uploadId: asset?.uploadId, blurhash: asset?.blurhash };
     setImageVersions(prev => [...prev, newVersion]);
     setCurrentVersionIndex(prev => prev + 1);
     setPreviewImageUrl(url);
@@ -527,6 +529,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       title: string;
       content: string;
       image_url?: string;
+      image_upload_id?: string;
       tags: string[];
       publish: boolean;
       authorId: string;
@@ -556,6 +559,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         title: string;
         content: string;
         image_url?: string;
+        image_upload_id?: string;
         tags: string[];
         external_url?: string | null;
       };
@@ -785,7 +789,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       
       // Initialize image versions and staged state if there's an existing image
       if (article.article.draft_image_url) {
-        setImageVersions([{ url: article.article.draft_image_url, timestamp: Date.now() }]);
+        setImageVersions([{
+          url: article.article.draft_image_url,
+          timestamp: Date.now(),
+          uploadId: article.article.draft_image?.id ?? article.article.draft_upload_file_id ?? undefined,
+          blurhash: article.article.draft_image?.blurhash,
+        }]);
         setCurrentVersionIndex(0);
         setPreviewImageUrl(article.article.draft_image_url);
         setStagedImageUrl(article.article.draft_image_url);
@@ -886,6 +895,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         title: data.title,
         content: data.content,
         image_url: finalImageUrl || undefined,
+        image_upload_id: currentHeader?.uploadId,
         tags: data.tags,
         publish: false, // Save as draft, publish is a separate action
         authorId: String(user.id),
@@ -898,6 +908,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         title: data.title,
         content: data.content, // Markdown content
         image_url: finalImageUrl || undefined,
+        image_upload_id: currentHeader?.uploadId,
         tags: data.tags,
         external_url: externalUrl,
       };
@@ -1613,10 +1624,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       className="w-10 h-8 flex items-center justify-center rounded-md border border-border overflow-hidden cursor-pointer hover:bg-accent transition-colors flex-shrink-0"
                     >
                       {(stagedImageUrl || article?.article.draft_image_url) ? (
-                        <img 
-                          src={stagedImageUrl || article?.article.draft_image_url} 
-                          alt="Article header" 
-                          className="w-full h-full object-cover"
+                        <BlurhashImage
+                          src={stagedImageUrl || article?.article.draft_image_url || ''}
+                          alt="Article header"
+                          blurhash={currentHeader?.blurhash ?? article?.article.draft_image?.blurhash}
+                          className="h-full w-full"
+                          imgClassName="h-full w-full object-cover"
                         />
                       ) : (
                         <ImageIcon className="w-5 h-5 text-muted-foreground" />
@@ -1637,10 +1650,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         <div className="text-sm font-medium">Preview</div>
                         <div className="aspect-video rounded-lg border-2 border-dashed border-border overflow-hidden bg-muted/40">
                           {previewImageUrl ? (
-                            <img 
-                              src={previewImageUrl} 
-                              alt="Image preview" 
-                              className="w-full h-full object-cover"
+                            <BlurhashImage
+                              src={previewImageUrl}
+                              alt="Image preview"
+                              blurhash={currentHeader?.blurhash}
+                              className="h-full w-full"
+                              imgClassName="h-full w-full object-cover"
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-gray-400">
@@ -1651,6 +1666,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                             </div>
                           )}
                         </div>
+                        {currentHeader?.blurhash ? (
+                          <p className="font-mono text-xs break-all text-muted-foreground" data-testid="header-blurhash">
+                            blurhash {currentHeader.blurhash}
+                          </p>
+                        ) : null}
                         
                         {/* Image Versions */}
                         {imageVersions.length > 0 && (
@@ -1682,27 +1702,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       
                       {/* Controls Section */}
                       <div className="space-y-4">
-                        <Tabs defaultValue="url" className="w-full">
-                          <TabsList className="grid w-full grid-cols-3">
-                            <TabsTrigger value="url">URL</TabsTrigger>
-                            <TabsTrigger value="generate">Generate</TabsTrigger>
+                        <Tabs defaultValue="uploads" className="w-full">
+                          <TabsList className="grid w-full grid-cols-2">
                             <TabsTrigger value="uploads">From Uploads</TabsTrigger>
+                            <TabsTrigger value="generate">Generate</TabsTrigger>
                           </TabsList>
-                          <TabsContent value="url" className="space-y-2 mt-3">
-                            <label className="block text-sm font-medium">Image URL</label>
-                            <Input
-                              className="w-full"
-                              value={previewImageUrl}
-                              onChange={(e) => {
-                                setPreviewImageUrl(e.target.value);
-                                if (e.target.value) {
-                                  addImageVersion(e.target.value);
-                                }
-                              }}
-                              placeholder="Enter image URL..."
-                            />
-                            {errors.image_url && <p className="text-red-500 text-sm">{errors.image_url.message}</p>}
-                          </TabsContent>
                           <TabsContent value="generate" className="space-y-3 mt-3">
                             <div className="text-sm font-medium">Generate New Image</div>
                             <div className="flex items-center gap-2">
@@ -1791,8 +1795,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                           </TabsContent>
                           <TabsContent value="uploads" className="mt-3">
                             <ImagePickerFromUploads
-                              onSelect={(url) => {
-                                addImageVersion(url);
+                              onSelect={(file) => {
+                                addImageVersion(file.url, undefined, { uploadId: file.id, blurhash: file.blurhash });
                                 setImageModalOpen(false);
                               }}
                             />

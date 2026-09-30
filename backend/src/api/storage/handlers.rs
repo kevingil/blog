@@ -69,6 +69,7 @@ pub async fn upload_file(
         multipart.map_err(|_| AppError::InvalidInput("Invalid request body".to_owned()))?;
     let mut key = None;
     let mut file = None;
+    let mut content_type = None;
     while let Some(field) = multipart
         .next_field()
         .await
@@ -84,6 +85,7 @@ pub async fn upload_file(
                 );
             }
             Some("file") if file.is_none() => {
+                content_type = field.content_type().map(str::to_owned);
                 file = Some(
                     field
                         .bytes()
@@ -100,11 +102,24 @@ pub async fn upload_file(
         .ok_or_else(|| AppError::InvalidInput("File key is required".to_owned()))?;
     let file = file.ok_or_else(|| AppError::InvalidInput("File is required".to_owned()))?;
     let service = state.service()?;
-    service.upload_file(&key, file).await?;
+    let recorded = service
+        .put_recorded(
+            &key,
+            content_type.as_deref().unwrap_or("application/octet-stream"),
+            file,
+            Some(_authenticated.0.into_inner()),
+        )
+        .await?;
     Ok(Json(SuccessResponse::new(UploadFileResponse {
         success: true,
-        url: format!("{}/{}", service.url_prefix(), key),
-        key,
+        url: recorded.url,
+        key: recorded.key,
+        id: recorded.id,
+        content_type: recorded.content_type,
+        byte_size: recorded.byte_size,
+        width: recorded.width,
+        height: recorded.height,
+        blurhash: recorded.blurhash,
     })))
 }
 

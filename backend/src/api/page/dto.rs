@@ -55,6 +55,8 @@ pub struct PageCreateRequest {
     pub meta_data: Option<BTreeMap<String, Value>>,
     #[serde(default, deserialize_with = "null_default")]
     pub is_published: bool,
+    #[serde(default)]
+    pub image_upload_id: Option<Uuid>,
 }
 
 impl PageCreateRequest {
@@ -86,6 +88,7 @@ impl PageCreateRequest {
             image_url: self.image_url,
             meta_data: self.meta_data,
             is_published: self.is_published,
+            image_upload_id: self.image_upload_id,
         })
     }
 }
@@ -98,6 +101,8 @@ pub struct PageUpdateRequest {
     pub image_url: Option<String>,
     pub meta_data: Option<BTreeMap<String, Value>>,
     pub is_published: Option<bool>,
+    #[serde(default)]
+    pub image_upload_id: Option<Uuid>,
 }
 
 impl From<PageUpdateRequest> for CoreUpdateRequest {
@@ -109,6 +114,7 @@ impl From<PageUpdateRequest> for CoreUpdateRequest {
             image_url: value.image_url,
             meta_data: value.meta_data,
             is_published: value.is_published,
+            image_upload_id: value.image_upload_id,
         }
     }
 }
@@ -125,6 +131,10 @@ pub struct PageResponse {
     pub is_published: bool,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upload_file_id: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<crate::core::storage::ImageAsset>,
 }
 
 impl From<CorePage> for PageResponse {
@@ -140,6 +150,8 @@ impl From<CorePage> for PageResponse {
             is_published: value.is_published,
             created_at: timestamp(value.created_at),
             updated_at: timestamp(value.updated_at),
+            upload_file_id: value.upload_file_id,
+            image: value.image,
         }
     }
 }

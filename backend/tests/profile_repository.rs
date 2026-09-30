@@ -76,6 +76,7 @@ async fn profile_postgres_repository_preserves_public_selection_settings_and_upd
         meta_description: None,
         created_at: None,
         updated_at: None,
+        logo_upload_file_id: None,
     };
     organizations.save(&mut organization).await?;
 

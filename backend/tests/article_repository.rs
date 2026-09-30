@@ -65,6 +65,11 @@ fn article_fixture(
         created_at: None,
         updated_at: None,
         external_url: None,
+        draft_upload_file_id: None,
+        published_upload_file_id: None,
+        draft_image: None,
+        published_image: None,
+        body_images: Vec::new(),
     }
 }
 

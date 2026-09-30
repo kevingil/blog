@@ -1,5 +1,6 @@
 import { Profile } from '@/client';
 import { generatedData } from '@/services/generatedClient';
+import type { ImageAsset } from '@/services/types';
 
 /**
  * Public profile that can be either a user or organization
@@ -10,6 +11,7 @@ export interface PublicProfile {
   name: string;
   bio: string;
   image_url: string; // profile_image for user, logo_url for org
+  image?: ImageAsset | null;
   email_public: string;
   social_links: Record<string, string>;
   meta_description: string;
@@ -24,6 +26,7 @@ export interface UserProfile {
   name: string;
   bio: string;
   profile_image: string;
+  image?: ImageAsset | null;
   email_public: string;
   social_links: Record<string, string>;
   meta_description: string;
@@ -37,6 +40,7 @@ export interface ProfileUpdateRequest {
   name?: string;
   bio?: string;
   profile_image?: string;
+  profile_upload_file_id?: string;
   email_public?: string;
   social_links?: Record<string, string>;
   meta_description?: string;

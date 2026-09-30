@@ -110,6 +110,7 @@ fn organization(name: &str, slug: &str) -> Organization {
         meta_description: None,
         created_at: None,
         updated_at: None,
+        logo_upload_file_id: None,
     }
 }
 

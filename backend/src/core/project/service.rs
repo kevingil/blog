@@ -75,6 +75,8 @@ impl ProjectService {
             url: request.url,
             created_at: None,
             updated_at: None,
+            upload_file_id: request.image_upload_id,
+            image: None,
         };
         self.projects.save(&mut project).await?;
         Ok(project)
@@ -98,7 +100,13 @@ impl ProjectService {
         if let Some(tags) = request.tags {
             project.tag_ids = self.tags.ensure_exists(&tags).await?;
         }
+        if let Some(image_upload_id) = request.image_upload_id {
+            project.upload_file_id = Some(image_upload_id);
+        }
         if let Some(image_url) = request.image_url {
+            if request.image_upload_id.is_none() && image_url.is_empty() {
+                project.upload_file_id = None;
+            }
             project.image_url = image_url;
         }
         if let Some(url) = request.url {
