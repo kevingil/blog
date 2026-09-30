@@ -1,6 +1,5 @@
 import { ArticleListItem, ArticleData, RecommendedArticle, ArticleVersion, ArticleVersionListResponse } from '@/services/types';
 import { Articles, Images } from '@/client';
-import { client } from '@/client/client.gen';
 import type { ArticleVersionListResponse as GeneratedArticleVersionListResponse } from '@/client';
 import { generatedData } from '@/services/generatedClient';
 
@@ -109,17 +108,6 @@ export async function getArticleById(blogId: string): Promise<ArticleListItem | 
   }
 }
 
-export async function createExternalArticle(url: string): Promise<ArticleListItem> {
-  return generatedData<ArticleListItem>(
-    client.post({
-      url: '/blog/articles/external',
-      body: { url },
-      headers: { 'Content-Type': 'application/json' },
-      security: [{ scheme: 'bearer', type: 'http' }],
-    }),
-  );
-}
-
 export async function createArticle(article: {
   title: string;
   content: string;
@@ -127,9 +115,12 @@ export async function createArticle(article: {
   tags: string[];
   publish: boolean;  // true = publish immediately, false = save as draft only
   authorId: string;
+  external_url?: string | null;
 }): Promise<ArticleListItem> {
   // Protected endpoint - requires auth
-  return generatedData<ArticleListItem>(Articles.createArticle({ body: article }));
+  return generatedData<ArticleListItem>(Articles.createArticle({
+    body: article as Parameters<typeof Articles.createArticle>[0]['body'],
+  }));
 }
 
 export async function updateArticle(slug: string, article: {
@@ -137,11 +128,16 @@ export async function updateArticle(slug: string, article: {
   content: string;     // Updates draft_content
   image_url?: string;  // Updates draft_image_url
   tags: string[];
+  external_url?: string | null;
 }): Promise<ArticleListItem> {
   // Protected endpoint - requires auth
-  // Updates always go to draft_* fields; use publishArticle() to publish
+  // Updates always go to draft_* fields; use publishArticle() to publish.
+  // external_url null clears the link. Omitting it would leave the saved link alone.
   return generatedData<ArticleListItem>(
-    Articles.updateArticle({ path: { slug }, body: article }),
+    Articles.updateArticle({
+      path: { slug },
+      body: article as Parameters<typeof Articles.updateArticle>[0]['body'],
+    }),
   );
 }
 

@@ -141,13 +141,19 @@ impl ArticleRepository for MemoryArticles {
             .any(|article| article.slug == slug && Some(article.id) != exclude_id))
     }
 
-    async fn external_url_exists(&self, url: &str) -> Result<bool, AppError> {
+    async fn external_url_exists(
+        &self,
+        url: &str,
+        exclude_id: Option<Uuid>,
+    ) -> Result<bool, AppError> {
         Ok(self
             .articles
             .lock()
             .expect("articles lock")
             .values()
-            .any(|article| article.external_url.as_deref() == Some(url)))
+            .any(|article| {
+                article.external_url.as_deref() == Some(url) && Some(article.id) != exclude_id
+            }))
     }
 
     async fn save_draft(&self, article: &mut Article) -> Result<(), AppError> {
@@ -540,6 +546,7 @@ async fn create_validates_fields_creates_tags_and_uses_a_unique_slug() {
             tags: vec!["rust".to_owned(), "testing".to_owned()],
             publish: false,
             author_id,
+            external_url: None,
         })
         .await
         .expect("create article");
@@ -556,6 +563,7 @@ async fn create_validates_fields_creates_tags_and_uses_a_unique_slug() {
             tags: Vec::new(),
             publish: false,
             author_id,
+            external_url: None,
         })
         .await
         .expect_err("invalid fields");
@@ -703,6 +711,7 @@ async fn update_publish_unpublish_and_delete_preserve_lifecycle() {
                 image_url: "https://example.com/image.jpg".to_owned(),
                 tags: vec!["rust".to_owned()],
                 published_at: Some(1_700_000_000),
+                external_url: None,
             },
         )
         .await
@@ -886,6 +895,178 @@ async fn create_external_publishes_cached_image_and_excerpt() {
         )
         .await;
     assert!(matches!(duplicate, Err(AppError::Conflict(_))));
+}
+
+fn external_service(service: ArticleService) -> (ArticleService, Arc<MemoryImageCache>) {
+    let images = Arc::new(MemoryImageCache::default());
+    let service = service.with_external_blogs(
+        Arc::new(StaticPage {
+            page: ExternalPage {
+                url: "https://www.sellscale.com/blog-posts/our-agentic-engineering-org".to_owned(),
+                title: "Our Agentic Engineering Org".to_owned(),
+                excerpt: "Every engineering team runs some version of the same cycle.".to_owned(),
+                image: Some(ExternalImage {
+                    bytes: vec![0xFF, 0xD8, 0xFF, 0x00],
+                    content_type: "image/jpeg".to_owned(),
+                    extension: "jpg".to_owned(),
+                }),
+                published_at: None,
+            },
+        }),
+        images.clone(),
+    );
+    (service, images)
+}
+
+#[tokio::test]
+async fn update_can_point_an_existing_article_outside_and_back() {
+    let (articles, accounts, _, service) = fixture();
+    let author_id = Uuid::new_v4();
+    accounts
+        .accounts
+        .lock()
+        .expect("accounts lock")
+        .insert(AccountId(author_id), account(author_id, "Ada"));
+    let id = Uuid::new_v4();
+    let mut existing = article(id, author_id, "Notes from the lab", Vec::new());
+    existing.published_title = Some("Notes from the lab".to_owned());
+    existing.published_content =
+        Some("A published note that already lives on this site.".to_owned());
+    existing.published_at = Some(Utc::now());
+    articles
+        .articles
+        .lock()
+        .expect("articles lock")
+        .insert(id, existing);
+    let (service, images) = external_service(service);
+
+    let linked = service
+        .update(
+            id,
+            UpdateArticle {
+                title: "Notes from the lab".to_owned(),
+                content: "A published note that already lives on this site.".to_owned(),
+                image_url: String::new(),
+                tags: Vec::new(),
+                published_at: None,
+                external_url: Some(Some(
+                    "https://www.sellscale.com/blog-posts/our-agentic-engineering-org".to_owned(),
+                )),
+            },
+        )
+        .await
+        .expect("set external link");
+    assert_eq!(
+        linked.article.external_url.as_deref(),
+        Some("https://www.sellscale.com/blog-posts/our-agentic-engineering-org")
+    );
+    assert_eq!(linked.article.draft_title, "Notes from the lab");
+    assert!(linked.article.draft_image_url.contains("/external-blogs/"));
+    assert_eq!(
+        linked.article.published_image_url.as_deref(),
+        Some(linked.article.draft_image_url.as_str())
+    );
+    assert_eq!(images.stored.lock().expect("image cache").len(), 1);
+
+    let kept = service
+        .update(
+            id,
+            UpdateArticle {
+                title: "Notes from the lab".to_owned(),
+                content: "A published note that already lives on this site.".to_owned(),
+                image_url: linked.article.draft_image_url.clone(),
+                tags: Vec::new(),
+                published_at: None,
+                external_url: None,
+            },
+        )
+        .await
+        .expect("save without touching the link");
+    assert_eq!(
+        kept.article.external_url.as_deref(),
+        Some("https://www.sellscale.com/blog-posts/our-agentic-engineering-org")
+    );
+
+    let cleared = service
+        .update(
+            id,
+            UpdateArticle {
+                title: "Notes from the lab".to_owned(),
+                content: "A published note that already lives on this site.".to_owned(),
+                image_url: linked.article.draft_image_url.clone(),
+                tags: Vec::new(),
+                published_at: None,
+                external_url: Some(None),
+            },
+        )
+        .await
+        .expect("clear external link");
+    assert_eq!(cleared.article.external_url, None);
+    assert_eq!(cleared.article.draft_title, "Notes from the lab");
+    assert_eq!(
+        cleared.article.published_content.as_deref(),
+        Some("A published note that already lives on this site.")
+    );
+}
+
+#[tokio::test]
+async fn create_with_only_an_external_link_fills_the_preview() {
+    let (_articles, accounts, _, service) = fixture();
+    let author_id = Uuid::new_v4();
+    accounts
+        .accounts
+        .lock()
+        .expect("accounts lock")
+        .insert(AccountId(author_id), account(author_id, "Ada"));
+    let (service, _) = external_service(service);
+
+    let created = service
+        .create(CreateArticle {
+            title: String::new(),
+            content: String::new(),
+            image_url: String::new(),
+            tags: Vec::new(),
+            publish: false,
+            author_id,
+            external_url: Some(
+                "https://www.sellscale.com/blog-posts/our-agentic-engineering-org".to_owned(),
+            ),
+        })
+        .await
+        .expect("create from link");
+
+    assert_eq!(created.article.draft_title, "Our Agentic Engineering Org");
+    assert!(created.article.draft_content.contains("same cycle"));
+    assert!(created.article.draft_image_url.contains("/external-blogs/"));
+    assert!(created.article.published_at.is_none());
+    assert_eq!(
+        created.article.external_url.as_deref(),
+        Some("https://www.sellscale.com/blog-posts/our-agentic-engineering-org")
+    );
+}
+
+#[test]
+fn update_request_distinguishes_a_missing_external_link_from_a_cleared_one() {
+    let missing: UpdateArticle = serde_json::from_str(
+        r#"{"title":"Hello title","content":"long enough content","image_url":"","tags":[]}"#,
+    )
+    .expect("missing field");
+    assert!(missing.external_url.is_none());
+
+    let cleared: UpdateArticle = serde_json::from_str(
+        r#"{"title":"Hello title","content":"long enough content","image_url":"","tags":[],"external_url":null}"#,
+    )
+    .expect("null field");
+    assert_eq!(cleared.external_url, Some(None));
+
+    let set: UpdateArticle = serde_json::from_str(
+        r#"{"title":"Hello title","content":"long enough content","image_url":"","tags":[],"external_url":"https://example.com/post"}"#,
+    )
+    .expect("url field");
+    assert_eq!(
+        set.external_url,
+        Some(Some("https://example.com/post".to_owned()))
+    );
 }
 
 #[test]

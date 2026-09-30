@@ -310,10 +310,19 @@ impl ArticleRepository for DieselArticleRepository {
             .map_err(map_diesel_error)
     }
 
-    async fn external_url_exists(&self, url: &str) -> Result<bool, AppError> {
+    async fn external_url_exists(
+        &self,
+        url: &str,
+        exclude_id: Option<Uuid>,
+    ) -> Result<bool, AppError> {
         let mut connection = self.connection().await?;
-        article::table
+        let mut query = article::table
             .filter(article::external_url.eq(url))
+            .into_boxed();
+        if let Some(exclude_id) = exclude_id {
+            query = query.filter(article::id.ne(exclude_id));
+        }
+        query
             .select(count_star())
             .first::<i64>(&mut connection)
             .await

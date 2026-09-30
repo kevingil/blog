@@ -23,7 +23,11 @@ pub trait ArticleRepository: Send + Sync {
     async fn delete(&self, id: Uuid) -> Result<(), AppError>;
     async fn get_popular_tags(&self, limit: i64) -> Result<Vec<i64>, AppError>;
     async fn slug_exists(&self, slug: &str, exclude_id: Option<Uuid>) -> Result<bool, AppError>;
-    async fn external_url_exists(&self, url: &str) -> Result<bool, AppError>;
+    async fn external_url_exists(
+        &self,
+        url: &str,
+        exclude_id: Option<Uuid>,
+    ) -> Result<bool, AppError>;
     async fn save_draft(&self, article: &mut Article) -> Result<(), AppError>;
     async fn publish(
         &self,
