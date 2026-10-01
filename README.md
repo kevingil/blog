@@ -61,6 +61,9 @@ VITE_WS_URL=ws://localhost:8080/websocket
 VITE_PUBLIC_S3_URL_PREFIX=http://localhost:9000/blog
 ```
 
+`VITE_GA_MEASUREMENT_ID` is optional. Leave it unset locally. Set it to a GA4
+measurement ID (`G-…`) only in the production frontend build.
+
 The backend's `PUBLIC_API_URL` and `PUBLIC_APP_URL` configure MCP OAuth callback
 and return origins. Model endpoints in the local profile use fixtures; unset
 model endpoints use the real OpenAI, Groq, and Exa APIs.
@@ -164,6 +167,9 @@ Set backend variables in Render and frontend `VITE_*` variables at the frontend
 host. Use public hostnames or custom domains, not internal service hosts.
 Frontend `VITE_*` values are public and baked into the build; rebuild it after
 changing them and configure its host to rewrite SPA deep links to `index.html`.
+Set `VITE_GA_MEASUREMENT_ID` in the Cloudflare build environment when the
+deployed site should load Google Analytics. The tag is omitted unless that
+value is a GA4 measurement ID, so local builds, Compose, and forks stay quiet.
 
 The Cloudflare Workers frontend uses
 [`frontend/wrangler.jsonc`](frontend/wrangler.jsonc) to serve Vite's `dist`

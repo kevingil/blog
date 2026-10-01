@@ -6,8 +6,10 @@ RUN bun install --frozen-lockfile
 COPY . .
 ARG VITE_API_BASE_URL=http://localhost:8080
 ARG VITE_WS_URL=ws://localhost:8080/websocket
+ARG VITE_GA_MEASUREMENT_ID=
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 ENV VITE_WS_URL=${VITE_WS_URL}
+ENV VITE_GA_MEASUREMENT_ID=${VITE_GA_MEASUREMENT_ID}
 RUN bun run build
 
 FROM nginx:1.29.5-alpine@sha256:1eff5a5f3fcf8431a0abb7eddf5471fec24e5e1905a2581aeacdb07a4479b92b
