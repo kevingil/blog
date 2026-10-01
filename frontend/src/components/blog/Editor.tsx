@@ -4,7 +4,7 @@ import { useAuth } from '@/services/auth/auth';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, ArrowUp, Square, Trash2, Mic } from "lucide-react"
+import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, ArrowUp, Square, Trash2, Mic, MessageSquare, X } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { VITE_API_BASE_URL } from "@/services/constants";
@@ -438,6 +438,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   /* --------------------------------------------------------------------- */
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [inputMode, setInputMode] = useState<'text' | 'conversation'>('text');
   const playSpeechRef = useRef<(audioBase64: string, mimeType?: string) => Promise<void>>(async () => {});
@@ -1562,6 +1563,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     if (consumedRequestIdRef.current === initialRequestId) return;
     consumedRequestIdRef.current = initialRequestId;
 
+    setMobileChatOpen(true);
     setChatLoading(true);
 
     (async () => {
@@ -2154,9 +2156,22 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
       </div>
 
-      {/* Chat side-panel */}
-        <div className="article-editor-chat border rounded-sm">
-        <div ref={chatMessagesRef} className="flex-1 overflow-y-auto p-1.5 space-y-2">
+      {/* Chat stays beside the draft on a wide screen, and covers it on a phone. */}
+        <div className={cn("article-editor-chat border rounded-sm", mobileChatOpen && "article-editor-chat-open")}>
+        <div className="article-editor-chat-mobile-bar">
+          <span className="text-sm font-medium">Assistant</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            onClick={() => setMobileChatOpen(false)}
+            aria-label="Close chat"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <div ref={chatMessagesRef} className="flex-1 space-y-2 overflow-y-auto p-3 md:p-1.5">
           {chatMessages.map((m, i) => {
             switch (m.role) {
               case 'tool': {
@@ -2407,6 +2422,15 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           </PromptInput>
         </div>
       </div>
+      <button
+        type="button"
+        className="article-editor-chat-fab"
+        onClick={() => setMobileChatOpen(true)}
+        aria-label="Open assistant chat"
+      >
+        <MessageSquare />
+        {chatLoading ? "Working" : "Chat"}
+      </button>
 
       {/* Version History Drawer */}
       <Drawer open={showVersions} onOpenChange={setShowVersions} direction="right">

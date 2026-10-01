@@ -196,7 +196,7 @@ export function TipTapEditor({
         </Toggle>
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
-        <article className="mx-auto max-w-4xl px-4 pb-6 pt-4 md:px-8 md:pb-8 md:pt-6">
+        <article className="mx-auto max-w-4xl px-4 pb-20 pt-4 md:px-8 md:pb-8 md:pt-6">
           {title && <h1 className="mb-3 text-2xl font-bold md:mb-4 md:text-4xl">{title}</h1>}
           {imageUrl && (
             <img
