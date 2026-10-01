@@ -626,14 +626,14 @@ export function SourcesManagerContent({
 export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManagerProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="min-w-[90vw] w-[90vw] max-h-[90vh] overflow-hidden flex flex-col p-0">
+      <DialogContent className="flex h-[85vh] max-h-[90vh] w-[90vw] min-w-[90vw] flex-col overflow-hidden p-0">
         <DialogHeader className="sr-only">
           <DialogTitle>Sources & References</DialogTitle>
           <DialogDescription>
             Manage sources and references for this article. Add web links to scrape content automatically, or add manual sources.
           </DialogDescription>
         </DialogHeader>
-        <SourcesManagerContent articleId={articleId} showHeader={false} />
+        <SourcesManagerContent articleId={articleId} />
       </DialogContent>
     </Dialog>
   );
