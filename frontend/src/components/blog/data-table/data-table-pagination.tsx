@@ -21,8 +21,8 @@ export function DataTablePagination<TData>({
   onPageChange,
 }: DataTablePaginationProps<TData>) {
   return (
-    <div className="flex items-center justify-between px-2 py-4">
-      <div className="flex-1 text-sm text-muted-foreground">
+    <div className="flex min-w-0 items-center justify-between gap-2 py-3">
+      <div className="hidden min-w-0 flex-1 text-sm text-muted-foreground sm:block">
         {table.getFilteredSelectedRowModel().rows.length > 0 && (
           <>
             {table.getFilteredSelectedRowModel().rows.length} of{" "}
@@ -30,9 +30,9 @@ export function DataTablePagination<TData>({
           </>
         )}
       </div>
-      <div className="flex items-center space-x-6 lg:space-x-8">
-        <div className="flex items-center space-x-2">
-          <p className="text-sm font-medium">
+      <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-6 lg:gap-8">
+        <div className="flex items-center">
+          <p className="whitespace-nowrap text-sm font-medium">
             Page {currentPage} of {totalPages}
           </p>
         </div>

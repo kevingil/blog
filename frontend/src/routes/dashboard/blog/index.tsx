@@ -98,7 +98,7 @@ function ArticlesPage() {
   return (
     <section className="flex flex-col flex-1 min-h-0 min-w-0 p-0 md:p-4 h-full overflow-hidden">
       <Card className="flex flex-col flex-1 min-h-0 min-w-0 overflow-hidden">
-        <CardContent className="flex flex-col flex-1 min-h-0 min-w-0 py-0 px-6 overflow-hidden">
+        <CardContent className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-3 py-0 md:px-6">
           <DataTable
             columns={columns}
             data={data?.articles || []}

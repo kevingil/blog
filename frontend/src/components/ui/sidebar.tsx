@@ -500,9 +500,9 @@ const SidebarMenuButton = React.forwardRef<HTMLButtonElement, React.ComponentPro
   isActive?: boolean
   tooltip?: string | React.ComponentProps<typeof TooltipContent>
 } & VariantProps<typeof sidebarMenuButtonVariants>>(
-  ({ asChild = false, isActive = false, variant = "default", size = "default", tooltip, className, ...props }, ref) => {
+  ({ asChild = false, isActive = false, variant = "default", size = "default", tooltip, className, onClick, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
-    const { isMobile, state } = useSidebar();
+    const { isMobile, state, setOpenMobile } = useSidebar();
     const button = (
       <Comp
         ref={ref}
@@ -511,6 +511,10 @@ const SidebarMenuButton = React.forwardRef<HTMLButtonElement, React.ComponentPro
         data-size={size}
         data-active={isActive}
         className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
+        onClick={(event) => {
+          onClick?.(event);
+          if (isMobile) setOpenMobile(false);
+        }}
         {...props}
       />
     );
