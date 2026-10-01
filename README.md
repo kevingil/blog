@@ -164,6 +164,15 @@ Set backend variables in Render and frontend `VITE_*` variables at the frontend
 host. Use public hostnames or custom domains, not internal service hosts.
 Frontend `VITE_*` values are public and baked into the build; rebuild it after
 changing them and configure its host to rewrite SPA deep links to `index.html`.
+
+The Cloudflare Workers frontend uses
+[`frontend/wrangler.jsonc`](frontend/wrangler.jsonc) to serve Vite's `dist`
+directory with `assets.not_found_handling: "single-page-application"`. This
+serves `index.html` for direct navigation to React routes such as
+`/projects?page=1`. In Cloudflare Builds, use `frontend` as the root directory,
+`bun run build` as the build command, and `npx wrangler deploy` as the deploy
+command. Redeploy the frontend after changing this configuration.
+
 The API uses Render's [pre-deploy command](https://render.com/docs/deploys#pre-deploy-command)
 on a paid service, so migration failure blocks the new API deployment.
 Production never runs the local fixture seed. Existing accounts remain intact.
