@@ -112,7 +112,7 @@ the Blueprint to switch its runtime to Rust and apply the build, pre-deploy,
 and start commands together. Render supports this [runtime change in place](https://render.com/docs/native-runtimes#changing-a-services-runtime).
 
 The API's async PostgreSQL pool supports TLS with certificate and hostname
-verification using the system CA store. Use `sslmode=require` in the production
+verification. Use `sslmode=require` in the production
 `DATABASE_URL` to prevent unencrypted connections. For Render, Supabase's shared
 session pooler on port `5432` provides IPv4 connectivity without its paid direct
 IPv4 add-on and supports the migration session lock. Copy the exact URL from
@@ -120,6 +120,45 @@ Supabase's Connect dialog. Do not use the transaction pooler on port `6543`.
 Local PostgreSQL without TLS remains supported through its default `prefer`
 mode. The synchronous migration binaries use libpq, so verify API database
 connectivity as well as successful migrations during deployment.
+
+### Supabase TLS certificate on Render
+
+Configure the Supabase root CA before deploying the API. The API loads system
+roots by default, which may not trust Supabase's database certificate chain.
+The existing Rust code supports the certificate environment variables below;
+no code change is needed.
+
+1. In the Supabase **blog** project, open **Database → Settings → SSL
+   configuration → Download certificate**. Use the certificate supplied by
+   that project. See [Supabase's SSL documentation](https://supabase.com/docs/guides/platform/ssl-enforcement).
+2. In the **personal Render workspace**, open **blog-backend → Environment →
+   Secret Files → Add file**. Name it `supabase-ca.crt` and paste the entire
+   downloaded PEM, including `BEGIN CERTIFICATE` and `END CERTIFICATE` lines.
+   Choose **Save only** while preparing the remaining settings.
+3. Add these service environment variables:
+
+   | Variable | Value |
+   | --- | --- |
+   | `SSL_CERT_FILE` | `/etc/secrets/supabase-ca.crt` |
+   | `SSL_CERT_DIR` | `/etc/ssl/certs` |
+
+   Both settings matter: setting either overrides the TLS library's default
+   certificate discovery. The directory retains Render's system CA roots
+   alongside the Supabase CA. These are Dashboard-managed settings; the
+   Blueprint does not provision the certificate file or these variables.
+4. Choose **Save and deploy**. Render may still run a cached build. Verify
+   **Deploy succeeded | Live** and the API's `server listening` log. Certificate
+   and hostname verification remain enabled.
+
+If pre-deploy succeeds but the API exits with `error performing TLS handshake`,
+check this certificate configuration. The migration binaries use libpq, where
+`sslmode=require` normally encrypts without verifying the server certificate;
+the API's Rust TLS client verifies it. Successful migrations therefore do not
+prove the API trusts the server. After fixing trust, redeploy normally: the
+stamper skips recorded baseline versions and the migrator applies only pending
+versions. Do not reset the ledger or rerun historical SQL to fix a TLS error.
+
+### Frontend configuration and cutover
 
 Set backend variables in Render and frontend `VITE_*` variables at the frontend
 host. Use public hostnames or custom domains, not internal service hosts.
