@@ -562,10 +562,10 @@ async fn create_validates_fields_creates_tags_and_uses_a_unique_slug() {
     assert_eq!(created.tags.len(), 2);
     assert_eq!(tags.tags.lock().expect("tags lock").len(), 2);
 
-    let error = service
+    let empty = service
         .create(CreateArticle {
-            title: "x".to_owned(),
-            content: "short".to_owned(),
+            title: String::new(),
+            content: String::new(),
             image_url: String::new(),
             tags: Vec::new(),
             publish: false,
@@ -574,7 +574,42 @@ async fn create_validates_fields_creates_tags_and_uses_a_unique_slug() {
             image_upload_id: None,
         })
         .await
-        .expect_err("invalid fields");
+        .expect("empty article");
+    assert_eq!(empty.article.draft_title, "");
+    assert_eq!(empty.article.draft_content, "");
+    assert_eq!(empty.article.slug, "untitled");
+
+    let emptied = service
+        .update(
+            created.article.id,
+            UpdateArticle {
+                title: String::new(),
+                content: String::new(),
+                image_url: String::new(),
+                tags: Vec::new(),
+                published_at: None,
+                external_url: None,
+                image_upload_id: None,
+            },
+        )
+        .await
+        .expect("empty update");
+    assert_eq!(emptied.article.draft_title, "");
+    assert_eq!(emptied.article.draft_content, "");
+
+    let error = service
+        .create(CreateArticle {
+            title: "t".repeat(201),
+            content: String::new(),
+            image_url: String::new(),
+            tags: Vec::new(),
+            publish: false,
+            author_id,
+            external_url: None,
+            image_upload_id: None,
+        })
+        .await
+        .expect_err("title too long");
     assert!(matches!(error, AppError::InvalidInput(_)));
 }
 

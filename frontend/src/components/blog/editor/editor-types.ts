@@ -15,7 +15,7 @@ export const DEFAULT_IMAGE_PROMPT = [
 ];
 
 export const articleSchema = z.object({
-  title: z.string(),
+  title: z.string().max(200, 'Title must be at most 200 characters'),
   content: z.string(),
   image_url: z.union([z.string().url(), z.literal('')]).optional(),
   tags: z.array(z.string()),
@@ -27,20 +27,6 @@ export const articleSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ['external_url'],
       message: 'Enter a full http or https link.',
-    });
-  }
-  if (!external && value.title.trim().length < 1) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['title'],
-      message: 'Title is required',
-    });
-  }
-  if (!external && value.content.trim().length < 1) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['content'],
-      message: 'Content is required',
     });
   }
 });

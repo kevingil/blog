@@ -950,18 +950,13 @@ fn validate_update(request: &UpdateArticle) -> Result<(), AppError> {
 
 fn validate_article_fields(
     title: &str,
-    content: &str,
+    _content: &str,
     image_url: &str,
     tags: &[String],
 ) -> Result<(), AppError> {
-    if !(3..=200).contains(&title.chars().count()) {
+    if title.chars().count() > 200 {
         return Err(AppError::InvalidInput(
-            "title must contain between 3 and 200 characters".to_owned(),
-        ));
-    }
-    if content.chars().count() < 10 {
-        return Err(AppError::InvalidInput(
-            "content must contain at least 10 characters".to_owned(),
+            "title must contain at most 200 characters".to_owned(),
         ));
     }
     if tags.len() > 10
