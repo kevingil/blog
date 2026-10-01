@@ -25,7 +25,9 @@ COPY --from=builder /app/backend/target/release/stamp-diesel-migrations /usr/loc
 COPY --from=builder /app/backend/target/release/schema-fingerprint /usr/local/bin/schema-fingerprint
 COPY --from=builder /app/backend/target/release/external-fixtures /usr/local/bin/external-fixtures
 
+COPY --chmod=755 scripts/pre-deploy.sh /usr/local/bin/pre-deploy
+
 USER 10001
 ENV PORT=8080
 EXPOSE 8080
-ENTRYPOINT ["/usr/local/bin/blog-backend"]
+CMD ["/usr/local/bin/blog-backend"]

@@ -22,8 +22,9 @@ tmp/
 .vscode
 .idea
 
-# .env file
+# Local environment files. Commit only the corresponding *.env.example files.
 .env
+*.env
 
 # Project build
 main

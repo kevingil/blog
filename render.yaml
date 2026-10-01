@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://render.com/schema/render.yaml.json
 
 previews:
-  generation: off
+  generation: "off"
 
 services:
   - type: web
@@ -17,7 +17,7 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     autoDeployTrigger: checksPass
-    preDeployCommand: /usr/local/bin/migrate
+    preDeployCommand: /usr/local/bin/pre-deploy
     healthCheckPath: /health
     maxShutdownDelaySeconds: 120
     numInstances: 1
@@ -25,6 +25,7 @@ services:
       paths:
         - backend/**
         - Dockerfile
+        - scripts/pre-deploy.sh
         - render.yaml
     envVars:
       - key: HOST
@@ -38,6 +39,10 @@ services:
       - key: AUTH_SECRET
         sync: false
       - key: ALLOWED_ORIGINS
+        sync: false
+      - key: PUBLIC_API_URL
+        sync: false
+      - key: PUBLIC_APP_URL
         sync: false
       - key: OPENAI_API_KEY
         sync: false
