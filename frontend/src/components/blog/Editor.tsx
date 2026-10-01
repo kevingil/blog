@@ -18,7 +18,6 @@ import { EditorTabs } from './editor/EditorTabs';
 import { ImageLoader } from './editor/ImageLoader';
 import { ImagePickerFromUploads } from './editor/ImagePickerFromUploads';
 import { BlurhashImage } from '@/components/media/BlurhashImage';
-import { turndownService } from './editor/turndown';
 import { 
   DEFAULT_IMAGE_PROMPT, 
   articleSchema, 
@@ -738,14 +737,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
   const [imagePrompt, setImagePrompt] = useState<string | null>(DEFAULT_IMAGE_PROMPT[Math.floor(Math.random() * DEFAULT_IMAGE_PROMPT.length)]);
 
-  /* --------------------------------------------------------------------- */
-  /* Markdown Editor Setup                                                 */
-  /* --------------------------------------------------------------------- */
-  const [activeTab, setActiveTab] = useState<string>('edit');
+  /* Preview is the only editor. Highlights stay until the next agent run. */
+  const [activeTab, setActiveTab] = useState<string>('preview');
   const [addedRanges, setAddedRanges] = useState<TextRange[]>([]);
 
   const onContentChange = (md: string) => {
-    setAddedRanges([]);
     setValue('content', md);
   };
 
@@ -923,6 +919,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
   const rewriteArticle = async () => {
     if (!article?.article.id) return;
+    setAddedRanges([]);
     setGeneratingRewrite(true);
     try {
       const result = await updateArticleWithContext(article.article.id);
@@ -1064,6 +1061,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   };
 
   const streamChatResponse = async (requestId: string, assistantIndex: number, isEditRequest: boolean) => {
+    setAddedRanges([]);
     return new Promise<void>((resolve, reject) => {
       const wsUrl = `${VITE_API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://')}/websocket`;
       

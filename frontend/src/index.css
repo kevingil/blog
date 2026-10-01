@@ -322,6 +322,33 @@
     margin-bottom: 1rem;
   }
 
+  .article-editor .ProseMirror {
+    outline: none;
+  }
+
+  .article-editor .ProseMirror mark[data-added='true'] {
+    background-color: rgba(74, 222, 128, 0.32);
+    border-radius: 0.15rem;
+    color: inherit;
+    padding: 0;
+  }
+
+  .article-editor .ProseMirror pre[data-added='true'] {
+    box-shadow: inset 0 0 0 2px rgba(74, 222, 128, 0.55);
+  }
+
+  .article-editor .ProseMirror img[data-added='true'] {
+    box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.55);
+  }
+
+  .article-editor .ProseMirror p.is-editor-empty:first-child::before {
+    color: var(--muted-foreground);
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+
   /*
 Go Blog CSS
 Cool animations, 
