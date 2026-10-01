@@ -28,8 +28,8 @@ import { cn } from "@/lib/utils";
 
 const COMPACT_HIDDEN_COLUMNS = new Set([
   "tags",
-  "article.created_at",
-  "article.published_at",
+  "article_created_at",
+  "article_published_at",
   "status",
 ]);
 
@@ -37,7 +37,7 @@ function compactColumnClass(id: string) {
   if (COMPACT_HIDDEN_COLUMNS.has(id)) {
     return "hidden w-0 max-w-0 overflow-hidden border-0 p-0 md:table-cell md:w-auto md:max-w-none md:overflow-visible md:p-2";
   }
-  if (id === "article.draft_title") {
+  if (id === "article_draft_title") {
     return "max-w-0 whitespace-normal md:max-w-none";
   }
   if (id === "actions") {

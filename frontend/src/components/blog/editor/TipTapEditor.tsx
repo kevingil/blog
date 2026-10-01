@@ -140,7 +140,7 @@ export function TipTapEditor({
 
   return (
     <div className="article-editor flex h-full min-h-0 flex-col bg-background">
-      <div className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-b px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&_button]:shrink-0">
+      <div className="flex shrink-0 items-center gap-0 overflow-x-auto border-b px-0.5 py-0.5 [scrollbar-width:none] md:gap-0.5 md:px-1 md:py-1 [&::-webkit-scrollbar]:hidden [&_button]:shrink-0 [&_button]:max-md:h-7 [&_button]:max-md:min-w-7 [&_button]:max-md:px-1">
         <Toggle size="sm" type="button" pressed={!!editor?.isActive('bold')} onPressedChange={() => editor?.chain().focus().toggleBold().run()} aria-label="Bold" title="Bold">
           <Bold className="h-3.5 w-3.5" />
         </Toggle>
@@ -150,14 +150,14 @@ export function TipTapEditor({
         <Toggle size="sm" type="button" pressed={!!editor?.isActive('strike')} onPressedChange={() => editor?.chain().focus().toggleStrike().run()} aria-label="Strikethrough" title="Strikethrough">
           <Strikethrough className="h-3.5 w-3.5" />
         </Toggle>
-        <div className="mx-1 h-4 w-px bg-border" />
+        <div className="mx-0.5 h-4 w-px shrink-0 bg-border md:mx-1" />
         <Toggle size="sm" type="button" pressed={!!editor?.isActive('heading', { level: 2 })} onPressedChange={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()} aria-label="Heading 2" title="Heading 2">
           <Heading2 className="h-3.5 w-3.5" />
         </Toggle>
         <Toggle size="sm" type="button" pressed={!!editor?.isActive('heading', { level: 3 })} onPressedChange={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()} aria-label="Heading 3" title="Heading 3">
           <Heading3 className="h-3.5 w-3.5" />
         </Toggle>
-        <div className="mx-1 h-4 w-px bg-border" />
+        <div className="mx-0.5 h-4 w-px shrink-0 bg-border md:mx-1" />
         <Toggle size="sm" type="button" pressed={!!editor?.isActive('bulletList')} onPressedChange={() => editor?.chain().focus().toggleBulletList().run()} aria-label="Bullet list" title="Bullet list">
           <List className="h-3.5 w-3.5" />
         </Toggle>
@@ -173,7 +173,7 @@ export function TipTapEditor({
         <Toggle size="sm" type="button" pressed={!!editor?.isActive('codeBlock')} onPressedChange={() => editor?.chain().focus().toggleCodeBlock().run()} aria-label="Code block" title="Code block">
           <SquareCode className="h-3.5 w-3.5" />
         </Toggle>
-        <div className="mx-1 h-4 w-px bg-border" />
+        <div className="mx-0.5 h-4 w-px shrink-0 bg-border md:mx-1" />
         <Toggle
           size="sm"
           type="button"

@@ -245,7 +245,7 @@ function PublishDrawerContent({
   };
 
   return (
-    <DrawerContent className="w-full sm:max-w-sm ml-auto">
+    <DrawerContent className="ml-auto w-full data-[vaul-drawer-direction=right]:w-full sm:max-w-sm sm:data-[vaul-drawer-direction=right]:max-w-sm">
       <DrawerHeader>
         <DrawerTitle>Publishing Settings</DrawerTitle>
         <DrawerDescription>Manage article publication status.</DrawerDescription>
@@ -2070,7 +2070,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               />
             )}
             <Drawer direction="right" open={tagsOpen} onOpenChange={setTagsOpen}>
-              <DrawerContent className="w-full sm:max-w-sm ml-auto">
+              <DrawerContent className="ml-auto w-full data-[vaul-drawer-direction=right]:w-full sm:max-w-sm sm:data-[vaul-drawer-direction=right]:max-w-sm">
                 <DrawerHeader>
                   <DrawerTitle>Edit Tags</DrawerTitle>
                   <DrawerDescription>Add or remove tags for your article.</DrawerDescription>
@@ -2097,7 +2097,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               </DrawerContent>
             </Drawer>
             <Drawer direction="right" open={externalOpen} onOpenChange={setExternalOpen}>
-              <DrawerContent className="w-full sm:max-w-sm ml-auto">
+              <DrawerContent className="ml-auto w-full data-[vaul-drawer-direction=right]:w-full sm:max-w-sm sm:data-[vaul-drawer-direction=right]:max-w-sm">
                 <DrawerHeader>
                   <DrawerTitle>External link</DrawerTitle>
                   <DrawerDescription>
@@ -2410,7 +2410,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
       {/* Version History Drawer */}
       <Drawer open={showVersions} onOpenChange={setShowVersions} direction="right">
-        <DrawerContent className="w-full sm:max-w-md ml-auto h-full">
+        <DrawerContent className="ml-auto h-full w-full data-[vaul-drawer-direction=right]:w-full sm:max-w-md sm:data-[vaul-drawer-direction=right]:max-w-md">
           <DrawerHeader>
             <DrawerTitle>Version History</DrawerTitle>
             <DrawerDescription>
