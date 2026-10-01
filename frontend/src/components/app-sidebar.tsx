@@ -22,11 +22,14 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { Link } from "@tanstack/react-router"
+import { useLocation, useNavigate } from "@tanstack/react-router"
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { getArticles } from "@/services/blog"
+import { MessageSquare, Plus } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 
 const navigationData = {
@@ -199,8 +202,23 @@ const navigationData = {
   ],
 }
 
+function isWritingPath(pathname: string) {
+  return pathname === "/dashboard" || pathname === "/dashboard/"
+}
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { state } = useSidebar()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const isWriting = isWritingPath(location.pathname)
+
+  const startWriting = () => {
+    if (isWriting) {
+      window.dispatchEvent(new Event("writing-session-reset"))
+      return
+    }
+    void navigate({ to: "/dashboard" })
+  }
   
   // Fetch articles for the sidebar with infinite scrolling
   const {
@@ -223,10 +241,43 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader>
-        {state === "expanded" && (
-          <div className="text-base font-semibold">Dashboard</div>
-        )}
+      <SidebarHeader className="gap-2 px-2 pt-3 pb-1 group-data-[collapsible=icon]:px-1">
+        <div className="flex h-10 items-center gap-1.5 group-data-[collapsible=icon]:justify-center">
+          <SidebarTrigger className="size-8 shrink-0 text-sidebar-foreground/80 hover:bg-sidebar-accent" />
+          {state === "expanded" && (
+            <>
+              <span className="font-wordmark text-[1.35rem] leading-none tracking-tight text-sidebar-foreground">
+                Copilot
+              </span>
+              <button
+                type="button"
+                onClick={startWriting}
+                aria-label="What are we writing today?"
+                title="What are we writing today?"
+                className={cn(
+                  "ml-auto inline-flex size-8 items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-foreground transition-colors hover:bg-sidebar-accent/70",
+                  isWriting && "border-sidebar-foreground/15"
+                )}
+              >
+                <MessageSquare className="size-4" />
+              </button>
+            </>
+          )}
+        </div>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              type="button"
+              tooltip="New"
+              isActive={isWriting}
+              onClick={startWriting}
+              className="h-9 rounded-xl bg-sidebar-accent px-3 font-medium text-sidebar-foreground shadow-none hover:bg-sidebar-accent/80 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground"
+            >
+              <Plus />
+              <span>New</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navigationData.navMain} />
