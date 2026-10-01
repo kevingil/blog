@@ -180,6 +180,8 @@ fn project(title: &str, tag_ids: Vec<i64>) -> Project {
         url: "https://example.com".to_owned(),
         created_at: None,
         updated_at: None,
+        upload_file_id: None,
+        image: None,
     }
 }
 
@@ -301,6 +303,7 @@ async fn project_create_preserves_tags_empty_tags_and_validation_cases() {
             tags: vec!["golang".to_owned(), "testing".to_owned()],
             image_url: "https://example.com/image.png".to_owned(),
             url: "https://example.com/project".to_owned(),
+            image_upload_id: None,
         })
         .await;
     assert!(
@@ -314,6 +317,7 @@ async fn project_create_preserves_tags_empty_tags_and_validation_cases() {
             tags: Vec::new(),
             image_url: String::new(),
             url: String::new(),
+            image_upload_id: None,
         })
         .await;
     assert!(matches!(no_tags, Ok(ref project) if project.tag_ids.is_empty()));
@@ -326,6 +330,7 @@ async fn project_create_preserves_tags_empty_tags_and_validation_cases() {
                 tags: Vec::new(),
                 image_url: String::new(),
                 url: String::new(),
+                image_upload_id: None,
             })
             .await;
         assert!(matches!(invalid, Err(AppError::InvalidInput(_))));
@@ -353,6 +358,7 @@ async fn project_update_changes_only_provided_fields_and_preserves_not_found() {
                 tags: Some(vec!["newtag".to_owned()]),
                 image_url: Some("https://example.com/new-image.png".to_owned()),
                 url: Some("https://example.com/new-url".to_owned()),
+                image_upload_id: None,
             },
         )
         .await;

@@ -23,6 +23,14 @@ pub struct FileDataResponse {
     pub size_raw: i64,
     pub url: String,
     pub is_image: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<uuid::Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blurhash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub height: Option<i32>,
 }
 
 impl From<FileData> for FileDataResponse {
@@ -34,6 +42,10 @@ impl From<FileData> for FileDataResponse {
             size_raw: file.size_raw,
             url: file.url,
             is_image: file.is_image,
+            id: file.id,
+            blurhash: file.blurhash,
+            width: file.width,
+            height: file.height,
         }
     }
 }
@@ -71,6 +83,16 @@ pub struct UploadFileResponse {
     pub success: bool,
     pub url: String,
     pub key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<uuid::Uuid>,
+    pub content_type: String,
+    pub byte_size: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub height: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blurhash: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]

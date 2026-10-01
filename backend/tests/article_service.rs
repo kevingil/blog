@@ -235,6 +235,7 @@ impl ArticleRepository for MemoryArticles {
                 embedding: Vec::new(),
                 edited_by: Some(article.author_id),
                 created_at: Some(Utc::now()),
+                upload_file_id: article.draft_upload_file_id,
             },
         );
         Ok(id)
@@ -460,6 +461,11 @@ fn article(id: Uuid, author_id: Uuid, title: &str, tags: Vec<i64>) -> Article {
         created_at: Some(Utc::now()),
         updated_at: Some(Utc::now()),
         external_url: None,
+        draft_upload_file_id: None,
+        published_upload_file_id: None,
+        draft_image: None,
+        published_image: None,
+        body_images: Vec::new(),
     }
 }
 
@@ -547,6 +553,7 @@ async fn create_validates_fields_creates_tags_and_uses_a_unique_slug() {
             publish: false,
             author_id,
             external_url: None,
+            image_upload_id: None,
         })
         .await
         .expect("create article");
@@ -564,6 +571,7 @@ async fn create_validates_fields_creates_tags_and_uses_a_unique_slug() {
             publish: false,
             author_id,
             external_url: None,
+            image_upload_id: None,
         })
         .await
         .expect_err("invalid fields");
@@ -712,6 +720,7 @@ async fn update_publish_unpublish_and_delete_preserve_lifecycle() {
                 tags: vec!["rust".to_owned()],
                 published_at: Some(1_700_000_000),
                 external_url: None,
+                image_upload_id: None,
             },
         )
         .await
@@ -769,6 +778,7 @@ async fn version_listing_lookup_and_revert_are_scoped_to_the_article() {
             embedding: Vec::new(),
             edited_by: None,
             created_at: Some(Utc::now()),
+            upload_file_id: None,
         },
     );
 
@@ -952,6 +962,7 @@ async fn update_can_point_an_existing_article_outside_and_back() {
                 external_url: Some(Some(
                     "https://www.sellscale.com/blog-posts/our-agentic-engineering-org".to_owned(),
                 )),
+                image_upload_id: None,
             },
         )
         .await
@@ -978,6 +989,7 @@ async fn update_can_point_an_existing_article_outside_and_back() {
                 tags: Vec::new(),
                 published_at: None,
                 external_url: None,
+                image_upload_id: None,
             },
         )
         .await
@@ -997,6 +1009,7 @@ async fn update_can_point_an_existing_article_outside_and_back() {
                 tags: Vec::new(),
                 published_at: None,
                 external_url: Some(None),
+                image_upload_id: None,
             },
         )
         .await
@@ -1031,6 +1044,7 @@ async fn create_with_only_an_external_link_fills_the_preview() {
             external_url: Some(
                 "https://www.sellscale.com/blog-posts/our-agentic-engineering-org".to_owned(),
             ),
+            image_upload_id: None,
         })
         .await
         .expect("create from link");

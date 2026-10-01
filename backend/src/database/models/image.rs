@@ -21,6 +21,7 @@ pub struct ImageRow {
     pub meta_data: Option<Value>,
     pub created_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
+    pub upload_file_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Insertable)]

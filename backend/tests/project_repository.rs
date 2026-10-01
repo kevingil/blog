@@ -47,6 +47,8 @@ async fn project_postgres_repository_preserves_arrays_empty_strings_order_and_up
         url: String::new(),
         created_at: None,
         updated_at: None,
+        upload_file_id: None,
+        image: None,
     };
     repository.save(&mut value).await?;
     let inserted = repository.find_by_id(id).await?;

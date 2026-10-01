@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Mail, Globe } from 'lucide-react';
 import { SocialLinkIcon } from '../../components/social-link-icon';
 import { getPublicProfile } from '../../services/profile';
+import { BlurhashImage } from '../../components/media/BlurhashImage';
 
 export const Route = createFileRoute('/_publicLayout/about')({
   component: AboutPage,
@@ -59,13 +60,20 @@ function AboutPage() {
                   <Card className="overflow-hidden p-0">
                     <CardContent className="p-0">
                       <div className="relative">
-                        <img
+                        <BlurhashImage
                           src={profile.image_url}
                           alt={profile.type === 'organization' ? 'Logo' : 'Profile'}
-                          className="w-full aspect-square object-cover"
+                          blurhash={profile.image?.blurhash}
+                          className="aspect-square w-full"
+                          imgClassName="h-full w-full object-cover"
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
                       </div>
+                      {profile.image?.blurhash ? (
+                        <p className="px-3 py-2 font-mono text-xs text-muted-foreground break-all" data-testid="about-blurhash">
+                          blurhash {profile.image.blurhash}
+                        </p>
+                      ) : null}
                     </CardContent>
                   </Card>
                 </div>

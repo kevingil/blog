@@ -20,6 +20,8 @@ pub struct ProfileUpdateRequest {
     pub email_public: Option<String>,
     pub social_links: Option<BTreeMap<String, String>>,
     pub meta_description: Option<String>,
+    #[serde(default)]
+    pub profile_upload_file_id: Option<Uuid>,
 }
 
 impl From<ProfileUpdateRequest> for CoreProfileUpdateRequest {
@@ -31,6 +33,7 @@ impl From<ProfileUpdateRequest> for CoreProfileUpdateRequest {
             email_public: value.email_public,
             social_links: value.social_links,
             meta_description: value.meta_description,
+            profile_upload_file_id: value.profile_upload_file_id,
         }
     }
 }
@@ -48,6 +51,8 @@ pub struct PublicProfileResponse {
     pub meta_description: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub website_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<crate::core::storage::ImageAsset>,
 }
 
 impl From<CorePublicProfileResponse> for PublicProfileResponse {
@@ -62,6 +67,7 @@ impl From<CorePublicProfileResponse> for PublicProfileResponse {
             social_links: value.social_links,
             meta_description: value.meta_description,
             website_url: value.website_url,
+            image: value.image,
         }
     }
 }
@@ -77,6 +83,8 @@ pub struct UserProfileResponse {
     pub meta_description: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub organization_id: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<crate::core::storage::ImageAsset>,
 }
 
 impl From<CoreUserProfileResponse> for UserProfileResponse {
@@ -90,6 +98,7 @@ impl From<CoreUserProfileResponse> for UserProfileResponse {
             social_links: value.social_links,
             meta_description: value.meta_description,
             organization_id: value.organization_id,
+            image: value.image,
         }
     }
 }

@@ -20,6 +20,7 @@ pub struct OrganizationRow {
     pub meta_description: Option<String>,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
+    pub logo_upload_file_id: Option<Uuid>,
 }
 
 #[derive(Debug, Insertable)]
@@ -57,6 +58,7 @@ impl TryFrom<OrganizationRow> for Organization {
             meta_description: row.meta_description,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            logo_upload_file_id: row.logo_upload_file_id,
         })
     }
 }

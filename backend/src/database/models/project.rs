@@ -17,6 +17,7 @@ pub struct ProjectRow {
     pub updated_at: Option<DateTime<Utc>>,
     pub content: Option<String>,
     pub tag_ids: Option<Vec<Option<i32>>>,
+    pub upload_file_id: Option<Uuid>,
 }
 
 #[derive(Debug, Insertable)]
@@ -51,6 +52,8 @@ impl TryFrom<ProjectRow> for Project {
             url: row.url.unwrap_or_default(),
             created_at: row.created_at,
             updated_at: row.updated_at,
+            upload_file_id: row.upload_file_id,
+            image: None,
         })
     }
 }

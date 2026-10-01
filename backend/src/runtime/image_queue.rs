@@ -6,7 +6,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     api::image::{ImageGenerationJob, ImageGenerationQueue},
-    core::{article::ArticleService, image::ImageService, storage::ObjectStore},
+    core::{article::ArticleService, image::ImageService, storage::StorageService},
     error::AppError,
     integrations::openai::{GeneratedImage, OpenAiClient},
 };
@@ -26,8 +26,7 @@ pub struct ImageQueueWorker {
     service: Arc<ImageService>,
     articles: Arc<ArticleService>,
     openai: Arc<OpenAiClient>,
-    object_store: Arc<dyn ObjectStore>,
-    url_prefix: Arc<str>,
+    storage: Arc<StorageService>,
 }
 
 impl RuntimeImageQueue {
@@ -35,8 +34,7 @@ impl RuntimeImageQueue {
         service: Arc<ImageService>,
         articles: Arc<ArticleService>,
         openai: Arc<OpenAiClient>,
-        object_store: Arc<dyn ObjectStore>,
-        url_prefix: impl Into<Arc<str>>,
+        storage: Arc<StorageService>,
     ) -> (Arc<Self>, ImageQueueWorker) {
         let (jobs, receiver) = mpsc::channel(QUEUE_CAPACITY);
         (
@@ -46,8 +44,7 @@ impl RuntimeImageQueue {
                 service,
                 articles,
                 openai,
-                object_store,
-                url_prefix: url_prefix.into(),
+                storage,
             },
         )
     }
@@ -136,8 +133,11 @@ impl ImageQueueWorker {
             GeneratedImage::Url(url) => Ok(url),
             GeneratedImage::Bytes(bytes) => {
                 let key = format!("images/{}.png", job.request_id);
-                self.object_store.put(&key, bytes).await?;
-                Ok(format!("{}/{key}", self.url_prefix.trim_end_matches('/')))
+                Ok(self
+                    .storage
+                    .put_recorded(&key, "image/png", bytes, None)
+                    .await?
+                    .url)
             }
         }
     }

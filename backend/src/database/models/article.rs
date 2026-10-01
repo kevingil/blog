@@ -30,6 +30,8 @@ pub struct ArticleRow {
     pub current_draft_version_id: Option<Uuid>,
     pub current_published_version_id: Option<Uuid>,
     pub external_url: Option<String>,
+    pub draft_upload_file_id: Option<Uuid>,
+    pub published_upload_file_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Insertable)]
@@ -55,6 +57,8 @@ pub struct NewArticleRow {
     pub current_draft_version_id: Option<Uuid>,
     pub current_published_version_id: Option<Uuid>,
     pub external_url: Option<String>,
+    pub draft_upload_file_id: Option<Uuid>,
+    pub published_upload_file_id: Option<Uuid>,
 }
 
 #[derive(Debug, AsChangeset)]
@@ -79,6 +83,8 @@ pub struct ArticleChangeset {
     pub current_draft_version_id: Option<Option<Uuid>>,
     pub current_published_version_id: Option<Option<Uuid>>,
     pub external_url: Option<Option<String>>,
+    pub draft_upload_file_id: Option<Option<Uuid>>,
+    pub published_upload_file_id: Option<Option<Uuid>>,
 }
 
 #[derive(Debug, Clone, Queryable, Selectable, Identifiable)]
@@ -95,6 +101,7 @@ pub struct ArticleVersionRow {
     pub embedding: Option<Vector>,
     pub edited_by: Option<Uuid>,
     pub created_at: Option<DateTime<Utc>>,
+    pub upload_file_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Insertable)]
@@ -110,4 +117,5 @@ pub struct NewArticleVersionRow {
     pub embedding: Option<Vector>,
     pub edited_by: Option<Uuid>,
     pub created_at: DateTime<Utc>,
+    pub upload_file_id: Option<Uuid>,
 }

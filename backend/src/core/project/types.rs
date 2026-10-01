@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::core::storage::ImageAsset;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Project {
     pub id: Uuid,
@@ -16,6 +18,10 @@ pub struct Project {
     pub url: String,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upload_file_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<ImageAsset>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,6 +42,8 @@ pub struct ProjectCreateRequest {
     pub image_url: String,
     #[serde(default)]
     pub url: String,
+    #[serde(default)]
+    pub image_upload_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -46,6 +54,8 @@ pub struct ProjectUpdateRequest {
     pub tags: Option<Vec<String>>,
     pub image_url: Option<String>,
     pub url: Option<String>,
+    #[serde(default)]
+    pub image_upload_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

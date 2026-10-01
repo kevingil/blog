@@ -166,6 +166,8 @@ fn profile_account(id: Uuid) -> ProfileAccount {
         )])),
         meta_description: Some("User meta description".to_owned()),
         organization_id: Some(Uuid::new_v4()),
+        profile_upload_file_id: None,
+        image: None,
     }
 }
 
@@ -182,6 +184,7 @@ fn organization(id: Uuid) -> Organization {
         meta_description: None,
         created_at: None,
         updated_at: None,
+        logo_upload_file_id: None,
     }
 }
 
@@ -204,6 +207,8 @@ async fn profile_public_response_preserves_values_and_zero_id() {
             Value::String("testuser".to_owned()),
         )])),
         meta_description: Some("Meta description".to_owned()),
+        image_upload_file_id: None,
+        image: None,
     });
     let result = service(profiles, organizations).get_public_profile().await;
     assert!(
@@ -240,6 +245,7 @@ async fn profile_user_get_and_update_preserve_partial_fields_and_not_found() {
                     ("github".to_owned(), "newaccount".to_owned()),
                 ])),
                 meta_description: Some("Updated meta".to_owned()),
+                profile_upload_file_id: None,
             },
         )
         .await;

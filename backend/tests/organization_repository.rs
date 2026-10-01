@@ -70,6 +70,7 @@ async fn organization_postgres_repository_preserves_json_uniqueness_membership_a
         meta_description: None,
         created_at: None,
         updated_at: None,
+        logo_upload_file_id: None,
     };
     repository.save(&mut value).await?;
     let loaded = repository.find_by_slug(&slug).await?;

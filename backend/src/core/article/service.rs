@@ -10,6 +10,7 @@ use uuid::Uuid;
 use crate::{
     core::{
         auth::{AccountId, AccountRepository},
+        storage::{UploadRepository, resolve_image},
         tag::TagRepository,
     },
     error::AppError,
@@ -55,6 +56,8 @@ pub struct RecommendedArticle {
     pub author: Option<String>,
     #[serde(default)]
     pub external_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<crate::core::storage::ImageAsset>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
@@ -112,6 +115,8 @@ pub struct CreateArticle {
     /// When set, the public article opens this link. Empty keeps it on this site.
     #[serde(default)]
     pub external_url: Option<String>,
+    #[serde(default)]
+    pub image_upload_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, ToSchema)]
@@ -127,6 +132,8 @@ pub struct UpdateArticle {
     #[serde(default, deserialize_with = "deserialize_optional_update")]
     #[schema(value_type = Option<String>)]
     pub external_url: Option<Option<String>>,
+    #[serde(default)]
+    pub image_upload_id: Option<Uuid>,
 }
 
 fn deserialize_optional_update<'de, D>(deserializer: D) -> Result<Option<Option<String>>, D::Error>
@@ -160,6 +167,7 @@ pub struct ArticleService {
     context_writer: Option<Arc<dyn ArticleContextWriter>>,
     external_pages: Option<Arc<dyn ExternalPagePort>>,
     image_cache: Option<Arc<dyn ExternalImageCache>>,
+    uploads: Option<Arc<dyn UploadRepository>>,
 }
 
 impl ArticleService {
@@ -176,7 +184,13 @@ impl ArticleService {
             context_writer: None,
             external_pages: None,
             image_cache: None,
+            uploads: None,
         }
+    }
+
+    pub fn with_uploads(mut self, uploads: Arc<dyn UploadRepository>) -> Self {
+        self.uploads = Some(uploads);
+        self
     }
 
     pub fn with_embedding_provider(mut self, provider: Arc<dyn ArticleEmbeddingProvider>) -> Self {
@@ -316,17 +330,21 @@ impl ArticleService {
                     .published_title
                     .clone()
                     .unwrap_or_else(|| article.draft_title.clone()),
-                slug: article.slug,
+                slug: article.slug.clone(),
                 image_url: article
                     .published_image_url
                     .filter(|url| !url.is_empty())
                     .or_else(|| {
-                        (!article.draft_image_url.is_empty()).then_some(article.draft_image_url)
+                        (!article.draft_image_url.is_empty()).then(|| article.draft_image_url.clone())
                     }),
                 published_at: article.published_at,
                 created_at: article.created_at,
                 author,
                 external_url: article.external_url.clone(),
+                image: article
+                    .published_image
+                    .clone()
+                    .or_else(|| article.draft_image.clone()),
             });
         }
         Ok(recommended)
@@ -381,6 +399,7 @@ impl ArticleService {
         let mut article = self.articles.find_by_id(article_id).await?;
         article.imagen_request_id = Some(image_request_id);
         article.draft_image_url = output_url.to_owned();
+        article.draft_upload_file_id = self.lookup_upload_id(output_url).await?;
         article.updated_at = Some(Utc::now());
         self.articles.save_draft(&mut article).await
     }
@@ -408,14 +427,23 @@ impl ArticleService {
             article.external_url = Some(page.url.clone());
             if article.draft_image_url.is_empty() {
                 if let Some(stored) = self.cache_page_image(article.id, page).await? {
+                    article.draft_upload_file_id = self.lookup_upload_id(&stored).await?;
                     article.draft_image_url = stored;
                 }
             }
+        }
+        if let Some(id) = request.image_upload_id {
+            let resolved = resolve_image(self.uploads.as_deref(), Some(id), "", "", None).await?;
+            article.draft_image_url = resolved.url;
+            article.draft_upload_file_id = resolved.upload_file_id;
+            article.draft_image = resolved.image;
         }
         if request.publish {
             article.published_title = Some(request.title);
             article.published_content = Some(request.content);
             article.published_image_url = Some(article.draft_image_url.clone());
+            article.published_upload_file_id = article.draft_upload_file_id;
+            article.published_image = article.draft_image.clone();
             article.published_at = Some(now);
         }
         let id = article.id;
@@ -466,7 +494,9 @@ impl ArticleService {
         if let Some(image) = page.image {
             let key = format!("external-blogs/{}.{}", article.id, image.extension);
             let stored = images.store(&key, &image.content_type, image.bytes).await?;
+            article.draft_upload_file_id = self.lookup_upload_id(&stored).await?;
             article.draft_image_url = stored.clone();
+            article.published_upload_file_id = article.draft_upload_file_id;
             article.published_image_url = Some(stored);
         }
         let id = article.id;
@@ -496,15 +526,26 @@ impl ArticleService {
         if article.draft_title != request.title {
             article.slug = self.unique_slug(&request.title, Some(article_id)).await?;
         }
+        let resolved = resolve_image(
+            self.uploads.as_deref(),
+            request.image_upload_id,
+            &request.image_url,
+            &article.draft_image_url,
+            article.draft_upload_file_id,
+        )
+        .await?;
         let draft_changed = article.draft_title != request.title
             || article.draft_content != request.content
-            || article.draft_image_url != request.image_url;
+            || article.draft_image_url != resolved.url
+            || article.draft_upload_file_id != resolved.upload_file_id;
         if draft_changed {
             self.articles.create_draft_snapshot(article_id).await?;
         }
         article.draft_title = request.title;
         article.draft_content = request.content.clone();
-        article.draft_image_url = request.image_url;
+        article.draft_image_url = resolved.url;
+        article.draft_upload_file_id = resolved.upload_file_id;
+        article.draft_image = resolved.image;
         article.tag_ids = Some(tag_ids);
         article.updated_at = Some(Utc::now());
         if let Some(timestamp) = request.published_at {
@@ -522,6 +563,8 @@ impl ArticleService {
                         .is_none_or(should_replace_external_image)
                         && !article.draft_image_url.is_empty()
                     {
+                        article.published_upload_file_id = article.draft_upload_file_id;
+                        article.published_image = article.draft_image.clone();
                         article.published_image_url = Some(article.draft_image_url.clone());
                     }
                     if article
@@ -795,6 +838,23 @@ fn new_article(
         created_at: Some(now),
         updated_at: Some(now),
         external_url: None,
+        draft_upload_file_id: None,
+        published_upload_file_id: None,
+        draft_image: None,
+        published_image: None,
+        body_images: Vec::new(),
+    }
+}
+
+impl ArticleService {
+    async fn lookup_upload_id(&self, url: &str) -> Result<Option<Uuid>, AppError> {
+        let Some(uploads) = &self.uploads else {
+            return Ok(None);
+        };
+        Ok(uploads
+            .find_by_public_url(url)
+            .await?
+            .map(|file| file.id))
     }
 }
 

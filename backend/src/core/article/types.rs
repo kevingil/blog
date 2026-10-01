@@ -6,6 +6,8 @@ use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use crate::core::storage::ImageAsset;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct Article {
     pub id: Uuid,
@@ -30,6 +32,16 @@ pub struct Article {
     /// Set when this row points at the author's post on another site.
     #[serde(default)]
     pub external_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub draft_upload_file_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub published_upload_file_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub draft_image: Option<ImageAsset>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub published_image: Option<ImageAsset>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub body_images: Vec<ImageAsset>,
 }
 
 impl Article {
@@ -78,6 +90,8 @@ pub struct ArticleVersion {
     pub embedding: Vec<f32>,
     pub edited_by: Option<Uuid>,
     pub created_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upload_file_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

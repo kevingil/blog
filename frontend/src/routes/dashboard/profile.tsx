@@ -7,6 +7,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Pencil, X, Building2, User, Check, Plus, LogOut } from 'lucide-react';
+import { ImagePickerFromUploads } from '@/components/blog/editor/ImagePickerFromUploads';
+import { BlurhashImage } from '@/components/media/BlurhashImage';
+import type { FileData } from '@/services/storage';
 import { SocialLinksBuilder } from '@/components/social-links-builder';
 import { createFileRoute } from '@tanstack/react-router';
 import { useAdminDashboard } from '@/services/dashboard/dashboard';
@@ -56,6 +59,7 @@ function ProfileSettings() {
   const [editingProfile, setEditingProfile] = useState(false);
   const [showCreateOrg, setShowCreateOrg] = useState(false);
   const [editSocialLinks, setEditSocialLinks] = useState<Record<string, string>>({});
+  const [profileImage, setProfileImage] = useState<FileData | null>(null);
   const { toast } = useToast();
   const { setPageTitle } = useAdminDashboard();
 
@@ -76,6 +80,29 @@ function ProfileSettings() {
         listOrganizations(),
       ]);
       setProfile(profileData);
+      if (profileData?.image) {
+        setProfileImage({
+          key: profileData.image.id,
+          last_modified: new Date(),
+          size: '',
+          size_raw: 0,
+          url: profileData.image.url,
+          is_image: true,
+          id: profileData.image.id,
+          blurhash: profileData.image.blurhash,
+          width: profileData.image.width,
+          height: profileData.image.height,
+        });
+      } else if (profileData?.profile_image) {
+        setProfileImage({
+          key: profileData.profile_image,
+          last_modified: new Date(),
+          size: '',
+          size_raw: 0,
+          url: profileData.profile_image,
+          is_image: true,
+        });
+      }
       setSiteSettings(settingsData);
       setOrganizations(orgsData);
     } catch (error) {
@@ -98,7 +125,8 @@ function ProfileSettings() {
       const data = {
         name: formData.get('name') as string,
         bio: formData.get('bio') as string,
-        profile_image: formData.get('profileImage') as string,
+        profile_image: profileImage?.url || '',
+        profile_upload_file_id: profileImage?.id,
         email_public: formData.get('emailPublic') as string,
         social_links: editSocialLinks,
         meta_description: formData.get('metaDescription') as string,
@@ -277,12 +305,27 @@ function ProfileSettings() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="profileImage">Profile Image URL</Label>
-                <Input
-                  id="profileImage"
-                  name="profileImage"
-                  defaultValue={profile?.profile_image || ''}
-                  placeholder="https://..."
+                <Label>Profile image</Label>
+                {profileImage?.url ? (
+                  <div className="flex items-center gap-3">
+                    <BlurhashImage
+                      src={profileImage.url}
+                      alt="Profile"
+                      blurhash={profileImage.blurhash}
+                      className="h-16 w-16 rounded-full"
+                      imgClassName="h-full w-full rounded-full object-cover"
+                    />
+                    {profileImage.blurhash ? (
+                      <p className="font-mono text-xs text-muted-foreground break-all" data-testid="profile-blurhash">
+                        blurhash {profileImage.blurhash}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Choose an uploaded image.</p>
+                )}
+                <ImagePickerFromUploads
+                  onSelect={(file) => setProfileImage(file)}
                 />
               </div>
               
@@ -325,10 +368,12 @@ function ProfileSettings() {
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 {profile?.profile_image && (
-                  <img 
-                    src={profile.profile_image} 
-                    alt="Profile" 
-                    className="w-16 h-16 rounded-full object-cover"
+                  <BlurhashImage
+                    src={profile.profile_image}
+                    alt="Profile"
+                    blurhash={profile.image?.blurhash}
+                    className="h-16 w-16 rounded-full"
+                    imgClassName="h-full w-full rounded-full object-cover"
                   />
                 )}
                 <div>

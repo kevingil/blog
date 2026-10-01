@@ -123,6 +123,7 @@ impl PageRepository for DieselPageRepository {
                     page::content.eq(&value.content),
                     page::description.eq(&value.description),
                     page::image_url.eq(&value.image_url),
+                    page::upload_file_id.eq(value.upload_file_id),
                     page::meta_data.eq(meta_data),
                     page::is_published.eq(value.is_published),
                     page::updated_at.eq(Utc::now()),
@@ -142,6 +143,7 @@ impl PageRepository for DieselPageRepository {
                     content: &value.content,
                     description: &value.description,
                     image_url: &value.image_url,
+                    upload_file_id: value.upload_file_id,
                     meta_data,
                     // GORM's `default:true` tag substitutes the database default
                     // when a newly-created model carries bool's false zero value.

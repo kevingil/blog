@@ -33,6 +33,7 @@ use crate::{
     constants::BACKGROUND_SHUTDOWN_TIMEOUT,
     core::{
         article::{ArticleRepository, ArticleService, ObjectImageCache},
+        storage::UploadRepository,
         auth::AuthService,
         chat::ChatMessageService,
         conversation::ConversationService,
@@ -74,7 +75,8 @@ use crate::{
         organization::DieselOrganizationRepository, page::DieselPageRepository,
         project::DieselProjectRepository, site_settings::DieselSiteSettingsRepository,
         source::DieselSourceRepository, tag::DieselTagRepository,
-        task_run::DieselTaskRunRepository, user_insight_status::DieselUserInsightStatusRepository,
+        task_run::DieselTaskRunRepository, upload::DieselUploadRepository,
+        user_insight_status::DieselUserInsightStatusRepository,
     },
     integrations::{
         exa::ExaClient,
@@ -163,16 +165,24 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         Arc::new(DieselTaskRunRepository::new(pool.clone())),
         cancellation.child_token(),
     ));
+    let uploads: Arc<dyn UploadRepository> =
+        Arc::new(DieselUploadRepository::new(pool.clone()));
+    let storage_service = Arc::new(
+        StorageService::new(
+            object_store.clone(),
+            config.s3_url_prefix.clone(),
+            cancellation.child_token(),
+        )
+        .with_uploads(uploads.clone()),
+    );
     let article_service = Arc::new(
         ArticleService::new(articles.clone(), accounts.clone(), tags.clone())
             .with_embedding_provider(openai.clone())
             .with_context_writer(openai.clone())
+            .with_uploads(uploads.clone())
             .with_external_blogs(
                 Arc::new(HttpExternalPages::new()?),
-                Arc::new(ObjectImageCache::new(
-                    object_store.clone(),
-                    config.s3_url_prefix.clone(),
-                )),
+                Arc::new(ObjectImageCache::new(storage_service.clone())),
             ),
     );
     let (article_generation_queue, agent_worker) =
@@ -199,8 +209,7 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         image_service.clone(),
         article_service,
         openai.clone(),
-        object_store.clone(),
-        config.s3_url_prefix.clone(),
+        storage_service.clone(),
     );
     let image = ImageState::new(image_service, image_queue);
 
@@ -224,12 +233,15 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         DieselPageRepository::new(pool.clone()),
     ))));
     let site_settings = Arc::new(DieselSiteSettingsRepository::new(pool.clone()));
-    let profile = ProfileState::new(Arc::new(ProfileService::new(
-        site_settings.clone(),
-        site_settings.clone(),
-        site_settings,
-        organizations,
-    )));
+    let profile = ProfileState::new(Arc::new(
+        ProfileService::new(
+            site_settings.clone(),
+            site_settings.clone(),
+            site_settings,
+            organizations,
+        )
+        .with_uploads(uploads.clone()),
+    ));
     let project = ProjectState::new(Arc::new(ProjectService::new(
         Arc::new(DieselProjectRepository::new(pool.clone())),
         tags,
@@ -241,11 +253,7 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         fetch.clone(),
     ));
     let source = SourceState::new(source_service.clone());
-    let storage = StorageState::new(Arc::new(StorageService::new(
-        object_store,
-        config.s3_url_prefix,
-        cancellation.child_token(),
-    )));
+    let storage = StorageState::new(storage_service);
     let taskrun = TaskRunState::new(task_runs.clone());
 
     let clock = Arc::new(SystemClock);
