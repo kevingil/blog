@@ -6,7 +6,7 @@ previews:
 services:
   - type: web
     name: blog-backend
-    runtime: docker
+    runtime: rust
     plan: starter
     # Oregon is Render's closest region to the existing Fly SJC deployment.
     # Confirm the Supabase region before the first Blueprint sync because this
@@ -14,20 +14,25 @@ services:
     region: oregon
     repo: https://github.com/kevingil/blog
     branch: main
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
+    buildCommand: >-
+      cargo build --manifest-path backend/Cargo.toml --locked --release
+      --target-dir backend/target
+      --bin blog-backend --bin migrate --bin stamp-diesel-migrations
+      --bin schema-fingerprint
+    startCommand: ./backend/target/release/blog-backend
     autoDeployTrigger: checksPass
-    preDeployCommand: /usr/local/bin/pre-deploy
+    preDeployCommand: ./scripts/pre-deploy.sh backend/target/release
     healthCheckPath: /health
     maxShutdownDelaySeconds: 120
     numInstances: 1
     buildFilter:
       paths:
         - backend/**
-        - Dockerfile
         - scripts/pre-deploy.sh
         - render.yaml
     envVars:
+      - key: RUSTUP_TOOLCHAIN
+        value: "1.92.0"
       - key: HOST
         value: 0.0.0.0
       - key: PORT
