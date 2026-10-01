@@ -163,7 +163,7 @@ async fn openai_provider_stream_preserves_structured_tool_history_and_usage() ->
     let request = requests.last().ok_or("fixture did not receive request")?;
     assert_eq!(request["stream"], true);
     assert_eq!(request["store"], false);
-    assert_eq!(request["model"], "gpt-5.4-mini-2026-03-17");
+    assert_eq!(request["model"], "gpt-6.1-sol");
     assert_eq!(request["max_output_tokens"], 16_384);
     assert_eq!(request["reasoning"]["effort"], "medium");
     let items = request["input"]

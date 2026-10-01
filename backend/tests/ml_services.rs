@@ -90,11 +90,22 @@ async fn image_prompt_service_preserves_the_active_prompt_contract() {
 
 #[test]
 fn copilot_prompt_only_advertises_registered_tools() {
-    let prompt = copilot_prompt(&["read_document".to_owned(), "replace_lines".to_owned()]);
-    assert!(prompt.contains("**read_document**"));
-    assert!(prompt.contains("**replace_lines**"));
-    assert!(!prompt.contains("| **ask_question** |"));
-    assert!(prompt.contains("Present a plan of proposed changes before editing"));
+    let prompt = copilot_prompt(&[
+        "read_document".to_owned(),
+        "replace_lines".to_owned(),
+        "web_search".to_owned(),
+        "sandbox".to_owned(),
+    ]);
+    assert!(prompt.contains("blog writing agent"));
+    assert!(prompt.contains("workspace is on the left"));
+    assert!(prompt.contains("Research, brainstorm"));
+    assert!(prompt.contains("Follow the user's instructions"));
+    assert!(prompt.contains("read_document"));
+    assert!(prompt.contains("replace_lines"));
+    assert!(!prompt.contains("ask_question"));
+    assert!(!prompt.contains("web_search"));
+    assert!(!prompt.contains("sandbox"));
+    assert!(!prompt.contains("Present a plan of proposed changes before editing"));
 }
 
 #[test]
