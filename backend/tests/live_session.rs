@@ -337,3 +337,14 @@ async fn successful_edit_tells_the_voice_model_the_article_changed() {
     .await;
     assert_eq!(summary, "The article was updated.");
 }
+
+#[tokio::test]
+async fn document_update_tells_the_voice_model_the_article_changed() {
+    let summary = commentary_after_delegation(vec![json!({
+        "type": "document_update",
+        "content": "## Internal ops",
+        "tool_name": "apply_patch"
+    })])
+    .await;
+    assert_eq!(summary, "The article was updated.");
+}

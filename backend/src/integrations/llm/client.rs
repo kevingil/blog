@@ -892,6 +892,7 @@ async fn complete(
             content: state.content.clone(),
             reasoning: state.reasoning.clone(),
             tool_calls: state.tool_calls.clone(),
+            hosted: Vec::new(),
             usage: state.usage,
             finish_reason: state.finish_reason,
         }),

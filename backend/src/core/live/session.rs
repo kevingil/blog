@@ -458,6 +458,13 @@ async fn forward_harness(mut handle: LiveTurnHandle, notes: mpsc::Sender<Session
 }
 
 fn edit_outcome(event: &Value) -> Option<bool> {
+    if event.get("type").and_then(Value::as_str) == Some("document_update") {
+        let updated = event
+            .get("content")
+            .and_then(Value::as_str)
+            .is_some_and(|content| !content.is_empty());
+        return updated.then_some(true);
+    }
     let name = event
         .get("tool_name")
         .and_then(Value::as_str)
@@ -467,7 +474,7 @@ fn edit_outcome(event: &Value) -> Option<bool> {
                 .and_then(Value::as_str)
         })
         .unwrap_or("");
-    if name != "replace_lines" && name != "rewrite_document" {
+    if name != "replace_lines" && name != "rewrite_document" && name != "apply_patch" {
         return None;
     }
     if event.get("type").and_then(Value::as_str) != Some("tool_result") {

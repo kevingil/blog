@@ -139,6 +139,9 @@ export function getToolDisplayName(toolName: string): string {
   const toolDisplayMap: Record<string, string> = {
     'rewrite_document': 'Rewriting document',
     'replace_lines': 'Editing text',
+    'apply_patch': 'Editing article',
+    'web_search': 'Searching the web',
+    'sandbox': 'Running OpenAI sandbox',
     'analyze_document': 'Analyzing document',
     'generate_image_prompt': 'Generating image prompt',
     'search_web': 'Searching the web',

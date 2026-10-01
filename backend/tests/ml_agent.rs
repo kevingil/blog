@@ -5,9 +5,10 @@ use std::{
 
 use async_trait::async_trait;
 use blog_backend::core::ml::llm::{
-    Agent, AgentError, AgentEventType, ContentPart, FinishReason, InMemorySessionStore, LlmMessage,
-    MessageRole, Model, Provider, ProviderError, ProviderEvent, ProviderResponse, ReplaceLinesTool,
-    SessionStore, TokenUsage, Tool, ToolCall, ToolContext,
+    Agent, AgentError, AgentEventType, ContentPart, FinishReason, HostedToolCall,
+    InMemorySessionStore, LlmMessage, MessageRole, Model, Provider, ProviderError, ProviderEvent,
+    ProviderResponse, ReplaceLinesTool, SessionStore, TokenUsage, Tool, ToolCall, ToolContext,
+    ToolResult,
 };
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -94,6 +95,7 @@ fn complete(
         content: content.to_owned(),
         reasoning: String::new(),
         tool_calls,
+        hosted: Vec::new(),
         usage: TokenUsage {
             input_tokens: 10,
             output_tokens: 5,
@@ -185,6 +187,87 @@ async fn agent_streams_deltas_executes_tools_and_preserves_result_order() {
                 .parts
                 .iter()
                 .any(|part| matches!(part, ContentPart::Text(text) if text.text == "Done"))
+    }));
+}
+
+#[tokio::test]
+async fn hosted_provider_tools_are_recorded_and_not_executed_locally() {
+    let provider = Arc::new(ScriptedProvider::new(vec![vec![ProviderEvent::complete(
+        ProviderResponse {
+            content: "The product is 42.".to_owned(),
+            reasoning: String::new(),
+            tool_calls: Vec::new(),
+            hosted: vec![HostedToolCall {
+                call: ToolCall {
+                    id: "ci_1".to_owned(),
+                    name: "sandbox".to_owned(),
+                    input: r#"{"code":"print(6*7)"}"#.to_owned(),
+                    r#type: "hosted".to_owned(),
+                    finished: true,
+                    thought_signature: Vec::new(),
+                },
+                result: ToolResult {
+                    tool_call_id: "ci_1".to_owned(),
+                    content: r#"{"tool_name":"sandbox","stdout":"42\n","hosted":true}"#.to_owned(),
+                    metadata: String::new(),
+                    is_error: false,
+                },
+            }],
+            usage: TokenUsage::default(),
+            finish_reason: FinishReason::EndTurn,
+        },
+    )]]));
+    let store = Arc::new(InMemorySessionStore::default());
+    let session = store.create_session("hosted").await;
+    assert!(session.is_ok());
+    let Ok(session) = session else {
+        return;
+    };
+    let agent = Agent::new(provider, store.clone(), Vec::new());
+    let cancellation = CancellationToken::new();
+    let context = ToolContext::new(
+        &session.id,
+        "",
+        "request",
+        None,
+        "",
+        "",
+        cancellation.clone(),
+    );
+    let run = agent.start(
+        cancellation,
+        session.id.clone(),
+        "what is 6 times 7".to_owned(),
+        Vec::new(),
+        context,
+    );
+    assert!(run.is_ok());
+    let Ok(run) = run else {
+        return;
+    };
+    let mut saw_tool = false;
+    let mut events = run.events;
+    while let Some(event) = events.recv().await {
+        if event.event_type == AgentEventType::Tool
+            && let Some(message) = event.message
+            && message
+                .tool_results()
+                .iter()
+                .any(|result| result.tool_call_id == "ci_1" && result.content.contains("42"))
+        {
+            saw_tool = true;
+        }
+    }
+    let result = run.handle.await;
+    assert!(matches!(result, Ok(Ok(()))));
+    assert!(saw_tool);
+    let history = store.list_messages(&session.id).await.unwrap_or_default();
+    assert!(history.iter().any(|message| {
+        message.role == MessageRole::Assistant
+            && message
+                .tool_calls()
+                .iter()
+                .any(|call| call.id == "ci_1" && call.r#type == "hosted" && call.name == "sandbox")
     }));
 }
 

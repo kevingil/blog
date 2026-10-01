@@ -520,10 +520,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     },
   };
   
-  // (deprecated) pending edit/patch state removed in favor of inline diffs
-  
-  // Track processed tool messages to avoid re-applying old patches
-  const [processedToolMessages, setProcessedToolMessages] = useState<Set<string>>(new Set());
+  // Article edits are applied on the backend. The editor only applies
+  // document_update events that carry the saved draft.
 
   // Use React Query to fetch article data
   const { data: article, isLoading: articleLoading, error } = useQuery({
@@ -1300,12 +1298,16 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 }
                 break;
                 
+              case 'document_update':
+                if (typeof msg.content === 'string' && msg.content.length > 0) {
+                  applyAgentMarkdown(msg.content);
+                }
+                break;
+
               case 'tool_result':
                 setIsThinking(false);
                 if (msg.tool_result) {
                   const toolId = msg.tool_id;
-                  const toolMessageId = `${requestId}-${toolId || Date.now()}-tool-result`;
-                  const isNewMessage = !processedToolMessages.has(toolMessageId);
 
                   try {
                     const toolResult = msg.tool_result.content ? JSON.parse(msg.tool_result.content) : {};
@@ -1349,19 +1351,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       updated[assistantIndex] = { ...updated[assistantIndex], steps };
                       return updated;
                     });
-
-                    // Silently apply edits -- content is markdown, set directly via form
-                    if (toolName === 'replace_lines' && isNewMessage && !isError) {
-                      if (toolResult.new_markdown) {
-                        applyAgentMarkdown(toolResult.new_markdown);
-                      }
-                      setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
-                    } else if (toolName === 'rewrite_document' && isNewMessage && !isError) {
-                      if (toolResult.new_content) {
-                        applyAgentMarkdown(toolResult.new_content);
-                      }
-                      setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
-                    }
                   } catch (e) {
                     console.error('[Editor] Failed to parse tool result:', e);
                   }
@@ -2220,21 +2209,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                 status={groupStatus}
                                 isLast={isLastStep}
                               >
-                                <ToolGroupDisplay 
-                                  group={step.toolGroup}
-                                  onArtifactAction={(toolId, action) => {
-                                    const call = step.toolGroup?.calls.find(c => c.id === toolId);
-                                    if (!call) return;
-                                    const editTools = ['replace_lines', 'rewrite_document'];
-                                    if (editTools.includes(call.name) && action === 'accept' && call.result) {
-                                      const result = call.result;
-                                      const newMd = (result.new_markdown || result.new_content) as string;
-                                      if (newMd) {
-                                        applyAgentMarkdown(newMd);
-                                      }
-                                    }
-                                  }}
-                                />
+                                <ToolGroupDisplay group={step.toolGroup} />
                               </ChainOfThoughtStep>
                             );
                           }
