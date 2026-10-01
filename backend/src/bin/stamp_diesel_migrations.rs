@@ -8,8 +8,15 @@ use secrecy::ExposeSecret;
 
 use blog_backend::{config::database_url_from_env, database::fingerprint::schema_fingerprint};
 
-const MIGRATION_SCHEMA_SHA256: &str =
-    "81fa7f13268ae949c1c627f62ea860d4fe7dfb72698a4f40c5b4706cadd07b29";
+// Exact, audited variants of the same seven-migration application schema.
+// Extension versions and namespaces remain part of the fingerprint guard.
+// Evidence: docs/porting/MIGRATION_ADOPTION.md.
+const BASELINE_SCHEMA_FINGERPRINTS: [&str; 2] = [
+    // Local PostgreSQL 17.4: uuid-ossp 1.1 in public, vector 0.8.2 in public.
+    "81fa7f13268ae949c1c627f62ea860d4fe7dfb72698a4f40c5b4706cadd07b29",
+    // Supabase PostgreSQL 17.4: uuid-ossp 1.1 in extensions, vector 0.8.0 in public.
+    "51fecabff9c453a84feb6c7a0f5cbca4274b5ae479ac1e48cd45092c0b72f00e",
+];
 const MIGRATION_VERSIONS: [&str; 7] = [
     "20250723064003",
     "20250813062742",
@@ -79,10 +86,10 @@ fn main() -> anyhow::Result<()> {
         }
 
         let actual_fingerprint = schema_fingerprint(connection)?;
-        if actual_fingerprint != MIGRATION_SCHEMA_SHA256 {
+        if !BASELINE_SCHEMA_FINGERPRINTS.contains(&actual_fingerprint.as_str()) {
             anyhow::bail!(
                 "database schema does not match the seven-migration Goose baseline \
-                 through 20260315000000: expected fingerprint {MIGRATION_SCHEMA_SHA256}, found \
+                 through 20260315000000: expected one of {BASELINE_SCHEMA_FINGERPRINTS:?}, found \
                  {actual_fingerprint}; no migration history was written"
             );
         }

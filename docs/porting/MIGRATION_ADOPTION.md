@@ -45,6 +45,27 @@ This known source defect means that intermediate down-state does not
 fingerprint-equal the exact pre-Up state. Preserve it; do not silently repair
 the historical SQL during the port.
 
+## Verified Supabase baseline variant
+
+A read-only production inspection on 2026-09-30 reproduced the first Render
+deployment's rejected fingerprint. Compared with a fresh local PostgreSQL 17.4
+database built from only the seven historical migrations, the live schema has:
+
+- All 21 application tables and 230 column records matching exactly.
+- All 66 constraint records and 81 index records matching exactly.
+- The seven expected Goose versions recorded as applied, and no Diesel ledger.
+- Only two differences in the fingerprint payload: `uuid-ossp` 1.1 is installed
+  in `extensions` instead of `public`, and `vector` in `public` is version 0.8.0
+  instead of 0.8.2.
+
+Changing only those two extension metadata values in the locally generated
+baseline payload reproduces the live payload byte for byte and yields
+`51fecabff9c453a84feb6c7a0f5cbca4274b5ae479ac1e48cd45092c0b72f00e`.
+The stamper accepts this exact Supabase fingerprint alongside the original
+local fingerprint. It does not ignore extensions or accept arbitrary schema
+differences. No production DDL, stamping, or application-data changes were made
+during this inspection; the scratch local comparison database was removed.
+
 ## Existing Supabase database stamping
 
 `stamp-diesel-migrations` is a one-time command for the existing database. It
@@ -55,8 +76,9 @@ must:
 2. Refuse to continue if Diesel's migration ledger already exists.
 3. Validate the existing tables, columns, types, nullability, defaults,
    constraints, indexes, and required extensions against the canonical
-   fingerprint produced by applying only the seven historical migrations to a
-   clean database. The four September migrations are not part of that baseline.
+   fingerprints for the seven historical migrations: the clean local baseline
+   or its audited Supabase extension variant above. The four September
+   migrations are not part of that baseline.
 4. In the same transaction, create Diesel's exact ledger and insert the seven
    version strings:
 
@@ -85,8 +107,11 @@ docker run --rm \
   blog-backend:migration-stamp
 ```
 
-The fingerprint must be exactly
-`81fa7f13268ae949c1c627f62ea860d4fe7dfb72698a4f40c5b4706cadd07b29`.
+The fingerprint must be one of these exact audited values:
+
+- Local baseline: `81fa7f13268ae949c1c627f62ea860d4fe7dfb72698a4f40c5b4706cadd07b29`.
+- Supabase baseline: `51fecabff9c453a84feb6c7a0f5cbca4274b5ae479ac1e48cd45092c0b72f00e`.
+
 After verifying the target and backup, stamp the existing schema once:
 
 ```sh
@@ -159,8 +184,8 @@ The plain `stamp-diesel-migrations` command still refuses an existing ledger.
 Use `--if-needed` for repeated deployment commands. Never drop a ledger, use
 `migration redo`, or edit historical SQL to force adoption to succeed.
 
-The recorded fingerprint includes extension versions and namespaces as well as
-public schema structure. A Supabase extension/layout difference is a hard
-failure; investigate it against a schema-only clone rather than replacing the
-expected hash with an unverified production hash. The earlier parity result
-above is historical evidence, not verification of the current production DB.
+The recorded fingerprints include extension versions and namespaces as well as
+public schema structure. Any difference from both audited variants is a hard
+failure; investigate it against the historical migration baseline rather than
+accepting an unverified production hash. The inspection above describes the
+pre-adoption database at that time; later legitimate migrations change its hash.
