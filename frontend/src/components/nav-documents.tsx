@@ -62,7 +62,7 @@ export function NavDocuments({
   hasNextPage,
   isFetchingNextPage,
 }: NavDocumentsProps) {
-  const { isMobile } = useSidebar()
+  const { isMobile, setOpenMobile } = useSidebar()
   const location = useLocation()
   const navigate = useNavigate()
   const loadMoreRef = useRef<HTMLDivElement>(null)
@@ -193,7 +193,12 @@ export function NavDocuments({
                       align={isMobile ? "end" : "start"}
                     >
                       <DropdownMenuItem asChild>
-                        <Link to={editUrl}>
+                        <Link
+                          to={editUrl}
+                          onClick={() => {
+                            if (isMobile) setOpenMobile(false)
+                          }}
+                        >
                           <IconFolder />
                           <span>Edit</span>
                         </Link>

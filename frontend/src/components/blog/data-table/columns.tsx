@@ -32,37 +32,37 @@ export const createColumns = (onArticleDeleted: () => void): ColumnDef<ArticleLi
       const hasChanges = hasDraftChanges(article);
       const externalUrl = externalArticleUrl(article);
       return (
-        <div className="flex items-start gap-3 py-2">
+        <div className="flex min-w-0 items-start gap-2 py-1 md:gap-3 md:py-2">
           {article.draft_image_url && (
             <img
               src={article.draft_image_url}
-              className="rounded-md w-16 h-16 min-w-16 min-h-16 object-cover"
+              className="size-10 shrink-0 rounded-md object-cover md:size-16"
               alt={article.draft_title}
             />
           )}
-          <div className="flex flex-col gap-1 min-w-0">
-            <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <div className="flex min-w-0 items-center gap-1.5">
               <Link
                 to="/dashboard/blog/edit/$blogSlug"
                 params={{ blogSlug: article.slug || "" }}
-                className="font-medium hover:underline truncate"
+                className="min-w-0 truncate font-medium hover:underline"
               >
                 {article.draft_title}
               </Link>
               {externalUrl && (
-                <Badge variant="outline" className="text-[0.6rem] px-1 py-0">
+                <Badge variant="outline" className="shrink-0 px-1 py-0 text-[0.6rem]">
                   external
                 </Badge>
               )}
               {hasChanges && (
-                <Badge variant="outline" className="text-[0.6rem] px-1 py-0 text-amber-600 dark:text-amber-400 border-amber-300">
+                <Badge variant="outline" className="shrink-0 border-amber-300 px-1 py-0 text-[0.6rem] text-amber-600 dark:text-amber-400">
                   modified
                 </Badge>
               )}
             </div>
             {article.draft_content && (
-              <p className="text-xs text-muted-foreground line-clamp-2">
-                {article.draft_content.replace(/<[^>]*>/g, '').slice(0, 150)}...
+              <p className="truncate text-xs text-muted-foreground">
+                {article.draft_content.replace(/<[^>]*>/g, '').slice(0, 150)}
               </p>
             )}
           </div>

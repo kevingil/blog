@@ -28,8 +28,7 @@ import {
 import { useLocation, useNavigate } from "@tanstack/react-router"
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { getArticles } from "@/services/blog"
-import { MessageSquare, Plus } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { Plus } from "lucide-react"
 
 
 const navigationData = {
@@ -245,23 +244,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <div className="flex h-10 items-center gap-1.5 group-data-[collapsible=icon]:justify-center">
           <SidebarTrigger className="size-8 shrink-0 text-sidebar-foreground/80 hover:bg-sidebar-accent" />
           {state === "expanded" && (
-            <>
-              <span className="font-wordmark text-[1.35rem] leading-none tracking-tight text-sidebar-foreground">
-                Copilot
-              </span>
-              <button
-                type="button"
-                onClick={startWriting}
-                aria-label="What are we writing today?"
-                title="What are we writing today?"
-                className={cn(
-                  "ml-auto inline-flex size-8 items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-foreground transition-colors hover:bg-sidebar-accent/70",
-                  isWriting && "border-sidebar-foreground/15"
-                )}
-              >
-                <MessageSquare className="size-4" />
-              </button>
-            </>
+            <span className="font-wordmark text-[1.35rem] leading-none tracking-tight text-sidebar-foreground">
+              Copilot
+            </span>
           )}
         </div>
         <SidebarMenu>

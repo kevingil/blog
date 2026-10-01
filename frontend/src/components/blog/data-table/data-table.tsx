@@ -24,6 +24,27 @@ import {
 
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
+import { cn } from "@/lib/utils";
+
+const COMPACT_HIDDEN_COLUMNS = new Set([
+  "tags",
+  "article.created_at",
+  "article.published_at",
+  "status",
+]);
+
+function compactColumnClass(id: string) {
+  if (COMPACT_HIDDEN_COLUMNS.has(id)) {
+    return "hidden w-0 max-w-0 overflow-hidden border-0 p-0 md:table-cell md:w-auto md:max-w-none md:overflow-visible md:p-2";
+  }
+  if (id === "article.draft_title") {
+    return "max-w-0 whitespace-normal md:max-w-none";
+  }
+  if (id === "actions") {
+    return "w-10 px-1";
+  }
+  return undefined;
+}
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -93,14 +114,14 @@ export function DataTable<TData, TValue>({
         statusFilter={statusFilter}
         onStatusFilterChange={onStatusFilterChange}
       />
-      <div className="flex-1 min-h-0 min-w-0 rounded-md border border-border bg-card overflow-auto relative">
-        <Table noWrapper>
+      <div className="relative min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden rounded-md border border-border bg-card md:overflow-x-auto">
+        <Table noWrapper className="table-fixed md:table-auto">
           <TableHeader className="sticky top-0 bg-muted/60 z-10 border-b border-border">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   return (
-                    <TableHead key={header.id} className="bg-muted/60 text-foreground">
+                    <TableHead key={header.id} className={cn("bg-muted/60 text-foreground", compactColumnClass(header.column.id))}>
                       {header.isPlaceholder
                         ? null
                         : flexRender(
@@ -130,7 +151,7 @@ export function DataTable<TData, TValue>({
                   data-state={row.getIsSelected() && "selected"}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className={compactColumnClass(cell.column.id)}>
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext()

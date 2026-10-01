@@ -81,7 +81,7 @@ import {
   ReasoningStep 
 } from "@/components/prompt-kit/chain-of-thought";
 import { cn } from '@/lib/utils';
-import { Wrench, BookOpen, FileSearch, PlusCircle, FileText, ImageIcon } from "lucide-react";
+import { Wrench, BookOpen, FileSearch, PlusCircle, FileText, ImageIcon, MoreHorizontal } from "lucide-react";
 import { 
   updateArticle, 
   getArticle, 
@@ -100,8 +100,14 @@ import { ArticleListItem, ArticleVersion, ArticleVersionListResponse, isPublishe
 import { Badge } from '@/components/ui/badge';
 import { Globe, EyeOff, History, Tag } from 'lucide-react';
 import { Dialog, DialogTitle, DialogContent, DialogTrigger, DialogDescription, DialogFooter, DialogHeader, DialogClose } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerClose } from '@/components/ui/drawer';
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerClose } from '@/components/ui/drawer';
 import type { UseMutationResult } from '@tanstack/react-query';
 
 const INITIAL_CHAT_GREETING = 'Hi! I can help you improve your article. Try asking me to "rewrite the introduction" or "make the content more engaging".';
@@ -379,6 +385,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [generatingRewrite, setGeneratingRewrite] = useState(false);
   const [publishDrawerOpen, setPublishDrawerOpen] = useState(false);
   const [resourcesOpen, setResourcesOpen] = useState(false);
+  const [tagsOpen, setTagsOpen] = useState(false);
+  const [externalOpen, setExternalOpen] = useState(false);
   
   // Image versioning state
   const [imageVersions, setImageVersions] = useState<Array<{ url: string; prompt?: string; timestamp: number; uploadId?: string; blurhash?: string | null }>>([]);
@@ -1609,12 +1617,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
   return (
       <section className="article-editor-shell">
-        <div className="article-editor-main">
+        <div className="article-editor-main px-2 pt-2 md:px-0 md:pt-0">
         {/* Article Metadata Card */}
         
             {/* Article Title Section with Image and Save */}
             <div className="mb-2">
-              <div className="flex flex-row items-center gap-2">
+              <div className="flex min-w-0 flex-row items-center gap-2">
                 {/* Edit Image Trigger */}
                 <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
                   <DialogTrigger asChild>
@@ -1861,11 +1869,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 </Dialog>
 
                 {/* Title Input */}
-                <div className="flex-1">
+                <div className="min-w-0 flex-1">
                   <Input
                     {...register('title')}
                     placeholder="Article Title"
-                    className="w-full text-lg font-medium"
+                    className="w-full min-w-0 text-base font-medium md:text-lg"
                   />
                   {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title.message}</p>}
                 </div>
@@ -1876,12 +1884,87 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     variant="outline"
                     size="sm"
                     onClick={() => setPublishDrawerOpen(true)}
-                    className="flex-shrink-0"
+                    className="hidden shrink-0 md:inline-flex"
                   >
                     <RefreshCw className="h-4 w-4 mr-1" />
                     Update Published
                   </Button>
                 )}
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0 md:hidden"
+                      aria-label="Article options"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuItem
+                      disabled={!article?.article.id}
+                      onSelect={() => window.setTimeout(() => setResourcesOpen(true), 0)}
+                    >
+                      <BookOpen />
+                      Resources
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => window.setTimeout(() => setTagsOpen(true), 0)}>
+                      <Tag />
+                      Tags
+                      {watchedTags && watchedTags.length > 0 && (
+                        <span className="ml-auto text-xs text-muted-foreground">{watchedTags.length}</span>
+                      )}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => window.setTimeout(() => setExternalOpen(true), 0)}>
+                      <ExternalLinkIcon />
+                      External
+                      {watchedExternalUrl?.trim() && (
+                        <span className="ml-auto text-xs text-muted-foreground">on</span>
+                      )}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => window.setTimeout(() => setPublishDrawerOpen(true), 0)}>
+                      {isPublished(article?.article) ? <Globe /> : <EyeOff />}
+                      {isPublished(article?.article) ? "Published" : "Draft"}
+                    </DropdownMenuItem>
+                    {!isNew && isPublished(article?.article) && hasDraftChanges(article?.article) && (
+                      <DropdownMenuItem onSelect={() => window.setTimeout(() => setPublishDrawerOpen(true), 0)}>
+                        <RefreshCw />
+                        Update published
+                      </DropdownMenuItem>
+                    )}
+                    {!isNew && (
+                      <DropdownMenuItem asChild>
+                        <Link
+                          to="/blog"
+                          params={{ slug: article?.article.slug || '' }}
+                          search={{ page: undefined, tag: undefined, search: undefined }}
+                          target="_blank"
+                        >
+                          <ExternalLinkIcon />
+                          View
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
+                    {!isNew && (
+                      <DropdownMenuItem onSelect={() => window.setTimeout(() => setShowVersions(true), 0)}>
+                        <History />
+                        History
+                      </DropdownMenuItem>
+                    )}
+                    {!isNew && (
+                      <DropdownMenuItem
+                        disabled={generatingRewrite}
+                        onSelect={() => rewriteArticle()}
+                      >
+                        <RefreshCw />
+                        Regenerate
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
                 {/* Save Button */}
                 <Button
@@ -1901,8 +1984,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               </div>
             </div>
 
-            {/* Article Tools Section */}
-            <div className="flex flex-wrap items-center gap-1.5 mb-2">
+            {/* Article tools stay on one row at desktop widths. Phones use the options menu. */}
+            <div className="mb-2 hidden flex-wrap items-center gap-1.5 md:flex">
               <Button
                 type="button"
                 variant="outline"
@@ -1913,126 +1996,35 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 <BookOpen className="h-4 w-4" />
                 Resources
               </Button>
-              {article?.article.id && (
-                <SourcesManager
-                  articleId={article.article.id}
-                  isOpen={resourcesOpen}
-                  onOpenChange={setResourcesOpen}
-                />
-              )}
-
-              {/* Tags Button */}
-              <Drawer direction="right">
-                <DrawerTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Tag className="h-4 w-4" />
-                    Tags
-                    {watchedTags && watchedTags.length > 0 && (
-                      <Badge variant="secondary" className="ml-1">
-                        {watchedTags.length}
-                      </Badge>
-                    )}
-                  </Button>
-                </DrawerTrigger>
-
-                {/* Drawer content for tags editing */}
-                <DrawerContent className="w-full sm:max-w-sm ml-auto">
-                  <DrawerHeader>
-                    <DrawerTitle>Edit Tags</DrawerTitle>
-                    <DrawerDescription>Add or remove tags for your article.</DrawerDescription>
-                  </DrawerHeader>
-                  <div className="space-y-4 px-4">
-                    <div className="space-y-2">
-                      <label className="block text-md font-medium leading-6 text-foreground">Article Tags</label>
-                      <ChipInput
-                        value={watchedTags}
-                        onChange={(tags) => setValue('tags', tags.map((tag: string) => tag.toUpperCase()))}
-                        placeholder="Type and press Enter to add tags..."
-                      />
-                      {errors.tags && <p className="text-red-500 text-sm">{errors.tags.message}</p>}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      Tags help categorize your article and make it easier to find. Press Enter or comma to add a tag.
-                    </div>
-                  </div>
-                  <DrawerFooter>
-                    <DrawerClose asChild>
-                      <Button variant="outline" className="w-full">Done</Button>
-                    </DrawerClose>
-                  </DrawerFooter>
-                </DrawerContent>
-              </Drawer>
-
-              <Drawer direction="right">
-                <DrawerTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <ExternalLinkIcon className="h-4 w-4" />
-                    External
-                    {watchedExternalUrl?.trim() && (
-                      <Badge variant="secondary" className="ml-1">
-                        on
-                      </Badge>
-                    )}
-                  </Button>
-                </DrawerTrigger>
-                <DrawerContent className="w-full sm:max-w-sm ml-auto">
-                  <DrawerHeader>
-                    <DrawerTitle>External link</DrawerTitle>
-                    <DrawerDescription>
-                      Point this article at a post published somewhere else. Readers open that link in a new tab. Clear the link and save to keep the article on this site.
-                    </DrawerDescription>
-                  </DrawerHeader>
-                  <div className="space-y-2 px-4">
-                    <label htmlFor="external-article-url" className="text-sm font-medium">
-                      Article link
-                    </label>
-                    <Input
-                      id="external-article-url"
-                      type="url"
-                      placeholder="https://example.com/blog/post"
-                      {...register('external_url')}
-                    />
-                    {errors.external_url && (
-                      <p className="text-sm text-destructive">{errors.external_url.message}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      Saving with a new link stores it, and fills in a title, preview, and cover when those are still empty.
-                    </p>
-                  </div>
-                  <DrawerFooter>
-                    <DrawerClose asChild>
-                      <Button variant="outline" className="w-full">Done</Button>
-                    </DrawerClose>
-                  </DrawerFooter>
-                </DrawerContent>
-              </Drawer>
-
-              {/* Publish Button */}
-              <Drawer direction="right" open={publishDrawerOpen} onOpenChange={setPublishDrawerOpen}>
-                <DrawerTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    {isPublished(article?.article) ? (
-                      <Globe className="h-4 w-4" />
-                    ) : (
-                      <EyeOff className="h-4 w-4" />
-                    )}
-                    {isPublished(article?.article) ? "Published" : "Draft"}
-                    {isPublished(article?.article) && hasDraftChanges(article?.article) && (
-                      <Badge variant="secondary" className="ml-1">*</Badge>
-                    )}
-                  </Button>
-                </DrawerTrigger>
-
-                {/* Drawer content for publishing settings */}
-                <PublishDrawerContent
-                  article={article}
-                  isNew={isNew}
-                  publishMutation={publishMutation}
-                  unpublishMutation={unpublishMutation}
-                />
-              </Drawer>
-
-              {/* View Article Button */}
+              <Button type="button" variant="outline" size="sm" onClick={() => setTagsOpen(true)}>
+                <Tag className="h-4 w-4" />
+                Tags
+                {watchedTags && watchedTags.length > 0 && (
+                  <Badge variant="secondary" className="ml-1">
+                    {watchedTags.length}
+                  </Badge>
+                )}
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setExternalOpen(true)}>
+                <ExternalLinkIcon className="h-4 w-4" />
+                External
+                {watchedExternalUrl?.trim() && (
+                  <Badge variant="secondary" className="ml-1">
+                    on
+                  </Badge>
+                )}
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setPublishDrawerOpen(true)}>
+                {isPublished(article?.article) ? (
+                  <Globe className="h-4 w-4" />
+                ) : (
+                  <EyeOff className="h-4 w-4" />
+                )}
+                {isPublished(article?.article) ? "Published" : "Draft"}
+                {isPublished(article?.article) && hasDraftChanges(article?.article) && (
+                  <Badge variant="secondary" className="ml-1">*</Badge>
+                )}
+              </Button>
               {!isNew && (
                 <Button variant="outline" size="sm" asChild>
                   <Link
@@ -2046,8 +2038,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   </Link>
                 </Button>
               )}
-
-              {/* Version History Button */}
               {!isNew && (
                 <Button
                   type="button"
@@ -2059,8 +2049,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   History
                 </Button>
               )}
-
-              {/* Regenerate Button */}
               {!isNew && (
                 <Button
                   type="button"
@@ -2074,6 +2062,80 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 </Button>
               )}
             </div>
+            {article?.article.id && (
+              <SourcesManager
+                articleId={article.article.id}
+                isOpen={resourcesOpen}
+                onOpenChange={setResourcesOpen}
+              />
+            )}
+            <Drawer direction="right" open={tagsOpen} onOpenChange={setTagsOpen}>
+              <DrawerContent className="w-full sm:max-w-sm ml-auto">
+                <DrawerHeader>
+                  <DrawerTitle>Edit Tags</DrawerTitle>
+                  <DrawerDescription>Add or remove tags for your article.</DrawerDescription>
+                </DrawerHeader>
+                <div className="space-y-4 px-4">
+                  <div className="space-y-2">
+                    <label className="block text-md font-medium leading-6 text-foreground">Article Tags</label>
+                    <ChipInput
+                      value={watchedTags}
+                      onChange={(tags) => setValue('tags', tags.map((tag: string) => tag.toUpperCase()))}
+                      placeholder="Type and press Enter to add tags..."
+                    />
+                    {errors.tags && <p className="text-red-500 text-sm">{errors.tags.message}</p>}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Tags help categorize your article and make it easier to find. Press Enter or comma to add a tag.
+                  </div>
+                </div>
+                <DrawerFooter>
+                  <DrawerClose asChild>
+                    <Button variant="outline" className="w-full">Done</Button>
+                  </DrawerClose>
+                </DrawerFooter>
+              </DrawerContent>
+            </Drawer>
+            <Drawer direction="right" open={externalOpen} onOpenChange={setExternalOpen}>
+              <DrawerContent className="w-full sm:max-w-sm ml-auto">
+                <DrawerHeader>
+                  <DrawerTitle>External link</DrawerTitle>
+                  <DrawerDescription>
+                    Point this article at a post published somewhere else. Readers open that link in a new tab. Clear the link and save to keep the article on this site.
+                  </DrawerDescription>
+                </DrawerHeader>
+                <div className="space-y-2 px-4">
+                  <label htmlFor="external-article-url" className="text-sm font-medium">
+                    Article link
+                  </label>
+                  <Input
+                    id="external-article-url"
+                    type="url"
+                    placeholder="https://example.com/blog/post"
+                    {...register('external_url')}
+                  />
+                  {errors.external_url && (
+                    <p className="text-sm text-destructive">{errors.external_url.message}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Saving with a new link stores it, and fills in a title, preview, and cover when those are still empty.
+                  </p>
+                </div>
+                <DrawerFooter>
+                  <DrawerClose asChild>
+                    <Button variant="outline" className="w-full">Done</Button>
+                  </DrawerClose>
+                </DrawerFooter>
+              </DrawerContent>
+            </Drawer>
+            <Drawer direction="right" open={publishDrawerOpen} onOpenChange={setPublishDrawerOpen}>
+              <PublishDrawerContent
+                article={article}
+                isNew={isNew}
+                publishMutation={publishMutation}
+                unpublishMutation={unpublishMutation}
+              />
+            </Drawer>
 
           <form className="flex-1 flex flex-col min-h-0 min-w-0">
               <div className="flex-1 flex flex-col border border-border rounded-sm min-h-0 min-w-0">

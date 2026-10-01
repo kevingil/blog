@@ -140,7 +140,7 @@ export function TipTapEditor({
 
   return (
     <div className="article-editor flex h-full min-h-0 flex-col bg-background">
-      <div className="flex shrink-0 flex-wrap items-center gap-0.5 border-b px-2 py-1">
+      <div className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-b px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&_button]:shrink-0">
         <Toggle size="sm" type="button" pressed={!!editor?.isActive('bold')} onPressedChange={() => editor?.chain().focus().toggleBold().run()} aria-label="Bold" title="Bold">
           <Bold className="h-3.5 w-3.5" />
         </Toggle>
@@ -196,8 +196,8 @@ export function TipTapEditor({
         </Toggle>
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
-        <article className="mx-auto max-w-4xl px-8 pb-8 pt-6">
-          {title && <h1 className="mb-4 text-4xl font-bold">{title}</h1>}
+        <article className="mx-auto max-w-4xl px-4 pb-6 pt-4 md:px-8 md:pb-8 md:pt-6">
+          {title && <h1 className="mb-3 text-2xl font-bold md:mb-4 md:text-4xl">{title}</h1>}
           {imageUrl && (
             <img
               src={imageUrl}
