@@ -14,11 +14,11 @@ import { addedTextRanges, type TextRange } from '@/lib/added-text';
 import { useConversation } from '@/hooks/use-conversation';
 
 // Editor modules
-import { EditorTabs } from './editor/EditorTabs';
+import { TipTapEditor } from './editor/TipTapEditor';
+import { SourcesManager } from './SourcesManager';
 import { ImageLoader } from './editor/ImageLoader';
 import { ImagePickerFromUploads } from './editor/ImagePickerFromUploads';
 import { BlurhashImage } from '@/components/media/BlurhashImage';
-import { turndownService } from './editor/turndown';
 import { 
   DEFAULT_IMAGE_PROMPT, 
   articleSchema, 
@@ -378,6 +378,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [generatingRewrite, setGeneratingRewrite] = useState(false);
   const [publishDrawerOpen, setPublishDrawerOpen] = useState(false);
+  const [resourcesOpen, setResourcesOpen] = useState(false);
   
   // Image versioning state
   const [imageVersions, setImageVersions] = useState<Array<{ url: string; prompt?: string; timestamp: number; uploadId?: string; blurhash?: string | null }>>([]);
@@ -738,14 +739,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
   const [imagePrompt, setImagePrompt] = useState<string | null>(DEFAULT_IMAGE_PROMPT[Math.floor(Math.random() * DEFAULT_IMAGE_PROMPT.length)]);
 
-  /* --------------------------------------------------------------------- */
-  /* Markdown Editor Setup                                                 */
-  /* --------------------------------------------------------------------- */
-  const [activeTab, setActiveTab] = useState<string>('edit');
+  /* Highlights stay until the next agent run. */
   const [addedRanges, setAddedRanges] = useState<TextRange[]>([]);
 
   const onContentChange = (md: string) => {
-    setAddedRanges([]);
     setValue('content', md);
   };
 
@@ -923,6 +920,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
   const rewriteArticle = async () => {
     if (!article?.article.id) return;
+    setAddedRanges([]);
     setGeneratingRewrite(true);
     try {
       const result = await updateArticleWithContext(article.article.id);
@@ -1064,6 +1062,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   };
 
   const streamChatResponse = async (requestId: string, assistantIndex: number, isEditRequest: boolean) => {
+    setAddedRanges([]);
     return new Promise<void>((resolve, reject) => {
       const wsUrl = `${VITE_API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://')}/websocket`;
       
@@ -1904,6 +1903,24 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
             {/* Article Tools Section */}
             <div className="flex flex-wrap items-center gap-1.5 mb-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setResourcesOpen(true)}
+                disabled={!article?.article.id}
+              >
+                <BookOpen className="h-4 w-4" />
+                Resources
+              </Button>
+              {article?.article.id && (
+                <SourcesManager
+                  articleId={article.article.id}
+                  isOpen={resourcesOpen}
+                  onOpenChange={setResourcesOpen}
+                />
+              )}
+
               {/* Tags Button */}
               <Drawer direction="right">
                 <DrawerTrigger asChild>
@@ -2060,17 +2077,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
           <form className="flex-1 flex flex-col min-h-0 min-w-0">
               <div className="flex-1 flex flex-col border border-border rounded-sm min-h-0 min-w-0">
-                <EditorTabs
+                <TipTapEditor
                   content={watchedContent || ''}
                   onChange={onContentChange}
                   highlights={addedRanges}
-                  activeTab={activeTab}
-                  onTabChange={setActiveTab}
                   title={watchedTitle}
                   authorName={user?.name}
                   imageUrl={previewImageUrl}
                   tags={watchedTags}
-                  articleId={article?.article.id}
                 />
                 {errors.content && <p className="text-red-500">{errors.content.message}</p>}
               </div>
