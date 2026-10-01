@@ -619,24 +619,7 @@ impl Provider for OpenAiClient {
             .clone()
             .unwrap_or_else(|| copilot_prompt(&tool_names));
         let input = response_input(&messages);
-        let response_tools = tools
-            .iter()
-            .map(|tool| {
-                let info = tool.info();
-                ResponseTool {
-                    r#type: "function",
-                    name: info.name,
-                    description: info.description,
-                    parameters: serde_json::json!({
-                        "type": "object",
-                        "properties": info.parameters,
-                        "required": info.required,
-                        "additionalProperties": false,
-                    }),
-                    strict: true,
-                }
-            })
-            .collect();
+        let response_tools = response_tools(&tools);
         let request = self
             .client
             .post(format!("{}/responses", self.base_url))
@@ -663,14 +646,188 @@ impl Provider for OpenAiClient {
             response = request => response.map_err(|error| ProviderError::Request(error.to_string()))?,
         };
         if !response.status().is_success() {
-            return Err(ProviderError::Request(format!(
-                "OpenAI returned HTTP {}",
-                response.status()
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(ProviderError::Request(provider_status_error(
+                "OpenAI",
+                status.as_u16(),
+                &body,
             )));
         }
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
         tokio::spawn(run_response_stream(response, sender, cancellation));
         Ok(receiver)
+    }
+}
+
+fn response_tools(tools: &[Arc<dyn Tool>]) -> Vec<ResponseTool> {
+    tools
+        .iter()
+        .map(|tool| {
+            let info = tool.info();
+            ResponseTool {
+                r#type: "function",
+                name: info.name,
+                description: info.description,
+                parameters: strict_parameters(&info.parameters, &info.required),
+                strict: true,
+            }
+        })
+        .collect()
+}
+
+fn strict_parameters(
+    parameters: &std::collections::BTreeMap<String, serde_json::Value>,
+    required: &[String],
+) -> serde_json::Value {
+    let mut properties = serde_json::Map::new();
+    for (name, schema) in parameters {
+        properties.insert(name.clone(), schema.clone());
+    }
+    strict_schema(&serde_json::json!({
+        "type": "object",
+        "properties": properties,
+        "required": required,
+    }))
+}
+
+/// OpenAI strict function schemas reject a request with HTTP 400 unless every
+/// object lists all of its properties in `required` and sets
+/// `additionalProperties` to false. Optional fields stay optional by accepting
+/// null.
+fn strict_schema(schema: &serde_json::Value) -> serde_json::Value {
+    let Some(object) = schema.as_object() else {
+        return schema.clone();
+    };
+    let mut object = object.clone();
+    if let Some(items) = object.get("items").cloned() {
+        object.insert("items".to_owned(), strict_schema(&items));
+    }
+    for key in ["anyOf", "oneOf", "allOf"] {
+        if let Some(options) = object.get(key).and_then(serde_json::Value::as_array) {
+            let next = options.iter().map(strict_schema).collect();
+            object.insert(key.to_owned(), serde_json::Value::Array(next));
+        }
+    }
+    if schema_is_object(&object) {
+        let properties = object
+            .get("properties")
+            .and_then(serde_json::Value::as_object)
+            .cloned()
+            .unwrap_or_default();
+        let mut required = object
+            .get("required")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|item| item.as_str().map(ToOwned::to_owned))
+            .filter(|name| properties.contains_key(name))
+            .collect::<Vec<_>>();
+        let mut next_properties = serde_json::Map::new();
+        for (name, child) in properties {
+            let child = if required.iter().any(|existing| existing == &name) {
+                child
+            } else {
+                required.push(name.clone());
+                make_nullable(child)
+            };
+            next_properties.insert(name, strict_schema(&child));
+        }
+        object.insert(
+            "properties".to_owned(),
+            serde_json::Value::Object(next_properties),
+        );
+        object.insert(
+            "required".to_owned(),
+            serde_json::Value::Array(
+                required
+                    .into_iter()
+                    .map(serde_json::Value::String)
+                    .collect(),
+            ),
+        );
+        object.insert(
+            "additionalProperties".to_owned(),
+            serde_json::Value::Bool(false),
+        );
+        if !object.contains_key("type") {
+            object.insert("type".to_owned(), serde_json::json!("object"));
+        }
+    }
+    serde_json::Value::Object(object)
+}
+
+fn schema_is_object(object: &serde_json::Map<String, serde_json::Value>) -> bool {
+    if object.contains_key("properties") || object.contains_key("additionalProperties") {
+        return true;
+    }
+    match object.get("type") {
+        Some(serde_json::Value::String(name)) => name == "object",
+        Some(serde_json::Value::Array(types)) => {
+            types.iter().any(|item| item.as_str() == Some("object"))
+        }
+        _ => false,
+    }
+}
+
+fn make_nullable(schema: serde_json::Value) -> serde_json::Value {
+    if schema_allows_null(&schema) {
+        return schema;
+    }
+    let Some(object) = schema.as_object() else {
+        return schema;
+    };
+    let mut object = object.clone();
+    match object.get("type").cloned() {
+        Some(serde_json::Value::String(name)) => {
+            object.insert("type".to_owned(), serde_json::json!([name, "null"]));
+            serde_json::Value::Object(object)
+        }
+        Some(serde_json::Value::Array(mut types)) => {
+            types.push(serde_json::json!("null"));
+            object.insert("type".to_owned(), serde_json::Value::Array(types));
+            serde_json::Value::Object(object)
+        }
+        _ => serde_json::json!({
+            "anyOf": [schema, {"type": "null"}]
+        }),
+    }
+}
+
+fn schema_allows_null(schema: &serde_json::Value) -> bool {
+    match schema.get("type") {
+        Some(serde_json::Value::String(name)) => name == "null",
+        Some(serde_json::Value::Array(types)) => {
+            types.iter().any(|item| item.as_str() == Some("null"))
+        }
+        _ => schema
+            .get("anyOf")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|options| {
+                options.iter().any(|option| {
+                    option.get("type").and_then(serde_json::Value::as_str) == Some("null")
+                })
+            }),
+    }
+}
+
+fn provider_status_error(provider: &str, status: u16, body: &str) -> String {
+    let detail = body.split_whitespace().collect::<Vec<_>>().join(" ");
+    let detail = truncate_detail(&detail, 400);
+    if detail.is_empty() {
+        format!("{provider} returned HTTP {status}")
+    } else {
+        format!("{provider} returned HTTP {status}: {detail}")
+    }
+}
+
+fn truncate_detail(value: &str, limit: usize) -> String {
+    let mut characters = value.chars();
+    let prefix = characters.by_ref().take(limit).collect::<String>();
+    if characters.next().is_some() {
+        format!("{prefix}...")
+    } else {
+        prefix
     }
 }
 
@@ -1122,5 +1279,117 @@ async fn send_provider_event(
         biased;
         () = cancellation.cancelled() => Err(()),
         result = sender.send(event) => result.map_err(|_| ()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{provider_status_error, response_tools, strict_schema};
+    use crate::core::ml::llm::{ReadDocumentTool, ReplaceLinesTool, Tool};
+    use std::sync::Arc;
+
+    fn assert_strict(schema: &serde_json::Value) -> Result<(), String> {
+        if let Some(items) = schema.get("items") {
+            assert_strict(items)?;
+        }
+        for key in ["anyOf", "oneOf", "allOf"] {
+            if let Some(options) = schema.get(key).and_then(serde_json::Value::as_array) {
+                for option in options {
+                    assert_strict(option)?;
+                }
+            }
+        }
+        let is_object = schema.get("type").and_then(serde_json::Value::as_str) == Some("object")
+            || schema
+                .get("type")
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|types| types.iter().any(|item| item.as_str() == Some("object")))
+            || schema.get("properties").is_some();
+        if !is_object {
+            return Ok(());
+        }
+        if schema.get("additionalProperties") != Some(&serde_json::Value::Bool(false)) {
+            return Err(format!("missing additionalProperties: false in {schema}"));
+        }
+        let properties = schema
+            .get("properties")
+            .and_then(serde_json::Value::as_object)
+            .ok_or_else(|| format!("object schema missing properties: {schema}"))?;
+        let required = schema
+            .get("required")
+            .and_then(serde_json::Value::as_array)
+            .ok_or_else(|| format!("object schema missing required: {schema}"))?;
+        for name in properties.keys() {
+            if !required.iter().any(|item| item.as_str() == Some(name)) {
+                return Err(format!("property {name} is not required in {schema}"));
+            }
+            assert_strict(&properties[name])?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn strict_tool_schemas_list_every_property_including_nested_objects() {
+        let tools: Vec<Arc<dyn Tool>> = vec![
+            Arc::new(ReadDocumentTool),
+            Arc::new(ReplaceLinesTool::new(None)),
+        ];
+        let schemas = response_tools(&tools);
+        let replace = schemas
+            .iter()
+            .find(|tool| tool.name == "replace_lines")
+            .expect("replace_lines schema");
+        assert!(replace.strict);
+        assert_strict(&replace.parameters).expect("replace_lines is strict");
+        let required = replace.parameters["required"].as_array().expect("required");
+        assert!(required.iter().any(|item| item == "new_content"));
+        assert_eq!(
+            replace.parameters["properties"]["new_content"]["type"],
+            "string"
+        );
+
+        let nested = strict_schema(&serde_json::json!({
+            "type": "object",
+            "properties": {
+                "sources": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "excerpt_text": {"type": "string"},
+                            "title": {"type": "string"}
+                        },
+                        "required": ["excerpt_text"]
+                    }
+                },
+                "limit": {"type": ["number", "null"]}
+            },
+            "required": ["sources"]
+        }));
+        assert_strict(&nested).expect("nested schema is strict");
+        assert_eq!(
+            nested["properties"]["sources"]["items"]["properties"]["title"]["type"],
+            serde_json::json!(["string", "null"])
+        );
+        assert_eq!(
+            nested["properties"]["limit"]["type"],
+            serde_json::json!(["number", "null"])
+        );
+    }
+
+    #[test]
+    fn provider_status_error_keeps_the_response_body() {
+        assert_eq!(
+            provider_status_error("OpenAI", 400, ""),
+            "OpenAI returned HTTP 400"
+        );
+        assert_eq!(
+            provider_status_error(
+                "OpenAI",
+                400,
+                "  Invalid schema for function \n 'replace_lines'  "
+            ),
+            "OpenAI returned HTTP 400: Invalid schema for function 'replace_lines'"
+        );
     }
 }
