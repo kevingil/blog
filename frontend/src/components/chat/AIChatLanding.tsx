@@ -57,14 +57,9 @@ export function AIChatLanding({ onGenerate, isGenerating = false }: AIChatLandin
       <div className="w-full max-w-3xl space-y-6">
         {/* Header with animated gradient */}
         <div className="text-center space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <div className="flex items-center justify-center gap-2">
-          <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-gradient-to-br from-violet-500/10 to-indigo-500/10 mb-2">
-            <Sparkles className="h-8 w-8 text-violet-600 dark:text-violet-400" />
-          </div>
-          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
+          <h1 className="font-wordmark text-3xl font-medium tracking-tight text-balance md:text-4xl">
             What are we writing today?
           </h1>
-          </div>
           {/* <p className="text-muted-foreground text-base md:text-lg">
             Describe your article idea and AI will help you write it
           </p> */}
@@ -74,7 +69,7 @@ export function AIChatLanding({ onGenerate, isGenerating = false }: AIChatLandin
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150">
           <div className={cn(
             "relative rounded-2xl border bg-card shadow-sm transition-all duration-200",
-            "focus-within:ring-2 focus-within:ring-violet-500/20 focus-within:border-violet-500/50",
+            "focus-within:ring-2 focus-within:ring-ring/30 focus-within:border-ring/40",
             isGenerating && "opacity-60 pointer-events-none"
           )}>
             {/* Textarea */}
@@ -94,10 +89,10 @@ export function AIChatLanding({ onGenerate, isGenerating = false }: AIChatLandin
                 {sources.map((source) => (
                   <div
                     key={source.id}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 text-sm group"
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted border text-sm group"
                   >
-                    <LinkIcon className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
-                    <span className="text-violet-700 dark:text-violet-300 max-w-[200px] truncate">
+                    <LinkIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="max-w-[200px] truncate">
                       {source.url}
                     </span>
                     <button
@@ -105,7 +100,7 @@ export function AIChatLanding({ onGenerate, isGenerating = false }: AIChatLandin
                       className="opacity-0 group-hover:opacity-100 transition-opacity"
                       disabled={isGenerating}
                     >
-                      <X className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                      <X className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
                   </div>
                 ))}
@@ -121,7 +116,7 @@ export function AIChatLanding({ onGenerate, isGenerating = false }: AIChatLandin
                     value={sourceUrl}
                     onChange={(e) => setSourceUrl(e.target.value)}
                     placeholder="https://example.com/article"
-                    className="flex-1 px-3 py-2 text-sm rounded-lg border bg-background focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                    className="flex-1 px-3 py-2 text-sm rounded-lg border bg-background focus:outline-none focus:ring-2 focus:ring-ring/30"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
@@ -181,7 +176,7 @@ export function AIChatLanding({ onGenerate, isGenerating = false }: AIChatLandin
                 <Button
                   onClick={handleSubmit}
                   disabled={!prompt.trim() || isGenerating}
-                  className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-sm"
+                  className="shadow-sm"
                 >
                   {isGenerating ? (
                     <>

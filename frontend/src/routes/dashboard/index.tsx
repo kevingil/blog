@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/services/auth/auth';
@@ -16,13 +16,26 @@ function DashboardIndex() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isGenerating, setIsGenerating] = useState(false);
+  const [session, setSession] = useState(0);
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
   const { setPageTitle } = useAdminDashboard();
 
   useEffect(() => {
-    setPageTitle("AI Copilot");
+    const reset = () => {
+      setSession((value) => value + 1);
+      setIsGenerating(false);
+    };
+    window.addEventListener("writing-session-reset", reset);
+    return () => window.removeEventListener("writing-session-reset", reset);
+  }, []);
+
+  useEffect(() => {
+    setPageTitle("New");
   }, [setPageTitle]);
 
   const handleGenerate = async (prompt: string, sources: AttachedSource[]) => {
+    const generation = sessionRef.current;
     if (!user?.id) {
       toast({
         title: "Error",
@@ -56,6 +69,8 @@ function DashboardIndex() {
         await Promise.all(sourcePromises);
       }
 
+      if (sessionRef.current !== generation) return;
+
       toast({
         title: "Generating",
         description: sources.length > 0
@@ -69,6 +84,7 @@ function DashboardIndex() {
         search: { requestId: request_id },
       });
     } catch (err) {
+      if (sessionRef.current !== generation) return;
       console.error("Generation failed:", err);
       toast({
         title: "Error",
@@ -76,13 +92,16 @@ function DashboardIndex() {
         variant: "destructive",
       });
     } finally {
-      setIsGenerating(false);
+      if (sessionRef.current === generation) {
+        setIsGenerating(false);
+      }
     }
   };
 
   return (
     <section className="flex-1">
-      <AIChatLanding 
+      <AIChatLanding
+        key={session}
         onGenerate={handleGenerate}
         isGenerating={isGenerating}
       />

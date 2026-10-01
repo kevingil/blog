@@ -2,9 +2,8 @@ import React from "react"
 import {
   IconDots,
   IconFolder,
-  IconShare3,
+  IconSearch,
   IconTrash,
-  type Icon,
 } from "@tabler/icons-react"
 
 import {
@@ -16,7 +15,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {
   SidebarGroup,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuAction,
   SidebarMenuButton,
@@ -70,6 +68,8 @@ export function NavDocuments({
   const loadMoreRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
   const [articleToDelete, setArticleToDelete] = React.useState<ArticleListItem | null>(null)
+  const [searchOpen, setSearchOpen] = React.useState(false)
+  const [query, setQuery] = React.useState("")
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -120,45 +120,61 @@ export function NavDocuments({
     }
   }, [fetchNextPage, hasNextPage, isFetchingNextPage])
 
+  const normalizedQuery = query.trim().toLowerCase()
+  const visibleArticles = articles
+    .slice()
+    .sort((a, b) => {
+      const dateA = a.article.created_at ? new Date(a.article.created_at).getTime() : 0;
+      const dateB = b.article.created_at ? new Date(b.article.created_at).getTime() : 0;
+      return dateB - dateA;
+    })
+    .filter((articleItem) => {
+      if (!normalizedQuery) return true
+      return (articleItem.article.draft_title || "").toLowerCase().includes(normalizedQuery)
+    })
+
   return (
     <>
       <SidebarGroup className="group-data-[collapsible=icon]:hidden flex-1 flex flex-col min-h-0">
-        <div className="flex flex-row justify-between gap-2">
-        <SidebarGroupLabel>Recent Articles</SidebarGroupLabel>
+        <div className="flex items-center gap-2 px-2 pb-1">
+          <span className="text-sm text-sidebar-foreground/55">Recent</span>
+          <button
+            type="button"
+            aria-label="Search articles"
+            aria-expanded={searchOpen}
+            onClick={() => {
+              setSearchOpen((open) => !open)
+              setQuery("")
+            }}
+            className="ml-auto inline-flex size-7 items-center justify-center rounded-md text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          >
+            <IconSearch className="size-4" />
+          </button>
         </div>
+        {searchOpen && (
+          <input
+            autoFocus
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search articles"
+            className="mx-2 mb-2 h-8 rounded-lg border border-sidebar-border bg-transparent px-2.5 text-sm outline-none focus:ring-2 focus:ring-sidebar-ring/40"
+          />
+        )}
         <SidebarMenu className="flex-1 overflow-y-auto min-h-0">
-          {articles
-            .slice()
-            .sort((a, b) => {
-              const dateA = a.article.created_at ? new Date(a.article.created_at).getTime() : 0;
-              const dateB = b.article.created_at ? new Date(b.article.created_at).getTime() : 0;
-              return dateB - dateA;
-            })
-            .map((articleItem) => {
+          {visibleArticles.map((articleItem) => {
               const editUrl = `/dashboard/blog/edit/${articleItem.article.slug || ''}`
               return (
                 <SidebarMenuItem key={articleItem.article.id}>
-                  <SidebarMenuButton isActive={location.pathname === editUrl} asChild className="!h-auto !min-h-10">
+                  <SidebarMenuButton isActive={location.pathname === editUrl} asChild className="h-8 rounded-lg font-normal">
                     <Link 
                       to={editUrl} 
-                      className="flex flex-col items-start gap-0.5 px-2 py-2"
+                      title={formatArticleMeta(articleItem.article)}
+                      className="px-2"
                       onClick={() => {
                         queryClient.invalidateQueries({ queryKey: ['article', articleItem.article.slug] })
                       }}
                     >
-                      <div className="flex items-center gap-2 w-full min-w-0">
-                        <span 
-                          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                            isPublished(articleItem.article) 
-                              ? "bg-green-500" 
-                              : "bg-indigo-400"
-                          }`}
-                        />
-                        <span className="text-xs font-medium truncate flex-1">{articleItem.article.draft_title}</span>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground leading-tight truncate w-full pl-3.5">
-                        {formatArticleMeta(articleItem.article)}
-                      </span>
+                      <span className="truncate text-sm text-sidebar-foreground/85">{articleItem.article.draft_title}</span>
                     </Link>
                   </SidebarMenuButton>
                   <DropdownMenu>
@@ -228,6 +244,9 @@ export function NavDocuments({
                 </SidebarMenuItem>
               )
             })}
+          {normalizedQuery && visibleArticles.length === 0 && (
+            <p className="px-2 py-3 text-xs text-sidebar-foreground/50">No matches</p>
+          )}
           {/* Loading indicator for infinite scroll */}
           {hasNextPage && (
             <div ref={loadMoreRef} className="flex justify-center p-4">
