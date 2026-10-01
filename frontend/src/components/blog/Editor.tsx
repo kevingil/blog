@@ -362,6 +362,49 @@ function PublishDrawerContent({
   );
 }
 
+const AUTOSAVE_DELAY_MS = 800;
+const PENDING_DRAFT_KEY = 'blog-editor-pending-draft';
+
+function draftSnapshot(value: Partial<ArticleFormData> | undefined): string {
+  return JSON.stringify({
+    title: value?.title ?? '',
+    content: value?.content ?? '',
+    image_url: value?.image_url ?? '',
+    tags: value?.tags ?? [],
+    external_url: value?.external_url ?? '',
+  });
+}
+
+function rememberPendingDraft(slug: string, value: ArticleFormData) {
+  try {
+    sessionStorage.setItem(
+      PENDING_DRAFT_KEY,
+      JSON.stringify({ slug, ...JSON.parse(draftSnapshot(value)) }),
+    );
+  } catch {
+    // Autosave still navigates; the edit page reloads the saved draft.
+  }
+}
+
+function takePendingDraft(slug: string): ArticleFormData | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING_DRAFT_KEY);
+    if (!raw) return null;
+    sessionStorage.removeItem(PENDING_DRAFT_KEY);
+    const parsed = JSON.parse(raw) as ArticleFormData & { slug?: string };
+    if (parsed.slug !== slug) return null;
+    return {
+      title: parsed.title ?? '',
+      content: parsed.content ?? '',
+      image_url: parsed.image_url ?? '',
+      tags: parsed.tags ?? [],
+      external_url: parsed.external_url ?? '',
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const { toast } = useToast()
   const navigate = useNavigate();
@@ -387,6 +430,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [resourcesOpen, setResourcesOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
   const [externalOpen, setExternalOpen] = useState(false);
+  const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [draftEpoch, setDraftEpoch] = useState(0);
+  const savedSnapshotRef = useRef<string | null>(null);
+  const catchUpSnapshotRef = useRef<string | null>(null);
+  const catchUpSeenRef = useRef<string | null>(null);
+  const failedSnapshotRef = useRef<string | null>(null);
+  const hydratedArticleIdRef = useRef<string | null>(null);
+  const getFormValuesRef = useRef<(() => ArticleFormData) | null>(null);
   
   // Image versioning state
   const [imageVersions, setImageVersions] = useState<Array<{ url: string; prompt?: string; timestamp: number; uploadId?: string; blurhash?: string | null }>>([]);
@@ -542,18 +593,49 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       publish: boolean;
       authorId: string;
       external_url?: string | null;
-    }) => createArticle(data),
-    onSuccess: (response) => {
-      toast({ title: "Success", description: "Article created successfully." });
+      autosave?: boolean;
+      snapshot?: string;
+    }) => createArticle({
+      title: data.title,
+      content: data.content,
+      image_url: data.image_url,
+      image_upload_id: data.image_upload_id,
+      tags: data.tags,
+      publish: data.publish,
+      authorId: data.authorId,
+      external_url: data.external_url,
+    }),
+    onSuccess: (response, variables) => {
       queryClient.invalidateQueries({ queryKey: ['articles'] });
+      if (variables.autosave && response.article.slug) {
+        const latest = getFormValuesRef.current?.();
+        if (latest && variables.snapshot && draftSnapshot(latest) !== variables.snapshot) {
+          rememberPendingDraft(response.article.slug, latest);
+        }
+        try {
+          sessionStorage.setItem('blog-editor-autosaved', response.article.slug);
+        } catch {
+          // The edit page still loads the saved draft.
+        }
+        navigate({
+          to: `/dashboard/blog/edit/${response.article.slug}`,
+          replace: true,
+        });
+        return;
+      }
+      toast({ title: "Success", description: "Article created successfully." });
       if (response.article.external_url && response.article.slug) {
         navigate({ to: `/dashboard/blog/edit/${response.article.slug}` });
       } else {
         navigate({ to: '/dashboard/blog' });
       }
     },
-    onError: (error) => {
+    onError: (error, variables) => {
       console.error('Error creating article:', error);
+      if (variables.autosave && variables.snapshot) {
+        failedSnapshotRef.current = variables.snapshot;
+        setAutosaveStatus('error');
+      }
       const errorMessage = error instanceof Error ? error.message : "Failed to create article. Please try again.";
       toast({ title: "Error", description: errorMessage, variant: "destructive" });
     }
@@ -572,9 +654,19 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         external_url?: string | null;
       };
       returnToDashboard?: boolean;
+      autosave?: boolean;
+      snapshot?: string;
     }) => updateArticle(data.slug, data.updateData),
     onSuccess: (response, variables) => {
-      toast({ title: "Success", description: "Draft saved successfully." });
+      if (variables.autosave) {
+        if (variables.snapshot) {
+          savedSnapshotRef.current = variables.snapshot;
+        }
+        failedSnapshotRef.current = null;
+        setAutosaveStatus('saved');
+      } else {
+        toast({ title: "Success", description: "Draft saved successfully." });
+      }
       
       const newSlug = response?.article?.slug;
       const oldSlug = variables.slug;
@@ -631,21 +723,37 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       
       if (variables.returnToDashboard) {
         navigate({ to: '/dashboard/blog' });
-      } else {
+      } else if (!variables.autosave) {
         const saved = response.article;
-        setValue('title', saved.draft_title || '');
-        setValue('content', saved.draft_content || '');
-        setValue('image_url', saved.draft_image_url || '');
-        setValue('external_url', saved.external_url || '');
-        setValue('tags', variables.updateData.tags);
+        const next = {
+          title: saved.draft_title || '',
+          content: saved.draft_content || '',
+          image_url: saved.draft_image_url || '',
+          external_url: saved.external_url || '',
+          tags: variables.updateData.tags,
+        };
+        setValue('title', next.title);
+        setValue('content', next.content);
+        setValue('image_url', next.image_url);
+        setValue('external_url', next.external_url);
+        setValue('tags', next.tags);
+        const snap = draftSnapshot(next);
+        savedSnapshotRef.current = snap;
+        catchUpSnapshotRef.current = snap;
+        catchUpSeenRef.current = null;
+        setDraftEpoch((epoch) => epoch + 1);
         if (saved.draft_image_url) {
           setStagedImageUrl(saved.draft_image_url);
           setPreviewImageUrl(saved.draft_image_url);
         }
       }
     },
-    onError: (error) => {
+    onError: (error, variables) => {
       console.error('Error updating article:', error);
+      if (variables.autosave && variables.snapshot) {
+        failedSnapshotRef.current = variables.snapshot;
+        setAutosaveStatus('error');
+      }
       const errorMessage = error instanceof Error ? error.message : "Failed to save draft. Please try again.";
       toast({ title: "Error", description: errorMessage, variant: "destructive" });
     }
@@ -708,13 +816,19 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         .map((tag: any) => tag?.name?.toUpperCase())
         .filter((name: string | undefined) => !!name && name !== '') : [];
       const revertedContent = response.article.draft_content || '';
-      reset({
+      const reverted = {
         title: response.article.draft_title,
         content: revertedContent,
         image_url: response.article.draft_image_url || '',
         tags: tagNames,
         external_url: response.article.external_url || '',
-      });
+      };
+      reset(reverted);
+      const revertedSnapshot = draftSnapshot(reverted);
+      savedSnapshotRef.current = revertedSnapshot;
+      catchUpSnapshotRef.current = revertedSnapshot;
+      catchUpSeenRef.current = null;
+      setDraftEpoch((epoch) => epoch + 1);
       
       setSelectedVersion(null);
       setShowVersions(false);
@@ -743,6 +857,15 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const watchedContent = useWatch({ control, name: 'content' });
   const watchedTitle = useWatch({ control, name: 'title' });
   const watchedExternalUrl = useWatch({ control, name: 'external_url' });
+  const watchedImageUrl = useWatch({ control, name: 'image_url' });
+  const draftKey = draftSnapshot({
+    title: watchedTitle,
+    content: watchedContent,
+    image_url: watchedImageUrl,
+    tags: watchedTags,
+    external_url: watchedExternalUrl,
+  });
+  getFormValuesRef.current = getValues;
 
   const [imagePrompt, setImagePrompt] = useState<string | null>(DEFAULT_IMAGE_PROMPT[Math.floor(Math.random() * DEFAULT_IMAGE_PROMPT.length)]);
 
@@ -777,6 +900,18 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   // Populate form when article data is loaded (always load draft_* fields for editing)
   useEffect(() => {
     if (article && !isNew) {
+      if (hydratedArticleIdRef.current === article.article.id) {
+        return;
+      }
+      hydratedArticleIdRef.current = article.article.id;
+      try {
+        if (sessionStorage.getItem('blog-editor-autosaved') === article.article.slug) {
+          sessionStorage.removeItem('blog-editor-autosaved');
+          setAutosaveStatus('saved');
+        }
+      } catch {
+        // Status text is optional.
+      }
       // Extract tag names from the server response format
       const tagNames = article.tags ? article.tags
         .map((tag: any) => tag?.name?.toUpperCase())
@@ -789,7 +924,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         tags: tagNames,
         external_url: article.article.external_url || '',
       } as ArticleFormData;
-      reset(newValues);
+      const pending = takePendingDraft(article.article.slug);
+      const formValues = pending ?? newValues;
+      reset(formValues);
+      savedSnapshotRef.current = draftSnapshot(newValues);
+      catchUpSnapshotRef.current = draftSnapshot(formValues);
+      catchUpSeenRef.current = null;
+      setDraftEpoch((epoch) => epoch + 1);
       
       // Initialize image versions and staged state if there's an existing image
       if (article.article.draft_image_url) {
@@ -811,6 +952,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       
       // Content is now markdown -- form value is set via reset() above
     } else if (isNew) {
+      hydratedArticleIdRef.current = null;
       const blank: ArticleFormData = {
         title: '',
         content: '',
@@ -819,6 +961,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         external_url: '',
       };
       reset(blank);
+      const blankSnapshot = draftSnapshot(blank);
+      savedSnapshotRef.current = blankSnapshot;
+      catchUpSnapshotRef.current = blankSnapshot;
+      catchUpSeenRef.current = null;
+      setDraftEpoch((epoch) => epoch + 1);
       setImageVersions([]);
       setCurrentVersionIndex(-1);
       setPreviewImageUrl('');
@@ -878,7 +1025,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleSubmit, createArticleMutation.isPending, updateArticleMutation.isPending]);
 
-  const onSubmit = async (data: ArticleFormData, returnToDashboard: boolean = true) => {
+  const onSubmit = async (data: ArticleFormData, returnToDashboard: boolean = true, autosave = false) => {
     if (!user) {
       toast({ title: "Error", description: "You must be logged in to edit an article." });
       return;
@@ -891,6 +1038,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       : formImageUrl;
 
     const externalUrl = data.external_url?.trim() || null;
+    const snapshot = draftSnapshot({
+      ...data,
+      image_url: finalImageUrl || '',
+    });
 
     if (isNew) {
       // New articles are created as drafts by default
@@ -904,6 +1055,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         publish: false, // Save as draft, publish is a separate action
         authorId: String(user.id),
         external_url: externalUrl,
+        autosave,
+        snapshot,
       });
     } else {
       // Updates always go to draft_* fields
@@ -920,10 +1073,56 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       updateArticleMutation.mutate({
         slug: blogSlug as string,
         updateData,
-        returnToDashboard
+        returnToDashboard: autosave ? false : returnToDashboard,
+        autosave,
+        snapshot,
       });
     }
   };
+
+  const onSubmitRef = useRef(onSubmit);
+  onSubmitRef.current = onSubmit;
+
+  useEffect(() => {
+    if (catchUpSnapshotRef.current !== null && draftKey !== catchUpSnapshotRef.current) {
+      if (catchUpSeenRef.current === null || catchUpSeenRef.current === draftKey) {
+        catchUpSeenRef.current = draftKey;
+        return;
+      }
+    }
+    catchUpSnapshotRef.current = null;
+    catchUpSeenRef.current = null;
+    if (savedSnapshotRef.current === null) {
+      return;
+    }
+    if (draftKey === savedSnapshotRef.current || draftKey === failedSnapshotRef.current) {
+      return;
+    }
+    if (createArticleMutation.isPending || updateArticleMutation.isPending) {
+      return;
+    }
+
+    setAutosaveStatus('idle');
+    const timer = window.setTimeout(() => {
+      let submitted = false;
+      setAutosaveStatus('saving');
+      void handleSubmit((data) => {
+        submitted = true;
+        return onSubmitRef.current(data, false, true);
+      })().finally(() => {
+        if (!submitted) {
+          setAutosaveStatus('idle');
+        }
+      });
+    }, AUTOSAVE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [
+    draftKey,
+    draftEpoch,
+    handleSubmit,
+    createArticleMutation.isPending,
+    updateArticleMutation.isPending,
+  ]);
 
   const rewriteArticle = async () => {
     if (!article?.article.id) return;
@@ -1957,6 +2156,15 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
+                <span className="hidden min-w-14 text-right text-xs text-muted-foreground sm:inline">
+                  {autosaveStatus === 'saving' || createArticleMutation.isPending || updateArticleMutation.isPending
+                    ? 'Saving…'
+                    : autosaveStatus === 'saved'
+                      ? 'Saved'
+                      : autosaveStatus === 'error'
+                        ? 'Not saved'
+                        : ''}
+                </span>
                 {/* Save Button */}
                 <Button
                   type="button"

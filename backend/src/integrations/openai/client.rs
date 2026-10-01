@@ -31,8 +31,8 @@ use crate::{
 const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 const DEFAULT_EMBEDDING_MODEL: &str = "text-embedding-3-small";
 const DEFAULT_GENERATION_MODEL: &str = "gpt-5-2025-08-07";
-const COPILOT_MODEL_ID: &str = "gpt-5.4-mini";
-const COPILOT_API_MODEL: &str = "gpt-5.4-mini-2026-03-17";
+const COPILOT_MODEL_ID: &str = "gpt-6.1-sol";
+const COPILOT_API_MODEL: &str = "gpt-6.1-sol";
 const COPILOT_MAX_OUTPUT_TOKENS: i64 = 16_384;
 const DEFAULT_IMAGE_MODEL: &str = "gpt-image-1";
 const EMBEDDING_DIMENSIONS: usize = 1536;
