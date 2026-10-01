@@ -136,8 +136,16 @@ adoption or data transfer.
 
 ## Repeatable pre-deploy command
 
-The image installs `scripts/pre-deploy.sh` as `/usr/local/bin/pre-deploy` and the
-Blueprint runs it before every API deploy:
+The native Rust Blueprint runs the shared script before every API deploy:
+
+```sh
+./scripts/pre-deploy.sh backend/target/release
+```
+
+It uses the migration binaries built alongside the API. The script's optional
+first argument selects the binary directory. For local Docker diagnostics, the
+image installs it as `/usr/local/bin/pre-deploy`, with `/usr/local/bin` as the
+default binary directory:
 
 ```sh
 docker run --rm \

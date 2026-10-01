@@ -81,8 +81,8 @@ adopted, subsequent deploys apply only pending migrations. See the
 retry behavior, and fingerprint limitations. Fresh local databases still use
 `migrate` directly through Compose.
 
-[`render.yaml`](render.yaml) defines one Docker API service. The frontend is hosted
-separately and is not provisioned by this Blueprint.
+[`render.yaml`](render.yaml) defines one native Rust API service, pinned to Rust
+1.92.0. The frontend stays on Cloudflare and is not provisioned by this Blueprint.
 Sync it in the **personal Render workspace** after merging this PR. It reuses
 the existing Supabase database and S3-compatible storage; it creates neither.
 Confirm the API region before creating the service. Supply the prompted secrets
@@ -97,6 +97,19 @@ and public URLs in that workspace:
 | `VITE_WS_URL` | Public API origin using `wss://`, followed by `/websocket` |
 | `S3_URL_PREFIX`, `VITE_PUBLIC_S3_URL_PREFIX` | Existing public bucket/CDN prefix |
 | Other `S3_*`, provider API keys | Existing production credentials and bucket settings |
+
+The native build compiles only the API, migrator, stamper, and fingerprint
+diagnostic into `backend/target/release`. Pre-deploy runs
+`./scripts/pre-deploy.sh backend/target/release`; start runs
+`./backend/target/release/blog-backend`. Docker remains available for local
+Compose and migration diagnostics, but Render no longer builds or pushes its
+image/cache layers. A cold native build still compiles the Rust dependencies.
+Builds require PostgreSQL's `libpq` development library; runtime requires libpq
+and trusted CA certificates.
+
+For an existing Blueprint-managed Docker service, merge this change and sync
+the Blueprint to switch its runtime to Rust and apply the build, pre-deploy,
+and start commands together. Render supports this [runtime change in place](https://render.com/docs/native-runtimes#changing-a-services-runtime).
 
 The API's async PostgreSQL pool supports TLS with certificate and hostname
 verification using the system CA store. Use `sslmode=require` in the production
