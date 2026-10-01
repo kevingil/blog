@@ -98,11 +98,15 @@ and public URLs in that workspace:
 | `S3_URL_PREFIX`, `VITE_PUBLIC_S3_URL_PREFIX` | Existing public bucket/CDN prefix |
 | Other `S3_*`, provider API keys | Existing production credentials and bucket settings |
 
-Before deploying over the public database endpoint, configure TLS for the API's
-async PostgreSQL pool in `backend/src/database/pool.rs`. It currently uses
-diesel-async's default connection setup, which does not support TLS. The
-synchronous migration binaries use libpq, so successful migrations alone do
-not verify the API's TLS connectivity.
+The API's async PostgreSQL pool supports TLS with certificate and hostname
+verification using the system CA store. Use `sslmode=require` in the production
+`DATABASE_URL` to prevent unencrypted connections. For Render, Supabase's shared
+session pooler on port `5432` provides IPv4 connectivity without its paid direct
+IPv4 add-on and supports the migration session lock. Copy the exact URL from
+Supabase's Connect dialog. Do not use the transaction pooler on port `6543`.
+Local PostgreSQL without TLS remains supported through its default `prefer`
+mode. The synchronous migration binaries use libpq, so verify API database
+connectivity as well as successful migrations during deployment.
 
 Set backend variables in Render and frontend `VITE_*` variables at the frontend
 host. Use public hostnames or custom domains, not internal service hosts.
