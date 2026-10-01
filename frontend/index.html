@@ -8,6 +8,12 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Gloria+Hallelujah&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <title>Kevin Gil</title>
+    <script type="module">
+      import { installGoogleTag } from "./src/lib/analytics.ts";
+
+      const measurementId = import.meta.env.VITE_GA_MEASUREMENT_ID;
+      if (measurementId) installGoogleTag(measurementId);
+    </script>
   </head>
   <body>
     <div id="root"></div>

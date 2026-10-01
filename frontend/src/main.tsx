@@ -5,6 +5,7 @@ import './index.css'
 
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { routeTree } from './routeTree.gen'
+import { trackPageView } from './lib/analytics'
 import { AuthProvider, useAuthContext } from './services/auth/auth'
 
 // Create a router instance
@@ -28,7 +29,7 @@ function RouterWithAuth() {
   
   // Create router with auth context
   const routerWithAuth = React.useMemo(() => {
-    return createRouter({
+    const nextRouter = createRouter({
       routeTree,
       context: {
         auth,
@@ -41,6 +42,10 @@ function RouterWithAuth() {
         console.error("Error:", error);
       },
     });
+    nextRouter.subscribe("onResolved", ({ toLocation }) => {
+      trackPageView(`${toLocation.pathname}${toLocation.searchStr}`);
+    });
+    return nextRouter;
   }, [auth]);
 
   return <RouterProvider router={routerWithAuth} />;
