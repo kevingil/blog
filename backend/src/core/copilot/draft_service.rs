@@ -9,6 +9,9 @@ use crate::{core::article::ArticleRepository, error::AppError};
 pub trait ArticleDraftService: Send + Sync {
     async fn create_draft_snapshot(&self, article_id: Uuid) -> Result<Option<Uuid>, AppError>;
     async fn update_draft_content(&self, article_id: Uuid, content: &str) -> Result<(), AppError>;
+    async fn load_draft_content(&self, _article_id: Uuid) -> Result<Option<String>, AppError> {
+        Ok(None)
+    }
 }
 
 pub struct ArticleDraftAdapter {
@@ -34,6 +37,11 @@ impl ArticleDraftService for ArticleDraftAdapter {
         self.repository
             .update_draft_content(article_id, content)
             .await
+    }
+
+    async fn load_draft_content(&self, article_id: Uuid) -> Result<Option<String>, AppError> {
+        let article = self.repository.find_by_id(article_id).await?;
+        Ok(Some(article.draft_content))
     }
 }
 

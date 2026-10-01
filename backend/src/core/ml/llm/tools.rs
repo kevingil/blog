@@ -550,15 +550,7 @@ impl Tool for ReplaceLinesTool {
             );
             output.join("\n")
         };
-        context.update_markdown(new_markdown.clone())?;
-
-        // Go treats persistence as best effort: the edit succeeds and remains
-        // in the turn's working copy even if the database update fails.
-        if let (Some(saver), Some(article_id)) = (&self.draft_saver, context.article_id)
-            && let Err(error) = saver.update_draft_content(article_id, &new_markdown).await
-        {
-            tracing::warn!(%error, %article_id, "failed to persist copilot draft edit");
-        }
+        save_working_markdown(&context, self.draft_saver.as_ref(), new_markdown.clone()).await?;
 
         let result_value = json!({
             "old_str": old_content,
@@ -1106,6 +1098,307 @@ impl Tool for SelectSourcesForEditTool {
             }),
         )
     }
+}
+
+async fn save_working_markdown(
+    context: &ToolContext,
+    saver: Option<&Arc<dyn DraftSaver>>,
+    markdown: String,
+) -> Result<(), AppError> {
+    context.update_markdown(markdown.clone())?;
+    // Persistence is best effort: the edit stays in the turn's working copy
+    // even when the database update fails.
+    if let (Some(saver), Some(article_id)) = (saver, context.article_id)
+        && let Err(error) = saver.update_draft_content(article_id, &markdown).await
+    {
+        tracing::warn!(%error, %article_id, "failed to persist copilot draft edit");
+    }
+    Ok(())
+}
+
+pub struct ApplyPatchTool {
+    draft_saver: Option<Arc<dyn DraftSaver>>,
+}
+
+impl ApplyPatchTool {
+    pub fn new(draft_saver: Option<Arc<dyn DraftSaver>>) -> Self {
+        Self { draft_saver }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct ApplyPatchInput {
+    #[serde(default)]
+    patch: String,
+    #[serde(default)]
+    old_str: String,
+    #[serde(default)]
+    new_str: String,
+    #[serde(default)]
+    reason: String,
+}
+
+#[async_trait]
+impl Tool for ApplyPatchTool {
+    fn info(&self) -> ToolInfo {
+        ToolInfo {
+            name: "apply_patch".to_owned(),
+            description: "Apply an edit to the article on the backend. The editor receives the saved draft. To create a draft in an empty document, set old_str to an empty string and new_str to the full markdown. To edit, set old_str to the exact current text (it must match once) and new_str to the replacement. Alternatively pass a *** Begin Patch block in patch.".to_owned(),
+            parameters: BTreeMap::from([
+                (
+                    "patch".to_owned(),
+                    json!({"type": "string", "description": "*** Begin Patch block, or an empty string when using old_str and new_str."}),
+                ),
+                (
+                    "old_str".to_owned(),
+                    json!({"type": "string", "description": "Exact article text to replace. Empty only when creating the first draft."}),
+                ),
+                (
+                    "new_str".to_owned(),
+                    json!({"type": "string", "description": "Replacement markdown."}),
+                ),
+                ("reason".to_owned(), json!({"type": "string"})),
+            ]),
+            required: vec![
+                "patch".to_owned(),
+                "old_str".to_owned(),
+                "new_str".to_owned(),
+                "reason".to_owned(),
+            ],
+            parallel_safe: false,
+        }
+    }
+
+    async fn run(
+        &self,
+        context: ToolContext,
+        call: ToolCallRequest,
+    ) -> Result<ToolResponse, AppError> {
+        let input: ApplyPatchInput = match serde_json::from_str(&call.input) {
+            Ok(input) => input,
+            Err(_) => return Ok(ToolResponse::error("Invalid input format")),
+        };
+        let document = context.document_markdown()?;
+        let applied = if !input.patch.trim().is_empty() {
+            apply_begin_patch(&document, &input.patch)
+        } else {
+            apply_replacement(&document, &input.old_str, &input.new_str)
+        };
+        let (new_markdown, old_str, new_str) = match applied {
+            Ok(applied) => applied,
+            Err(error) => return Ok(ToolResponse::error(error)),
+        };
+        save_working_markdown(&context, self.draft_saver.as_ref(), new_markdown.clone()).await?;
+        let result_value = json!({
+            "old_str": old_str,
+            "new_str": new_str,
+            "new_markdown": new_markdown,
+            "reason": input.reason,
+            "tool_name": "apply_patch",
+        });
+        let result = result_value
+            .as_object()
+            .cloned()
+            .ok_or(AppError::Internal)?;
+        Ok(ToolResponse::structured(
+            serde_json::to_string(&result_value).map_err(|_| AppError::Internal)?,
+            result,
+            Some(ArtifactHint {
+                artifact_type: "diff".to_owned(),
+                data: json!({
+                    "original": old_str,
+                    "proposed": new_str,
+                    "reason": input.reason,
+                })
+                .as_object()
+                .cloned()
+                .ok_or(AppError::Internal)?,
+            }),
+        ))
+    }
+}
+
+fn apply_replacement(
+    document: &str,
+    old_str: &str,
+    new_str: &str,
+) -> Result<(String, String, String), String> {
+    if old_str.is_empty() {
+        if !document.trim().is_empty() {
+            return Err(
+                "old_str is empty but the article already has content. Copy the exact text to replace."
+                    .to_owned(),
+            );
+        }
+        if new_str.trim().is_empty() {
+            return Err(
+                "new_str is required when creating a draft in an empty article.".to_owned(),
+            );
+        }
+        return Ok((new_str.to_owned(), String::new(), new_str.to_owned()));
+    }
+    let matches = document.match_indices(old_str).count();
+    if matches == 0 {
+        return Err(
+            "old_str was not found in the article. Call read_document and copy the exact text."
+                .to_owned(),
+        );
+    }
+    if matches > 1 {
+        return Err(format!(
+            "old_str matched {matches} times. Include more surrounding text so it matches once."
+        ));
+    }
+    Ok((
+        document.replacen(old_str, new_str, 1),
+        old_str.to_owned(),
+        new_str.to_owned(),
+    ))
+}
+
+fn apply_begin_patch(document: &str, patch: &str) -> Result<(String, String, String), String> {
+    let mut current = document.to_owned();
+    let mut mode = "";
+    let mut hunk: Vec<String> = Vec::new();
+    let mut saw_file = false;
+    let mut original = String::new();
+    let mut proposed = String::new();
+    let flush = |current: &mut String,
+                 mode: &str,
+                 hunk: &mut Vec<String>,
+                 original: &mut String,
+                 proposed: &mut String|
+     -> Result<(), String> {
+        if hunk.is_empty() {
+            return Ok(());
+        }
+        let lines = std::mem::take(hunk);
+        let borrowed = lines.iter().map(String::as_str).collect::<Vec<_>>();
+        let (next, old_block, new_block) = match mode {
+            "add" => {
+                if !current.trim().is_empty() {
+                    return Err(
+                        "Add File replaces an empty article. Use Update File to edit existing text."
+                            .to_owned(),
+                    );
+                }
+                let body = added_lines(&borrowed)?;
+                (body.clone(), String::new(), body)
+            }
+            "update" => apply_hunk(current, &borrowed)?,
+            _ => {
+                return Err(
+                    "patch must name *** Update File: article.md or *** Add File: article.md"
+                        .to_owned(),
+                );
+            }
+        };
+        if original.is_empty() {
+            *original = old_block;
+        }
+        *proposed = new_block;
+        *current = next;
+        Ok(())
+    };
+    for line in patch.lines() {
+        let trimmed = line.trim();
+        if trimmed == "*** Begin Patch" || trimmed == "*** End Patch" {
+            flush(&mut current, mode, &mut hunk, &mut original, &mut proposed)?;
+            continue;
+        }
+        if let Some(path) = trimmed
+            .strip_prefix("*** Update File:")
+            .or_else(|| trimmed.strip_prefix("*** Update File "))
+        {
+            flush(&mut current, mode, &mut hunk, &mut original, &mut proposed)?;
+            ensure_article_path(path)?;
+            mode = "update";
+            saw_file = true;
+            continue;
+        }
+        if let Some(path) = trimmed
+            .strip_prefix("*** Add File:")
+            .or_else(|| trimmed.strip_prefix("*** Add File "))
+        {
+            flush(&mut current, mode, &mut hunk, &mut original, &mut proposed)?;
+            ensure_article_path(path)?;
+            mode = "add";
+            saw_file = true;
+            continue;
+        }
+        if trimmed.starts_with("***") {
+            return Err(
+                "unsupported patch command. Use *** Update File: article.md or *** Add File: article.md."
+                    .to_owned(),
+            );
+        }
+        if trimmed == "@@" || trimmed.starts_with("@@ ") {
+            flush(&mut current, mode, &mut hunk, &mut original, &mut proposed)?;
+            continue;
+        }
+        hunk.push(line.to_owned());
+    }
+    flush(&mut current, mode, &mut hunk, &mut original, &mut proposed)?;
+    if !saw_file {
+        return Err(
+            "patch must include *** Begin Patch and *** Update File: article.md or *** Add File: article.md"
+                .to_owned(),
+        );
+    }
+    Ok((current, original, proposed))
+}
+
+fn ensure_article_path(path: &str) -> Result<(), String> {
+    let path = path.trim();
+    if path.is_empty() || path == "article.md" || path.ends_with("/article.md") {
+        Ok(())
+    } else {
+        Err("patches apply to the article only (article.md)".to_owned())
+    }
+}
+
+fn added_lines(hunk: &[&str]) -> Result<String, String> {
+    let mut lines = Vec::new();
+    for line in hunk {
+        if let Some(rest) = line.strip_prefix('+') {
+            lines.push(rest);
+        } else if line.is_empty() {
+            lines.push("");
+        } else {
+            return Err("Add File hunks only contain added lines prefixed with +".to_owned());
+        }
+    }
+    if lines.join("\n").trim().is_empty() {
+        return Err("Add File patch did not include any content".to_owned());
+    }
+    Ok(lines.join("\n"))
+}
+
+fn apply_hunk(document: &str, hunk: &[&str]) -> Result<(String, String, String), String> {
+    let mut old_lines = Vec::new();
+    let mut new_lines = Vec::new();
+    for line in hunk {
+        if let Some(rest) = line.strip_prefix('+') {
+            new_lines.push(rest);
+        } else if let Some(rest) = line.strip_prefix('-') {
+            old_lines.push(rest);
+        } else if let Some(rest) = line.strip_prefix(' ') {
+            old_lines.push(rest);
+            new_lines.push(rest);
+        } else {
+            old_lines.push(*line);
+            new_lines.push(*line);
+        }
+    }
+    let old_block = old_lines.join("\n");
+    let new_block = new_lines.join("\n");
+    if old_block.is_empty() {
+        if document.trim().is_empty() {
+            return Ok((new_block.clone(), String::new(), new_block));
+        }
+        return Err("patch hunk has no original text to match".to_owned());
+    }
+    apply_replacement(document, &old_block, &new_block)
 }
 
 fn structured_result(result: Value) -> Result<ToolResponse, AppError> {

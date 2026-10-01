@@ -91,6 +91,7 @@ export type StreamEventType =
   | 'text'
   | 'tool_use'
   | 'tool_result'
+  | 'document_update'
   | 'tool_group_start'
   | 'tool_status'
   | 'tool_group_complete'
@@ -300,6 +301,7 @@ export type ToolCategory = 'research' | 'analysis' | 'editing' | 'generation';
 
 export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   search_web_sources: 'research',
+  web_search: 'research',
   ask_question: 'research',
   get_relevant_sources: 'research',
   fetch_url: 'research',
@@ -307,12 +309,15 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   add_context_from_sources: 'analysis',
   rewrite_document: 'editing',
   replace_lines: 'editing',
+  apply_patch: 'editing',
+  sandbox: 'analysis',
   generate_text_content: 'generation',
   generate_image_prompt: 'generation',
 };
 
 export const PARALLELIZABLE_TOOLS = new Set([
   'search_web_sources',
+  'web_search',
   'ask_question',
   'get_relevant_sources',
   'fetch_url',
@@ -326,6 +331,7 @@ export const ARTIFACT_TOOLS = new Set([
   'get_relevant_sources',
   'rewrite_document',
   'replace_lines',
+  'apply_patch',
   'generate_text_content',
   'generate_image_prompt',
 ]);
@@ -336,7 +342,10 @@ export const ARTIFACT_TOOLS = new Set([
 
 export const TOOL_DISPLAY_NAMES: Record<string, string> = {
   search_web_sources: 'Web Search',
+  web_search: 'Web Search',
   ask_question: 'Ask Question',
+  sandbox: 'Sandbox',
+  apply_patch: 'Edit Article',
   get_relevant_sources: 'Find Sources',
   fetch_url: 'Fetch URL',
   analyze_document: 'Analyze Document',

@@ -140,6 +140,8 @@ pub struct ToolStatusPayload {
     pub name: String,
     pub status: String,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub input: BTreeMap<String, Value>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub result: BTreeMap<String, Value>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub error: String,

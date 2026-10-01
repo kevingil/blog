@@ -3,7 +3,8 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use blog_backend::{
     core::ml::llm::{
-        DraftSaver, ReadDocumentTool, ReplaceLinesTool, Tool, ToolCallRequest, ToolContext,
+        ApplyPatchTool, DraftSaver, ReadDocumentTool, ReplaceLinesTool, Tool, ToolCallRequest,
+        ToolContext,
     },
     error::AppError,
 };
@@ -164,4 +165,75 @@ async fn replace_lines_handles_empty_documents_and_invalid_ranges() {
     };
     assert!(!created.is_error);
     assert_eq!(empty.document_markdown().unwrap_or_default(), "first draft");
+}
+
+#[tokio::test]
+async fn apply_patch_writes_an_empty_article_and_replaces_unique_text() {
+    let saver = Arc::new(CapturingDraftSaver::default());
+    let tool = ApplyPatchTool::new(Some(saver.clone()));
+    let empty = context("");
+    let created = tool
+        .run(
+            empty.clone(),
+            ToolCallRequest {
+                id: "patch-1".to_owned(),
+                name: "apply_patch".to_owned(),
+                input: r#"{"patch":"","old_str":"","new_str":"Hello draft","reason":"write"}"#
+                    .to_owned(),
+            },
+        )
+        .await;
+    assert!(created.is_ok());
+    let Ok(created) = created else {
+        return;
+    };
+    assert!(!created.is_error);
+    assert_eq!(empty.document_markdown().unwrap_or_default(), "Hello draft");
+    assert_eq!(
+        saver
+            .values
+            .lock()
+            .map(|values| values.clone())
+            .unwrap_or_default(),
+        vec!["Hello draft"]
+    );
+
+    let edited = tool
+        .run(
+            empty.clone(),
+            ToolCallRequest {
+                id: "patch-2".to_owned(),
+                name: "apply_patch".to_owned(),
+                input: r#"{"patch":"*** Begin Patch\n*** Update File: article.md\n@@\n-Hello draft\n+Hello article\n*** End Patch","old_str":"","new_str":"","reason":"rename"}"#
+                    .to_owned(),
+            },
+        )
+        .await;
+    assert!(edited.is_ok());
+    let Ok(edited) = edited else {
+        return;
+    };
+    assert!(!edited.is_error, "{}", edited.content);
+    assert_eq!(
+        empty.document_markdown().unwrap_or_default(),
+        "Hello article"
+    );
+
+    let ambiguous = context("one one");
+    let rejected = tool
+        .run(
+            ambiguous,
+            ToolCallRequest {
+                id: "patch-3".to_owned(),
+                name: "apply_patch".to_owned(),
+                input: r#"{"patch":"","old_str":"one","new_str":"two","reason":"ambiguous"}"#
+                    .to_owned(),
+            },
+        )
+        .await;
+    assert!(rejected.is_ok());
+    let Ok(rejected) = rejected else {
+        return;
+    };
+    assert!(rejected.is_error);
 }

@@ -1,4 +1,8 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -14,9 +18,9 @@ use crate::{
         ml::{
             EmbeddingPort as MlEmbeddingPort, TextGenerationPort,
             llm::{
-                ContentPart, FinishReason, LlmMessage, MessageRole, Model, Provider, ProviderError,
-                ProviderEvent, ProviderEventType, ProviderResponse, TokenUsage, Tool, ToolCall,
-                copilot_prompt,
+                ContentPart, FinishReason, HostedToolCall, LlmMessage, MessageRole, Model,
+                Provider, ProviderError, ProviderEvent, ProviderEventType, ProviderResponse,
+                TokenUsage, Tool, ToolCall, ToolResult, copilot_prompt,
             },
         },
         source,
@@ -439,7 +443,7 @@ struct ResponseRequest<'a> {
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     stream: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    tools: Vec<ResponseTool>,
+    tools: Vec<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_output_tokens: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -512,15 +516,6 @@ struct ResponseUsage {
 struct ResponseInputTokenDetails {
     #[serde(default)]
     cached_tokens: i64,
-}
-
-#[derive(Serialize)]
-struct ResponseTool {
-    r#type: &'static str,
-    name: String,
-    description: String,
-    parameters: serde_json::Value,
-    strict: bool,
 }
 
 #[derive(Serialize)]
@@ -610,20 +605,29 @@ impl Provider for OpenAiClient {
                 "OpenAI API key is not configured".to_owned(),
             ));
         }
-        let tool_names = tools
+        let hosted = hosted_tools_enabled(&self.base_url);
+        let mut tool_names = tools
             .iter()
             .map(|tool| tool.info().name)
             .collect::<Vec<_>>();
+        if hosted {
+            for name in ["web_search", "sandbox"] {
+                if !tool_names.iter().any(|existing| existing == name) {
+                    tool_names.push((*name).to_owned());
+                }
+            }
+        }
         let instructions = self
             .system_message
             .clone()
             .unwrap_or_else(|| copilot_prompt(&tool_names));
         let input = response_input(&messages);
-        let response_tools = response_tools(&tools);
+        let response_tools = response_tools(&tools, hosted);
         let request = self
             .client
             .post(format!("{}/responses", self.base_url))
             .bearer_auth(self.api_key.expose_secret())
+            .timeout(Duration::from_secs(300))
             .json(&ResponseRequest {
                 model: &self.provider_model.api_model,
                 instructions,
@@ -660,20 +664,37 @@ impl Provider for OpenAiClient {
     }
 }
 
-fn response_tools(tools: &[Arc<dyn Tool>]) -> Vec<ResponseTool> {
-    tools
-        .iter()
-        .map(|tool| {
-            let info = tool.info();
-            ResponseTool {
-                r#type: "function",
-                name: info.name,
-                description: info.description,
-                parameters: strict_parameters(&info.parameters, &info.required),
-                strict: true,
-            }
-        })
-        .collect()
+fn hosted_tools_enabled(base_url: &str) -> bool {
+    base_url.to_ascii_lowercase().contains("api.openai.com")
+}
+
+fn response_tools(tools: &[Arc<dyn Tool>], hosted: bool) -> Vec<serde_json::Value> {
+    let mut items = Vec::new();
+    if hosted {
+        // OpenAI runs these inside the Responses request. They are not functions.
+        items.push(serde_json::json!({"type": "web_search"}));
+        items.push(serde_json::json!({
+            "type": "code_interpreter",
+            "container": {"type": "auto"}
+        }));
+    }
+    for tool in tools {
+        let info = tool.info();
+        if matches!(
+            info.name.as_str(),
+            "web_search" | "sandbox" | "code_interpreter"
+        ) {
+            continue;
+        }
+        items.push(serde_json::json!({
+            "type": "function",
+            "name": info.name,
+            "description": info.description,
+            "parameters": strict_parameters(&info.parameters, &info.required),
+            "strict": true,
+        }));
+    }
+    items
 }
 
 fn strict_parameters(
@@ -832,6 +853,7 @@ fn truncate_detail(value: &str, limit: usize) -> String {
 }
 
 fn response_input(messages: &[LlmMessage]) -> serde_json::Value {
+    let answered = answered_tool_call_ids(messages);
     let mut items = Vec::new();
     for (index, message) in messages.iter().enumerate() {
         match message.role {
@@ -888,18 +910,33 @@ fn response_input(messages: &[LlmMessage]) -> serde_json::Value {
                     }));
                 }
                 for call in message.tool_calls() {
-                    if !call.name.is_empty() {
+                    if call.r#type == "hosted" || call.name.is_empty() {
+                        continue;
+                    }
+                    if answered.contains(&call.id) {
+                        let arguments = if call.input.trim().is_empty() || call.input == "null" {
+                            "{}"
+                        } else {
+                            call.input.as_str()
+                        };
                         items.push(serde_json::json!({
                             "type": "function_call",
                             "call_id": call.id,
                             "name": call.name,
-                            "arguments": call.input,
+                            "arguments": arguments,
                         }));
                     }
                 }
             }
             MessageRole::Tool => {
                 for result in message.tool_results() {
+                    if let Some(replay) = hosted_replay(&result.content) {
+                        items.push(replay);
+                        continue;
+                    }
+                    if !answered.contains(&result.tool_call_id) {
+                        continue;
+                    }
                     items.push(serde_json::json!({
                         "type": "function_call_output",
                         "call_id": result.tool_call_id,
@@ -910,6 +947,281 @@ fn response_input(messages: &[LlmMessage]) -> serde_json::Value {
         }
     }
     serde_json::Value::Array(items)
+}
+
+fn hosted_replay(content: &str) -> Option<serde_json::Value> {
+    let value: serde_json::Value = serde_json::from_str(content).ok()?;
+    if value.get("hosted").and_then(serde_json::Value::as_bool) != Some(true) {
+        return None;
+    }
+    let replay = value.get("replay")?.clone();
+    replay.as_object().is_some().then_some(replay)
+}
+
+fn hosted_exchanges(items: &[serde_json::Value]) -> Vec<HostedToolCall> {
+    let citations = citation_results(items);
+    let search_count = items
+        .iter()
+        .filter(|item| {
+            item.get("type").and_then(serde_json::Value::as_str) == Some("web_search_call")
+        })
+        .count();
+    let mut exchanges = Vec::new();
+    for item in items {
+        let Some(mut exchange) = hosted_exchange(item) else {
+            continue;
+        };
+        if exchange.call.name == "web_search" && search_count == 1 && citations_needed(&exchange) {
+            attach_citations(&mut exchange, &citations);
+        }
+        exchanges.push(exchange);
+    }
+    exchanges
+}
+
+fn citations_needed(exchange: &HostedToolCall) -> bool {
+    serde_json::from_str::<serde_json::Value>(&exchange.result.content)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("search_results")
+                .and_then(|results| results.as_array())
+                .cloned()
+        })
+        .is_some_and(|results| results.is_empty())
+}
+
+fn attach_citations(exchange: &mut HostedToolCall, citations: &[serde_json::Value]) {
+    if citations.is_empty() {
+        return;
+    }
+    let Ok(mut value) = serde_json::from_str::<serde_json::Value>(&exchange.result.content) else {
+        return;
+    };
+    let Some(object) = value.as_object_mut() else {
+        return;
+    };
+    object.insert(
+        "search_results".to_owned(),
+        serde_json::Value::Array(citations.to_vec()),
+    );
+    object.insert(
+        "total_found".to_owned(),
+        serde_json::Value::from(citations.len()),
+    );
+    object.insert(
+        "message".to_owned(),
+        serde_json::Value::String(format!("Found {} results", citations.len())),
+    );
+    if let Ok(content) = serde_json::to_string(&value) {
+        exchange.result.content = content;
+    }
+}
+
+fn hosted_exchange(item: &serde_json::Value) -> Option<HostedToolCall> {
+    let kind = item.get("type").and_then(serde_json::Value::as_str)?;
+    let name = match kind {
+        "web_search_call" => "web_search",
+        "code_interpreter_call" => "sandbox",
+        _ => return None,
+    };
+    let id = ["id", "call_id"]
+        .iter()
+        .find_map(|field| {
+            item.get(field)
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.is_empty())
+        })?
+        .to_owned();
+    let status = item
+        .get("status")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("completed");
+    let failed = matches!(status, "failed" | "incomplete");
+    let mut summary = match name {
+        "web_search" => web_search_summary(item),
+        _ => sandbox_summary(item),
+    };
+    if let Some(object) = summary.as_object_mut() {
+        object.insert("hosted".to_owned(), serde_json::Value::Bool(true));
+        object.insert("replay".to_owned(), item.clone());
+        object.insert(
+            "tool_name".to_owned(),
+            serde_json::Value::String(name.to_owned()),
+        );
+    }
+    let input = serde_json::json!({
+        "query": summary.get("query").cloned().unwrap_or(serde_json::Value::Null),
+        "code": summary.get("code").cloned().unwrap_or(serde_json::Value::Null),
+    })
+    .to_string();
+    Some(HostedToolCall {
+        call: ToolCall {
+            id: id.clone(),
+            name: name.to_owned(),
+            input,
+            r#type: "hosted".to_owned(),
+            finished: true,
+            thought_signature: Vec::new(),
+        },
+        result: ToolResult {
+            tool_call_id: id,
+            content: serde_json::to_string(&summary).unwrap_or_else(|_| "{}".to_owned()),
+            metadata: String::new(),
+            is_error: failed,
+        },
+    })
+}
+
+fn web_search_summary(item: &serde_json::Value) -> serde_json::Value {
+    let query = item
+        .pointer("/action/query")
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| {
+            item.pointer("/action/queries/0")
+                .and_then(serde_json::Value::as_str)
+        })
+        .unwrap_or_default()
+        .to_owned();
+    let mut results = Vec::new();
+    for key in ["sources", "results", "search_results"] {
+        push_search_entries(&mut results, item.get(key));
+    }
+    push_search_entries(&mut results, item.pointer("/action/sources"));
+    serde_json::json!({
+        "query": query,
+        "search_results": results,
+        "total_found": results.len(),
+        "message": format!("Found {} results", results.len()),
+    })
+}
+
+fn sandbox_summary(item: &serde_json::Value) -> serde_json::Value {
+    let code = item
+        .get("code")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    let mut stdout = String::new();
+    let mut stderr = String::new();
+    if let Some(outputs) = item.get("outputs").and_then(serde_json::Value::as_array) {
+        for output in outputs {
+            let kind = output
+                .get("type")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let logs = output
+                .get("logs")
+                .and_then(serde_json::Value::as_str)
+                .or_else(|| output.get("text").and_then(serde_json::Value::as_str))
+                .unwrap_or_default();
+            match kind {
+                "logs" | "log" | "stdout" => stdout.push_str(logs),
+                "error" | "stderr" => {
+                    if logs.is_empty() {
+                        stderr.push_str(
+                            output
+                                .get("message")
+                                .and_then(serde_json::Value::as_str)
+                                .unwrap_or_default(),
+                        );
+                    } else {
+                        stderr.push_str(logs);
+                    }
+                }
+                _ if !logs.is_empty() && stdout.is_empty() => stdout.push_str(logs),
+                _ => {}
+            }
+        }
+    }
+    serde_json::json!({
+        "code": code,
+        "stdout": stdout,
+        "stderr": stderr,
+        "exit_code": i32::from(!stderr.is_empty()),
+    })
+}
+
+fn citation_results(items: &[serde_json::Value]) -> Vec<serde_json::Value> {
+    let mut results = Vec::new();
+    for item in items {
+        let Some(content) = item.get("content").and_then(serde_json::Value::as_array) else {
+            continue;
+        };
+        for part in content {
+            let Some(annotations) = part
+                .get("annotations")
+                .and_then(serde_json::Value::as_array)
+            else {
+                continue;
+            };
+            for annotation in annotations {
+                if annotation.get("type").and_then(serde_json::Value::as_str)
+                    != Some("url_citation")
+                {
+                    continue;
+                }
+                push_search_entries(&mut results, Some(annotation));
+            }
+        }
+    }
+    results
+}
+
+fn push_search_entries(results: &mut Vec<serde_json::Value>, value: Option<&serde_json::Value>) {
+    let Some(value) = value else {
+        return;
+    };
+    let entries = value
+        .as_array()
+        .map(|entries| entries.as_slice())
+        .unwrap_or(std::slice::from_ref(value));
+    for entry in entries {
+        if !entry.is_object() {
+            continue;
+        }
+        let url = entry
+            .get("url")
+            .or_else(|| entry.get("link"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default();
+        if url.is_empty() {
+            continue;
+        }
+        let title = entry
+            .get("title")
+            .or_else(|| entry.get("name"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(url);
+        let summary = entry
+            .get("snippet")
+            .or_else(|| entry.get("summary"))
+            .or_else(|| entry.get("text"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default();
+        results.push(serde_json::json!({
+            "title": title,
+            "url": url,
+            "summary": summary,
+        }));
+    }
+}
+
+fn answered_tool_call_ids(messages: &[LlmMessage]) -> HashSet<String> {
+    let mut calls = HashSet::new();
+    let mut results = HashSet::new();
+    for message in messages {
+        for call in message.tool_calls() {
+            if !call.id.is_empty() && !call.name.is_empty() {
+                calls.insert(call.id);
+            }
+        }
+        for result in message.tool_results() {
+            if !result.tool_call_id.is_empty() {
+                results.insert(result.tool_call_id);
+            }
+        }
+    }
+    calls.intersection(&results).cloned().collect()
 }
 
 fn output_message_id(message: &LlmMessage, index: usize) -> String {
@@ -927,6 +1239,7 @@ struct StreamAccumulator {
     reasoning: String,
     pending_calls: HashMap<String, ToolCall>,
     tool_calls: Vec<ToolCall>,
+    hosted: Vec<HostedToolCall>,
     completed: bool,
 }
 
@@ -937,6 +1250,7 @@ impl StreamAccumulator {
             reasoning: String::new(),
             pending_calls: HashMap::new(),
             tool_calls: Vec::new(),
+            hosted: Vec::new(),
             completed: false,
         }
     }
@@ -1228,6 +1542,9 @@ async fn complete_response(
         cache_creation_tokens: 0,
         cache_read_tokens: cached,
     };
+    if let Some(items) = response.get("output").and_then(|value| value.as_array()) {
+        state.hosted = hosted_exchanges(items);
+    }
     let finish_reason = if !state.tool_calls.is_empty() {
         FinishReason::ToolUse
     } else if body.status == "incomplete" {
@@ -1242,6 +1559,7 @@ async fn complete_response(
             content: state.content.clone(),
             reasoning: state.reasoning.clone(),
             tool_calls: state.tool_calls.clone(),
+            hosted: state.hosted.clone(),
             usage,
             finish_reason,
         }),
@@ -1334,18 +1652,30 @@ mod tests {
             Arc::new(ReadDocumentTool),
             Arc::new(ReplaceLinesTool::new(None)),
         ];
-        let schemas = response_tools(&tools);
+        let schemas = response_tools(&tools, false);
         let replace = schemas
             .iter()
-            .find(|tool| tool.name == "replace_lines")
+            .find(|tool| tool["name"] == "replace_lines")
             .expect("replace_lines schema");
-        assert!(replace.strict);
-        assert_strict(&replace.parameters).expect("replace_lines is strict");
-        let required = replace.parameters["required"].as_array().expect("required");
+        assert_eq!(replace["strict"], true);
+        assert_strict(&replace["parameters"]).expect("replace_lines is strict");
+        let required = replace["parameters"]["required"]
+            .as_array()
+            .expect("required");
         assert!(required.iter().any(|item| item == "new_content"));
         assert_eq!(
-            replace.parameters["properties"]["new_content"]["type"],
+            replace["parameters"]["properties"]["new_content"]["type"],
             "string"
+        );
+        let hosted = response_tools(&tools, true);
+        assert!(hosted.iter().any(|tool| tool["type"] == "web_search"));
+        assert!(hosted.iter().any(|tool| {
+            tool["type"] == "code_interpreter" && tool["container"]["type"] == "auto"
+        }));
+        assert!(
+            hosted
+                .iter()
+                .all(|tool| tool["name"] != "web_search" && tool["name"] != "sandbox")
         );
 
         let nested = strict_schema(&serde_json::json!({
@@ -1375,6 +1705,60 @@ mod tests {
             nested["properties"]["limit"]["type"],
             serde_json::json!(["number", "null"])
         );
+    }
+
+    #[test]
+    fn hosted_tool_history_replays_the_provider_item() {
+        use crate::core::ml::llm::{ContentPart, LlmMessage, MessageRole, ToolCall, ToolResult};
+        let replay = serde_json::json!({
+            "type": "code_interpreter_call",
+            "id": "ci_1",
+            "status": "completed",
+            "code": "print(6*7)",
+            "outputs": [{"type": "logs", "logs": "42\n"}]
+        });
+        let messages = vec![
+            LlmMessage::new(
+                "session",
+                MessageRole::Assistant,
+                vec![ContentPart::ToolCall(ToolCall {
+                    id: "ci_1".to_owned(),
+                    name: "sandbox".to_owned(),
+                    input: r#"{"query":null,"code":"print(6*7)"}"#.to_owned(),
+                    r#type: "hosted".to_owned(),
+                    finished: true,
+                    thought_signature: Vec::new(),
+                })],
+                "",
+            ),
+            LlmMessage::new(
+                "session",
+                MessageRole::Tool,
+                vec![ContentPart::ToolResult(ToolResult {
+                    tool_call_id: "ci_1".to_owned(),
+                    content: serde_json::json!({
+                        "hosted": true,
+                        "tool_name": "sandbox",
+                        "stdout": "42\n",
+                        "replay": replay,
+                    })
+                    .to_string(),
+                    metadata: String::new(),
+                    is_error: false,
+                })],
+                "",
+            ),
+        ];
+        let input = super::response_input(&messages);
+        let items = input.as_array().expect("input array");
+        assert!(
+            items
+                .iter()
+                .any(|item| { item["type"] == "code_interpreter_call" && item["id"] == "ci_1" })
+        );
+        assert!(items.iter().all(|item| {
+            item["type"] != "function_call" && item["type"] != "function_call_output"
+        }));
     }
 
     #[test]

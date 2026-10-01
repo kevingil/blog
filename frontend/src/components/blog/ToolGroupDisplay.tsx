@@ -45,12 +45,12 @@ interface ToolGroupDisplayProps {
 /**
  * Tools that should use the full card UI (because they have artifacts)
  */
-const ARTIFACT_TOOLS = new Set(['replace_lines', 'rewrite_document']);
+const ARTIFACT_TOOLS = new Set(['replace_lines', 'rewrite_document', 'apply_patch']);
 
 /**
  * Tools that can be expanded to show content (but still use subtle styling)
  */
-const EXPANDABLE_TOOLS = new Set(['read_document', 'search_web_sources', 'ask_question', 'replace_lines']);
+const EXPANDABLE_TOOLS = new Set(['read_document', 'search_web_sources', 'web_search', 'ask_question', 'replace_lines', 'sandbox']);
 
 /**
  * Check if a tool should use the full card UI
@@ -90,6 +90,7 @@ function mapStatus(status: ToolCallStatus): 'pending' | 'running' | 'completed' 
 function getToolIcon(toolName: string) {
   switch (toolName) {
     case 'search_web_sources':
+    case 'web_search':
       return <Search className="h-4 w-4" />;
     case 'ask_question':
       return <MessageSquare className="h-4 w-4" />;
@@ -99,6 +100,7 @@ function getToolIcon(toolName: string) {
       return <Link2 className="h-4 w-4" />;
     case 'rewrite_document':
     case 'replace_lines':
+    case 'apply_patch':
       return <FileDiff className="h-4 w-4" />;
     case 'analyze_document':
     case 'read_document':
@@ -153,6 +155,7 @@ function ToolResultContent({ call }: { call: ToolCallRecord }) {
   // Handle different tool types
   switch (name) {
     case 'search_web_sources':
+    case 'web_search':
     case 'get_relevant_sources':
       return <SearchResultsContent result={result} />;
     
@@ -161,6 +164,7 @@ function ToolResultContent({ call }: { call: ToolCallRecord }) {
     
     case 'rewrite_document':
     case 'replace_lines':
+    case 'apply_patch':
       return <DiffResultContent result={result} />;
     
     case 'analyze_document':
@@ -372,6 +376,7 @@ function getExpandableContent(call: ToolCallRecord): React.ReactNode | null {
       );
     }
     case 'search_web_sources':
+    case 'web_search':
     case 'get_relevant_sources': {
       const searchResults = (call.result.search_results || call.result.relevant_sources || []) as SearchResult[];
       if (searchResults.length === 0) return null;
@@ -420,6 +425,17 @@ function getExpandableContent(call: ToolCallRecord): React.ReactNode | null {
             </pre>
           )}
         </div>
+      );
+    }
+    case 'sandbox': {
+      const stdout = (call.result.stdout || '') as string;
+      const stderr = (call.result.stderr || '') as string;
+      const output = stdout || stderr;
+      if (!output) return null;
+      return (
+        <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono">
+          {output}
+        </pre>
       );
     }
     default:
@@ -539,7 +555,7 @@ export function ToolGroupDisplay({ group, onArtifactAction }: ToolGroupDisplayPr
               </ToolCallTrigger>
               <ToolCallContent>
                 <ToolCallStatusItem status="running">
-                  {call.name === 'replace_lines' ? 'Replacing text...' : 'Analyzing document...'}
+                  {call.name === 'sandbox' ? 'Running in the sandbox...' : call.name === 'replace_lines' || call.name === 'apply_patch' ? 'Updating the article...' : 'Analyzing document...'}
                 </ToolCallStatusItem>
               </ToolCallContent>
             </ToolCall>

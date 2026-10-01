@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
 
 use async_trait::async_trait;
 use blog_backend::{
@@ -8,8 +11,9 @@ use blog_backend::{
             ArticleDraftService, ChatPersistencePort, ChatRequest, CopilotConfig, CopilotManager,
         },
         ml::llm::{
-            Agent, FinishReason, InMemorySessionStore, LlmMessage, Model, Provider, ProviderError,
-            ProviderEvent, ProviderResponse, SessionStore, TokenUsage, Tool,
+            Agent, ApplyPatchTool, FinishReason, InMemorySessionStore, LlmMessage, MessageRole,
+            Model, Provider, ProviderError, ProviderEvent, ProviderResponse, SessionStore,
+            TokenUsage, Tool, ToolCall,
         },
         speech::{SpeechAudio, SpeechPort, silent_wav},
     },
@@ -51,6 +55,7 @@ impl Provider for FinalProvider {
                 content: "Finished article".to_owned(),
                 reasoning: String::new(),
                 tool_calls: Vec::new(),
+                hosted: Vec::new(),
                 usage: TokenUsage::default(),
                 finish_reason: FinishReason::EndTurn,
             }))
@@ -93,16 +98,17 @@ impl ChatPersistencePort for MemoryChat {
     }
 
     async fn history(&self, article_id: Uuid, limit: i64) -> Result<Vec<ChatMessage>, AppError> {
-        Ok(self
+        let messages = self
             .messages
             .lock()
             .map_err(|_| AppError::Internal)?
             .iter()
             .filter(|message| message.article_id == article_id)
-            .rev()
-            .take(limit as usize)
             .cloned()
-            .collect())
+            .collect::<Vec<_>>();
+        let limit = usize::try_from(limit).unwrap_or(0);
+        let start = messages.len().saturating_sub(limit);
+        Ok(messages[start..].to_vec())
     }
 }
 
@@ -333,4 +339,239 @@ async fn live_turn_keeps_the_transcript_and_skips_speech_synthesis() {
                 value.get("input_channel").and_then(|item| item.as_str()) == Some("voice")
             })
     }));
+}
+
+struct RecordingProvider {
+    model: Model,
+    scripts: Mutex<VecDeque<Vec<ProviderEvent>>>,
+    seen: Mutex<Vec<Vec<LlmMessage>>>,
+}
+
+impl RecordingProvider {
+    fn new(scripts: Vec<Vec<ProviderEvent>>) -> Self {
+        Self {
+            model: Model::openai("fixture", "fixture", 1_024, false),
+            scripts: Mutex::new(scripts.into()),
+            seen: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+#[async_trait]
+impl Provider for RecordingProvider {
+    fn model(&self) -> Model {
+        self.model.clone()
+    }
+
+    fn system_message(&self) -> &str {
+        "fixture"
+    }
+
+    async fn stream_response(
+        &self,
+        _cancellation: CancellationToken,
+        messages: Vec<LlmMessage>,
+        _tools: Vec<Arc<dyn Tool>>,
+    ) -> Result<mpsc::Receiver<ProviderEvent>, ProviderError> {
+        self.seen
+            .lock()
+            .map_err(|_| ProviderError::Request("seen lock".to_owned()))?
+            .push(messages);
+        let script = self
+            .scripts
+            .lock()
+            .map_err(|_| ProviderError::Request("script lock".to_owned()))?
+            .pop_front()
+            .ok_or_else(|| ProviderError::Request("missing script".to_owned()))?;
+        let (sender, receiver) = mpsc::channel(script.len().max(1));
+        for event in script {
+            sender
+                .send(event)
+                .await
+                .map_err(|_| ProviderError::Request("fixture stream dropped".to_owned()))?;
+        }
+        Ok(receiver)
+    }
+}
+
+fn scripted_complete(content: &str, calls: Vec<ToolCall>, finish: FinishReason) -> ProviderEvent {
+    ProviderEvent::complete(ProviderResponse {
+        content: content.to_owned(),
+        reasoning: String::new(),
+        tool_calls: calls,
+        hosted: Vec::new(),
+        usage: TokenUsage::default(),
+        finish_reason: finish,
+    })
+}
+
+struct StoredDraft;
+
+#[async_trait]
+impl ArticleDraftService for StoredDraft {
+    async fn create_draft_snapshot(&self, _article_id: Uuid) -> Result<Option<Uuid>, AppError> {
+        Ok(None)
+    }
+
+    async fn update_draft_content(
+        &self,
+        _article_id: Uuid,
+        _content: &str,
+    ) -> Result<(), AppError> {
+        Ok(())
+    }
+
+    async fn load_draft_content(&self, _article_id: Uuid) -> Result<Option<String>, AppError> {
+        Ok(Some("Stored opening".to_owned()))
+    }
+}
+
+#[tokio::test]
+async fn backend_edit_streams_the_saved_draft_and_replays_tool_execution() {
+    let provider = Arc::new(RecordingProvider::new(vec![
+        vec![scripted_complete(
+            "",
+            vec![ToolCall {
+                id: "call-patch".to_owned(),
+                name: "apply_patch".to_owned(),
+                input: r#"{"patch":"","old_str":"","new_str":"Hello draft","reason":"write"}"#
+                    .to_owned(),
+                r#type: "function".to_owned(),
+                finished: true,
+                thought_signature: Vec::new(),
+            }],
+            FinishReason::ToolUse,
+        )],
+        vec![scripted_complete("Done", Vec::new(), FinishReason::EndTurn)],
+        vec![scripted_complete("Next", Vec::new(), FinishReason::EndTurn)],
+    ]));
+    let store = Arc::new(InMemorySessionStore::default());
+    let agent = Agent::new(
+        provider.clone(),
+        store.clone(),
+        vec![Arc::new(ApplyPatchTool::new(None))],
+    );
+    let chat = Arc::new(MemoryChat::default());
+    let manager = CopilotManager::new(
+        agent,
+        store as Arc<dyn SessionStore>,
+        chat.clone(),
+        None,
+        None,
+        CopilotConfig::new(2, 1, 16, 15).unwrap_or_default(),
+        CancellationToken::new(),
+        None,
+        None,
+    );
+    let article_id = Uuid::new_v4();
+    let request_id = manager
+        .submit(ChatRequest {
+            message: "write it".to_owned(),
+            document_content: String::new(),
+            document_markdown: String::new(),
+            article_id: article_id.to_string(),
+            channel: "text".to_owned(),
+        })
+        .await
+        .unwrap_or_default();
+    let mut stream = manager
+        .take_response_stream(&request_id)
+        .expect("edit stream");
+    let mut updated = String::new();
+    while let Some(event) = stream.recv().await {
+        if event.event_type == "document_update" {
+            updated = event.content;
+        }
+    }
+    assert_eq!(updated, "Hello draft");
+
+    let follow_up = manager
+        .submit(ChatRequest {
+            message: "continue".to_owned(),
+            document_content: String::new(),
+            document_markdown: "Hello draft".to_owned(),
+            article_id: article_id.to_string(),
+            channel: "text".to_owned(),
+        })
+        .await
+        .unwrap_or_default();
+    let mut follow_stream = manager
+        .take_response_stream(&follow_up)
+        .expect("follow-up stream");
+    while follow_stream.recv().await.is_some() {}
+
+    let seen = provider
+        .seen
+        .lock()
+        .map(|seen| seen.clone())
+        .unwrap_or_default();
+    let follow_messages = seen.last().cloned().unwrap_or_default();
+    assert!(follow_messages.iter().any(|message| {
+        message.role == MessageRole::Assistant
+            && message
+                .tool_calls()
+                .iter()
+                .any(|call| call.id == "call-patch" && call.name == "apply_patch")
+    }));
+    assert!(follow_messages.iter().any(|message| {
+        message.role == MessageRole::Tool
+            && message.tool_results().iter().any(|result| {
+                result.tool_call_id == "call-patch" && result.content.contains("Hello draft")
+            })
+    }));
+}
+
+#[tokio::test]
+async fn empty_client_document_uses_the_stored_article() {
+    let provider = Arc::new(RecordingProvider::new(vec![vec![scripted_complete(
+        "Ready",
+        Vec::new(),
+        FinishReason::EndTurn,
+    )]]));
+    let store = Arc::new(InMemorySessionStore::default());
+    let agent = Agent::new(provider.clone(), store.clone(), Vec::new());
+    let manager = CopilotManager::new(
+        agent,
+        store as Arc<dyn SessionStore>,
+        Arc::new(MemoryChat::default()),
+        None,
+        Some(Arc::new(StoredDraft)),
+        CopilotConfig::new(2, 1, 16, 15).unwrap_or_default(),
+        CancellationToken::new(),
+        None,
+        None,
+    );
+    let request_id = manager
+        .submit(ChatRequest {
+            message: "look at the draft".to_owned(),
+            document_content: String::new(),
+            document_markdown: String::new(),
+            article_id: Uuid::new_v4().to_string(),
+            channel: "text".to_owned(),
+        })
+        .await
+        .unwrap_or_default();
+    let mut stream = manager
+        .take_response_stream(&request_id)
+        .expect("stored draft stream");
+    while stream.recv().await.is_some() {}
+    let seen = provider
+        .seen
+        .lock()
+        .map(|seen| seen.clone())
+        .unwrap_or_default();
+    let prompt = seen
+        .first()
+        .and_then(|messages| {
+            messages
+                .iter()
+                .find(|message| message.role == MessageRole::User)
+        })
+        .map(|message| message.text())
+        .unwrap_or_default();
+    assert!(
+        prompt.contains("Total: 1 lines, 14 chars, 1 paragraphs"),
+        "{prompt}"
+    );
+    assert!(!prompt.contains("empty document"), "{prompt}");
 }

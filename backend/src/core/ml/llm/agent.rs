@@ -9,9 +9,9 @@ use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 
 use super::{
-    Attachment, ContentPart, FinishReason, LlmMessage, MessageRole, Model, Provider, ProviderError,
-    ProviderEventType, SessionStore, TextContent, TokenUsage, Tool, ToolCallRequest, ToolContext,
-    ToolRegistry, ToolResult,
+    Attachment, ContentPart, FinishReason, HostedToolCall, LlmMessage, MessageRole, Model,
+    Provider, ProviderError, ProviderEventType, SessionStore, TextContent, TokenUsage, Tool,
+    ToolCallRequest, ToolContext, ToolRegistry, ToolResult,
 };
 
 const MAX_ITERATIONS: usize = 25;
@@ -341,6 +341,18 @@ impl Agent {
                 .map_err(store_error)?;
             self.track_usage(&session_id, response.usage).await?;
 
+            if !response.hosted.is_empty() {
+                self.publish_hosted_tools(
+                    &cancellation,
+                    &session_id,
+                    &events,
+                    &mut history,
+                    iteration,
+                    response.hosted,
+                )
+                .await?;
+            }
+
             if response.finish_reason == FinishReason::ToolUse && !response.tool_calls.is_empty() {
                 send_event(
                     &events,
@@ -441,6 +453,81 @@ impl Agent {
             },
         )
         .await
+    }
+
+    async fn publish_hosted_tools(
+        &self,
+        cancellation: &CancellationToken,
+        session_id: &str,
+        events: &mpsc::Sender<AgentEvent>,
+        history: &mut Vec<LlmMessage>,
+        iteration: usize,
+        hosted: Vec<HostedToolCall>,
+    ) -> Result<(), AgentError> {
+        let mut assistant = self
+            .store
+            .create_message(
+                session_id,
+                MessageRole::Assistant,
+                hosted
+                    .iter()
+                    .map(|item| ContentPart::ToolCall(item.call.clone()))
+                    .collect(),
+                &self.provider.model().id.0,
+            )
+            .await
+            .map_err(store_error)?;
+        assistant.finish(FinishReason::ToolUse);
+        self.store
+            .update_message(assistant.clone())
+            .await
+            .map_err(store_error)?;
+        send_event(
+            events,
+            cancellation,
+            AgentEvent {
+                event_type: AgentEventType::Response,
+                message: Some(assistant.clone()),
+                error: None,
+                thinking_message: String::new(),
+                iteration,
+                content_delta: String::new(),
+                reasoning_delta: String::new(),
+                done: false,
+            },
+        )
+        .await?;
+        let tool_message = self
+            .store
+            .create_message(
+                session_id,
+                MessageRole::Tool,
+                hosted
+                    .into_iter()
+                    .map(|item| ContentPart::ToolResult(item.result))
+                    .collect(),
+                "",
+            )
+            .await
+            .map_err(store_error)?;
+        send_event(
+            events,
+            cancellation,
+            AgentEvent {
+                event_type: AgentEventType::Tool,
+                message: Some(tool_message.clone()),
+                error: None,
+                thinking_message: String::new(),
+                iteration,
+                content_delta: String::new(),
+                reasoning_delta: String::new(),
+                done: false,
+            },
+        )
+        .await?;
+        history.push(assistant);
+        history.push(tool_message);
+        Ok(())
     }
 
     async fn execute_tools(

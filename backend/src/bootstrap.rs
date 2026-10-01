@@ -33,7 +33,6 @@ use crate::{
     constants::BACKGROUND_SHUTDOWN_TIMEOUT,
     core::{
         article::{ArticleRepository, ArticleService, ObjectImageCache},
-        storage::UploadRepository,
         auth::AuthService,
         chat::ChatMessageService,
         conversation::ConversationService,
@@ -46,9 +45,10 @@ use crate::{
         ml::{
             TextGenerationService,
             llm::{
-                Agent, AskQuestionTool, GenerateImagePromptTool, GetRelevantSourcesTool,
-                InMemorySessionStore, Model, ModelProvider, ReadDocumentTool, ReplaceLinesTool,
-                SearchWebSourcesTool, SelectSourcesForEditTool, SessionStore, Tool, ToolRegistry,
+                Agent, ApplyPatchTool, AskQuestionTool, GenerateImagePromptTool,
+                GetRelevantSourcesTool, InMemorySessionStore, Model, ModelProvider,
+                ReadDocumentTool, ReplaceLinesTool, SearchWebSourcesTool, SelectSourcesForEditTool,
+                SessionStore, Tool, ToolRegistry,
             },
         },
         organization::OrganizationService,
@@ -58,6 +58,7 @@ use crate::{
         skill::SkillService,
         source::SourceService,
         storage::StorageService,
+        storage::UploadRepository,
         taskrun::TaskRunService,
         worker::{
             ContentCrawler, CrawlWorker, DiscoveryWorker, InsightWorker, ManagerConfig,
@@ -165,8 +166,7 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         Arc::new(DieselTaskRunRepository::new(pool.clone())),
         cancellation.child_token(),
     ));
-    let uploads: Arc<dyn UploadRepository> =
-        Arc::new(DieselUploadRepository::new(pool.clone()));
+    let uploads: Arc<dyn UploadRepository> = Arc::new(DieselUploadRepository::new(pool.clone()));
     let storage_service = Arc::new(
         StorageService::new(
             object_store.clone(),
@@ -310,6 +310,7 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
     let text_generation = Arc::new(TextGenerationService::new(openai.clone()));
     let tools: Vec<Arc<dyn Tool>> = vec![
         Arc::new(ReadDocumentTool),
+        Arc::new(ApplyPatchTool::new(Some(drafts.clone()))),
         Arc::new(ReplaceLinesTool::new(Some(drafts.clone()))),
         Arc::new(GenerateImagePromptTool::new(text_generation)),
         Arc::new(AskQuestionTool::new(exa.clone())),

@@ -34,7 +34,7 @@ use super::{
     ArticleDraftService, ChatRequest, CopilotConfig, FullMessagePayload, ReasoningStep,
     StreamResponse, ToolCallPayload, ToolGroupPayload, ToolStatusPayload, TurnStep,
     metadata::{
-        ARTIFACT_STATUS_PENDING, ARTIFACT_TYPE_CODE_EDIT, MetadataBuilder, message_context,
+        ARTIFACT_STATUS_APPLIED, ARTIFACT_TYPE_CODE_EDIT, MetadataBuilder, message_context,
     },
 };
 
@@ -145,7 +145,10 @@ impl CopilotManager {
         })
     }
 
-    pub async fn submit(self: &Arc<Self>, request: ChatRequest) -> Result<String, ManagerError> {
+    pub async fn submit(
+        self: &Arc<Self>,
+        mut request: ChatRequest,
+    ) -> Result<String, ManagerError> {
         self.prune_completed();
         if request.message.is_empty() {
             return Err(ManagerError::MessageRequired);
@@ -155,6 +158,15 @@ impl CopilotManager {
         }
         let article_id =
             Uuid::parse_str(&request.article_id).map_err(|_| ManagerError::InvalidArticle)?;
+        if request.document_markdown.trim().is_empty() && request.document_content.trim().is_empty()
+        {
+            if let Some(drafts) = &self.drafts
+                && let Ok(Some(stored)) = drafts.load_draft_content(article_id).await
+                && !stored.trim().is_empty()
+            {
+                request.document_markdown = stored;
+            }
+        }
         if self.active_requests() >= self.config.max_concurrent_requests.get() {
             return Err(ManagerError::ConcurrencyLimit(
                 self.config.max_concurrent_requests.get(),
@@ -554,6 +566,7 @@ async fn process_run(
                                 tool_id: call.id.clone(),
                                 name: call.name.clone(),
                                 status: "running".to_owned(),
+                                input: tool_input_map(&input),
                                 result: BTreeMap::new(),
                                 error: String::new(),
                                 completed_at: String::new(),
@@ -698,10 +711,15 @@ async fn stream_tool_results(
             "completed"
         };
         let completed_at = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
+        let input = steps.iter().find_map(|step| {
+            step.tool
+                .as_ref()
+                .and_then(|tool| (tool.tool_id == result.tool_call_id).then(|| tool.input.clone()))
+        });
         let record = ToolCallPayload {
             id: result.tool_call_id.clone(),
             name: tool_name.clone(),
-            input: BTreeMap::new(),
+            input: input.clone().unwrap_or_default(),
             status: status.to_owned(),
             result: parsed.clone().into_iter().collect(),
             error: if result.is_error {
@@ -727,7 +745,15 @@ async fn stream_tool_results(
         calls.push(record);
 
         if let Some(saved) = persist_tool_result(
-            manager, article_id, request, request_id, session_id, result, &tool_name, &parsed,
+            manager,
+            article_id,
+            request,
+            request_id,
+            session_id,
+            result,
+            &tool_name,
+            &parsed,
+            input.unwrap_or_default(),
         )
         .await
         {
@@ -771,6 +797,19 @@ async fn stream_tool_results(
             .get("tool_name")
             .and_then(Value::as_str)
             .unwrap_or_default();
+        if !result.is_error
+            && let Some(markdown) = parsed
+                .get("new_markdown")
+                .and_then(Value::as_str)
+                .filter(|markdown| !markdown.is_empty())
+        {
+            let mut update = StreamResponse::new(request_id, "document_update");
+            update.iteration = iteration;
+            update.tool_id = result.tool_call_id.clone();
+            update.tool_name = name.to_owned();
+            update.content = markdown.to_owned();
+            send_stream(sender, cancellation, update).await?;
+        }
         let mut stream = StreamResponse::new(request_id, "tool_result");
         stream.iteration = iteration;
         stream.tool_id = result.tool_call_id;
@@ -779,7 +818,7 @@ async fn stream_tool_results(
             "content": result.content,
             "metadata": result.metadata,
             "is_error": result.is_error,
-            "is_search": name == "search_web_sources" || name == "ask_question",
+            "is_search": name == "search_web_sources" || name == "ask_question" || name == "web_search",
             "tool_name": name,
         }));
         send_stream(sender, cancellation, stream).await?;
@@ -797,12 +836,13 @@ async fn persist_tool_result(
     result: &ToolResult,
     tool_name: &str,
     parsed: &Map<String, Value>,
+    input: BTreeMap<String, Value>,
 ) -> Option<ChatMessage> {
     let manager = manager.upgrade()?;
     let execution = ToolExecution {
         tool_name: tool_name.to_owned(),
         tool_id: result.tool_call_id.clone(),
-        input: Value::Null,
+        input: Value::Object(input.into_iter().collect()),
         output: Value::Object(parsed.clone()),
         error: if result.is_error {
             result.content.clone()
@@ -824,7 +864,7 @@ async fn persist_tool_result(
         })
         .with_tool_execution(execution);
     let content = match tool_name {
-        "replace_lines" => {
+        "replace_lines" | "apply_patch" => {
             let proposed = parsed
                 .get("new_str")
                 .and_then(Value::as_str)
@@ -843,7 +883,7 @@ async fn persist_tool_result(
                 status: if result.is_error {
                     "error".to_owned()
                 } else {
-                    ARTIFACT_STATUS_PENDING.to_owned()
+                    ARTIFACT_STATUS_APPLIED.to_owned()
                 },
                 content: proposed.to_owned(),
                 diff_preview: format!(
@@ -851,7 +891,7 @@ async fn persist_tool_result(
                     truncate_chars(original, 50),
                     truncate_chars(proposed, 50)
                 ),
-                title: "replace_lines result".to_owned(),
+                title: format!("{tool_name} result"),
                 description: if result.is_error {
                     result.content.clone()
                 } else {
@@ -860,6 +900,20 @@ async fn persist_tool_result(
                 applied_at: None,
             });
             String::new()
+        }
+        "web_search" => format!(
+            "🔎 Web search found {} results",
+            parsed
+                .get("total_found")
+                .and_then(Value::as_i64)
+                .unwrap_or(0)
+        ),
+        "sandbox" => {
+            if result.is_error {
+                "🧪 Hosted sandbox failed".to_owned()
+            } else {
+                "🧪 Hosted sandbox finished".to_owned()
+            }
         }
         "search_web_sources" => format!(
             "🔍 Web search completed: Found {} results, created {} sources",
@@ -916,27 +970,46 @@ fn reconstruct_messages(message: ChatMessage) -> Vec<LlmMessage> {
         _ => MessageRole::User,
     };
     let created_at = message.created_at.unwrap_or_else(Utc::now);
-    let mut parts = vec![ContentPart::Text(TextContent {
-        text: message.content,
-    })];
+    let text = message.content.clone();
+    let mut parts = vec![ContentPart::Text(TextContent { text: text.clone() })];
     let mut tool_result = None;
     if let Some(metadata) = message
         .meta_data
         .and_then(|value| serde_json::from_value::<MessageMetadata>(value).ok())
         && let Some(execution) = metadata.tool_execution
     {
-        parts.push(ContentPart::ToolCall(crate::core::ml::llm::ToolCall {
-            id: execution.tool_id.clone(),
-            name: execution.tool_name,
-            input: serde_json::to_string(&execution.input).unwrap_or_default(),
-            r#type: String::new(),
-            finished: execution.success,
-            thought_signature: Vec::new(),
-        }));
-        if metadata.artifact.is_some() {
+        if !execution.tool_id.is_empty() && !execution.tool_name.is_empty() {
+            let input = match &execution.input {
+                Value::Null => "{}".to_owned(),
+                value => serde_json::to_string(value).unwrap_or_else(|_| "{}".to_owned()),
+            };
+            let tool_name = execution.tool_name.clone();
+            let hosted = execution
+                .output
+                .get("hosted")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            parts.push(ContentPart::ToolCall(crate::core::ml::llm::ToolCall {
+                id: execution.tool_id.clone(),
+                name: tool_name.clone(),
+                input,
+                r#type: if hosted { "hosted" } else { "function" }.to_owned(),
+                finished: true,
+                thought_signature: Vec::new(),
+            }));
+            let content = if execution.output.is_null() {
+                json!({
+                    "content": text,
+                    "is_error": !execution.success,
+                    "tool_name": tool_name,
+                })
+                .to_string()
+            } else {
+                serde_json::to_string(&execution.output).unwrap_or_else(|_| text.clone())
+            };
             tool_result = Some(ToolResult {
                 tool_call_id: execution.tool_id,
-                content: serde_json::to_string(&execution.output).unwrap_or_default(),
+                content,
                 metadata: String::new(),
                 is_error: !execution.success,
             });
@@ -973,7 +1046,11 @@ fn sanitize_history(messages: &mut Vec<LlmMessage>) {
     let mut sanitized: Vec<LlmMessage> = Vec::with_capacity(messages.len());
     for message in messages.drain(..) {
         if let Some(previous) = sanitized.last() {
-            if message.role == previous.role && message.role != MessageRole::Tool {
+            if message.role == previous.role
+                && message.role != MessageRole::Tool
+                && previous.tool_calls().is_empty()
+                && message.tool_calls().is_empty()
+            {
                 if let Some(previous) = sanitized.last_mut() {
                     *previous = message;
                 }
@@ -1018,7 +1095,7 @@ fn convert_step(step: &TurnStep) -> ChainOfThoughtStep {
 
 fn generate_document_context(markdown: &str) -> String {
     if markdown.trim().is_empty() {
-        return "--- Document Context ---\nTotal: 0 lines, 0 chars, 0 paragraphs\n(empty document)\n---".to_owned();
+        return "--- Document Context ---\nTotal: 0 lines, 0 chars, 0 paragraphs\n(empty document — write it with apply_patch: old_str empty, new_str the full markdown)\n---".to_owned();
     }
     let lines = markdown.lines().collect::<Vec<_>>();
     let paragraphs = lines
@@ -1094,6 +1171,13 @@ fn format_source_context(mut sources: Vec<Source>) -> String {
         }
     }
     output.trim().to_owned()
+}
+
+fn tool_input_map(input: &Value) -> BTreeMap<String, Value> {
+    match input {
+        Value::Object(map) => map.clone().into_iter().collect(),
+        other => BTreeMap::from([("raw".to_owned(), other.clone())]),
+    }
 }
 
 fn truncate_chars(value: &str, limit: usize) -> String {

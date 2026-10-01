@@ -3,7 +3,7 @@ use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use super::{LlmMessage, Model, Tool, ToolCall};
+use super::{LlmMessage, Model, Tool, ToolCall, ToolResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderEventType {
@@ -32,8 +32,18 @@ pub struct ProviderResponse {
     pub content: String,
     pub reasoning: String,
     pub tool_calls: Vec<ToolCall>,
+    /// Hosted provider tools, such as OpenAI web search and code interpreter.
+    /// The provider already ran them. The agent records the results and does
+    /// not execute them again.
+    pub hosted: Vec<HostedToolCall>,
     pub usage: TokenUsage,
     pub finish_reason: super::FinishReason,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostedToolCall {
+    pub call: ToolCall,
+    pub result: ToolResult,
 }
 
 #[derive(Debug, Clone)]
