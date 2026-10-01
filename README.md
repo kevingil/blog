@@ -81,7 +81,8 @@ adopted, subsequent deploys apply only pending migrations. See the
 retry behavior, and fingerprint limitations. Fresh local databases still use
 `migrate` directly through Compose.
 
-[`render.yaml`](render.yaml) defines a Docker API and a Bun-built static frontend.
+[`render.yaml`](render.yaml) defines one Docker API service. The frontend is hosted
+separately and is not provisioned by this Blueprint.
 Sync it in the **personal Render workspace** after merging this PR. It reuses
 the existing Supabase database and S3-compatible storage; it creates neither.
 Confirm the API region before creating the service. Supply the prompted secrets
@@ -97,9 +98,16 @@ and public URLs in that workspace:
 | `S3_URL_PREFIX`, `VITE_PUBLIC_S3_URL_PREFIX` | Existing public bucket/CDN prefix |
 | Other `S3_*`, provider API keys | Existing production credentials and bucket settings |
 
-Use the assigned Render hostnames or your custom domains, not internal service
-hosts. Frontend `VITE_*` values are public and baked into the build; rebuild it
-after changing them. The frontend includes an SPA rewrite for deep links.
+Before deploying over the public database endpoint, configure TLS for the API's
+async PostgreSQL pool in `backend/src/database/pool.rs`. It currently uses
+diesel-async's default connection setup, which does not support TLS. The
+synchronous migration binaries use libpq, so successful migrations alone do
+not verify the API's TLS connectivity.
+
+Set backend variables in Render and frontend `VITE_*` variables at the frontend
+host. Use public hostnames or custom domains, not internal service hosts.
+Frontend `VITE_*` values are public and baked into the build; rebuild it after
+changing them and configure its host to rewrite SPA deep links to `index.html`.
 The API uses Render's [pre-deploy command](https://render.com/docs/deploys#pre-deploy-command)
 on a paid service, so migration failure blocks the new API deployment.
 Production never runs the local fixture seed. Existing accounts remain intact.
