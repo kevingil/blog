@@ -4,7 +4,7 @@ import { useAuth } from '@/services/auth/auth';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, ArrowUp, Square, Trash2, Mic, Keyboard } from "lucide-react"
+import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, ArrowUp, Square, Trash2, Mic } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { VITE_API_BASE_URL } from "@/services/constants";
@@ -2247,54 +2247,51 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           </div>
         <div className="p-2 space-y-1.5">
           <div className="flex items-center justify-between gap-2">
-            <div className="inline-flex rounded-md border p-0.5">
+            <div className="flex min-w-0 items-center gap-2">
               <Button
                 type="button"
                 size="sm"
-                variant={inputMode === 'text' ? 'default' : 'ghost'}
-                className="h-7 px-2 text-xs"
-                onClick={() => setInputMode('text')}
-              >
-                <Keyboard className="h-3.5 w-3.5 mr-1" />
-                Text
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={inputMode === 'conversation' ? 'default' : 'ghost'}
-                className="h-7 px-2 text-xs"
+                variant={inputMode === 'conversation' ? 'default' : 'outline'}
+                className={cn(
+                  'h-7 w-7 px-0',
+                  inputMode === 'conversation' && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
+                )}
+                aria-pressed={inputMode === 'conversation'}
+                aria-label={inputMode === 'conversation' ? 'Turn voice off' : 'Turn voice on'}
+                title={inputMode === 'conversation' ? 'Voice on' : 'Voice off'}
                 disabled={isNew || !article?.article?.id}
-                onClick={() => setInputMode('conversation')}
+                onClick={() =>
+                  setInputMode((mode) => (mode === 'conversation' ? 'text' : 'conversation'))
+                }
               >
-                <Mic className="h-3.5 w-3.5 mr-1" />
-                Conversation
+                <Mic className="h-3.5 w-3.5" />
               </Button>
+              {inputMode === 'conversation' && (
+                <span className="truncate text-[11px] text-muted-foreground">
+                  {conversation.error
+                    ? conversation.error
+                    : conversation.caption
+                      ? conversation.caption
+                      : conversation.state === 'connecting'
+                        ? 'Connecting to GPT-Live…'
+                        : conversation.state === 'speaking'
+                          ? 'Speaking…'
+                          : 'Voice on · talk, or paste a link'}
+                </span>
+              )}
             </div>
             {!isNew && article?.article?.id && (
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="h-7 px-2 text-xs"
+                className="h-7 shrink-0 px-2 text-xs"
                 disabled={clearingChat}
                 onClick={clearChat}
               >
                 <Trash2 className="h-3.5 w-3.5 mr-1" />
                 {clearingChat ? 'Clearing…' : 'Clear chat'}
               </Button>
-            )}
-            {inputMode === 'conversation' && (
-              <span className="max-w-[240px] truncate text-[11px] text-muted-foreground">
-                {conversation.error
-                  ? conversation.error
-                  : conversation.caption
-                    ? conversation.caption
-                    : conversation.state === 'connecting'
-                      ? 'Connecting to GPT-Live…'
-                      : conversation.state === 'speaking'
-                        ? 'Speaking…'
-                        : 'GPT-Live · talk, or paste a link'}
-              </span>
             )}
           </div>
           <PromptInput

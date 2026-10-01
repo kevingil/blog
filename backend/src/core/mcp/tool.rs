@@ -54,7 +54,8 @@ impl Tool for McpTool {
         _context: ToolContext,
         call: ToolCallRequest,
     ) -> Result<ToolResponse, AppError> {
-        let arguments: Value = serde_json::from_str(&call.input).unwrap_or_else(|_| json!({}));
+        let mut arguments: Value = serde_json::from_str(&call.input).unwrap_or_else(|_| json!({}));
+        omit_null_fields(&mut arguments);
         let result = self
             .client
             .call_tool(&self.remote_name, arguments)
@@ -62,10 +63,30 @@ impl Tool for McpTool {
             .map_err(|_| AppError::External)?;
         let content = mcp_result_text(&result);
         let mut object = Map::new();
-        object.insert("tool_name".to_owned(), Value::String(self.qualified_name.clone()));
+        object.insert(
+            "tool_name".to_owned(),
+            Value::String(self.qualified_name.clone()),
+        );
         object.insert("mcp_result".to_owned(), result);
         object.insert("content".to_owned(), Value::String(content.clone()));
         Ok(ToolResponse::structured(content, object, None))
+    }
+}
+
+fn omit_null_fields(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            map.retain(|_, child| !child.is_null());
+            for child in map.values_mut() {
+                omit_null_fields(child);
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                omit_null_fields(item);
+            }
+        }
+        _ => {}
     }
 }
 

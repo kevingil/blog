@@ -401,12 +401,33 @@ async fn begin_turn(
 
 async fn forward_harness(mut handle: LiveTurnHandle, notes: mpsc::Sender<SessionNote>) {
     let mut spoken = String::new();
+    let mut failure: Option<String> = None;
+    let mut document_updated = false;
     while let Some(event) = handle.events.recv().await {
         let event_type = event.get("type").and_then(Value::as_str);
         if matches!(event_type, Some("text") | Some("content_delta"))
             && let Some(content) = event.get("content").and_then(Value::as_str)
         {
             spoken.push_str(content);
+        }
+        match edit_outcome(&event) {
+            Some(true) => document_updated = true,
+            Some(false) => {
+                if failure.is_none() {
+                    failure = Some(edit_failure_detail(&event));
+                }
+            }
+            None => {}
+        }
+        if event_type == Some("error") && failure.is_none() {
+            failure = Some(
+                event
+                    .get("error")
+                    .and_then(Value::as_str)
+                    .filter(|message| !message.is_empty())
+                    .unwrap_or("the backend failed")
+                    .to_owned(),
+            );
         }
         if notes
             .send(SessionNote::Browser(
@@ -419,15 +440,76 @@ async fn forward_harness(mut handle: LiveTurnHandle, notes: mpsc::Sender<Session
             return;
         }
     }
-    let summary = if spoken.trim().is_empty() {
-        "The task is finished.".to_owned()
-    } else {
-        truncate_chars(spoken.trim(), COMMENTARY_LIMIT)
-    };
+    if document_updated
+        && notes
+            .send(SessionNote::Upstream(thinking_append(
+                "The article draft was updated by the backend. Ignore any earlier document excerpt.",
+            )))
+            .await
+            .is_err()
+    {
+        return;
+    }
+    let summary = live_result_commentary(&spoken, failure.as_deref(), document_updated);
     let _ = notes
         .send(SessionNote::Upstream(commentary_append(None, &summary)))
         .await;
     let _ = notes.send(SessionNote::Finished).await;
+}
+
+fn edit_outcome(event: &Value) -> Option<bool> {
+    let name = event
+        .get("tool_name")
+        .and_then(Value::as_str)
+        .or_else(|| {
+            event
+                .pointer("/tool_result/tool_name")
+                .and_then(Value::as_str)
+        })
+        .unwrap_or("");
+    if name != "replace_lines" && name != "rewrite_document" {
+        return None;
+    }
+    if event.get("type").and_then(Value::as_str) != Some("tool_result") {
+        return None;
+    }
+    let failed = event
+        .pointer("/tool_result/is_error")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    Some(!failed)
+}
+
+fn edit_failure_detail(event: &Value) -> String {
+    event
+        .pointer("/tool_result/content")
+        .and_then(Value::as_str)
+        .filter(|content| !content.is_empty())
+        .unwrap_or("the edit tool failed")
+        .to_owned()
+}
+
+fn live_result_commentary(spoken: &str, failure: Option<&str>, document_updated: bool) -> String {
+    if document_updated {
+        let spoken = spoken.trim();
+        let summary = if spoken.is_empty() {
+            "The article was updated.".to_owned()
+        } else {
+            spoken.to_owned()
+        };
+        return truncate_chars(&summary, COMMENTARY_LIMIT);
+    }
+    if let Some(failure) = failure.map(str::trim).filter(|failure| !failure.is_empty()) {
+        return truncate_chars(
+            &format!("The task failed and the article was not changed: {failure}"),
+            COMMENTARY_LIMIT,
+        );
+    }
+    if spoken.trim().is_empty() {
+        "The task is finished.".to_owned()
+    } else {
+        truncate_chars(spoken.trim(), COMMENTARY_LIMIT)
+    }
 }
 
 fn combined_message(state: &SessionState) -> String {
@@ -479,4 +561,4 @@ fn truncate_chars(value: &str, limit: usize) -> String {
     }
 }
 
-const LIVE_INSTRUCTIONS: &str = "You are the spoken side of a blog writing copilot in a live, full-duplex conversation. Keep replies short and natural. When the user wants an edit, research, a link checked, or any change to the article, delegate to the backend and tell them you are taking care of it. After the backend returns a result, say briefly that it is done. Typed notes and links from the chat are part of the same conversation. Do not claim a change is finished until the backend says so.";
+const LIVE_INSTRUCTIONS: &str = "You are the spoken side of a blog writing copilot in a live, full-duplex conversation. Keep replies short and natural. When the user wants an edit, research, a link checked, or any change to the article, delegate to the backend and tell them you are taking care of it. After the backend returns a result, paraphrase that result. Typed notes and links from the chat are part of the same conversation. If the backend says the task failed or the article was not changed, tell the user the edit did not work. Only say an edit succeeded when the backend says the article was updated.";

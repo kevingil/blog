@@ -468,14 +468,18 @@ impl Tool for ReplaceLinesTool {
             name: "replace_lines".to_owned(),
             description: "Replace lines in the document by line number. Use read_document to see line numbers and section boundaries. Works for rewriting, insertion, and deletion.".to_owned(),
             parameters: BTreeMap::from([
-                ("start_line".to_owned(), json!({"type": "number"})),
-                ("end_line".to_owned(), json!({"type": "number"})),
-                ("new_content".to_owned(), json!({"type": "string"})),
+                ("start_line".to_owned(), json!({"type": "integer"})),
+                ("end_line".to_owned(), json!({"type": "integer"})),
+                (
+                    "new_content".to_owned(),
+                    json!({"type": "string", "description": "Replacement markdown for the inclusive line range. Use an empty string to delete those lines."}),
+                ),
                 ("reason".to_owned(), json!({"type": "string"})),
             ]),
             required: vec![
                 "start_line".to_owned(),
                 "end_line".to_owned(),
+                "new_content".to_owned(),
                 "reason".to_owned(),
             ],
             parallel_safe: false,
@@ -963,29 +967,36 @@ struct SelectSourcesInput {
 
 #[derive(Debug, Deserialize)]
 struct SelectSourceInput {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_empty")]
     source_id: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_empty")]
     title: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_empty")]
     url: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_empty")]
     source_type: String,
     excerpt_text: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_empty")]
     excerpt_id: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_empty")]
     content: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_empty")]
     origin_tool: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_empty")]
     origin_query: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_empty")]
     origin_question: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_empty")]
     author: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_empty")]
     published_date: String,
+}
+
+fn null_as_empty<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(Option::<String>::deserialize(deserializer)?.unwrap_or_default())
 }
 
 #[async_trait]

@@ -222,3 +222,118 @@ async fn typed_link_is_included_in_the_same_live_turn() {
         vec!["check this\n\nhttps://example.com/notes".to_owned()]
     );
 }
+
+struct ScriptedHarness {
+    events: Vec<Value>,
+}
+
+#[async_trait]
+impl LiveHarness for ScriptedHarness {
+    async fn run_turn(&self, _turn: LiveTurn) -> Result<LiveTurnHandle, AppError> {
+        let (sender, events) = mpsc::channel(8);
+        for event in &self.events {
+            sender
+                .send(event.clone())
+                .await
+                .map_err(|_| AppError::External)?;
+        }
+        Ok(LiveTurnHandle {
+            request_id: "req-scripted".to_owned(),
+            events,
+        })
+    }
+}
+
+async fn commentary_after_delegation(events: Vec<Value>) -> String {
+    let (inbound_tx, inbound_rx) = mpsc::channel(8);
+    let (outbound_tx, mut outbound_rx) = mpsc::channel(8);
+    let (command_tx, command_rx) = mpsc::channel(8);
+    let (browser_tx, mut browser_rx) = mpsc::channel(8);
+    tokio::spawn(async move {
+        let _ = run_live_session(
+            Box::new(ScriptedConnection {
+                inbound: inbound_rx,
+                outbound: outbound_tx,
+            }),
+            command_rx,
+            browser_tx,
+            Arc::new(ScriptedHarness { events }),
+        )
+        .await;
+    });
+    command_tx
+        .send(LiveClientCommand::Start {
+            article_id: "article-1".to_owned(),
+            document_content: "draft".to_owned(),
+            document_markdown: "draft".to_owned(),
+        })
+        .await
+        .ok();
+    let _ = next_matching(&mut outbound_rx, "session.start").await;
+    inbound_tx
+        .send(json!({"type": "session.started", "session": {"id": "s1"}}))
+        .await
+        .ok();
+    let _ = next_matching(&mut browser_rx, "started").await;
+    inbound_tx
+        .send(json!({"type": "session.input_transcript.delta", "delta": "change the title"}))
+        .await
+        .ok();
+    inbound_tx
+        .send(json!({"type": "session.delegation.created", "delegation": {"id": "del_1"}}))
+        .await
+        .ok();
+    let _ = next_matching(&mut outbound_rx, "session.commentary.append").await;
+    let summary = next_matching(&mut outbound_rx, "session.commentary.append").await;
+    summary["content"].as_str().unwrap_or_default().to_owned()
+}
+
+#[tokio::test]
+async fn failed_provider_turn_is_not_reported_as_finished() {
+    let summary = commentary_after_delegation(vec![json!({
+        "type": "error",
+        "error": "provider failed: provider request failed: OpenAI returned HTTP 400 Bad Request",
+        "done": true
+    })])
+    .await;
+    assert!(
+        summary.contains("article was not changed"),
+        "voice commentary claimed success: {summary}"
+    );
+    assert!(summary.contains("HTTP 400"));
+    assert_ne!(summary, "The task is finished.");
+}
+
+#[tokio::test]
+async fn failed_edit_tool_overrides_a_success_claim() {
+    let summary = commentary_after_delegation(vec![
+        json!({"type": "text", "content": "Yes, it did."}),
+        json!({
+            "type": "tool_result",
+            "tool_name": "replace_lines",
+            "tool_result": {
+                "is_error": true,
+                "content": "start_line 12 exceeds document length",
+                "tool_name": "replace_lines"
+            }
+        }),
+    ])
+    .await;
+    assert!(summary.contains("article was not changed"), "{summary}");
+    assert!(!summary.contains("Yes, it did."));
+}
+
+#[tokio::test]
+async fn successful_edit_tells_the_voice_model_the_article_changed() {
+    let summary = commentary_after_delegation(vec![json!({
+        "type": "tool_result",
+        "tool_name": "replace_lines",
+        "tool_result": {
+            "is_error": false,
+            "content": "{\"new_markdown\":\"## Internal ops\"}",
+            "tool_name": "replace_lines"
+        }
+    })])
+    .await;
+    assert_eq!(summary, "The article was updated.");
+}
