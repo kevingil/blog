@@ -5,6 +5,7 @@ HTTP-003	meta	GET	/swagger/*	public	-	Swagger UI assets	UI route	-	missing	activ
 HTTP-004	meta	GET	/api/openapi.json	public	-	200 OpenAPI JSON	exact generated document	frontend/openapi-ts.config.ts currently reads file	missing	active-contract
 HTTP-005	agent	POST	/agent	Bearer JWT	copilot.ChatRequest	200 copilot.ChatRequestResponse;400;401;500	runtime response uses requestId	frontend/src/components/blog/Editor.tsx	covered	active-contract
 WS-001	agent	GET	/websocket	public upgrade	SubscribeMessage	101; frames WS-002..WS-008	no handshake auth	frontend/src/hooks/use-session.ts;frontend/src/hooks/use-worker-statuses.ts;frontend/src/components/blog/Editor.tsx	missing	active-contract
+WS-009	agent	GET	/agent/live	public upgrade	JSON start/audio/text/context/stop	101; frames started,transcript,audio,delegation,error	no handshake auth; GPT-Live client delegation	frontend/src/hooks/use-conversation.ts;frontend/src/components/blog/Editor.tsx	missing	active-contract
 HTTP-006	agent	GET	/agent/conversations/{articleId}	Bearer JWT	path UUID;limit=50	200 {messages,article_id,total};400;401;500	exact runtime casing	frontend/src/services/conversations.ts	covered	active-contract
 HTTP-007	agent	DELETE	/agent/conversations/{articleId}	Bearer JWT	path UUID	200 {success};400;401;500	exact object	frontend/src/services/conversations.ts	covered	active-contract
 HTTP-008	agent	GET	/agent/artifacts/{articleId}/pending	Bearer JWT	path UUID	200 {artifacts};400;401;500	exact object	frontend/src/services/artifacts.ts	covered	active-contract
@@ -108,6 +109,10 @@ WS-008	websocket	C->S	unsubscribe-worker	upgraded	{action:"unsubscribe",channel:
 HTTP-099	image	POST	/images/generate	Bearer JWT	{prompt,article_id,generate_prompt}	202 {request_id};400;401;502	exact snake_case request and response	frontend/src/components/blog/Editor.tsx	covered	approved-change
 HTTP-100	image	GET	/images/{requestId}	Bearer JWT	path request ID	200 ImageGenerationResponse;401;404;500	per runtime DTO	frontend ImageLoader consumers	covered	approved-change
 HTTP-101	image	GET	/images/{requestId}/status	Bearer JWT	path request ID	200 ImageGenerationStatus;401;404;500	camelCase plus compatibility snake_case fields	frontend ImageLoader consumers	covered	approved-change
+HTTP-102	agent	GET	/agent/connector-presets	Bearer JWT	-	200 {presets};401;500	camelCase preset catalog	frontend/src/routes/dashboard/connectors.tsx	covered	active-contract
+HTTP-103	agent	POST	/agent/connector-presets/{presetId}/connect	Bearer JWT	path preset id	200 {connected:false,authorizationUrl};400;401;500	starts MCP OAuth (PKCE + dynamic client registration) and returns the provider authorize URL	frontend/src/routes/dashboard/connectors.tsx	covered	active-contract
+HTTP-104	agent	POST	/agent/connectors/oauth	Bearer JWT	{name,url}	200 {connected:false,authorizationUrl};400;401;500	http(s) MCP URL; same OAuth sign-in path as presets	frontend/src/routes/dashboard/connectors.tsx	covered	active-contract
+HTTP-105	agent	GET	/agent/connectors/oauth/callback	public	query code, state	302 redirect to the app connectors page	exchanges the authorization code and stores the access token	frontend/src/routes/dashboard/connectors.tsx	covered	active-contract
 RESOLVED-004	frontend	PUT	/blog/articles/{id}/context	Bearer JWT	frontend request	resolved to HTTP-017	frontend caller now uses generated updateArticleWithContext	frontend/src/components/blog/Editor.tsx	n/a	resolved-existing-contract
 REMOVED-005	frontend	GET	/auth/session	unknown	-	dead export removed	-	none	n/a	removed-dead-consumer
 REMOVED-006	frontend	POST	/auth/refresh	unknown	-	dead export removed	-	none	n/a	removed-dead-consumer

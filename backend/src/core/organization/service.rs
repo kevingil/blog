@@ -72,6 +72,7 @@ impl OrganizationService {
             meta_description: request.meta_description,
             created_at: None,
             updated_at: None,
+            logo_upload_file_id: None,
         };
         self.organizations.save(&mut organization).await?;
         Ok(to_response(organization))

@@ -15,11 +15,34 @@ export const DEFAULT_IMAGE_PROMPT = [
 ];
 
 export const articleSchema = z.object({
-  title: z.string().min(1, 'Title is required'),
-  content: z.string().min(1, 'Content is required'),
+  title: z.string(),
+  content: z.string(),
   image_url: z.union([z.string().url(), z.literal('')]).optional(),
   tags: z.array(z.string()),
-  // Note: isDraft removed - publish/unpublish is now a separate action
+  external_url: z.string().optional(),
+}).superRefine((value, ctx) => {
+  const external = value.external_url?.trim() ?? '';
+  if (external && !/^https?:\/\//i.test(external)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['external_url'],
+      message: 'Enter a full http or https link.',
+    });
+  }
+  if (!external && value.title.trim().length < 1) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['title'],
+      message: 'Title is required',
+    });
+  }
+  if (!external && value.content.trim().length < 1) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['content'],
+      message: 'Content is required',
+    });
+  }
 });
 
 export type ArticleFormData = z.infer<typeof articleSchema>;
@@ -49,6 +72,7 @@ export type ChatMessage = {
   id?: string;
   role: 'user' | 'assistant' | 'tool';
   content: string;
+  channel?: 'text' | 'voice';
   diffState?: 'accepted' | 'rejected';
   diffPreview?: {
     oldText: string;

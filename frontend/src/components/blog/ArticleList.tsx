@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useRouter, Link } from '@tanstack/react-router';
+import { useRouter } from '@tanstack/react-router';
 import { format } from 'date-fns';
 import { Card, CardContent } from "@/components/ui/card";
 import { Image as ImageIcon, X, Search } from "lucide-react";
@@ -15,7 +15,9 @@ import {
 } from "@/components/ui/pagination";
 import { Input } from "@/components/ui/input";
 import { getArticles, searchArticles, getPopularTags } from '@/services/blog';
-import { ArticleListItem, ITEMS_PER_PAGE, getDisplayTitle, getDisplayContent, getDisplayImageUrl } from '@/services/types';
+import { ArticleListItem, ITEMS_PER_PAGE, getDisplayTitle, getDisplayContent, getDisplayImage, externalArticleUrl } from '@/services/types';
+import { BlurhashImage } from '@/components/media/BlurhashImage';
+import { ArticleHref } from '@/components/blog/ArticleHref';
 import { GetArticlesResponse } from '@/routes/dashboard/blog';
 import { useQuery } from '@tanstack/react-query';
 
@@ -279,7 +281,8 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
             // For public listing, use published content if available, otherwise draft
             const displayTitle = getDisplayTitle(article.article);
             const displayContent = getDisplayContent(article.article);
-            const displayImageUrl = getDisplayImageUrl(article.article);
+            const displayImage = getDisplayImage(article.article);
+            const externalUrl = externalArticleUrl(article.article);
             
             return (
               <Card
@@ -288,10 +291,9 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
                 className="group relative overflow-hidden hover:border-primary/30 hover:shadow-[0_0_20px_-5px_rgba(249,115,22,0.1)] transition-all duration-500"
               >
                 <CardContent className="p-0">
-                  <Link
-                    to="/blog/$blogSlug"
-                    params={{ blogSlug: article.article.slug as string }}
-                    search={{ page: undefined, tag: undefined, search: undefined }}
+                  <ArticleHref
+                    slug={article.article.slug as string}
+                    externalUrl={externalUrl}
                     className="flex items-stretch gap-4"
                   >
                     <div className="flex-1 p-4 sm:p-5">
@@ -300,6 +302,12 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
                       </h2>
                       <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
                         <span className="font-medium">{article.author?.name}</span>
+                        {externalUrl && (
+                          <>
+                            <span>·</span>
+                            <span>External</span>
+                          </>
+                        )}
                         <span>·</span>
                         <span>
                           {(() => {
@@ -325,14 +333,16 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
                     </div>
 
                     <div className="relative w-36 sm:w-48 md:w-56 flex-shrink-0 overflow-hidden rounded-lg my-4 mr-4">
-                      {displayImageUrl ? (
+                      {displayImage?.url ? (
                         <>
-                          <img
-                            src={displayImageUrl}
+                          <BlurhashImage
+                            src={displayImage.url}
                             alt={displayTitle || ''}
-                            className="w-full h-full object-cover aspect-video transition-transform duration-300 group-hover:scale-105"
+                            blurhash={displayImage.blurhash}
+                            className="h-full w-full"
+                            imgClassName="w-full h-full object-cover aspect-video transition-transform duration-300 group-hover:scale-105"
                           />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent pointer-events-none" />
                         </>
                       ) : (
                         <div className="w-full h-full aspect-video bg-muted/40 flex items-center justify-center">
@@ -340,7 +350,7 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
                         </div>
                       )}
                     </div>
-                  </Link>
+                  </ArticleHref>
                 </CardContent>
               </Card>
             );

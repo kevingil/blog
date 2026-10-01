@@ -1,21 +1,18 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MarkdownEditor } from './MarkdownEditor';
-import { DiffView } from './DiffView';
 import { MarkdownPreview } from './MarkdownPreview';
-import { BookOpen, Code, Eye, ShieldCheck } from 'lucide-react';
+import { BookOpen, Code, Eye } from 'lucide-react';
 import { EditorView } from '@codemirror/view';
 import { SourcesManagerContent } from '../SourcesManager';
+import type { TextRange } from '@/lib/added-text';
 
 interface EditorTabsProps {
   content: string;
   onChange: (md: string) => void;
-  originalContent: string;
-  diffing: boolean;
+  highlights?: TextRange[];
   activeTab: string;
   onTabChange: (tab: string) => void;
-  onAccept: () => void;
-  onReject: () => void;
   title?: string;
   authorName?: string;
   imageUrl?: string;
@@ -87,7 +84,7 @@ function scrollPreviewToLine(container: HTMLElement, targetLine: number): void {
 }
 
 /* ------------------------------------------------------------------ */
-/* Percentage-based fallback (Diff tab)                                */
+/* Scrollable container lookup                                         */
 /* ------------------------------------------------------------------ */
 
 function findScrollable(container: HTMLElement | null): HTMLElement | null {
@@ -114,12 +111,9 @@ function findScrollable(container: HTMLElement | null): HTMLElement | null {
 export function EditorTabs({
   content,
   onChange,
-  originalContent,
-  diffing,
+  highlights = [],
   activeTab,
   onTabChange,
-  onAccept,
-  onReject,
   title,
   authorName,
   imageUrl,
@@ -131,7 +125,6 @@ export function EditorTabs({
   const editorViewRef = useRef<EditorView | null>(null);
   const editRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
-  const diffRef = useRef<HTMLDivElement>(null);
   const prevTabRef = useRef(activeTab);
 
   /** Save scroll position from the outgoing tab, then switch */
@@ -147,14 +140,6 @@ export function EditorTabs({
         syncLineRef.current = line;
         const total = content.split('\n').length;
         scrollFractionRef.current = total > 1 ? (line - 1) / (total - 1) : 0;
-      }
-    } else if (activeTab === 'diff' && diffRef.current) {
-      const scrollable = findScrollable(diffRef.current);
-      if (scrollable) {
-        const max = scrollable.scrollHeight - scrollable.clientHeight;
-        scrollFractionRef.current = max > 0 ? scrollable.scrollTop / max : 0;
-        const total = content.split('\n').length;
-        syncLineRef.current = Math.round(scrollFractionRef.current * Math.max(1, total - 1)) + 1;
       }
     }
     onTabChange(newTab);
@@ -174,12 +159,6 @@ export function EditorTabs({
             scrollEditorToLine(editorViewRef.current, syncLineRef.current);
           } else if (activeTab === 'preview' && previewRef.current) {
             scrollPreviewToLine(previewRef.current, syncLineRef.current);
-          } else if (activeTab === 'diff' && diffRef.current) {
-            const scrollable = findScrollable(diffRef.current);
-            if (scrollable) {
-              const max = scrollable.scrollHeight - scrollable.clientHeight;
-              if (max > 0) scrollable.scrollTop = scrollFractionRef.current * max;
-            }
           }
         });
       });
@@ -204,13 +183,6 @@ export function EditorTabs({
             Resources
           </TabsTrigger>
         </div>
-        <div className="flex">
-          <TabsTrigger value="diff" className="gap-1.5 data-[state=active]:bg-yellow-900/30 data-[state=active]:text-yellow-400 text-yellow-500/70">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            Review
-            {diffing && <span className="ml-1 h-2 w-2 rounded-full bg-yellow-400 animate-pulse" />}
-          </TabsTrigger>
-        </div>
       </TabsList>
 
       {/* Manual tab content -- avoids TabsContent flex issues with CodeMirror */}
@@ -221,20 +193,13 @@ export function EditorTabs({
           className="absolute inset-0"
           style={{ display: activeTab === 'edit' ? 'block' : 'none' }}
         >
-          <MarkdownEditor content={content} onChange={onChange} editorViewRef={editorViewRef} />
+          <MarkdownEditor
+            content={content}
+            onChange={onChange}
+            editorViewRef={editorViewRef}
+            highlights={highlights}
+          />
         </div>
-
-        {/* Diff/Review tab */}
-        {activeTab === 'diff' && (
-          <div ref={diffRef} className="absolute inset-0 overflow-auto">
-            <DiffView
-              oldValue={originalContent || content}
-              newValue={content}
-              onAccept={onAccept}
-              onReject={onReject}
-            />
-          </div>
-        )}
 
         {/* Preview tab */}
         {activeTab === 'preview' && (

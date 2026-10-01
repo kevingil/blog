@@ -3,19 +3,23 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::{DateTime, TimeZone, Utc};
 use reqwest::Url;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
     core::{
         auth::{AccountId, AccountRepository},
+        storage::{UploadRepository, resolve_image},
         tag::TagRepository,
     },
     error::AppError,
 };
 
-use super::{Article, ArticleListOptions, ArticleRepository, ArticleSearchOptions, ArticleVersion};
+use super::{
+    Article, ArticleListOptions, ArticleRepository, ArticleSearchOptions, ArticleVersion,
+    ExternalImageCache, ExternalPage, ExternalPagePort,
+};
 
 pub const ITEMS_PER_PAGE: i64 = 6;
 
@@ -50,6 +54,10 @@ pub struct RecommendedArticle {
     pub published_at: Option<DateTime<Utc>>,
     pub created_at: Option<DateTime<Utc>>,
     pub author: Option<String>,
+    #[serde(default)]
+    pub external_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<crate::core::storage::ImageAsset>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
@@ -104,6 +112,11 @@ pub struct CreateArticle {
     pub publish: bool,
     #[serde(rename = "authorId")]
     pub author_id: Uuid,
+    /// When set, the public article opens this link. Empty keeps it on this site.
+    #[serde(default)]
+    pub external_url: Option<String>,
+    #[serde(default)]
+    pub image_upload_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, ToSchema)]
@@ -115,6 +128,24 @@ pub struct UpdateArticle {
     #[serde(default)]
     pub tags: Vec<String>,
     pub published_at: Option<i64>,
+    /// `null` or `""` removes the external link. Omit the field to leave it unchanged.
+    #[serde(default, deserialize_with = "deserialize_optional_update")]
+    #[schema(value_type = Option<String>)]
+    pub external_url: Option<Option<String>>,
+    #[serde(default)]
+    pub image_upload_id: Option<Uuid>,
+}
+
+fn deserialize_optional_update<'de, D>(deserializer: D) -> Result<Option<Option<String>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Some(Option::<String>::deserialize(deserializer)?))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, ToSchema)]
+pub struct CreateExternalArticle {
+    pub url: String,
 }
 
 #[async_trait]
@@ -134,6 +165,9 @@ pub struct ArticleService {
     tags: Arc<dyn TagRepository>,
     embeddings: Option<Arc<dyn ArticleEmbeddingProvider>>,
     context_writer: Option<Arc<dyn ArticleContextWriter>>,
+    external_pages: Option<Arc<dyn ExternalPagePort>>,
+    image_cache: Option<Arc<dyn ExternalImageCache>>,
+    uploads: Option<Arc<dyn UploadRepository>>,
 }
 
 impl ArticleService {
@@ -148,7 +182,15 @@ impl ArticleService {
             tags,
             embeddings: None,
             context_writer: None,
+            external_pages: None,
+            image_cache: None,
+            uploads: None,
         }
+    }
+
+    pub fn with_uploads(mut self, uploads: Arc<dyn UploadRepository>) -> Self {
+        self.uploads = Some(uploads);
+        self
     }
 
     pub fn with_embedding_provider(mut self, provider: Arc<dyn ArticleEmbeddingProvider>) -> Self {
@@ -158,6 +200,16 @@ impl ArticleService {
 
     pub fn with_context_writer(mut self, writer: Arc<dyn ArticleContextWriter>) -> Self {
         self.context_writer = Some(writer);
+        self
+    }
+
+    pub fn with_external_blogs(
+        mut self,
+        pages: Arc<dyn ExternalPagePort>,
+        images: Arc<dyn ExternalImageCache>,
+    ) -> Self {
+        self.external_pages = Some(pages);
+        self.image_cache = Some(images);
         self
     }
 
@@ -278,16 +330,21 @@ impl ArticleService {
                     .published_title
                     .clone()
                     .unwrap_or_else(|| article.draft_title.clone()),
-                slug: article.slug,
+                slug: article.slug.clone(),
                 image_url: article
                     .published_image_url
                     .filter(|url| !url.is_empty())
                     .or_else(|| {
-                        (!article.draft_image_url.is_empty()).then_some(article.draft_image_url)
+                        (!article.draft_image_url.is_empty()).then(|| article.draft_image_url.clone())
                     }),
                 published_at: article.published_at,
                 created_at: article.created_at,
                 author,
+                external_url: article.external_url.clone(),
+                image: article
+                    .published_image
+                    .clone()
+                    .or_else(|| article.draft_image.clone()),
             });
         }
         Ok(recommended)
@@ -342,11 +399,18 @@ impl ArticleService {
         let mut article = self.articles.find_by_id(article_id).await?;
         article.imagen_request_id = Some(image_request_id);
         article.draft_image_url = output_url.to_owned();
+        article.draft_upload_file_id = self.lookup_upload_id(output_url).await?;
         article.updated_at = Some(Utc::now());
         self.articles.save_draft(&mut article).await
     }
 
-    pub async fn create(&self, request: CreateArticle) -> Result<ArticleListItem, AppError> {
+    pub async fn create(&self, mut request: CreateArticle) -> Result<ArticleListItem, AppError> {
+        let page = self
+            .resolve_external_link(None, request.external_url.as_deref().unwrap_or(""))
+            .await?;
+        if let Some(page) = &page {
+            fill_missing_copy(&mut request.title, &mut request.content, page);
+        }
         validate_create(&request)?;
         let tag_ids = self.tags.ensure_exists(&request.tags).await?;
         let now = Utc::now();
@@ -359,11 +423,81 @@ impl ArticleService {
             tag_ids,
             now,
         );
+        if let Some(page) = &page {
+            article.external_url = Some(page.url.clone());
+            if article.draft_image_url.is_empty() {
+                if let Some(stored) = self.cache_page_image(article.id, page).await? {
+                    article.draft_upload_file_id = self.lookup_upload_id(&stored).await?;
+                    article.draft_image_url = stored;
+                }
+            }
+        }
+        if let Some(id) = request.image_upload_id {
+            let resolved = resolve_image(self.uploads.as_deref(), Some(id), "", "", None).await?;
+            article.draft_image_url = resolved.url;
+            article.draft_upload_file_id = resolved.upload_file_id;
+            article.draft_image = resolved.image;
+        }
         if request.publish {
             article.published_title = Some(request.title);
             article.published_content = Some(request.content);
-            article.published_image_url = Some(request.image_url);
+            article.published_image_url = Some(article.draft_image_url.clone());
+            article.published_upload_file_id = article.draft_upload_file_id;
+            article.published_image = article.draft_image.clone();
             article.published_at = Some(now);
+        }
+        let id = article.id;
+        self.articles.save(&mut article).await?;
+        self.get_by_id(id).await
+    }
+
+    pub async fn create_external(
+        &self,
+        author_id: Uuid,
+        request: CreateExternalArticle,
+    ) -> Result<ArticleListItem, AppError> {
+        let pages = self
+            .external_pages
+            .as_ref()
+            .ok_or_else(|| AppError::InvalidInput("external blogs are unavailable".to_owned()))?;
+        let images = self
+            .image_cache
+            .as_ref()
+            .ok_or_else(|| AppError::InvalidInput("external blogs are unavailable".to_owned()))?;
+        let url = request.url.trim();
+        if url.is_empty() {
+            return Err(AppError::InvalidInput("url is required".to_owned()));
+        }
+        let page = pages.load(url).await?;
+        if self.articles.external_url_exists(&page.url, None).await? {
+            return Err(AppError::Conflict(
+                "an external blog for this link already exists".to_owned(),
+            ));
+        }
+        let title = fit_title(&page.title);
+        let excerpt = fit_excerpt(&page.excerpt);
+        validate_article_fields(&title, &excerpt, "", &[])?;
+        let now = Utc::now();
+        let mut article = new_article(
+            self.unique_slug(&title, None).await?,
+            title.clone(),
+            excerpt.clone(),
+            String::new(),
+            author_id,
+            Vec::new(),
+            now,
+        );
+        article.external_url = Some(page.url);
+        article.published_title = Some(title);
+        article.published_content = Some(excerpt);
+        article.published_at = Some(page.published_at.unwrap_or(now));
+        if let Some(image) = page.image {
+            let key = format!("external-blogs/{}.{}", article.id, image.extension);
+            let stored = images.store(&key, &image.content_type, image.bytes).await?;
+            article.draft_upload_file_id = self.lookup_upload_id(&stored).await?;
+            article.draft_image_url = stored.clone();
+            article.published_upload_file_id = article.draft_upload_file_id;
+            article.published_image_url = Some(stored);
         }
         let id = article.id;
         self.articles.save(&mut article).await?;
@@ -373,21 +507,79 @@ impl ArticleService {
     pub async fn update(
         &self,
         article_id: Uuid,
-        request: UpdateArticle,
+        mut request: UpdateArticle,
     ) -> Result<ArticleListItem, AppError> {
-        validate_update(&request)?;
         let mut article = self.articles.find_by_id(article_id).await?;
+        let link_change = self
+            .external_link_change(article_id, &article, &request)
+            .await?;
+        if let ExternalLinkChange::Set(page) = &link_change {
+            fill_missing_copy(&mut request.title, &mut request.content, page);
+            if should_replace_external_image(&request.image_url) {
+                if let Some(stored) = self.cache_page_image(article_id, page).await? {
+                    request.image_url = stored;
+                }
+            }
+        }
+        validate_update(&request)?;
         let tag_ids = self.tags.ensure_exists(&request.tags).await?;
         if article.draft_title != request.title {
             article.slug = self.unique_slug(&request.title, Some(article_id)).await?;
         }
+        let resolved = resolve_image(
+            self.uploads.as_deref(),
+            request.image_upload_id,
+            &request.image_url,
+            &article.draft_image_url,
+            article.draft_upload_file_id,
+        )
+        .await?;
+        let draft_changed = article.draft_title != request.title
+            || article.draft_content != request.content
+            || article.draft_image_url != resolved.url
+            || article.draft_upload_file_id != resolved.upload_file_id;
+        if draft_changed {
+            self.articles.create_draft_snapshot(article_id).await?;
+        }
         article.draft_title = request.title;
         article.draft_content = request.content.clone();
-        article.draft_image_url = request.image_url;
+        article.draft_image_url = resolved.url;
+        article.draft_upload_file_id = resolved.upload_file_id;
+        article.draft_image = resolved.image;
         article.tag_ids = Some(tag_ids);
         article.updated_at = Some(Utc::now());
         if let Some(timestamp) = request.published_at {
             article.published_at = Some(timestamp_to_utc(timestamp)?);
+        }
+        match link_change {
+            ExternalLinkChange::Unchanged => {}
+            ExternalLinkChange::Clear => article.external_url = None,
+            ExternalLinkChange::Set(page) => {
+                article.external_url = Some(page.url);
+                if article.published_at.is_some() {
+                    if article
+                        .published_image_url
+                        .as_deref()
+                        .is_none_or(should_replace_external_image)
+                        && !article.draft_image_url.is_empty()
+                    {
+                        article.published_upload_file_id = article.draft_upload_file_id;
+                        article.published_image = article.draft_image.clone();
+                        article.published_image_url = Some(article.draft_image_url.clone());
+                    }
+                    if article
+                        .published_content
+                        .as_deref()
+                        .unwrap_or("")
+                        .chars()
+                        .count()
+                        < 10
+                    {
+                        article.published_content = Some(article.draft_content.clone());
+                        article.published_title = Some(article.draft_title.clone());
+                    }
+                }
+            }
         }
         self.articles.save(&mut article).await?;
 
@@ -410,9 +602,13 @@ impl ArticleService {
     pub async fn update_with_context(&self, article_id: Uuid) -> Result<Article, AppError> {
         let mut article = self.articles.find_by_id(article_id).await?;
         let writer = self.context_writer.as_ref().ok_or(AppError::External)?;
-        article.draft_content = writer.update_with_context(&article).await?;
-        article.updated_at = Some(Utc::now());
-        self.articles.save(&mut article).await?;
+        let updated = writer.update_with_context(&article).await?;
+        if updated != article.draft_content {
+            self.articles.create_draft_snapshot(article_id).await?;
+            article.draft_content = updated;
+            article.updated_at = Some(Utc::now());
+            self.articles.save(&mut article).await?;
+        }
         Ok(article)
     }
 
@@ -529,6 +725,79 @@ impl ArticleService {
         })
     }
 
+    async fn external_link_change(
+        &self,
+        article_id: Uuid,
+        article: &Article,
+        request: &UpdateArticle,
+    ) -> Result<ExternalLinkChange, AppError> {
+        let Some(value) = &request.external_url else {
+            return Ok(ExternalLinkChange::Unchanged);
+        };
+        let trimmed = value.as_deref().unwrap_or("").trim();
+        if trimmed.is_empty() {
+            return Ok(ExternalLinkChange::Clear);
+        }
+        if article.external_url.as_deref() == Some(trimmed) {
+            return Ok(ExternalLinkChange::Unchanged);
+        }
+        match self
+            .resolve_external_link(Some(article_id), trimmed)
+            .await?
+        {
+            Some(page) if article.external_url.as_deref() == Some(page.url.as_str()) => {
+                Ok(ExternalLinkChange::Unchanged)
+            }
+            Some(page) => Ok(ExternalLinkChange::Set(page)),
+            None => Ok(ExternalLinkChange::Clear),
+        }
+    }
+
+    async fn resolve_external_link(
+        &self,
+        exclude_id: Option<Uuid>,
+        raw: &str,
+    ) -> Result<Option<ExternalPage>, AppError> {
+        let raw = raw.trim();
+        if raw.is_empty() {
+            return Ok(None);
+        }
+        let pages = self
+            .external_pages
+            .as_ref()
+            .ok_or_else(|| AppError::InvalidInput("external blogs are unavailable".to_owned()))?;
+        let page = pages.load(raw).await?;
+        if self
+            .articles
+            .external_url_exists(&page.url, exclude_id)
+            .await?
+        {
+            return Err(AppError::Conflict(
+                "an external blog for this link already exists".to_owned(),
+            ));
+        }
+        Ok(Some(page))
+    }
+
+    async fn cache_page_image(
+        &self,
+        article_id: Uuid,
+        page: &ExternalPage,
+    ) -> Result<Option<String>, AppError> {
+        let Some(image) = &page.image else {
+            return Ok(None);
+        };
+        let Some(images) = &self.image_cache else {
+            return Ok(None);
+        };
+        let key = format!("external-blogs/{article_id}.{}", image.extension);
+        Ok(Some(
+            images
+                .store(&key, &image.content_type, image.bytes.clone())
+                .await?,
+        ))
+    }
+
     async fn unique_slug(&self, title: &str, exclude_id: Option<Uuid>) -> Result<String, AppError> {
         let base = generate_slug(title);
         if self.articles.slug_exists(&base, exclude_id).await? {
@@ -568,6 +837,63 @@ fn new_article(
         session_memory: None,
         created_at: Some(now),
         updated_at: Some(now),
+        external_url: None,
+        draft_upload_file_id: None,
+        published_upload_file_id: None,
+        draft_image: None,
+        published_image: None,
+        body_images: Vec::new(),
+    }
+}
+
+impl ArticleService {
+    async fn lookup_upload_id(&self, url: &str) -> Result<Option<Uuid>, AppError> {
+        let Some(uploads) = &self.uploads else {
+            return Ok(None);
+        };
+        Ok(uploads
+            .find_by_public_url(url)
+            .await?
+            .map(|file| file.id))
+    }
+}
+
+enum ExternalLinkChange {
+    Unchanged,
+    Clear,
+    Set(ExternalPage),
+}
+
+fn should_replace_external_image(image_url: &str) -> bool {
+    let image_url = image_url.trim();
+    image_url.is_empty() || image_url.contains("/external-blogs/")
+}
+
+fn fill_missing_copy(title: &mut String, content: &mut String, page: &ExternalPage) {
+    if title.trim().chars().count() < 3 {
+        *title = fit_title(&page.title);
+    }
+    if content.trim().chars().count() < 10 {
+        *content = fit_excerpt(&page.excerpt);
+    }
+}
+
+fn fit_title(title: &str) -> String {
+    let title = title.trim();
+    if title.chars().count() <= 200 {
+        return title.to_owned();
+    }
+    let mut shortened: String = title.chars().take(197).collect();
+    shortened.push_str("...");
+    shortened
+}
+
+fn fit_excerpt(excerpt: &str) -> String {
+    let excerpt = excerpt.trim();
+    if excerpt.chars().count() >= 10 {
+        excerpt.to_owned()
+    } else {
+        format!("{excerpt} Read the original article.")
     }
 }
 

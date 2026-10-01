@@ -60,6 +60,8 @@ async fn tag_postgres_repository_preserves_case_insensitive_atomic_ensure_and_us
         url: String::new(),
         created_at: None,
         updated_at: None,
+        upload_file_id: None,
+        image: None,
     };
     project_repository.save(&mut project_value).await?;
     assert!(repository.is_used(tag_id).await?);

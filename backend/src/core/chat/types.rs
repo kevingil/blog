@@ -27,6 +27,8 @@ pub struct MessageMetadata {
     pub thinking: Option<ThinkingBlock>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub steps: Vec<ChainOfThoughtStep>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub input_channel: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

@@ -76,6 +76,8 @@ impl PageService {
             is_published: request.is_published,
             created_at: None,
             updated_at: None,
+            upload_file_id: request.image_upload_id,
+            image: None,
         };
         self.repository.save(&mut page).await?;
         Ok(page)
@@ -92,7 +94,13 @@ impl PageService {
         if let Some(description) = request.description {
             page.description = description;
         }
+        if let Some(image_upload_id) = request.image_upload_id {
+            page.upload_file_id = Some(image_upload_id);
+        }
         if let Some(image_url) = request.image_url {
+            if request.image_upload_id.is_none() && image_url.is_empty() {
+                page.upload_file_id = None;
+            }
             page.image_url = image_url;
         }
         if let Some(meta_data) = request.meta_data {

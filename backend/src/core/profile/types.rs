@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::core::storage::ImageAsset;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SiteSettings {
     pub id: i32,
@@ -25,6 +27,8 @@ pub struct PublicProfile {
     pub email_public: Option<String>,
     pub social_links: Option<BTreeMap<String, Value>>,
     pub meta_description: Option<String>,
+    pub image_upload_file_id: Option<Uuid>,
+    pub image: Option<ImageAsset>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -37,6 +41,8 @@ pub struct ProfileAccount {
     pub social_links: Option<BTreeMap<String, Value>>,
     pub meta_description: Option<String>,
     pub organization_id: Option<Uuid>,
+    pub profile_upload_file_id: Option<Uuid>,
+    pub image: Option<ImageAsset>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,6 +53,8 @@ pub struct ProfileUpdateRequest {
     pub email_public: Option<String>,
     pub social_links: Option<BTreeMap<String, String>>,
     pub meta_description: Option<String>,
+    #[serde(default)]
+    pub profile_upload_file_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,6 +70,8 @@ pub struct PublicProfileResponse {
     pub meta_description: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub website_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<ImageAsset>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -89,4 +99,6 @@ pub struct UserProfileResponse {
     pub meta_description: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub organization_id: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<ImageAsset>,
 }

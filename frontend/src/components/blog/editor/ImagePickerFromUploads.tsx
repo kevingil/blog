@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { Folder, ChevronLeft } from 'lucide-react';
 import { useStorageFiles } from '@/hooks/use-storage-files';
 import { cn } from '@/lib/utils';
+import type { FileData } from '@/services/storage';
+import { BlurhashImage } from '@/components/media/BlurhashImage';
 
 interface ImagePickerFromUploadsProps {
-  onSelect: (url: string) => void;
+  onSelect: (file: FileData) => void;
 }
 
 function getParentPath(currentPath: string): string {
@@ -79,18 +81,19 @@ export function ImagePickerFromUploads({ onSelect }: ImagePickerFromUploadsProps
             <button
               key={file.key}
               type="button"
-              onClick={() => onSelect(file.url)}
+              onClick={() => onSelect(file)}
               className={cn(
                 'flex flex-col rounded-lg border overflow-hidden hover:ring-2 hover:ring-primary transition-all',
                 'bg-card hover:bg-accent/50'
               )}
             >
-              <div className="aspect-square flex items-center justify-center overflow-hidden bg-muted/30">
-                <img
+              <div className="aspect-square overflow-hidden bg-muted/30">
+                <BlurhashImage
                   src={file.url}
                   alt={fileName}
-                  className="h-full w-full object-cover"
-                  loading="lazy"
+                  blurhash={file.blurhash}
+                  className="h-full w-full"
+                  imgClassName="h-full w-full object-cover"
                 />
               </div>
               <span className="text-[10px] truncate px-1 py-0.5 text-muted-foreground">

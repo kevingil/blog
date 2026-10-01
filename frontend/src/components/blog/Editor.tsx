@@ -4,17 +4,20 @@ import { useAuth } from '@/services/auth/auth';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, ArrowUp, Square, Settings, Trash2 } from "lucide-react"
+import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, ArrowUp, Square, Trash2, Mic, Keyboard } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { VITE_API_BASE_URL } from "@/services/constants";
 import { isAuthError } from '@/services/authenticatedFetch';
 import { submitAgentRequest } from '@/services/agent';
+import { addedTextRanges, type TextRange } from '@/lib/added-text';
+import { useConversation } from '@/hooks/use-conversation';
 
 // Editor modules
 import { EditorTabs } from './editor/EditorTabs';
 import { ImageLoader } from './editor/ImageLoader';
 import { ImagePickerFromUploads } from './editor/ImagePickerFromUploads';
+import { BlurhashImage } from '@/components/media/BlurhashImage';
 import { turndownService } from './editor/turndown';
 import { 
   DEFAULT_IMAGE_PROMPT, 
@@ -78,7 +81,7 @@ import {
   ReasoningStep 
 } from "@/components/prompt-kit/chain-of-thought";
 import { cn } from '@/lib/utils';
-import { FileDiff, Wrench, BookOpen, FileSearch, PlusCircle, FileText, ImageIcon } from "lucide-react";
+import { Wrench, BookOpen, FileSearch, PlusCircle, FileText, ImageIcon } from "lucide-react";
 import { 
   updateArticle, 
   getArticle, 
@@ -109,6 +112,7 @@ function mapConversationMessages(messages: any[]): ChatMessage[] {
       id: msg.id,
       role: msg.role,
       content: msg.content,
+      channel: msg.meta_data?.input_channel === 'voice' ? 'voice' : 'text',
       meta_data: msg.meta_data,
       created_at: msg.created_at,
     };
@@ -376,13 +380,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [publishDrawerOpen, setPublishDrawerOpen] = useState(false);
   
   // Image versioning state
-  const [imageVersions, setImageVersions] = useState<Array<{ url: string; prompt?: string; timestamp: number }>>([]);
+  const [imageVersions, setImageVersions] = useState<Array<{ url: string; prompt?: string; timestamp: number; uploadId?: string; blurhash?: string | null }>>([]);
   const [currentVersionIndex, setCurrentVersionIndex] = useState(-1);
   const [previewImageUrl, setPreviewImageUrl] = useState<string>('');
+  const currentHeader = currentVersionIndex >= 0 ? imageVersions[currentVersionIndex] : undefined;
 
   // Image versioning functions
-  const addImageVersion = (url: string, prompt?: string) => {
-    const newVersion = { url, prompt, timestamp: Date.now() };
+  const addImageVersion = (url: string, prompt?: string, asset?: { uploadId?: string; blurhash?: string | null }) => {
+    const newVersion = { url, prompt, timestamp: Date.now(), uploadId: asset?.uploadId, blurhash: asset?.blurhash };
     setImageVersions(prev => [...prev, newVersion]);
     setCurrentVersionIndex(prev => prev + 1);
     setPreviewImageUrl(url);
@@ -425,10 +430,15 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatInput, setChatInput] = useState('');
+  const [inputMode, setInputMode] = useState<'text' | 'conversation'>('text');
+  const playSpeechRef = useRef<(audioBase64: string, mimeType?: string) => Promise<void>>(async () => {});
+  const sendLiveTextRef = useRef<(text: string) => void>(() => {});
+  const liveUserIndexRef = useRef<number | null>(null);
+  const pendingLiveStreamRef = useRef<{ requestId: string; assistantIndex: number } | null>(null);
+  const startedLiveRequestsRef = useRef(new Set<string>());
   const [isThinking, setIsThinking] = useState(false);
   const [thinkingMessage, setThinkingMessage] = useState<string>('Thinking...');
   const chatMessagesRef = useRef<HTMLDivElement>(null);
-  const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
   const [clearingChat, setClearingChat] = useState(false);
   const [expandedTable, setExpandedTable] = useState<React.ReactNode | null>(null);
   
@@ -519,14 +529,20 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       title: string;
       content: string;
       image_url?: string;
+      image_upload_id?: string;
       tags: string[];
       publish: boolean;
       authorId: string;
+      external_url?: string | null;
     }) => createArticle(data),
-    onSuccess: () => {
+    onSuccess: (response) => {
       toast({ title: "Success", description: "Article created successfully." });
       queryClient.invalidateQueries({ queryKey: ['articles'] });
-      navigate({ to: '/dashboard/blog' });
+      if (response.article.external_url && response.article.slug) {
+        navigate({ to: `/dashboard/blog/edit/${response.article.slug}` });
+      } else {
+        navigate({ to: '/dashboard/blog' });
+      }
     },
     onError: (error) => {
       console.error('Error creating article:', error);
@@ -543,7 +559,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         title: string;
         content: string;
         image_url?: string;
+        image_upload_id?: string;
         tags: string[];
+        external_url?: string | null;
       };
       returnToDashboard?: boolean;
     }) => updateArticle(data.slug, data.updateData),
@@ -606,12 +624,16 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       if (variables.returnToDashboard) {
         navigate({ to: '/dashboard/blog' });
       } else {
-        // If we are *not* navigating away, refresh local state:
-        const data = variables.updateData;
-        setValue('title', data.title);
-        setValue('content', data.content);
-        setValue('image_url', data.image_url || '');
-        setValue('tags', data.tags);
+        const saved = response.article;
+        setValue('title', saved.draft_title || '');
+        setValue('content', saved.draft_content || '');
+        setValue('image_url', saved.draft_image_url || '');
+        setValue('external_url', saved.external_url || '');
+        setValue('tags', variables.updateData.tags);
+        if (saved.draft_image_url) {
+          setStagedImageUrl(saved.draft_image_url);
+          setPreviewImageUrl(saved.draft_image_url);
+        }
       }
     },
     onError: (error) => {
@@ -683,10 +705,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         content: revertedContent,
         image_url: response.article.draft_image_url || '',
         tags: tagNames,
+        external_url: response.article.external_url || '',
       });
       
       setSelectedVersion(null);
       setShowVersions(false);
+      setAddedRanges([]);
     },
     onError: (error) => {
       console.error('Error reverting to version:', error);
@@ -702,6 +726,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       content: '',
       image_url: '',
       tags: [],
+      external_url: '',
     }
   });
 
@@ -709,63 +734,25 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const watchedTags = useWatch({ control, name: 'tags' });
   const watchedContent = useWatch({ control, name: 'content' });
   const watchedTitle = useWatch({ control, name: 'title' });
+  const watchedExternalUrl = useWatch({ control, name: 'external_url' });
 
   const [imagePrompt, setImagePrompt] = useState<string | null>(DEFAULT_IMAGE_PROMPT[Math.floor(Math.random() * DEFAULT_IMAGE_PROMPT.length)]);
 
   /* --------------------------------------------------------------------- */
   /* Markdown Editor Setup                                                 */
   /* --------------------------------------------------------------------- */
-  const [diffing, setDiffing] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('edit');
-  const [turnSnapshotVersionId, setTurnSnapshotVersionId] = useState<string>('');
+  const [addedRanges, setAddedRanges] = useState<TextRange[]>([]);
 
-  // Turn-level state: refs so WebSocket handlers always read the latest value
-  const turnOriginalDocRef = useRef<string>('');
-  const pendingNewDocumentRef = useRef<string>('');
-
-  // Content update handler -- called by CodeMirror on user edits
   const onContentChange = (md: string) => {
-    if (!diffing) {
-      setValue('content', md);
-    }
+    setAddedRanges([]);
+    setValue('content', md);
   };
 
-  const acceptDiff = () => {
-    // Content is already set (the agent applied it). Just clear diff state.
-    setDiffing(false);
-    setActiveTab('edit');
-    turnOriginalDocRef.current = '';
-    pendingNewDocumentRef.current = '';
-    setTurnSnapshotVersionId('');
-  };
-
-  const rejectDiff = async () => {
-    const revertContent = turnOriginalDocRef.current;
-    if (!revertContent) {
-      setDiffing(false);
-      setActiveTab('edit');
-      return;
-    }
-
-    // If we have a backend snapshot, revert the DB too
-    if (turnSnapshotVersionId && blogSlug) {
-      try {
-        const reverted = await revertToVersion(blogSlug as string, turnSnapshotVersionId);
-        const revertedContent = reverted.article?.draft_content || revertContent;
-        setValue('content', revertedContent);
-      } catch (err) {
-        console.error('[Editor] Failed to revert backend to snapshot:', err);
-        setValue('content', revertContent);
-      }
-    } else {
-      setValue('content', revertContent);
-    }
-
-    setDiffing(false);
-    setActiveTab('edit');
-    turnOriginalDocRef.current = '';
-    pendingNewDocumentRef.current = '';
-    setTurnSnapshotVersionId('');
+  const applyAgentMarkdown = (next: string) => {
+    const previous = getValues('content') || '';
+    setValue('content', next);
+    setAddedRanges(addedTextRanges(previous, next));
   };
 
   if (!user) {
@@ -796,12 +783,18 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         content: loadedContent,
         image_url: article.article.draft_image_url || '',
         tags: tagNames,
+        external_url: article.article.external_url || '',
       } as ArticleFormData;
       reset(newValues);
       
       // Initialize image versions and staged state if there's an existing image
       if (article.article.draft_image_url) {
-        setImageVersions([{ url: article.article.draft_image_url, timestamp: Date.now() }]);
+        setImageVersions([{
+          url: article.article.draft_image_url,
+          timestamp: Date.now(),
+          uploadId: article.article.draft_image?.id ?? article.article.draft_upload_file_id ?? undefined,
+          blurhash: article.article.draft_image?.blurhash,
+        }]);
         setCurrentVersionIndex(0);
         setPreviewImageUrl(article.article.draft_image_url);
         setStagedImageUrl(article.article.draft_image_url);
@@ -819,6 +812,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         content: '',
         image_url: '',
         tags: [],
+        external_url: '',
       };
       reset(blank);
       setImageVersions([]);
@@ -869,13 +863,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
-        // Don't save if already saving
         if (createArticleMutation.isPending || updateArticleMutation.isPending) {
           return;
-        }
-        // Reject pending diff changes before saving
-        if (diffing) {
-          rejectDiff();
         }
         handleSubmit((data) => onSubmit(data, false))();
       }
@@ -883,7 +872,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [diffing, rejectDiff, handleSubmit, createArticleMutation.isPending, updateArticleMutation.isPending]);
+  }, [handleSubmit, createArticleMutation.isPending, updateArticleMutation.isPending]);
 
   const onSubmit = async (data: ArticleFormData, returnToDashboard: boolean = true) => {
     if (!user) {
@@ -897,6 +886,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       ? stagedImageUrl
       : formImageUrl;
 
+    const externalUrl = data.external_url?.trim() || null;
+
     if (isNew) {
       // New articles are created as drafts by default
       // Use publishArticle() separately to publish
@@ -904,9 +895,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         title: data.title,
         content: data.content,
         image_url: finalImageUrl || undefined,
+        image_upload_id: currentHeader?.uploadId,
         tags: data.tags,
         publish: false, // Save as draft, publish is a separate action
         authorId: String(user.id),
+        external_url: externalUrl,
       });
     } else {
       // Updates always go to draft_* fields
@@ -915,7 +908,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         title: data.title,
         content: data.content, // Markdown content
         image_url: finalImageUrl || undefined,
+        image_upload_id: currentHeader?.uploadId,
         tags: data.tags,
+        external_url: externalUrl,
       };
       
       updateArticleMutation.mutate({
@@ -933,10 +928,10 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       const result = await updateArticleWithContext(article.article.id);
       
       if (result.success && result.content) {
-        applyMarkdownEdit(result.content);
+        applyAgentMarkdown(result.content);
         setChatMessages((prev) => [
           ...prev,
-          { role: 'assistant', content: '📋 I\'ve prepared a full-document rewrite. Review the changes in the Diff tab.' }
+          { role: 'assistant', content: 'I updated the draft. New text is highlighted in the editor. Use History to restore an earlier version.' }
         ]);
       }
     } catch (error) {
@@ -947,16 +942,26 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
   };
 
-  // Apply text edit from AI assistant (markdown-based str_replace)
-  // Renders both old and new markdown to HTML, then uses character-by-character
-  // comparison in the diff-highlighter to find the exact edit boundaries.
-  // Apply a markdown edit from an artifact action (user clicks "Apply" on a tool result card)
-  const applyMarkdownEdit = (newMarkdown: string) => {
-    turnOriginalDocRef.current = getValues('content') || '';
-    setValue('content', newMarkdown);
-    pendingNewDocumentRef.current = newMarkdown;
-    setDiffing(true);
-    setActiveTab('diff');
+  const clearChat = async () => {
+    if (!article?.article?.id) return;
+    setClearingChat(true);
+    try {
+      await clearConversationHistory(article.article.id);
+      setChatMessages([getInitialGreetingMessage()]);
+      toast({
+        title: "Chat cleared",
+        description: "Your conversation history has been reset.",
+      });
+    } catch (error) {
+      console.error('Failed to clear chat history:', error);
+      toast({
+        title: "Error",
+        description: "Failed to clear chat history. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setClearingChat(false);
+    }
   };
 
   const sendChatWithMessage = async (message: string) => {
@@ -975,7 +980,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     const isEditRequest = /\b(rewrite|edit|improve|change|update|fix|enhance|modify)\b/i.test(text);
 
     // Show original user message in UI
-    const baseMessages = [...chatMessages, { role: 'user', content: text } as ChatMessage];
+    const baseMessages = [...chatMessages, { role: 'user', content: text, channel: inputMode } as ChatMessage];
     setChatMessages(baseMessages);
     setChatInput(''); // Clear the input state
 
@@ -994,6 +999,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
       return;
     }
 
+    if (inputMode === 'conversation') {
+      setChatInput('');
+      sendLiveTextRef.current(text);
+      return;
+    }
+
     await sendChatWithMessage(text);
   };
 
@@ -1004,13 +1015,13 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         throw new Error('Article ID is required');
       }
       
-      // Submit the request with single message - backend loads context from DB
       const result = await submitAgentRequest({
-        message: messageText,  // Single message string
-        documentContent: documentContent,
-        documentMarkdown: documentMarkdown || '',  // Markdown version for agent editing
-        articleId: article.article.id  // Required for loading context
-      });
+            message: messageText,
+            documentContent: documentContent,
+            documentMarkdown: documentMarkdown || '',
+            articleId: article.article.id,
+            channel: 'text',
+          });
       
       if (!result.requestId) {
         throw new Error('No request ID received');
@@ -1091,12 +1102,23 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           if (msg.type) {
             switch (msg.type) {
               case 'turn_started':
-                // Capture the current markdown content as the turn baseline for diff.
-                // Uses a ref (not state) so the done handler always reads the latest value.
-                turnOriginalDocRef.current = getValues('content') || '';
-                pendingNewDocumentRef.current = '';
-                if (msg.data?.snapshot_version_id) {
-                  setTurnSnapshotVersionId(msg.data.snapshot_version_id);
+                break;
+
+              case 'transcript':
+                if (msg.content) {
+                  setChatMessages((prev) => {
+                    const lastUser = [...prev].reverse().find((item) => item.role === 'user');
+                    if (lastUser && lastUser.content === msg.content) {
+                      return prev;
+                    }
+                    return prev;
+                  });
+                }
+                break;
+
+              case 'speech':
+                if (msg.data?.audioBase64) {
+                  void playSpeechRef.current(msg.data.audioBase64, msg.data.mimeType);
                 }
                 break;
 
@@ -1323,14 +1345,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     // Silently apply edits -- content is markdown, set directly via form
                     if (toolName === 'replace_lines' && isNewMessage && !isError) {
                       if (toolResult.new_markdown) {
-                        setValue('content', toolResult.new_markdown);
-                        pendingNewDocumentRef.current = toolResult.new_markdown;
+                        applyAgentMarkdown(toolResult.new_markdown);
                       }
                       setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
                     } else if (toolName === 'rewrite_document' && isNewMessage && !isError) {
                       if (toolResult.new_content) {
-                        setValue('content', toolResult.new_content);
-                        pendingNewDocumentRef.current = toolResult.new_content;
+                        applyAgentMarkdown(toolResult.new_content);
                       }
                       setProcessedToolMessages(prev => new Set(prev).add(toolMessageId));
                     }
@@ -1392,16 +1412,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 });
                 
                 ws.close();
-                
-                // Auto-switch to Diff tab if agent made edits during this turn
-                if (turnOriginalDocRef.current && pendingNewDocumentRef.current) {
-                  if (pendingNewDocumentRef.current !== turnOriginalDocRef.current) {
-                    setDiffing(true);
-                    setActiveTab('diff');
-                    console.debug('[Agent] done: switching to diff tab');
-                  }
-                }
-                
                 resolve();
                 break;
                 
@@ -1482,6 +1492,61 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     });
   };
 
+  const conversation = useConversation({
+    enabled: inputMode === 'conversation' && !isNew && Boolean(article?.article?.id),
+    articleId: article?.article?.id,
+    getDocument: () => {
+      const content = getValues('content') || '';
+      return { content, markdown: content };
+    },
+    onUserTranscript: (text) => {
+      setChatMessages((prev) => {
+        const index = liveUserIndexRef.current;
+        if (index != null && prev[index]?.role === 'user') {
+          const next = [...prev];
+          next[index] = { ...next[index], content: text, channel: 'voice' };
+          return next;
+        }
+        liveUserIndexRef.current = prev.length;
+        return [...prev, { role: 'user', content: text, channel: 'voice' } as ChatMessage];
+      });
+    },
+    onDelegation: (requestId, message) => {
+      setChatMessages((prev) => {
+        const index = liveUserIndexRef.current;
+        let next = [...prev];
+        if (index != null && next[index]?.role === 'user') {
+          next[index] = { ...next[index], content: message, channel: 'voice' };
+        } else {
+          next = [...next, { role: 'user', content: message, channel: 'voice' } as ChatMessage];
+        }
+        liveUserIndexRef.current = null;
+        pendingLiveStreamRef.current = { requestId, assistantIndex: next.length };
+        return [...next, { role: 'assistant', content: '' } as ChatMessage];
+      });
+    },
+  });
+  sendLiveTextRef.current = conversation.sendText;
+
+  useEffect(() => {
+    const pending = pendingLiveStreamRef.current;
+    if (!pending || startedLiveRequestsRef.current.has(pending.requestId)) {
+      return;
+    }
+    pendingLiveStreamRef.current = null;
+    startedLiveRequestsRef.current.add(pending.requestId);
+    setChatLoading(true);
+    void streamChatResponse(pending.requestId, pending.assistantIndex, false)
+      .catch((streamError: unknown) => {
+        toast({
+          title: "Conversation error",
+          description: streamError instanceof Error ? streamError.message : "Could not run the live turn",
+          variant: "destructive",
+        });
+      })
+      .finally(() => setChatLoading(false));
+  });
+
   // Auto-subscribe to an in-flight generation session when arriving from /blog/generate.
   const consumedRequestIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -1559,10 +1624,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       className="w-10 h-8 flex items-center justify-center rounded-md border border-border overflow-hidden cursor-pointer hover:bg-accent transition-colors flex-shrink-0"
                     >
                       {(stagedImageUrl || article?.article.draft_image_url) ? (
-                        <img 
-                          src={stagedImageUrl || article?.article.draft_image_url} 
-                          alt="Article header" 
-                          className="w-full h-full object-cover"
+                        <BlurhashImage
+                          src={stagedImageUrl || article?.article.draft_image_url || ''}
+                          alt="Article header"
+                          blurhash={currentHeader?.blurhash ?? article?.article.draft_image?.blurhash}
+                          className="h-full w-full"
+                          imgClassName="h-full w-full object-cover"
                         />
                       ) : (
                         <ImageIcon className="w-5 h-5 text-muted-foreground" />
@@ -1583,10 +1650,12 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                         <div className="text-sm font-medium">Preview</div>
                         <div className="aspect-video rounded-lg border-2 border-dashed border-border overflow-hidden bg-muted/40">
                           {previewImageUrl ? (
-                            <img 
-                              src={previewImageUrl} 
-                              alt="Image preview" 
-                              className="w-full h-full object-cover"
+                            <BlurhashImage
+                              src={previewImageUrl}
+                              alt="Image preview"
+                              blurhash={currentHeader?.blurhash}
+                              className="h-full w-full"
+                              imgClassName="h-full w-full object-cover"
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-gray-400">
@@ -1597,6 +1666,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                             </div>
                           )}
                         </div>
+                        {currentHeader?.blurhash ? (
+                          <p className="font-mono text-xs break-all text-muted-foreground" data-testid="header-blurhash">
+                            blurhash {currentHeader.blurhash}
+                          </p>
+                        ) : null}
                         
                         {/* Image Versions */}
                         {imageVersions.length > 0 && (
@@ -1628,27 +1702,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                       
                       {/* Controls Section */}
                       <div className="space-y-4">
-                        <Tabs defaultValue="url" className="w-full">
-                          <TabsList className="grid w-full grid-cols-3">
-                            <TabsTrigger value="url">URL</TabsTrigger>
-                            <TabsTrigger value="generate">Generate</TabsTrigger>
+                        <Tabs defaultValue="uploads" className="w-full">
+                          <TabsList className="grid w-full grid-cols-2">
                             <TabsTrigger value="uploads">From Uploads</TabsTrigger>
+                            <TabsTrigger value="generate">Generate</TabsTrigger>
                           </TabsList>
-                          <TabsContent value="url" className="space-y-2 mt-3">
-                            <label className="block text-sm font-medium">Image URL</label>
-                            <Input
-                              className="w-full"
-                              value={previewImageUrl}
-                              onChange={(e) => {
-                                setPreviewImageUrl(e.target.value);
-                                if (e.target.value) {
-                                  addImageVersion(e.target.value);
-                                }
-                              }}
-                              placeholder="Enter image URL..."
-                            />
-                            {errors.image_url && <p className="text-red-500 text-sm">{errors.image_url.message}</p>}
-                          </TabsContent>
                           <TabsContent value="generate" className="space-y-3 mt-3">
                             <div className="text-sm font-medium">Generate New Image</div>
                             <div className="flex items-center gap-2">
@@ -1737,8 +1795,8 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                           </TabsContent>
                           <TabsContent value="uploads" className="mt-3">
                             <ImagePickerFromUploads
-                              onSelect={(url) => {
-                                addImageVersion(url);
+                              onSelect={(file) => {
+                                addImageVersion(file.url, undefined, { uploadId: file.id, blurhash: file.blurhash });
                                 setImageModalOpen(false);
                               }}
                             />
@@ -1830,9 +1888,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 <Button
                   type="button"
                   onClick={() => {
-                    if (diffing) {
-                      rejectDiff();
-                    }
                     handleSubmit((data) => onSubmit(data, false))();
                   }}
                   disabled={createArticleMutation.isPending || updateArticleMutation.isPending}
@@ -1882,6 +1937,50 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     <div className="text-xs text-muted-foreground">
                       Tags help categorize your article and make it easier to find. Press Enter or comma to add a tag.
                     </div>
+                  </div>
+                  <DrawerFooter>
+                    <DrawerClose asChild>
+                      <Button variant="outline" className="w-full">Done</Button>
+                    </DrawerClose>
+                  </DrawerFooter>
+                </DrawerContent>
+              </Drawer>
+
+              <Drawer direction="right">
+                <DrawerTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <ExternalLinkIcon className="h-4 w-4" />
+                    External
+                    {watchedExternalUrl?.trim() && (
+                      <Badge variant="secondary" className="ml-1">
+                        on
+                      </Badge>
+                    )}
+                  </Button>
+                </DrawerTrigger>
+                <DrawerContent className="w-full sm:max-w-sm ml-auto">
+                  <DrawerHeader>
+                    <DrawerTitle>External link</DrawerTitle>
+                    <DrawerDescription>
+                      Point this article at a post published somewhere else. Readers open that link in a new tab. Clear the link and save to keep the article on this site.
+                    </DrawerDescription>
+                  </DrawerHeader>
+                  <div className="space-y-2 px-4">
+                    <label htmlFor="external-article-url" className="text-sm font-medium">
+                      Article link
+                    </label>
+                    <Input
+                      id="external-article-url"
+                      type="url"
+                      placeholder="https://example.com/blog/post"
+                      {...register('external_url')}
+                    />
+                    {errors.external_url && (
+                      <p className="text-sm text-destructive">{errors.external_url.message}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Saving with a new link stores it, and fills in a title, preview, and cover when those are still empty.
+                    </p>
                   </div>
                   <DrawerFooter>
                     <DrawerClose asChild>
@@ -1957,74 +2056,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   Regenerate
                 </Button>
               )}
-
-              {/* Settings Button */}
-              {!isNew && (
-                <Drawer open={showSettingsDrawer} onOpenChange={setShowSettingsDrawer} direction="right">
-                  <DrawerTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                    >
-                      <Settings className="h-4 w-4" />
-                    </Button>
-                  </DrawerTrigger>
-                  <DrawerContent>
-                    <DrawerHeader>
-                      <DrawerTitle>Chat Settings</DrawerTitle>
-                      <DrawerDescription>
-                        Manage your chat assistant settings
-                      </DrawerDescription>
-                    </DrawerHeader>
-                    <div className="p-4 space-y-4">
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="space-y-1">
-                          <p className="font-medium">Clear Chat History</p>
-                          <p className="text-sm text-muted-foreground">
-                            Remove all messages and start fresh with a new conversation
-                          </p>
-                        </div>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          disabled={clearingChat}
-                          onClick={async () => {
-                            if (!article?.article?.id) return;
-                            setClearingChat(true);
-                            try {
-                              await clearConversationHistory(article.article.id);
-                              setChatMessages([getInitialGreetingMessage()]);
-                              toast({
-                                title: "Chat cleared",
-                                description: "Your conversation history has been reset.",
-                              });
-                              setShowSettingsDrawer(false);
-                            } catch (error) {
-                              console.error('Failed to clear chat history:', error);
-                              toast({
-                                title: "Error",
-                                description: "Failed to clear chat history. Please try again.",
-                                variant: "destructive",
-                              });
-                            } finally {
-                              setClearingChat(false);
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          {clearingChat ? 'Clearing...' : 'Clear'}
-                        </Button>
-                      </div>
-                    </div>
-                    <DrawerFooter>
-                      <DrawerClose asChild>
-                        <Button variant="outline">Close</Button>
-                      </DrawerClose>
-                    </DrawerFooter>
-                  </DrawerContent>
-                </Drawer>
-              )}
             </div>
 
           <form className="flex-1 flex flex-col min-h-0 min-w-0">
@@ -2032,12 +2063,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 <EditorTabs
                   content={watchedContent || ''}
                   onChange={onContentChange}
-                  originalContent={turnOriginalDocRef.current}
-                  diffing={diffing}
+                  highlights={addedRanges}
                   activeTab={activeTab}
                   onTabChange={setActiveTab}
-                  onAccept={acceptDiff}
-                  onReject={rejectDiff}
                   title={watchedTitle}
                   authorName={user?.name}
                   imageUrl={previewImageUrl}
@@ -2111,7 +2139,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                                       const result = call.result;
                                       const newMd = (result.new_markdown || result.new_content) as string;
                                       if (newMd) {
-                                        applyMarkdownEdit(newMd);
+                                        applyAgentMarkdown(newMd);
                                       }
                                     }
                                   }}
@@ -2199,6 +2227,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                   return (
                     <div key={i} className="w-full flex justify-end">
                       <div className="max-w-xs whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-sm bg-primary text-primary-foreground">
+                        {m.channel === 'voice' && (
+                          <span className="mr-1 inline-flex align-middle opacity-80">
+                            <Mic className="h-3 w-3" />
+                          </span>
+                        )}
                         {m.content}
                       </div>
                     </div>
@@ -2213,6 +2246,57 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             )}
           </div>
         <div className="p-2 space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="inline-flex rounded-md border p-0.5">
+              <Button
+                type="button"
+                size="sm"
+                variant={inputMode === 'text' ? 'default' : 'ghost'}
+                className="h-7 px-2 text-xs"
+                onClick={() => setInputMode('text')}
+              >
+                <Keyboard className="h-3.5 w-3.5 mr-1" />
+                Text
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={inputMode === 'conversation' ? 'default' : 'ghost'}
+                className="h-7 px-2 text-xs"
+                disabled={isNew || !article?.article?.id}
+                onClick={() => setInputMode('conversation')}
+              >
+                <Mic className="h-3.5 w-3.5 mr-1" />
+                Conversation
+              </Button>
+            </div>
+            {!isNew && article?.article?.id && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs"
+                disabled={clearingChat}
+                onClick={clearChat}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                {clearingChat ? 'Clearing…' : 'Clear chat'}
+              </Button>
+            )}
+            {inputMode === 'conversation' && (
+              <span className="max-w-[240px] truncate text-[11px] text-muted-foreground">
+                {conversation.error
+                  ? conversation.error
+                  : conversation.caption
+                    ? conversation.caption
+                    : conversation.state === 'connecting'
+                      ? 'Connecting to GPT-Live…'
+                      : conversation.state === 'speaking'
+                        ? 'Speaking…'
+                        : 'GPT-Live · talk, or paste a link'}
+              </span>
+            )}
+          </div>
           <PromptInput
             value={chatInput}
             onValueChange={setChatInput}
@@ -2221,7 +2305,11 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             className="flex-1"
           >
             <PromptInputTextarea
-              placeholder="Ask the assistant or click a quick action above…"
+              placeholder={
+                inputMode === 'conversation'
+                  ? "Talk with GPT-Live, or paste a link it should see…"
+                  : "Ask the assistant or click a quick action above…"
+              }
               className="min-h-[44px]"
             />
             <PromptInputActions className="justify-end pt-2">
@@ -2253,8 +2341,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           <DrawerHeader>
             <DrawerTitle>Version History</DrawerTitle>
             <DrawerDescription>
+              Saved on the server before each agent edit. Revert restores that draft.
               {versionsData && (
-                <span>{versionsData.draft_count} drafts, {versionsData.published_count} published</span>
+                <span className="block mt-1">{versionsData.draft_count} drafts, {versionsData.published_count} published</span>
               )}
             </DrawerDescription>
           </DrawerHeader>
@@ -2265,7 +2354,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               </div>
             ) : versionsData?.versions.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
-                No versions yet. Save the article to create versions.
+                No versions yet. Saving the draft stores one here.
               </div>
             ) : (
               <div className="space-y-2">
@@ -2339,10 +2428,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
             </div>
             <div>
               <h4 className="font-medium mb-1 text-sm">Content Preview</h4>
-              <div 
-                className="prose prose-sm dark:prose-invert max-h-64 overflow-y-auto border rounded p-3 text-sm"
-                dangerouslySetInnerHTML={{ __html: selectedVersion?.content || '' }} 
-              />
+              <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap border rounded p-3 text-sm">
+                {selectedVersion?.content}
+              </pre>
             </div>
             {selectedVersion?.image_url && (
               <div>

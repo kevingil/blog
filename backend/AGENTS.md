@@ -1,6 +1,6 @@
 # Rust Backend Instructions
 
-- Preserve the observable behavior recorded in `docs/porting/CONTRACTS.tsv`.
+- Preserve existing HTTP status codes and response envelopes.
 - Keep dependencies one-way: `api -> core <- database/integrations`; only
   `bootstrap` assembles concrete implementations.
 - Use constructor injection and narrow Axum `State<T>` substates. Do not add

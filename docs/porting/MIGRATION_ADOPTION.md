@@ -15,7 +15,7 @@ directories. The extraction convention hashes exact bytes after
 | `20260130000000` | `1cfa433691713923cfe10b770760438e9c373a9d89d65709bc419cb5a4117b5a` | `7cc94d4613a39117163aead072435b9a63d81217200a5277ad13a2907538624b` | `8228405116b05ca6f6d33c0c0fcf3de1c175c300b62d210f2132369f71bcbb1a` |
 | `20260315000000` | `8252b6b6954e3658ff2c4682f909fd4d12b833d7646cdafb60a957af221c6b9b` | `6b99c00615c41a2e96782248d00ba6858d7962ded6630ad8f0746770fcdac1e5` | `344caf477f177a183f8a1e07d04dc98fb867f6e81a6e5318fd17da9ab0000faa` |
 
-## Fresh database
+## Historical baseline verification
 
 1. Start two clean databases from the same pinned PostgreSQL 17.4/pgvector
    image and settings.
@@ -55,8 +55,8 @@ must:
 2. Refuse to continue if Diesel's migration ledger already exists.
 3. Validate the existing tables, columns, types, nullability, defaults,
    constraints, indexes, and required extensions against the canonical
-   fingerprint produced by applying the checked-in Diesel migrations to a clean
-   database.
+   fingerprint produced by applying only the seven historical migrations to a
+   clean database. The four September migrations are not part of that baseline.
 4. In the same transaction, create Diesel's exact ledger and insert the seven
    version strings:
 
@@ -67,7 +67,7 @@ must:
    );
    ```
 
-5. Require `migrate` to report no pending work before the first Render deploy.
+5. Run `migrate` to apply newer migrations after the stamping transaction commits.
 
 Any legacy migration ledger is ignored and left untouched; it is historical
 metadata, not an input to Diesel stamping. If the application schema differs in
@@ -96,8 +96,7 @@ docker run --rm \
   blog-backend:migration-stamp
 ```
 
-Finally, require the normal migration entrypoint to exit successfully with no
-pending application DDL:
+Then apply the newer application DDL through the normal migration entrypoint:
 
 ```sh
 docker run --rm \
@@ -108,3 +107,60 @@ docker run --rm \
 
 The later Fly-to-Render compute move reuses this database and does no second
 adoption or data transfer.
+
+
+## Repeatable pre-deploy command
+
+The image installs `scripts/pre-deploy.sh` as `/usr/local/bin/pre-deploy` and the
+Blueprint runs it before every API deploy:
+
+```sh
+docker run --rm \
+  --env-file env/production.env \
+  --entrypoint /usr/local/bin/pre-deploy \
+  blog-backend:migration-stamp
+```
+
+This runs `stamp-diesel-migrations --if-needed` followed by `migrate`, stopping
+immediately if stamping fails. There are three explicit states:
+
+- **No Diesel ledger:** verify the seven-migration baseline fingerprint and
+  stamp exactly those seven versions in one transaction.
+- **All seven baseline versions recorded:** skip stamping without comparing the
+  old fingerprint, since later migrations legitimately change the schema.
+- **Existing ledger missing any baseline version:** fail without filling in
+  history or running migrations. Inspect the target and its history first.
+
+The initial newer migration set is:
+
+| Version | Change |
+| --- | --- |
+| `20260926000000` | MCP connectors |
+| `20260926000001` | Agent skills |
+| `20260930000000` | External article URLs |
+| `20260930120000` | Upload files, references, and owner columns |
+
+These four versions must be executed, never stamped. On the current image,
+`migrate` records eleven versions after a successful first run and applies zero
+on the next run. Future versions are embedded in the image at build time and
+applied in version order. Each migration commits separately; a failed later
+migration can be retried without restamping or replaying successful migrations.
+Both commands use the same advisory lock; `migrate` holds its lock for its
+connection lifetime. Use a direct or session-pooled PostgreSQL connection, not
+a transaction pooler. Stop the old Goose migrator before adoption because it
+does not participate in this lock.
+
+The pre-deploy script deliberately targets this existing database. For a truly
+empty database, run `migrate` directly to create all eleven migrations; after
+that the same pre-deploy script is usable. An empty or partial Diesel ledger is
+not evidence that existing application tables may safely be recreated.
+
+The plain `stamp-diesel-migrations` command still refuses an existing ledger.
+Use `--if-needed` for repeated deployment commands. Never drop a ledger, use
+`migration redo`, or edit historical SQL to force adoption to succeed.
+
+The recorded fingerprint includes extension versions and namespaces as well as
+public schema structure. A Supabase extension/layout difference is a hard
+failure; investigate it against a schema-only clone rather than replacing the
+expected hash with an unverified production hash. The earlier parity result
+above is historical evidence, not verification of the current production DB.

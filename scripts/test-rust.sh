@@ -17,8 +17,10 @@ case "$mode" in
       chat_repository \
       chat_service \
       content_crud_http_database \
+      conversation_service \
       copilot_contract \
       copilot_manager \
+      live_session \
       data_domain_http \
       datasource_repository \
       datasource_service \
@@ -28,6 +30,9 @@ case "$mode" in
       image_http \
       image_service \
       ml_agent \
+      mcp_presets \
+      mcp_registry \
+      skill_service \
       ml_research_tools \
       ml_services \
       ml_tools \

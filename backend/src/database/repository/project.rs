@@ -110,6 +110,7 @@ impl ProjectRepository for DieselProjectRepository {
                 project::content.eq(&value.content),
                 project::tag_ids.eq(tag_ids),
                 project::image_url.eq(&value.image_url),
+                project::upload_file_id.eq(value.upload_file_id),
                 project::url.eq(&value.url),
                 project::updated_at.eq(value.updated_at.unwrap_or_else(Utc::now)),
             ))

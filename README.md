@@ -1,8 +1,6 @@
 # Blog Copilot
 
 An agentic blog editor with a React/Bun frontend and an Axum/Rust backend.
-The legacy Go backend is no longer vendored. Its pinned source reference and
-the retained porting evidence live in `docs/porting/`.
 
 ![Blog Copilot](frontend/public/IMG_2718.png)
 
@@ -55,6 +53,61 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
+For native frontend development, put browser-visible values in `frontend/.env`:
+
+```env
+VITE_API_BASE_URL=http://localhost:8080
+VITE_WS_URL=ws://localhost:8080/websocket
+VITE_PUBLIC_S3_URL_PREFIX=http://localhost:9000/blog
+```
+
+The backend's `PUBLIC_API_URL` and `PUBLIC_APP_URL` configure MCP OAuth callback
+and return origins. Model endpoints in the local profile use fixtures; unset
+model endpoints use the real OpenAI, Groq, and Exa APIs.
+
+## Migrations and Render deployment
+
+The production database already has the seven Goose migrations through
+`20260315000000`. Preserve those SQL bodies and version IDs. Stamp their Diesel
+ledger entries once, then apply the four newer Diesel migrations for connectors,
+skills, external article URLs, and upload records. Do not revert or replay the
+historical schema against this database.
+
+[`scripts/pre-deploy.sh`](scripts/pre-deploy.sh) performs this sequence on every
+Render API deploy. It exits before migration if the initial schema fingerprint
+does not match or an existing Diesel ledger is missing baseline versions. Once
+adopted, subsequent deploys apply only pending migrations. See the
+[adoption runbook](docs/porting/MIGRATION_ADOPTION.md) for the exact commands,
+retry behavior, and fingerprint limitations. Fresh local databases still use
+`migrate` directly through Compose.
+
+[`render.yaml`](render.yaml) defines a Docker API and a Bun-built static frontend.
+Sync it in the **personal Render workspace** after merging this PR. It reuses
+the existing Supabase database and S3-compatible storage; it creates neither.
+Confirm the API region before creating the service. Supply the prompted secrets
+and public URLs in that workspace:
+
+| Setting | Value |
+| --- | --- |
+| `DATABASE_URL` | Existing Supabase direct or session-pooled URL with TLS; not a transaction pooler (migrations hold a session advisory lock) |
+| `AUTH_SECRET` | Existing signing secret |
+| `PUBLIC_API_URL`, `VITE_API_BASE_URL` | Public HTTPS API origin, without a trailing slash |
+| `PUBLIC_APP_URL`, `ALLOWED_ORIGINS` | Public HTTPS frontend origin (`ALLOWED_ORIGINS` also accepts comma-separated origins) |
+| `VITE_WS_URL` | Public API origin using `wss://`, followed by `/websocket` |
+| `S3_URL_PREFIX`, `VITE_PUBLIC_S3_URL_PREFIX` | Existing public bucket/CDN prefix |
+| Other `S3_*`, provider API keys | Existing production credentials and bucket settings |
+
+Use the assigned Render hostnames or your custom domains, not internal service
+hosts. Frontend `VITE_*` values are public and baked into the build; rebuild it
+after changing them. The frontend includes an SPA rewrite for deep links.
+The API uses Render's [pre-deploy command](https://render.com/docs/deploys#pre-deploy-command)
+on a paid service, so migration failure blocks the new API deployment.
+Production never runs the local fixture seed. Existing accounts remain intact.
+
+The existing Fly deploy workflow remains enabled until the compute cutover;
+merging to `main` can still deploy there. Coordinate its disablement and the
+frontend domain cutover with the first successful Render deployment.
+
 ## Verification
 
 The blocking Rust matrix is partitioned into exact targets so failures identify
@@ -91,9 +144,6 @@ remain in this repository:
 docker compose -f docker-compose.parity.yml up --build \
   --abort-on-container-exit --exit-code-from contract-tests contract-tests
 ```
-
-Porting evidence, contract classifications, migration adoption instructions,
-and task ownership live in `docs/porting/`.
 
 ## OpenAPI and frontend client
 

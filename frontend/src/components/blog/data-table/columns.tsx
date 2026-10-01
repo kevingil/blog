@@ -1,5 +1,5 @@
 import { ColumnDef } from "@tanstack/react-table";
-import { ArticleListItem, isPublished, hasDraftChanges } from "@/services/types";
+import { ArticleListItem, isPublished, hasDraftChanges, externalArticleUrl } from "@/services/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Link } from "@tanstack/react-router";
-import { ArrowUpDown, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { ArrowUpDown, ExternalLink, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { deleteArticle } from "@/services/blog";
 
 export const createColumns = (onArticleDeleted: () => void): ColumnDef<ArticleListItem>[] => [
@@ -30,6 +30,7 @@ export const createColumns = (onArticleDeleted: () => void): ColumnDef<ArticleLi
     cell: ({ row }) => {
       const article = row.original.article;
       const hasChanges = hasDraftChanges(article);
+      const externalUrl = externalArticleUrl(article);
       return (
         <div className="flex items-start gap-3 py-2">
           {article.draft_image_url && (
@@ -48,6 +49,11 @@ export const createColumns = (onArticleDeleted: () => void): ColumnDef<ArticleLi
               >
                 {article.draft_title}
               </Link>
+              {externalUrl && (
+                <Badge variant="outline" className="text-[0.6rem] px-1 py-0">
+                  external
+                </Badge>
+              )}
               {hasChanges && (
                 <Badge variant="outline" className="text-[0.6rem] px-1 py-0 text-amber-600 dark:text-amber-400 border-amber-300">
                   modified
@@ -168,6 +174,7 @@ export const createColumns = (onArticleDeleted: () => void): ColumnDef<ArticleLi
     cell: ({ row }) => {
       const article = row.original.article;
       const published = isPublished(article);
+      const external = Boolean(externalArticleUrl(article));
       return (
         <Badge
           variant="outline"
@@ -177,7 +184,7 @@ export const createColumns = (onArticleDeleted: () => void): ColumnDef<ArticleLi
               : "bg-indigo-50 dark:bg-indigo-900/30"
           }`}
         >
-          {published ? "Published" : "Draft"}
+          {external ? "External" : published ? "Published" : "Draft"}
         </Badge>
       );
     },
@@ -186,6 +193,7 @@ export const createColumns = (onArticleDeleted: () => void): ColumnDef<ArticleLi
     id: "actions",
     cell: ({ row }) => {
       const article = row.original.article;
+      const externalUrl = externalArticleUrl(article);
 
       const handleDelete = async () => {
         const result = await deleteArticle(article.id);
@@ -205,6 +213,14 @@ export const createColumns = (onArticleDeleted: () => void): ColumnDef<ArticleLi
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {externalUrl && (
+              <DropdownMenuItem asChild>
+                <a href={externalUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Open link
+                </a>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem asChild>
               <Link
                 to="/dashboard/blog/edit/$blogSlug"

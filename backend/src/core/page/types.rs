@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::core::storage::ImageAsset;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Page {
     pub id: Uuid,
@@ -17,6 +19,10 @@ pub struct Page {
     pub is_published: bool,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upload_file_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<ImageAsset>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,6 +44,8 @@ pub struct PageCreateRequest {
     pub meta_data: Option<BTreeMap<String, Value>>,
     #[serde(default)]
     pub is_published: bool,
+    #[serde(default)]
+    pub image_upload_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -48,6 +56,8 @@ pub struct PageUpdateRequest {
     pub image_url: Option<String>,
     pub meta_data: Option<BTreeMap<String, Value>>,
     pub is_published: Option<bool>,
+    #[serde(default)]
+    pub image_upload_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

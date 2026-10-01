@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::{
     api::{auth::AuthenticatedAccount, request::JsonBody, response::SuccessResponse},
-    core::article::{CreateArticle, UpdateArticle},
+    core::article::{CreateArticle, CreateExternalArticle, UpdateArticle},
     error::AppError,
 };
 
@@ -112,6 +112,38 @@ pub async fn create_article(
     AppError,
 > {
     let article = state.service()?.create(request).await?;
+    Ok((StatusCode::CREATED, Json(SuccessResponse::new(article))))
+}
+
+#[utoipa::path(
+    post,
+    path = "/blog/articles/external",
+    request_body = CreateExternalArticle,
+    responses(
+        (status = 201, body = SuccessResponse<crate::core::article::ArticleListItem>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 409, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "articles",
+    operation_id = "createExternalArticle"
+)]
+pub async fn create_external_article(
+    authenticated: AuthenticatedAccount,
+    State(state): State<ArticleState>,
+    JsonBody(request): JsonBody<CreateExternalArticle>,
+) -> Result<
+    (
+        StatusCode,
+        Json<SuccessResponse<crate::core::article::ArticleListItem>>,
+    ),
+    AppError,
+> {
+    let article = state
+        .service()?
+        .create_external(authenticated.into_inner().into_inner(), request)
+        .await?;
     Ok((StatusCode::CREATED, Json(SuccessResponse::new(article))))
 }
 

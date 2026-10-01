@@ -6,12 +6,25 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::AppError;
 
-use super::{FileData, FolderData, ObjectListing};
+use uuid::Uuid;
+
+use super::{
+    FileData, FolderData, ObjectListing, UploadFile, UploadRepository, blurhash_from_bytes,
+};
 
 #[async_trait]
 pub trait ObjectStore: Send + Sync {
     async fn list(&self, prefix: &str, delimiter: Option<&str>) -> Result<ObjectListing, AppError>;
     async fn put(&self, key: &str, data: Vec<u8>) -> Result<(), AppError>;
+    async fn put_with_content_type(
+        &self,
+        key: &str,
+        data: Vec<u8>,
+        content_type: &str,
+    ) -> Result<(), AppError> {
+        let _ = content_type;
+        self.put(key, data).await
+    }
     async fn delete(&self, key: &str) -> Result<(), AppError>;
     async fn copy(&self, source_key: &str, destination_key: &str) -> Result<(), AppError>;
 }
@@ -23,8 +36,21 @@ pub struct ListResult {
 }
 
 #[derive(Clone)]
+pub struct RecordedUpload {
+    pub id: Option<Uuid>,
+    pub key: String,
+    pub url: String,
+    pub content_type: String,
+    pub byte_size: i64,
+    pub width: Option<i32>,
+    pub height: Option<i32>,
+    pub blurhash: Option<String>,
+}
+
+#[derive(Clone)]
 pub struct StorageService {
     store: Arc<dyn ObjectStore>,
+    uploads: Option<Arc<dyn UploadRepository>>,
     url_prefix: Arc<str>,
     cancellation: CancellationToken,
 }
@@ -37,9 +63,15 @@ impl StorageService {
     ) -> Self {
         Self {
             store,
+            uploads: None,
             url_prefix: url_prefix.into(),
             cancellation,
         }
+    }
+
+    pub fn with_uploads(mut self, uploads: Arc<dyn UploadRepository>) -> Self {
+        self.uploads = Some(uploads);
+        self
     }
 
     pub async fn list_files(&self, prefix: &str) -> Result<ListResult, AppError> {
@@ -58,6 +90,10 @@ impl StorageService {
                 size_raw: object.size,
                 key: object.key,
                 last_modified: object.last_modified,
+                id: None,
+                blurhash: None,
+                width: None,
+                height: None,
             })
             .collect::<Vec<_>>();
         let mut folders = listing
@@ -79,25 +115,106 @@ impl StorageService {
                 }
             })
             .collect::<Vec<_>>();
+        if let Some(uploads) = &self.uploads {
+            let keys = files.iter().map(|file| file.key.clone()).collect::<Vec<_>>();
+            if !keys.is_empty() {
+                let records = uploads.find_by_keys(&keys).await?;
+                for file in &mut files {
+                    if let Some(record) = records.iter().find(|record| record.s3_key == file.key) {
+                        file.id = Some(record.id);
+                        file.blurhash.clone_from(&record.blurhash);
+                        file.width = record.width;
+                        file.height = record.height;
+                    }
+                }
+            }
+        }
         files.sort_unstable_by(|left, right| right.last_modified.cmp(&left.last_modified));
         folders.sort_unstable_by(|left, right| left.name.cmp(&right.name));
         Ok(ListResult { files, folders })
     }
 
     pub async fn upload_file(&self, key: &str, data: Vec<u8>) -> Result<(), AppError> {
+        self.put_recorded(key, "application/octet-stream", data, None)
+            .await
+            .map(|_| ())
+    }
+
+    pub async fn put_recorded(
+        &self,
+        key: &str,
+        content_type: &str,
+        data: Vec<u8>,
+        created_by: Option<Uuid>,
+    ) -> Result<RecordedUpload, AppError> {
+        let byte_size = i64::try_from(data.len()).unwrap_or(i64::MAX);
+        let content_type = content_type_for(key, content_type);
+        let (blurhash, width, height) = if is_raster_image(key, &content_type) {
+            blurhash_from_bytes(&data)
+                .map(|(hash, width, height)| (Some(hash), Some(width), Some(height)))
+                .unwrap_or((None, None, None))
+        } else {
+            (None, None, None)
+        };
         tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => Err(AppError::Internal),
-            result = self.store.put(key, data) => result,
+            () = self.cancellation.cancelled() => return Err(AppError::Internal),
+            result = self.store.put_with_content_type(key, data, &content_type) => result?,
         }
+        let url = public_url(&self.url_prefix, key);
+        let id = if key.is_empty() || key.ends_with('/') {
+            None
+        } else if let Some(uploads) = &self.uploads {
+            let filename = filename_from_key(key);
+            let saved = uploads
+                .upsert(UploadFile {
+                    id: Uuid::new_v4(),
+                    s3_key: key.to_owned(),
+                    public_url: url.clone(),
+                    filename,
+                    directory_path: directory_path(key),
+                    content_type: content_type.clone(),
+                    byte_size,
+                    width,
+                    height,
+                    blurhash: blurhash.clone(),
+                    created_by,
+                })
+                .await?;
+            Some(saved.id)
+        } else {
+            None
+        };
+        Ok(RecordedUpload {
+            id,
+            key: key.to_owned(),
+            url,
+            content_type,
+            byte_size,
+            width,
+            height,
+            blurhash,
+        })
     }
 
     pub async fn delete_file(&self, key: &str) -> Result<(), AppError> {
+        if let Some(uploads) = &self.uploads
+            && let Some(file) = uploads.find_by_keys(&[key.to_owned()]).await?.into_iter().next()
+            && uploads.is_referenced(file.id).await?
+        {
+            return Err(AppError::Conflict(
+                "this file is still used by a page".to_owned(),
+            ));
+        }
         tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => Err(AppError::Internal),
-            result = self.store.delete(key) => result,
+            () = self.cancellation.cancelled() => return Err(AppError::Internal),
+            result = self.store.delete(key) => result?,
         }
+        if let Some(uploads) = &self.uploads {
+            uploads.delete_by_key(key).await?;
+        }
+        Ok(())
     }
 
     pub async fn create_folder(&self, path: &str) -> Result<(), AppError> {
@@ -131,6 +248,11 @@ impl StorageService {
                 result = self.store.delete(&object.key) => result?,
             }
         }
+        if let Some(uploads) = &self.uploads {
+            uploads
+                .rename_prefix(old_path, new_path, &self.url_prefix)
+                .await?;
+        }
         Ok(())
     }
 
@@ -153,4 +275,54 @@ fn is_image_file(key: &str) -> bool {
     [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"]
         .iter()
         .any(|extension| key.ends_with(extension))
+}
+
+fn is_raster_image(key: &str, content_type: &str) -> bool {
+    is_image_file(key)
+        || (content_type.starts_with("image/") && content_type != "image/svg+xml")
+}
+
+fn content_type_for(key: &str, declared: &str) -> String {
+    if !declared.is_empty() && declared != "application/octet-stream" {
+        return declared.to_owned();
+    }
+    let lower = key.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    match lower.as_str() {
+        "jpg" | "jpeg" => "image/jpeg".to_owned(),
+        "png" => "image/png".to_owned(),
+        "gif" => "image/gif".to_owned(),
+        "webp" => "image/webp".to_owned(),
+        "bmp" => "image/bmp".to_owned(),
+        "svg" => "image/svg+xml".to_owned(),
+        _ => {
+            if declared.is_empty() {
+                "application/octet-stream".to_owned()
+            } else {
+                declared.to_owned()
+            }
+        }
+    }
+}
+
+pub fn public_url(prefix: &str, key: &str) -> String {
+    format!(
+        "{}/{}",
+        prefix.trim_end_matches('/'),
+        key.trim_start_matches('/')
+    )
+}
+
+fn filename_from_key(key: &str) -> String {
+    key.rsplit('/')
+        .next()
+        .filter(|name| !name.is_empty())
+        .unwrap_or(key)
+        .to_owned()
+}
+
+fn directory_path(key: &str) -> String {
+    match key.rsplit_once('/') {
+        Some((directory, file)) if !directory.is_empty() && !file.is_empty() => directory.to_owned(),
+        _ => String::new(),
+    }
 }

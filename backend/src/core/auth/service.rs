@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
 use uuid::Uuid;
 
-use crate::error::AppError;
+use crate::{error::AppError, setup::registration_role};
 
 use super::{
     Account, AccountId, AccountUpdate, LoginInput, LoginResult, PasswordUpdate, RegistrationInput,
@@ -50,6 +50,15 @@ pub trait AccountRepository: Send + Sync {
         id: AccountId,
         expected_password_hash: &str,
     ) -> Result<bool, AppError>;
+
+    async fn count(&self) -> Result<i64, AppError> {
+        Ok(0)
+    }
+
+    /// Point site settings at this account when no public author is configured.
+    async fn assign_public_author(&self, _id: AccountId) -> Result<(), AppError> {
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
@@ -173,12 +182,13 @@ impl AuthService {
             return Err(AppError::Conflict("resource already exists".to_owned()));
         }
 
+        let existing_accounts = self.accounts.count().await?;
         let account = Account {
             id: AccountId(Uuid::new_v4()),
             name: input.name,
             email: input.email,
             password_hash: self.hash_password(&input.password).await?,
-            role: "user".to_owned(),
+            role: registration_role(existing_accounts).to_owned(),
             created_at: None,
             updated_at: None,
             bio: None,
@@ -188,7 +198,11 @@ impl AuthService {
             meta_description: None,
             organization_id: None,
         };
-        self.accounts.create(&account).await
+        self.accounts.create(&account).await?;
+        if existing_accounts == 0 {
+            self.accounts.assign_public_author(account.id).await?;
+        }
+        Ok(())
     }
 
     pub async fn get_account(&self, id: AccountId) -> Result<Account, AppError> {

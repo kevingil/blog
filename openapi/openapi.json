@@ -325,6 +325,637 @@
         ]
       }
     },
+    "/agent/connector-presets": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "listConnectorPresets",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_ConnectorPresetListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent/connector-presets/{presetId}/connect": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "connectConnectorPreset",
+        "parameters": [
+          {
+            "name": "presetId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_OauthConnectResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent/connectors": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "listMcpConnectors",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_ConnectorListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "createMcpConnector",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectorWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_ConnectorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent/connectors/oauth": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "connectOauthMcp",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OauthConnectorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_OauthConnectResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent/connectors/oauth/callback": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "completeOauthConnector",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "error_description",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirects to the connectors page after sign-in"
+          },
+          "400": {
+            "description": "The sign-in query could not be read"
+          }
+        }
+      }
+    },
+    "/agent/connectors/{connectorId}": {
+      "delete": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "deleteMcpConnector",
+        "parameters": [
+          {
+            "name": "connectorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_SuccessFlagResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "updateMcpConnector",
+        "parameters": [
+          {
+            "name": "connectorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectorUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_ConnectorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent/connectors/{connectorId}/refresh": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "refreshMcpConnector",
+        "parameters": [
+          {
+            "name": "connectorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_ConnectorRefreshResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent/conversation/turn": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "submitConversationTurn",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationTurnRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_ConversationTurnResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/agent/conversations/{articleId}": {
       "get": {
         "tags": [
@@ -444,6 +1075,326 @@
             }
           },
           "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent/live": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "connectLiveSession",
+        "responses": {
+          "101": {
+            "description": "GPT-Live session switching protocols"
+          },
+          "400": {
+            "description": "Invalid WebSocket upgrade headers"
+          },
+          "426": {
+            "description": "Connection cannot be upgraded"
+          }
+        }
+      }
+    },
+    "/agent/skills": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "listAgentSkills",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_SkillListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "createAgentSkill",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkillWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_SkillResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent/skills/{skillId}": {
+      "delete": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "deleteAgentSkill",
+        "parameters": [
+          {
+            "name": "skillId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_SuccessFlagResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "updateAgentSkill",
+        "parameters": [
+          {
+            "name": "skillId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkillUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_SkillResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/agent/tools": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "operationId": "listAgentTools",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_AgentToolListResponse"
+                }
+              }
+            }
+          },
+          "401": {
             "description": "",
             "content": {
               "application/json": {
@@ -962,6 +1913,71 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/blog/articles/external": {
+      "post": {
+        "tags": [
+          "articles"
+        ],
+        "operationId": "createExternalArticle",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExternalArticle"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_ArticleListItem"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -6552,6 +7568,39 @@
   },
   "components": {
     "schemas": {
+      "AgentToolListResponse": {
+        "type": "object",
+        "required": [
+          "tools"
+        ],
+        "properties": {
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentToolResponse"
+            }
+          }
+        }
+      },
+      "AgentToolResponse": {
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "source"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        }
+      },
       "AllWorkersStatusResponse": {
         "type": "object",
         "required": [
@@ -6696,6 +7745,13 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "external_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set when this row points at the author's post on another site."
           }
         }
       },
@@ -6905,6 +7961,9 @@
           },
           "articleId": {
             "type": "string"
+          },
+          "channel": {
+            "type": "string"
           }
         }
       },
@@ -6920,6 +7979,277 @@
           },
           "status": {
             "type": "string"
+          }
+        }
+      },
+      "ConnectorListResponse": {
+        "type": "object",
+        "required": [
+          "connectors"
+        ],
+        "properties": {
+          "connectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectorResponse"
+            }
+          }
+        }
+      },
+      "ConnectorPresetListResponse": {
+        "type": "object",
+        "required": [
+          "presets"
+        ],
+        "properties": {
+          "presets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectorPresetResponse"
+            }
+          }
+        }
+      },
+      "ConnectorPresetResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "officialUrl",
+          "url",
+          "connected",
+          "connectorId",
+          "lastError"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "officialUrl": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "connected": {
+            "type": "boolean"
+          },
+          "connectorId": {
+            "type": "string"
+          },
+          "lastError": {
+            "type": "string"
+          }
+        }
+      },
+      "ConnectorRefreshResponse": {
+        "type": "object",
+        "required": [
+          "connectorId",
+          "toolNames"
+        ],
+        "properties": {
+          "connectorId": {
+            "type": "string"
+          },
+          "toolNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ConnectorResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "transport",
+          "command",
+          "args",
+          "url",
+          "headers",
+          "env",
+          "enabled",
+          "lastError",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "transport": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "url": {
+            "type": "string"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "lastError": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "ConnectorUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "transport": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "command": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "args": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "headers": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "env": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      },
+      "ConnectorWriteRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "transport"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "transport": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "url": {
+            "type": "string"
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
           }
         }
       },
@@ -6943,6 +8273,55 @@
           "total": {
             "type": "integer",
             "minimum": 0
+          }
+        }
+      },
+      "ConversationTurnRequest": {
+        "type": "object",
+        "required": [
+          "articleId"
+        ],
+        "properties": {
+          "articleId": {
+            "type": "string"
+          },
+          "documentContent": {
+            "type": "string"
+          },
+          "documentMarkdown": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "audioBase64": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          }
+        }
+      },
+      "ConversationTurnResponse": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "status",
+          "transcript",
+          "channel"
+        ],
+        "properties": {
+          "requestId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "transcript": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string"
           }
         }
       },
@@ -7074,6 +8453,17 @@
           "authorId": {
             "type": "string",
             "format": "uuid"
+          }
+        }
+      },
+      "CreateExternalArticle": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string"
           }
         }
       },
@@ -8117,6 +9507,46 @@
           }
         }
       },
+      "OauthConnectResponse": {
+        "type": "object",
+        "required": [
+          "connected",
+          "authorizationUrl"
+        ],
+        "properties": {
+          "connected": {
+            "type": "boolean"
+          },
+          "authorizationUrl": {
+            "type": "string"
+          },
+          "connector": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConnectorResponse"
+              }
+            ]
+          }
+        }
+      },
+      "OauthConnectorRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "url"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
       "OrganizationCreateRequest": {
         "type": "object",
         "properties": {
@@ -8804,6 +10234,12 @@
               "string",
               "null"
             ]
+          },
+          "external_url": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -8958,6 +10394,105 @@
               "null"
             ],
             "format": "uuid"
+          }
+        }
+      },
+      "SkillListResponse": {
+        "type": "object",
+        "required": [
+          "skills"
+        ],
+        "properties": {
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkillResponse"
+            }
+          }
+        }
+      },
+      "SkillResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "instructions",
+          "enabled",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "SkillUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "instructions": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      },
+      "SkillWriteRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "instructions"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
           }
         }
       },
@@ -9143,6 +10678,28 @@
           }
         }
       },
+      "SuccessResponse_AgentToolListResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "tools"
+            ],
+            "properties": {
+              "tools": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AgentToolResponse"
+                }
+              }
+            }
+          }
+        }
+      },
       "SuccessResponse_AllWorkersStatusResponse": {
         "type": "object",
         "required": [
@@ -9301,6 +10858,13 @@
                   "null"
                 ],
                 "format": "date-time"
+              },
+              "external_url": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Set when this row points at the author's post on another site."
               }
             }
           }
@@ -9470,6 +11034,154 @@
           }
         }
       },
+      "SuccessResponse_ConnectorListResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "connectors"
+            ],
+            "properties": {
+              "connectors": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ConnectorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "SuccessResponse_ConnectorPresetListResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "presets"
+            ],
+            "properties": {
+              "presets": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ConnectorPresetResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "SuccessResponse_ConnectorRefreshResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "connectorId",
+              "toolNames"
+            ],
+            "properties": {
+              "connectorId": {
+                "type": "string"
+              },
+              "toolNames": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "SuccessResponse_ConnectorResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "transport",
+              "command",
+              "args",
+              "url",
+              "headers",
+              "env",
+              "enabled",
+              "lastError",
+              "createdAt",
+              "updatedAt"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "transport": {
+                "type": "string"
+              },
+              "command": {
+                "type": "string"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "url": {
+                "type": "string"
+              },
+              "headers": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "propertyNames": {
+                  "type": "string"
+                }
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "lastError": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
       "SuccessResponse_ConversationHistoryResponse": {
         "type": "object",
         "required": [
@@ -9496,6 +11208,37 @@
               "total": {
                 "type": "integer",
                 "minimum": 0
+              }
+            }
+          }
+        }
+      },
+      "SuccessResponse_ConversationTurnResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "requestId",
+              "status",
+              "transcript",
+              "channel"
+            ],
+            "properties": {
+              "requestId": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "transcript": {
+                "type": "string"
+              },
+              "channel": {
+                "type": "string"
               }
             }
           }
@@ -10131,6 +11874,39 @@
           }
         }
       },
+      "SuccessResponse_OauthConnectResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "connected",
+              "authorizationUrl"
+            ],
+            "properties": {
+              "connected": {
+                "type": "boolean"
+              },
+              "authorizationUrl": {
+                "type": "string"
+              },
+              "connector": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ConnectorResponse"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
       "SuccessResponse_Option_Vec_RecommendedArticle": {
         "type": "object",
         "required": [
@@ -10183,6 +11959,12 @@
                       "format": "date-time"
                     },
                     "author": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "external_url": {
                       "type": [
                         "string",
                         "null"
@@ -10703,6 +12485,71 @@
                   "null"
                 ],
                 "format": "uuid"
+              }
+            }
+          }
+        }
+      },
+      "SuccessResponse_SkillListResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "skills"
+            ],
+            "properties": {
+              "skills": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SkillResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "SuccessResponse_SkillResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "description",
+              "instructions",
+              "enabled",
+              "createdAt",
+              "updatedAt"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "instructions": {
+                "type": "string"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "createdAt": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "string"
               }
             }
           }

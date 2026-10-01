@@ -3,7 +3,10 @@ use std::{collections::BTreeMap, sync::Arc};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::{core::organization::OrganizationRepository, error::AppError};
+use crate::{
+    core::{organization::OrganizationRepository, storage::UploadRepository},
+    error::AppError,
+};
 
 use super::{
     ProfileAccount, ProfileAccountRepository, ProfileRepository, ProfileUpdateRequest,
@@ -17,6 +20,7 @@ pub struct ProfileService {
     settings: Arc<dyn SiteSettingsRepository>,
     accounts: Arc<dyn ProfileAccountRepository>,
     organizations: Arc<dyn OrganizationRepository>,
+    uploads: Option<Arc<dyn UploadRepository>>,
 }
 
 impl ProfileService {
@@ -31,11 +35,18 @@ impl ProfileService {
             settings,
             accounts,
             organizations,
+            uploads: None,
         }
     }
 
+    pub fn with_uploads(mut self, uploads: Arc<dyn UploadRepository>) -> Self {
+        self.uploads = Some(uploads);
+        self
+    }
+
     pub async fn get_public_profile(&self) -> Result<PublicProfileResponse, AppError> {
-        let profile = self.profiles.get_public_profile().await?;
+        let mut profile = self.profiles.get_public_profile().await?;
+        profile.image = self.image_asset(profile.image_upload_file_id).await?;
         Ok(PublicProfileResponse {
             profile_type: profile.profile_type,
             // The Go service never assigns the DTO's ID field, so its encoded
@@ -48,6 +59,7 @@ impl ProfileService {
             social_links: string_values(profile.social_links),
             meta_description: profile.meta_description.unwrap_or_default(),
             website_url: profile.website_url,
+            image: profile.image,
         })
     }
 
@@ -55,10 +67,9 @@ impl ProfileService {
         &self,
         account_id: Uuid,
     ) -> Result<UserProfileResponse, AppError> {
-        self.accounts
-            .find_profile_account(account_id)
-            .await
-            .map(account_response)
+        let mut account = self.accounts.find_profile_account(account_id).await?;
+        account.image = self.image_asset(account.profile_upload_file_id).await?;
+        Ok(account_response(account))
     }
 
     pub async fn update_user_profile(
@@ -73,8 +84,18 @@ impl ProfileService {
         if let Some(bio) = request.bio {
             account.bio = Some(bio);
         }
-        if let Some(profile_image) = request.profile_image {
+        if let Some(profile_upload_file_id) = request.profile_upload_file_id {
+            let image = self.image_asset(Some(profile_upload_file_id)).await?;
+            let Some(image) = image else {
+                return Err(AppError::InvalidInput("image was not found".to_owned()));
+            };
+            account.profile_upload_file_id = Some(profile_upload_file_id);
+            account.profile_image = Some(image.url.clone());
+            account.image = Some(image);
+        } else if let Some(profile_image) = request.profile_image {
             account.profile_image = Some(profile_image);
+            account.profile_upload_file_id = None;
+            account.image = None;
         }
         if let Some(email_public) = request.email_public {
             account.email_public = Some(email_public);
@@ -91,6 +112,7 @@ impl ProfileService {
             );
         }
         self.accounts.update_profile_account(&account).await?;
+        account.image = self.image_asset(account.profile_upload_file_id).await?;
         Ok(account_response(account))
     }
 
@@ -156,6 +178,22 @@ fn account_response(account: ProfileAccount) -> UserProfileResponse {
         social_links: string_values(account.social_links),
         meta_description: account.meta_description.unwrap_or_default(),
         organization_id: account.organization_id,
+        image: account.image,
+    }
+}
+
+impl ProfileService {
+    async fn image_asset(
+        &self,
+        id: Option<Uuid>,
+    ) -> Result<Option<crate::core::storage::ImageAsset>, AppError> {
+        let Some(id) = id else {
+            return Ok(None);
+        };
+        let Some(uploads) = &self.uploads else {
+            return Ok(None);
+        };
+        Ok(uploads.find_by_id(id).await?.map(|file| file.asset()))
     }
 }
 

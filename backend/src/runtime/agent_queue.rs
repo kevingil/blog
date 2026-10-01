@@ -98,6 +98,7 @@ impl ArticleGenerationQueue for RuntimeAgentQueue {
             document_content: String::new(),
             document_markdown: String::new(),
             article_id: request.article_id.to_string(),
+            channel: String::new(),
         })
         .await
     }

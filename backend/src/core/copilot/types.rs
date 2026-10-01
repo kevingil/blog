@@ -13,6 +13,12 @@ pub struct ChatRequest {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub document_markdown: String,
     pub article_id: String,
+    #[serde(default = "default_channel", skip_serializing_if = "String::is_empty")]
+    pub channel: String,
+}
+
+fn default_channel() -> String {
+    "text".to_owned()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

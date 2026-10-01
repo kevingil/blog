@@ -35,6 +35,7 @@ struct RepositoryState {
     identity_updates: Vec<(AccountId, String, String)>,
     password_updates: Vec<AccountId>,
     deleted: Vec<AccountId>,
+    public_authors: Vec<AccountId>,
     fail_find_by_email: bool,
     conditional_password_update_fails: bool,
     conditional_delete_fails: bool,
@@ -151,6 +152,15 @@ impl AccountRepository for MockAccountRepository {
             state.deleted.push(id);
         }
         Ok(deleted)
+    }
+
+    async fn count(&self) -> Result<i64, AppError> {
+        Ok(i64::try_from(self.state().accounts.len()).unwrap_or(i64::MAX))
+    }
+
+    async fn assign_public_author(&self, id: AccountId) -> Result<(), AppError> {
+        self.state().public_authors.push(id);
+        Ok(())
     }
 }
 
@@ -461,12 +471,35 @@ async fn registration_creates_a_user_and_rejects_conflicts() -> TestResult {
         .ok_or_else(|| io::Error::other("registration did not create an account"))?;
     assert_eq!(created.name, "New User");
     assert_eq!(created.email, "newuser@example.com");
-    assert_eq!(created.role, "user");
+    assert_eq!(created.role, "admin");
+    assert_eq!(repository.state().public_authors, vec![created.id]);
     assert!(created.password_hash.starts_with("$2b$10$"));
     assert!(matches!(
         auth.register(input).await,
         Err(AppError::Conflict(_))
     ));
+    Ok(())
+}
+
+#[tokio::test]
+async fn registration_after_the_first_account_stays_a_member() -> TestResult {
+    let existing = test_account("owner@example.com", "password123").await?;
+    let repository = Arc::new(MockAccountRepository::with_accounts(vec![existing]));
+    let auth = service(repository.clone())?;
+    auth.register(RegistrationInput {
+        name: "Second User".to_owned(),
+        email: "second@example.com".to_owned(),
+        password: "securepassword".to_owned(),
+    })
+    .await?;
+    let created = repository
+        .state()
+        .created
+        .first()
+        .cloned()
+        .ok_or_else(|| io::Error::other("registration did not create an account"))?;
+    assert_eq!(created.role, "user");
+    assert!(repository.state().public_authors.is_empty());
     Ok(())
 }
 

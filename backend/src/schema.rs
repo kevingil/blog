@@ -23,6 +23,7 @@ diesel::table! {
         social_links -> Nullable<Jsonb>,
         meta_description -> Nullable<Text>,
         organization_id -> Nullable<Uuid>,
+        profile_upload_file_id -> Nullable<Uuid>,
     }
 }
 
@@ -53,6 +54,9 @@ diesel::table! {
         published_embedding -> Nullable<Vector>,
         current_draft_version_id -> Nullable<Uuid>,
         current_published_version_id -> Nullable<Uuid>,
+        external_url -> Nullable<Text>,
+        draft_upload_file_id -> Nullable<Uuid>,
+        published_upload_file_id -> Nullable<Uuid>,
     }
 }
 
@@ -92,6 +96,7 @@ diesel::table! {
         embedding -> Nullable<Vector>,
         edited_by -> Nullable<Uuid>,
         created_at -> Nullable<Timestamptz>,
+        upload_file_id -> Nullable<Uuid>,
     }
 }
 
@@ -218,6 +223,45 @@ diesel::table! {
         meta_data -> Nullable<Jsonb>,
         created_at -> Nullable<Timestamptz>,
         completed_at -> Nullable<Timestamptz>,
+        upload_file_id -> Nullable<Uuid>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use pgvector::sql_types::*;
+
+    agent_skill (id) {
+        id -> Uuid,
+        #[max_length = 255]
+        name -> Varchar,
+        description -> Nullable<Text>,
+        instructions -> Text,
+        enabled -> Bool,
+        created_at -> Nullable<Timestamptz>,
+        updated_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use pgvector::sql_types::*;
+
+    mcp_connector (id) {
+        id -> Uuid,
+        #[max_length = 255]
+        name -> Varchar,
+        #[max_length = 20]
+        transport -> Varchar,
+        command -> Nullable<Text>,
+        args -> Jsonb,
+        url -> Nullable<Text>,
+        headers -> Jsonb,
+        env -> Jsonb,
+        enabled -> Bool,
+        last_error -> Nullable<Text>,
+        created_at -> Nullable<Timestamptz>,
+        updated_at -> Nullable<Timestamptz>,
     }
 }
 
@@ -289,6 +333,7 @@ diesel::table! {
         meta_description -> Nullable<Text>,
         created_at -> Nullable<Timestamptz>,
         updated_at -> Nullable<Timestamptz>,
+        logo_upload_file_id -> Nullable<Uuid>,
     }
 }
 
@@ -309,6 +354,7 @@ diesel::table! {
         is_published -> Nullable<Bool>,
         created_at -> Nullable<Timestamptz>,
         updated_at -> Nullable<Timestamptz>,
+        upload_file_id -> Nullable<Uuid>,
     }
 }
 
@@ -327,6 +373,7 @@ diesel::table! {
         updated_at -> Nullable<Timestamptz>,
         content -> Nullable<Text>,
         tag_ids -> Nullable<Array<Nullable<Int4>>>,
+        upload_file_id -> Nullable<Uuid>,
     }
 }
 
@@ -444,7 +491,39 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    use diesel::sql_types::*;
+
+    upload_files (id) {
+        id -> Uuid,
+        s3_key -> Text,
+        public_url -> Text,
+        filename -> Text,
+        directory_path -> Text,
+        content_type -> Text,
+        byte_size -> Int8,
+        width -> Nullable<Int4>,
+        height -> Nullable<Int4>,
+        blurhash -> Nullable<Text>,
+        created_by -> Nullable<Uuid>,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+
+    upload_file_refs (upload_file_id, owner_kind, owner_id) {
+        upload_file_id -> Uuid,
+        owner_kind -> Text,
+        owner_id -> Uuid,
+    }
+}
+
 diesel::joinable!(account -> organization (organization_id));
+diesel::joinable!(upload_files -> account (created_by));
+diesel::joinable!(upload_file_refs -> upload_files (upload_file_id));
 diesel::joinable!(article -> account (author_id));
 diesel::joinable!(article_source -> article (article_id));
 diesel::joinable!(article_version -> account (edited_by));
@@ -469,6 +548,7 @@ diesel::joinable!(user_insight_status -> insight (insight_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     account,
+    agent_skill,
     article,
     article_source,
     article_version,
@@ -480,6 +560,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     imagen_request,
     insight,
     insight_topic,
+    mcp_connector,
     organization,
     page,
     project,
@@ -488,5 +569,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     task_run,
     task_run_event,
     task_run_step,
+    upload_file_refs,
+    upload_files,
     user_insight_status,
 );

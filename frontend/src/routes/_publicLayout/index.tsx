@@ -2,7 +2,9 @@ import { HeroSection } from "@/components/home/hero";
 import { useQuery } from '@tanstack/react-query';
 import { listProjects, type Project } from '@/services/projects';
 import { getArticles } from '@/services/blog';
-import { type ArticleListItem, getDisplayTitle, getDisplayContent, getDisplayImageUrl } from '@/services/types';
+import { type ArticleListItem, getDisplayTitle, getDisplayContent, getDisplayImage, externalArticleUrl } from '@/services/types';
+import { BlurhashImage } from '@/components/media/BlurhashImage';
+import { ArticleHref } from '@/components/blog/ArticleHref';
 import { Link } from '@tanstack/react-router';
 import { createFileRoute } from '@tanstack/react-router';
 import { format } from 'date-fns';
@@ -60,11 +62,19 @@ function useEntrance(index: number) {
 function articleMeta(article: ArticleListItem) {
   const title = getDisplayTitle(article.article);
   const content = getDisplayContent(article.article);
-  const imageUrl = getDisplayImageUrl(article.article);
+  const image = getDisplayImage(article.article);
   const date = article.article.published_at ? new Date(article.article.published_at) : null;
   const dateStr = date && !isNaN(date.getTime()) ? format(date, 'MMM d, yyyy') : '';
   const plain = content?.replace(/<[^>]*>/g, '').replace(/\*\*/g, '').replace(/#*/g, '').replace(/\n/g, ' ').substring(0, 150) || '';
-  return { title, imageUrl, dateStr, plain, slug: article.article.slug as string, author: article.author?.name };
+  return {
+    title,
+    image,
+    dateStr,
+    plain,
+    slug: article.article.slug as string,
+    author: article.author?.name,
+    externalUrl: externalArticleUrl(article.article),
+  };
 }
 
 const glassCard = "bg-card/90 dark:bg-card/80 backdrop-blur-md border border-border rounded-2xl hover:border-primary/30 hover:shadow-[0_0_20px_-5px_rgba(249,115,22,0.18)] transition-all duration-500";
@@ -109,20 +119,20 @@ function ArticlesSection() {
           {listArticles.length > 0 && (
             <div className="rounded-xl bg-card/80 backdrop-blur-sm border border-border overflow-hidden">
               {listArticles.map((article, i) => {
-                const { title, imageUrl, dateStr, slug, plain } = articleMeta(article);
+                const { title, image, dateStr, slug, plain, externalUrl } = articleMeta(article);
                 return (
-                  <Link
+                  <ArticleHref
                     key={article.article.id}
-                    to="/blog/$blogSlug"
-                    params={{ blogSlug: slug }}
+                    slug={slug}
+                    externalUrl={externalUrl}
                     className={cn(
                       "flex items-center gap-3 px-3 py-2.5 group hover:bg-accent transition-colors",
                       i < listArticles.length - 1 && "border-b border-border"
                     )}
                   >
                     <div className="w-14 h-10 shrink-0 rounded-lg overflow-hidden bg-muted/40">
-                      {imageUrl ? (
-                        <img src={imageUrl} alt="" className="w-full h-full object-cover object-center transition-transform duration-200 group-hover:scale-105" />
+                      {image?.url ? (
+                        <BlurhashImage src={image.url} blurhash={image.blurhash} className="h-full w-full" imgClassName="w-full h-full object-cover object-center transition-transform duration-200 group-hover:scale-105" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <svg className="w-3.5 h-3.5 text-muted-foreground/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -137,8 +147,10 @@ function ArticlesSection() {
                         <span className="text-[11px] text-muted-foreground line-clamp-1">{plain}</span>
                       )}
                     </div>
-                    <span className="text-[11px] text-muted-foreground shrink-0">{dateStr}</span>
-                  </Link>
+                    <span className="text-[11px] text-muted-foreground shrink-0">
+                      {externalUrl ? `External${dateStr ? ` · ${dateStr}` : ""}` : dateStr}
+                    </span>
+                  </ArticleHref>
                 );
               })}
             </div>
@@ -150,13 +162,13 @@ function ArticlesSection() {
 }
 
 function MainArticleCard({ article, index }: { article: ArticleListItem; index: number }) {
-  const { title, imageUrl, dateStr, plain, slug, author } = articleMeta(article);
+  const { title, image, dateStr, plain, slug, author, externalUrl } = articleMeta(article);
   const visible = useEntrance(index);
 
   return (
-    <Link
-      to="/blog/$blogSlug"
-      params={{ blogSlug: slug }}
+    <ArticleHref
+      slug={slug}
+      externalUrl={externalUrl}
       className={cn(
         glassCard,
         "group flex flex-row overflow-hidden p-2.5 gap-3 lg:col-span-2 lg:row-span-2",
@@ -164,8 +176,8 @@ function MainArticleCard({ article, index }: { article: ArticleListItem; index: 
       )}
     >
       <div className="relative w-20 shrink-0 aspect-[3/2] lg:w-64 lg:self-stretch lg:min-h-0 lg:aspect-auto overflow-hidden rounded-lg">
-        {imageUrl ? (
-          <img src={imageUrl} alt="" className="w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-105" loading="eager" />
+        {image?.url ? (
+          <BlurhashImage src={image.url} blurhash={image.blurhash} className="h-full w-full" imgClassName="w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-105" />
         ) : (
           <div className="w-full h-full bg-muted/40 flex items-center justify-center">
             <svg className="w-5 h-5 text-muted-foreground/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -179,21 +191,22 @@ function MainArticleCard({ article, index }: { article: ArticleListItem; index: 
         <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">{plain}</p>
         <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1">
           {author && <span>{author}</span>}
+          {externalUrl && <><span>·</span><span>External</span></>}
           {dateStr && <><span>·</span><span>{dateStr}</span></>}
         </div>
       </div>
-    </Link>
+    </ArticleHref>
   );
 }
 
 function CompactArticleCard({ article, index }: { article: ArticleListItem; index: number }) {
-  const { title, imageUrl, dateStr, plain, slug, author } = articleMeta(article);
+  const { title, image, dateStr, plain, slug, author, externalUrl } = articleMeta(article);
   const visible = useEntrance(index);
 
   return (
-    <Link
-      to="/blog/$blogSlug"
-      params={{ blogSlug: slug }}
+    <ArticleHref
+      slug={slug}
+      externalUrl={externalUrl}
       className={cn(
         glassCard,
         "group flex flex-row overflow-hidden p-2.5 gap-3 lg:col-start-3",
@@ -201,8 +214,8 @@ function CompactArticleCard({ article, index }: { article: ArticleListItem; inde
       )}
     >
       <div className="relative w-20 shrink-0 aspect-[3/2] overflow-hidden rounded-lg">
-        {imageUrl ? (
-          <img src={imageUrl} alt="" className="w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-105" loading="eager" />
+        {image?.url ? (
+          <BlurhashImage src={image.url} blurhash={image.blurhash} className="h-full w-full" imgClassName="w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-105" />
         ) : (
           <div className="w-full h-full bg-muted/40 flex items-center justify-center">
             <svg className="w-3 h-3 text-muted-foreground/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -216,10 +229,11 @@ function CompactArticleCard({ article, index }: { article: ArticleListItem; inde
         <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">{plain}</p>
         <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1">
           {author && <span>{author}</span>}
+          {externalUrl && <><span>·</span><span>External</span></>}
           {dateStr && <><span>·</span><span>{dateStr}</span></>}
         </div>
       </div>
-    </Link>
+    </ArticleHref>
   );
 }
 

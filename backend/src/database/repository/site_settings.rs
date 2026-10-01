@@ -111,6 +111,7 @@ impl ProfileAccountRepository for DieselSiteSettingsRepository {
                 account::name.eq(&value.name),
                 account::bio.eq(value.bio.as_deref()),
                 account::profile_image.eq(value.profile_image.as_deref()),
+                account::profile_upload_file_id.eq(value.profile_upload_file_id),
                 account::email_public.eq(value.email_public.as_deref()),
                 account::social_links.eq(social_links),
                 account::meta_description.eq(value.meta_description.as_deref()),
@@ -162,6 +163,8 @@ impl ProfileRepository for DieselSiteSettingsRepository {
                 email_public: row.email_public,
                 social_links,
                 meta_description: row.meta_description,
+                image_upload_file_id: row.logo_upload_file_id,
+                image: None,
             });
         }
 
@@ -184,6 +187,8 @@ impl ProfileRepository for DieselSiteSettingsRepository {
                 email_public: row.email_public,
                 social_links,
                 meta_description: row.meta_description,
+                image_upload_file_id: row.profile_upload_file_id,
+                image: None,
             });
         }
 
@@ -196,6 +201,8 @@ impl ProfileRepository for DieselSiteSettingsRepository {
             email_public: None,
             social_links: None,
             meta_description: None,
+            image_upload_file_id: None,
+            image: None,
         })
     }
 
@@ -223,6 +230,8 @@ fn profile_account_from_row(row: AccountRow) -> Result<ProfileAccount, AppError>
         social_links: json_object(row.social_links)?,
         meta_description: row.meta_description,
         organization_id: row.organization_id,
+        profile_upload_file_id: row.profile_upload_file_id,
+        image: None,
     })
 }
 

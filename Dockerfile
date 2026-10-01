@@ -9,7 +9,7 @@ COPY backend/Cargo.toml backend/Cargo.lock backend/rust-toolchain.toml backend/d
 COPY backend/migrations ./migrations
 COPY backend/src ./src
 COPY backend/tests ./tests
-RUN cargo build --locked --release --bin blog-backend --bin migrate --bin stamp-diesel-migrations --bin schema-fingerprint --bin external-fixtures
+RUN cargo build --locked --release --bin blog-backend --bin migrate --bin seed --bin stamp-diesel-migrations --bin schema-fingerprint --bin external-fixtures
 
 FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
 
@@ -20,11 +20,14 @@ RUN apt-get update \
 
 COPY --from=builder /app/backend/target/release/blog-backend /usr/local/bin/blog-backend
 COPY --from=builder /app/backend/target/release/migrate /usr/local/bin/migrate
+COPY --from=builder /app/backend/target/release/seed /usr/local/bin/seed
 COPY --from=builder /app/backend/target/release/stamp-diesel-migrations /usr/local/bin/stamp-diesel-migrations
 COPY --from=builder /app/backend/target/release/schema-fingerprint /usr/local/bin/schema-fingerprint
 COPY --from=builder /app/backend/target/release/external-fixtures /usr/local/bin/external-fixtures
 
+COPY --chmod=755 scripts/pre-deploy.sh /usr/local/bin/pre-deploy
+
 USER 10001
 ENV PORT=8080
 EXPOSE 8080
-ENTRYPOINT ["/usr/local/bin/blog-backend"]
+CMD ["/usr/local/bin/blog-backend"]

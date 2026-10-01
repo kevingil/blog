@@ -4,11 +4,13 @@ mod message;
 mod models;
 mod prompt;
 mod provider;
+mod registry;
 mod session;
 mod tools;
 
 pub use agent::{Agent, AgentError, AgentEvent, AgentEventType, AgentRun};
 pub use inventory::{DORMANT_CAPABILITIES, DormantCapability, DormantCapabilityKind};
+pub use registry::{RegisteredTool, ToolRegistry};
 pub use message::{
     Attachment, BinaryContent, ContentPart, FinishReason, LlmMessage, MessageRole, TextContent,
     ToolCall, ToolResult,

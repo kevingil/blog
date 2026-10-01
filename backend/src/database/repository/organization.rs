@@ -112,6 +112,7 @@ impl OrganizationRepository for DieselOrganizationRepository {
                 organization::slug.eq(&value.slug),
                 organization::bio.eq(value.bio.as_deref()),
                 organization::logo_url.eq(value.logo_url.as_deref()),
+                organization::logo_upload_file_id.eq(value.logo_upload_file_id),
                 organization::website_url.eq(value.website_url.as_deref()),
                 organization::email_public.eq(value.email_public.as_deref()),
                 organization::social_links.eq(social_links),

@@ -13,6 +13,10 @@ export type FileData = {
     size_raw: number;
     url: string;
     is_image: boolean;
+    id?: string;
+    blurhash?: string | null;
+    width?: number | null;
+    height?: number | null;
 };
 
 export type FolderData = {
@@ -58,7 +62,20 @@ export async function updateFolder(oldPath: string, newPath: string) {
 }
 
 function toFileData(file: FileDataResponse): FileData {
-    return { ...file, last_modified: new Date(file.last_modified) };
+    const recorded = file as FileDataResponse & {
+        id?: string;
+        blurhash?: string | null;
+        width?: number | null;
+        height?: number | null;
+    };
+    return {
+        ...file,
+        last_modified: new Date(file.last_modified),
+        id: recorded.id,
+        blurhash: recorded.blurhash,
+        width: recorded.width,
+        height: recorded.height,
+    };
 }
 
 function toFolderData(folder: FolderDataResponse): FolderData {

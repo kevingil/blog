@@ -1,3 +1,33 @@
+export type ImageAsset = {
+  id: string;
+  url: string;
+  blurhash?: string | null;
+  width?: number | null;
+  height?: number | null;
+};
+
+type ArticleImageSource = {
+  draft_image_url: string;
+  published_image_url?: string | null;
+  draft_image?: ImageAsset | null;
+  published_image?: ImageAsset | null;
+};
+
+export function getDisplayImage(
+  article: ArticleImageSource,
+  preferPublished = true,
+): ImageAsset | null {
+  const preferred = preferPublished ? article.published_image : article.draft_image;
+  const fallback = preferPublished ? article.draft_image : article.published_image;
+  if (preferred?.url) return preferred;
+  if (fallback?.url) return fallback;
+  const url = preferPublished && article.published_image_url
+    ? article.published_image_url
+    : article.draft_image_url;
+  if (!url) return null;
+  return { id: '', url };
+}
+
 export interface Article {
   id: string;
   slug: string;
@@ -7,12 +37,17 @@ export interface Article {
   draft_title: string;
   draft_content: string;
   draft_image_url: string;
+  draft_image?: ImageAsset | null;
+  draft_upload_file_id?: string | null;
   
   // Published content (null if unpublished)
   published_title: string | null;
   published_content: string | null;
   published_image_url: string | null;
+  published_image?: ImageAsset | null;
+  published_upload_file_id?: string | null;
   published_at: string | null;
+  body_images?: ImageAsset[];
   
   // Version pointers
   current_draft_version_id: string | null;
@@ -23,6 +58,7 @@ export interface Article {
   session_memory?: Record<string, any>;
   created_at: string;
   updated_at: string;
+  external_url?: string | null;
 }
 
 // Version history types
@@ -57,6 +93,14 @@ export function getDisplayTitle(article: Article | ArticleListItem['article'], p
 export function getDisplayContent(article: Article | ArticleListItem['article'], preferPublished = true): string {
   if (preferPublished && article.published_content) return article.published_content;
   return article.draft_content;
+}
+
+export function externalArticleUrl(
+  article: { external_url?: string | null } | null | undefined,
+): string | null {
+  const url = article?.external_url?.trim();
+  if (!url || !/^https?:\/\//i.test(url)) return null;
+  return url;
 }
 
 export function getDisplayImageUrl(article: Article | ArticleListItem['article'], preferPublished = true): string {
@@ -167,12 +211,17 @@ export type ArticleListItem = {
     draft_title: string;
     draft_content: string;
     draft_image_url: string;
+    draft_image?: ImageAsset | null;
+    draft_upload_file_id?: string | null;
     
     // Published content (null if unpublished)
     published_title: string | null;
     published_content: string | null;
     published_image_url: string | null;
+    published_image?: ImageAsset | null;
+    published_upload_file_id?: string | null;
     published_at: string | null;
+    body_images?: ImageAsset[];
     
     // Version pointers
     current_draft_version_id: string | null;
@@ -185,6 +234,7 @@ export type ArticleListItem = {
     tag_ids?: number[];
     imagen_request_id?: string | null;
     session_memory?: Record<string, any>;
+    external_url?: string | null;
   };
   author: {
     id: string;
@@ -218,9 +268,11 @@ export type RecommendedArticle = {
   title: string; // Backend returns the appropriate title (published if available)
   slug: string;
   image_url: string | null;
+  image?: ImageAsset | null;
   published_at: string | null;
   created_at: string;
   author: string | null;
+  external_url?: string | null;
 }
 
 export type ArticleRow = {
