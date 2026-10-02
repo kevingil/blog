@@ -244,9 +244,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <div className="flex h-10 items-center gap-1.5 group-data-[collapsible=icon]:justify-center">
           <SidebarTrigger className="size-8 shrink-0 text-sidebar-foreground/80 hover:bg-sidebar-accent" />
           {state === "expanded" && (
-            <span className="font-wordmark text-[1.35rem] leading-none tracking-tight text-sidebar-foreground">
+            <button
+              type="button"
+              onClick={startWriting}
+              className="font-wordmark text-[1.35rem] leading-none tracking-tight text-sidebar-foreground"
+            >
               Copilot
-            </span>
+            </button>
           )}
         </div>
         <SidebarMenu>

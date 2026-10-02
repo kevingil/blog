@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Pencil, X, Building2, User, Check, Plus, LogOut } from 'lucide-react';
 import { ImagePickerFromUploads } from '@/components/blog/editor/ImagePickerFromUploads';
 import { BlurhashImage } from '@/components/media/BlurhashImage';
+import { GenerateBlurhash } from '@/components/media/GenerateBlurhash';
 import type { FileData } from '@/services/storage';
 import { SocialLinksBuilder } from '@/components/social-links-builder';
 import { createFileRoute } from '@tanstack/react-router';
@@ -315,11 +316,23 @@ function ProfileSettings() {
                       className="h-16 w-16 rounded-full"
                       imgClassName="h-full w-full rounded-full object-cover"
                     />
-                    {profileImage.blurhash ? (
-                      <p className="font-mono text-xs text-muted-foreground break-all" data-testid="profile-blurhash">
-                        blurhash {profileImage.blurhash}
-                      </p>
-                    ) : null}
+                    <GenerateBlurhash
+                      fileKey={profileImage.key.includes("/") ? profileImage.key : undefined}
+                      uploadId={profileImage.id}
+                      blurhash={profileImage.blurhash}
+                      testId="profile-blurhash"
+                      onGenerated={(result) => {
+                        setProfileImage((current) => current ? {
+                          ...current,
+                          id: result.id ?? current.id,
+                          key: result.key || current.key,
+                          url: result.url || current.url,
+                          blurhash: result.blurhash,
+                          width: result.width,
+                          height: result.height,
+                        } : current);
+                      }}
+                    />
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">Choose an uploaded image.</p>

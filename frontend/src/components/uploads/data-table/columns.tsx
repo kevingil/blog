@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { ArrowUpDown, MoreHorizontal, Folder, File, Trash2, Copy } from "lucide-react";
 import { FileData, FolderData } from "@/services/storage";
+import { GenerateBlurhash } from "@/components/media/GenerateBlurhash";
 import { VITE_PUBLIC_S3_URL_PREFIX } from "@/services/constants";
 
 export type UploadItem = 
@@ -167,6 +168,14 @@ export const createColumns = (actions: ColumnActions): ColumnDef<UploadItem>[] =
                     {item.last_modified && new Date(item.last_modified).toLocaleString()}
                   </p>
                 </div>
+                {item.is_image ? (
+                  <GenerateBlurhash
+                    fileKey={item.key}
+                    uploadId={item.id}
+                    blurhash={item.blurhash}
+                    testId="upload-blurhash"
+                  />
+                ) : null}
               </div>
             </div>
 

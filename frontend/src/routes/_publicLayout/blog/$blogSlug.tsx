@@ -47,7 +47,7 @@ function RecommendedArticlesSkeleton() {
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
       {[1, 2, 3].map((i) => (
         <Card key={i}>
-          <Skeleton className="h-48 rounded-t-lg" />
+          <Skeleton className="h-48" />
           <CardContent className="p-4">
             <Skeleton className="h-6 w-3/4 mb-2" />
             <Skeleton className="h-4 w-1/2 mb-4" />
@@ -111,7 +111,7 @@ export default function Page() {
     return (
       <div className="container mx-auto py-16">
         <meta httpEquiv="refresh" content={`0;url=${externalUrl}`} />
-        <article className="max-w-xl mx-auto bg-card/60 text-card-foreground rounded-xl border border-border/60 p-8 shadow-lg">
+        <article className="max-w-xl mx-auto bg-card/60 text-card-foreground border border-border/60 p-8 shadow-lg">
           <p className="text-sm text-muted-foreground mb-2">Opening the original article</p>
           <h1 className="text-2xl font-semibold mb-4">
             {getDisplayTitle(articleData!.article)}
@@ -133,7 +133,7 @@ export default function Page() {
       <Separator className="my-12" />
 
       <section className={cn(
-        "max-w-4xl mx-auto bg-card/60 text-card-foreground rounded-xl border border-border/60 p-8 shadow-lg backdrop-blur-md",
+        "max-w-4xl mx-auto bg-card/60 text-card-foreground border border-border/60 p-8 shadow-lg backdrop-blur-md",
         isRecommendedAnimated ? "card-animated" : "card-hidden"
       )}>
         <h2 className="text-2xl font-bold mb-6">Other Articles</h2>
@@ -179,7 +179,7 @@ function ArticleContent({ slug, articleData }: { slug: string, articleData: Arti
 
   return (
     <article className={cn(
-      "max-w-4xl mx-auto bg-card/60 text-card-foreground rounded-xl border border-border/60 p-8 shadow-lg backdrop-blur-md",
+      "max-w-4xl mx-auto bg-card/60 text-card-foreground border border-border/60 p-8 shadow-lg backdrop-blur-md",
       isAnimated ? "card-animated" : "card-hidden"
     )}>
       {isPreview && (
@@ -196,8 +196,8 @@ function ArticleContent({ slug, articleData }: { slug: string, articleData: Arti
             src={displayImage.url}
             alt={displayTitle}
             blurhash={displayImage.blurhash}
-            className="aspect-video rounded-2xl"
-            imgClassName="h-full w-full rounded-2xl object-cover"
+            className="aspect-video"
+            imgClassName="h-full w-full object-cover"
           />
           {displayImage.blurhash ? (
             <p className="mt-2 font-mono text-xs text-muted-foreground break-all" data-testid="article-blurhash">
@@ -254,14 +254,14 @@ function RecommendedArticles({ slug, articleData }: { slug: string, articleData:
       {recommendedArticles?.map((article: RecommendedArticle, index: number) => {
         const externalUrl = externalArticleUrl(article);
         const card = (
-        <Card className="p-0" animationDelay={index * 100}>
+        <Card className="rounded-none p-0" animationDelay={index * 100}>
           {(article.image?.url || article.image_url) && (
             <BlurhashImage
               src={article.image?.url || article.image_url || ''}
               alt={article.title}
               blurhash={article.image?.blurhash}
-              className="h-48 w-full rounded-t-lg"
-              imgClassName="h-full w-full rounded-t-lg object-cover"
+              className="h-48 w-full"
+              imgClassName="h-full w-full object-cover"
             />
           )}
           <CardContent className="p-4">
