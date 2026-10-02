@@ -857,6 +857,16 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const watchedContent = useWatch({ control, name: 'content' });
   const watchedTitle = useWatch({ control, name: 'title' });
   const watchedExternalUrl = useWatch({ control, name: 'external_url' });
+  const articleIsLive = isPublished(article?.article);
+  const articleWordCount = (watchedContent ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+  const articleWhen = articleIsLive ? article?.article.published_at : article?.article.updated_at;
+  const articleWhenDate = articleWhen ? new Date(articleWhen) : null;
+  const articleWhenLabel = articleWhenDate && !Number.isNaN(articleWhenDate.getTime())
+    ? `${articleIsLive ? "Published" : "Updated"} ${format(articleWhenDate, "MMM d, yyyy")}`
+    : null;
   const watchedImageUrl = useWatch({ control, name: 'image_url' });
   const draftKey = draftSnapshot({
     title: watchedTitle,
@@ -2066,6 +2076,34 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                     className="w-full min-w-0 text-base font-medium md:text-lg"
                   />
                   {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title.message}</p>}
+                  <div className="mt-1 flex min-w-0 items-center gap-2 overflow-hidden text-xs text-muted-foreground">
+                    <span
+                      className={cn(
+                        "inline-flex h-5 shrink-0 items-center rounded-none border px-1.5 text-[10px] font-semibold uppercase tracking-wide",
+                        articleIsLive
+                          ? "border-primary/50 bg-primary/10 text-primary"
+                          : "border-border bg-muted text-foreground",
+                      )}
+                      data-testid="article-status-badge"
+                    >
+                      {articleIsLive ? "Live" : "Draft"}
+                    </span>
+                    <span className="truncate font-mono">
+                      {article?.article.slug ? `/${article.article.slug}` : "Not saved"}
+                    </span>
+                    {articleWordCount > 0 && (
+                      <span className="shrink-0">{articleWordCount.toLocaleString()} words</span>
+                    )}
+                    {articleWhenLabel && (
+                      <span className="shrink-0">{articleWhenLabel}</span>
+                    )}
+                    {articleIsLive && hasDraftChanges(article?.article) && (
+                      <span className="shrink-0 text-primary">Unpublished edits</span>
+                    )}
+                    {watchedExternalUrl?.trim() && (
+                      <span className="shrink-0">External</span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Publish button when unpublished changes */}
