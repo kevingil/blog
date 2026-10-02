@@ -197,17 +197,7 @@ export const Navbar = () => {
             </>
           )}
 
-          {isAuthenticated && (
-            <div className="inline-flex shrink-0 items-center gap-2">
-              <Link
-                to="/dashboard"
-                className="inline-flex h-9 items-center rounded-lg px-4 text-sm font-medium text-primary hover:text-primary/80 hover:bg-accent transition-all duration-200"
-              >
-                Dashboard
-              </Link>
-              <UserMenu variant="public" />
-            </div>
-          )}
+          {isAuthenticated && <UserMenu variant="public" />}
         </nav>
 
         {/* Nav - mobile */}
