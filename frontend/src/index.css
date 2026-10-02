@@ -17,6 +17,36 @@
   position: relative;
 }
 
+.writing-landing {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: 100%;
+  justify-content: center;
+  min-height: 0;
+  overflow: auto;
+  padding: 2rem 1rem 3rem;
+  width: 100%;
+}
+
+.writing-landing-intro {
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.writing-landing-chat {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 48rem);
+}
+
+.writing-launch-editor {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+}
+
 .article-editor-main {
   display: flex;
   flex: 1 1 auto;
