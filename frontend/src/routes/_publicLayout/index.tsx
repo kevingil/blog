@@ -1,6 +1,5 @@
 import { HeroSection } from "@/components/home/hero";
 import { useQuery } from '@tanstack/react-query';
-import { listProjects, type Project } from '@/services/projects';
 import { getArticles } from '@/services/blog';
 import { type ArticleListItem, getDisplayTitle, getDisplayContent, getDisplayImage, externalArticleUrl } from '@/services/types';
 import { BlurhashImage } from '@/components/media/BlurhashImage';
@@ -23,7 +22,6 @@ function HomePage() {
       <div className="relative z-10">
         <HeroSection />
         <ArticlesSection />
-        <ProjectsSection />
         <ConnectSection />
       </div>
     </div>
@@ -234,89 +232,6 @@ function CompactArticleCard({ article, index }: { article: ArticleListItem; inde
         </div>
       </div>
     </ArticleHref>
-  );
-}
-
-/* ════════════════════════════════════════
-   PROJECTS SECTION — book cards
-   ════════════════════════════════════════ */
-function ProjectsSection() {
-  const { data, isLoading } = useQuery({
-    queryKey: ['home-projects'],
-    queryFn: () => listProjects(1, 8),
-  });
-
-  const projects = data?.projects ?? [];
-
-  return (
-    <section className="mt-16 px-2 sm:px-0">
-      <SectionHeader label="Hackathon Projects & Experiments" seeAllHref="/projects" seeAllLabel="View all" />
-
-      {isLoading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 gap-1.5 w-full">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="overflow-hidden bg-card border border-border animate-pulse">
-              <div className="aspect-[2/1] bg-muted/60" />
-              <div className="p-1 h-11 flex flex-col gap-1">
-                <div className="h-3 w-4/5 bg-muted/60" />
-                <div className="h-2.5 w-full bg-muted/40" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : projects.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground text-sm">No hackathon projects or experiments yet.</div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 gap-1.5 w-full">
-          {projects.map((project, i) => (
-            <ProjectBookCard key={project.id} project={project} index={i} />
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function ProjectBookCard({ project, index }: { project: Project; index: number }) {
-  const visible = useEntrance(index);
-
-  return (
-    <Link
-      to="/projects/$projectId"
-      params={{ projectId: project.id }}
-      className={cn(
-        "group relative flex flex-col overflow-hidden",
-        "bg-card/90 dark:bg-card/80 backdrop-blur-md border border-border",
-        "hover:border-primary hover:shadow-[0_0_25px_rgba(249,115,22,0.5)]",
-        "transition-all duration-200",
-        visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
-      )}
-    >
-      <div className="relative aspect-[2/1] w-full overflow-hidden shrink-0">
-        {project.image_url ? (
-          <img src={project.image_url} alt={project.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
-        ) : (
-          <div className="w-full h-full bg-muted/40 flex items-center justify-center">
-            <svg className="w-6 h-6 text-muted-foreground/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-            </svg>
-          </div>
-        )}
-        {project.url && (
-          <div className="absolute top-1 right-1 w-4 h-4 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <svg className="w-1.5 h-1.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-          </div>
-        )}
-      </div>
-      <div className="p-1 flex flex-col min-w-0 h-11">
-        <h3 className="text-xs font-semibold tracking-tight text-foreground truncate group-hover:text-primary transition-colors">{project.title}</h3>
-        {project.description && (
-          <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5 flex-shrink-0">{project.description}</p>
-        )}
-      </div>
-    </Link>
   );
 }
 
