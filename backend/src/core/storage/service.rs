@@ -27,6 +27,7 @@ pub trait ObjectStore: Send + Sync {
     }
     async fn delete(&self, key: &str) -> Result<(), AppError>;
     async fn copy(&self, source_key: &str, destination_key: &str) -> Result<(), AppError>;
+    async fn get(&self, key: &str) -> Result<Vec<u8>, AppError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,7 +117,10 @@ impl StorageService {
             })
             .collect::<Vec<_>>();
         if let Some(uploads) = &self.uploads {
-            let keys = files.iter().map(|file| file.key.clone()).collect::<Vec<_>>();
+            let keys = files
+                .iter()
+                .map(|file| file.key.clone())
+                .collect::<Vec<_>>();
             if !keys.is_empty() {
                 let records = uploads.find_by_keys(&keys).await?;
                 for file in &mut files {
@@ -197,9 +201,94 @@ impl StorageService {
         })
     }
 
+    pub async fn generate_blurhash(&self, key: &str) -> Result<RecordedUpload, AppError> {
+        let key = key.trim();
+        if key.is_empty() || key.ends_with('/') {
+            return Err(AppError::InvalidInput("File key is required".to_owned()));
+        }
+        let content_type = content_type_for(key, "application/octet-stream");
+        if !is_raster_image(key, &content_type) {
+            return Err(AppError::InvalidInput(
+                "Blurhash can only be generated for images".to_owned(),
+            ));
+        }
+        let bytes = tokio::select! {
+            biased;
+            () = self.cancellation.cancelled() => return Err(AppError::Internal),
+            result = self.store.get(key) => result?,
+        };
+        let (hash, width, height) = blurhash_from_bytes(&bytes)
+            .ok_or_else(|| AppError::InvalidInput("Could not read this image".to_owned()))?;
+        let byte_size = i64::try_from(bytes.len()).unwrap_or(i64::MAX);
+        let url = public_url(&self.url_prefix, key);
+        let existing = if let Some(uploads) = &self.uploads {
+            uploads
+                .find_by_keys(&[key.to_owned()])
+                .await?
+                .into_iter()
+                .next()
+        } else {
+            None
+        };
+        let saved_content_type = existing
+            .as_ref()
+            .map(|file| file.content_type.clone())
+            .unwrap_or_else(|| content_type.clone());
+        let saved_size = existing
+            .as_ref()
+            .map(|file| file.byte_size)
+            .unwrap_or(byte_size);
+        let id = if let Some(uploads) = &self.uploads {
+            let saved = uploads
+                .upsert(UploadFile {
+                    id: existing
+                        .as_ref()
+                        .map(|file| file.id)
+                        .unwrap_or_else(Uuid::new_v4),
+                    s3_key: key.to_owned(),
+                    public_url: url.clone(),
+                    filename: filename_from_key(key),
+                    directory_path: directory_path(key),
+                    content_type: saved_content_type.clone(),
+                    byte_size: saved_size,
+                    width: Some(width),
+                    height: Some(height),
+                    blurhash: Some(hash.clone()),
+                    created_by: existing.and_then(|file| file.created_by),
+                })
+                .await?;
+            Some(saved.id)
+        } else {
+            None
+        };
+        Ok(RecordedUpload {
+            id,
+            key: key.to_owned(),
+            url,
+            content_type: saved_content_type,
+            byte_size: saved_size,
+            width: Some(width),
+            height: Some(height),
+            blurhash: Some(hash),
+        })
+    }
+
+    pub async fn generate_blurhash_for_id(&self, id: Uuid) -> Result<RecordedUpload, AppError> {
+        let uploads = self
+            .uploads
+            .as_ref()
+            .ok_or_else(|| AppError::InvalidInput("image library is unavailable".to_owned()))?;
+        let file = uploads.find_by_id(id).await?.ok_or(AppError::NotFound)?;
+        self.generate_blurhash(&file.s3_key).await
+    }
+
     pub async fn delete_file(&self, key: &str) -> Result<(), AppError> {
         if let Some(uploads) = &self.uploads
-            && let Some(file) = uploads.find_by_keys(&[key.to_owned()]).await?.into_iter().next()
+            && let Some(file) = uploads
+                .find_by_keys(&[key.to_owned()])
+                .await?
+                .into_iter()
+                .next()
             && uploads.is_referenced(file.id).await?
         {
             return Err(AppError::Conflict(
@@ -278,8 +367,7 @@ fn is_image_file(key: &str) -> bool {
 }
 
 fn is_raster_image(key: &str, content_type: &str) -> bool {
-    is_image_file(key)
-        || (content_type.starts_with("image/") && content_type != "image/svg+xml")
+    is_image_file(key) || (content_type.starts_with("image/") && content_type != "image/svg+xml")
 }
 
 fn content_type_for(key: &str, declared: &str) -> String {
@@ -322,7 +410,9 @@ fn filename_from_key(key: &str) -> String {
 
 fn directory_path(key: &str) -> String {
     match key.rsplit_once('/') {
-        Some((directory, file)) if !directory.is_empty() && !file.is_empty() => directory.to_owned(),
+        Some((directory, file)) if !directory.is_empty() && !file.is_empty() => {
+            directory.to_owned()
+        }
         _ => String::new(),
     }
 }

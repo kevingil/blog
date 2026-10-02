@@ -8,7 +8,7 @@ import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Trash2, 
 import { AnimatePresence, motion } from "framer-motion"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { VITE_API_BASE_URL } from "@/services/constants";
+import { VITE_API_BASE_URL, VITE_PUBLIC_S3_URL_PREFIX } from "@/services/constants";
 import { isAuthError } from '@/services/authenticatedFetch';
 import { submitAgentRequest } from '@/services/agent';
 import { generateArticle } from '@/services/llm/articles';
@@ -22,6 +22,7 @@ import { SourcesManager } from './SourcesManager';
 import { ImageLoader } from './editor/ImageLoader';
 import { ImagePickerFromUploads } from './editor/ImagePickerFromUploads';
 import { BlurhashImage } from '@/components/media/BlurhashImage';
+import { GenerateBlurhash } from '@/components/media/GenerateBlurhash';
 import { 
   DEFAULT_IMAGE_PROMPT, 
   articleSchema, 
@@ -401,6 +402,12 @@ function takePendingDraft(slug: string): ArticleFormData | null {
   } catch {
     return null;
   }
+}
+
+function storageKeyFromUrl(url: string): string | undefined {
+  const prefix = (VITE_PUBLIC_S3_URL_PREFIX || "").replace(/\/$/, "");
+  if (!prefix || !url.startsWith(`${prefix}/`)) return undefined;
+  return decodeURIComponent(url.slice(prefix.length + 1));
 }
 
 export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: boolean; launchpad?: boolean }) {
@@ -865,6 +872,16 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
   const watchedContent = useWatch({ control, name: 'content' });
   const watchedTitle = useWatch({ control, name: 'title' });
   const watchedExternalUrl = useWatch({ control, name: 'external_url' });
+  const articleIsLive = isPublished(article?.article);
+  const articleWordCount = (watchedContent ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+  const articleWhen = articleIsLive ? article?.article.published_at : article?.article.updated_at;
+  const articleWhenDate = articleWhen ? new Date(articleWhen) : null;
+  const articleWhenLabel = articleWhenDate && !Number.isNaN(articleWhenDate.getTime())
+    ? `${articleIsLive ? "Published" : "Updated"} ${format(articleWhenDate, "MMM d, yyyy")}`
+    : null;
   const watchedImageUrl = useWatch({ control, name: 'image_url' });
   const draftKey = draftSnapshot({
     title: watchedTitle,
@@ -2016,10 +2033,24 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
                             </div>
                           )}
                         </div>
-                        {currentHeader?.blurhash ? (
-                          <p className="font-mono text-xs break-all text-muted-foreground" data-testid="header-blurhash">
-                            blurhash {currentHeader.blurhash}
-                          </p>
+                        {previewImageUrl ? (
+                          <GenerateBlurhash
+                            fileKey={storageKeyFromUrl(previewImageUrl)}
+                            uploadId={currentHeader?.uploadId}
+                            blurhash={currentHeader?.blurhash}
+                            testId="header-blurhash"
+                            onGenerated={(result) => {
+                              setImageVersions((prev) => prev.map((version, index) => (
+                                index === currentVersionIndex
+                                  ? {
+                                      ...version,
+                                      blurhash: result.blurhash,
+                                      uploadId: result.id ?? version.uploadId,
+                                    }
+                                  : version
+                              )));
+                            }}
+                          />
                         ) : null}
                         
                         {/* Image Versions */}
@@ -2219,6 +2250,34 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
                     className="w-full min-w-0 text-base font-medium md:text-lg"
                   />
                   {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title.message}</p>}
+                  <div className="mt-1 flex min-w-0 items-center gap-2 overflow-hidden text-xs text-muted-foreground">
+                    <span
+                      className={cn(
+                        "inline-flex h-5 shrink-0 items-center rounded-none border px-1.5 text-[10px] font-semibold uppercase tracking-wide",
+                        articleIsLive
+                          ? "border-primary/50 bg-primary/10 text-primary"
+                          : "border-border bg-muted text-foreground",
+                      )}
+                      data-testid="article-status-badge"
+                    >
+                      {articleIsLive ? "Live" : "Draft"}
+                    </span>
+                    <span className="truncate font-mono">
+                      {article?.article.slug ? `/${article.article.slug}` : "Not saved"}
+                    </span>
+                    {articleWordCount > 0 && (
+                      <span className="shrink-0">{articleWordCount.toLocaleString()} words</span>
+                    )}
+                    {articleWhenLabel && (
+                      <span className="shrink-0">{articleWhenLabel}</span>
+                    )}
+                    {articleIsLive && hasDraftChanges(article?.article) && (
+                      <span className="shrink-0 text-primary">Unpublished edits</span>
+                    )}
+                    {watchedExternalUrl?.trim() && (
+                      <span className="shrink-0">External</span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Publish button when unpublished changes */}

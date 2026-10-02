@@ -103,6 +103,14 @@ export function externalArticleUrl(
   return url;
 }
 
+export function articleHost(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./i, "");
+  } catch {
+    return url;
+  }
+}
+
 export function getDisplayImageUrl(article: Article | ArticleListItem['article'], preferPublished = true): string {
   if (preferPublished && article.published_image_url) return article.published_image_url;
   return article.draft_image_url;

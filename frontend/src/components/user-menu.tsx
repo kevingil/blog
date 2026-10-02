@@ -12,7 +12,6 @@ import { Separator } from '@/components/ui/separator';
 import { 
   Home, 
   LayoutDashboard, 
-  Settings, 
   LogOut,
   Moon,
   Sun
@@ -54,17 +53,6 @@ export function UserMenu({ variant }: UserMenuProps) {
 
   return (
     <div className="inline-flex shrink-0 items-center gap-2">
-      {/* Navigation Button */}
-      {variant === 'dashboard' && (
-        <Link
-          to={navLink}
-          className="inline-flex h-9 items-center justify-center rounded-full bg-primary px-3 text-sm font-medium text-primary-foreground shadow-xs transition-colors hover:bg-primary/90"
-        >
-          {buttonLabel}
-        </Link>
-      )}
-
-      {/* Avatar Popover */}
       <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
           <Button
@@ -102,17 +90,16 @@ export function UserMenu({ variant }: UserMenuProps) {
 
         {/* Menu Items */}
         <div className="flex flex-col gap-1">
-          {/* Settings Link */}
-          <Link 
-            to={variant === 'dashboard' ? '/dashboard/settings' : '/dashboard/settings'} 
+          <Link
+            to={navLink}
             onClick={() => setIsOpen(false)}
           >
             <Button
               variant="ghost"
               className="w-full justify-start h-9 px-2"
             >
-              <Settings className="mr-2 h-4 w-4" />
-              <span>Account Preferences</span>
+              <NavIcon className="mr-2 h-4 w-4" />
+              <span>{buttonLabel}</span>
             </Button>
           </Link>
 

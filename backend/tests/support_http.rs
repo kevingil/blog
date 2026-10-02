@@ -263,6 +263,7 @@ enum StorageOperation {
 #[derive(Default)]
 struct Store {
     operations: Mutex<Vec<StorageOperation>>,
+    objects: Mutex<std::collections::HashMap<String, Vec<u8>>>,
 }
 
 impl Store {
@@ -284,9 +285,22 @@ impl ObjectStore for Store {
     }
 
     async fn put(&self, key: &str, data: Vec<u8>) -> Result<(), AppError> {
+        self.objects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(key.to_owned(), data.clone());
         self.state()
             .push(StorageOperation::Put(key.to_owned(), data));
         Ok(())
+    }
+
+    async fn get(&self, key: &str) -> Result<Vec<u8>, AppError> {
+        self.objects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(key)
+            .cloned()
+            .ok_or(AppError::NotFound)
     }
 
     async fn delete(&self, key: &str) -> Result<(), AppError> {
@@ -959,6 +973,38 @@ async fn storage_routes_preserve_multipart_keys_urls_and_folder_methods() -> Tes
 }
 
 #[tokio::test]
+async fn storage_blurhash_route_encodes_a_stored_image() -> TestResult {
+    let fixture = fixture()?;
+    let image = image::RgbaImage::from_pixel(8, 8, image::Rgba([220, 40, 40, 255]));
+    let mut bytes = Vec::new();
+    image::DynamicImage::ImageRgba8(image)
+        .write_to(
+            &mut std::io::Cursor::new(&mut bytes),
+            image::ImageFormat::Png,
+        )
+        .unwrap();
+    fixture.store.put("images/red.png", bytes).await.unwrap();
+    let (status, generated) = call(
+        fixture.router.clone(),
+        Method::POST,
+        "/storage/blurhash",
+        Some("application/json"),
+        json!({"key": "images/red.png"}).to_string(),
+        Some(&fixture.bearer),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{generated}");
+    assert_eq!(
+        generated["data"]["blurhash"],
+        "LTPJVz|_fQ|_|_sofQsofQfQfQfQ"
+    );
+    assert_eq!(generated["data"]["width"], 8);
+    assert_eq!(generated["data"]["height"], 8);
+    assert_eq!(generated["data"]["key"], "images/red.png");
+    Ok(())
+}
+
+#[tokio::test]
 async fn taskrun_routes_scope_by_organization_and_preserve_detail_event_json() -> TestResult {
     let fixture = fixture()?;
     let (status, listed) = call(
@@ -1099,6 +1145,7 @@ fn support_openapi_has_stable_operations_security_and_multipart_contract() -> Te
         ),
         ("/storage/files", "get", "listStorageFiles"),
         ("/storage/upload", "post", "uploadStorageFile"),
+        ("/storage/blurhash", "post", "generateStorageBlurhash"),
         ("/storage/{key}", "delete", "deleteStorageFile"),
         ("/storage/folders", "post", "createStorageFolder"),
         ("/storage/folders", "put", "updateStorageFolder"),

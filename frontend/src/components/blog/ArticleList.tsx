@@ -18,6 +18,7 @@ import { getArticles, searchArticles, getPopularTags } from '@/services/blog';
 import { ArticleListItem, ITEMS_PER_PAGE, getDisplayTitle, getDisplayContent, getDisplayImage, externalArticleUrl } from '@/services/types';
 import { BlurhashImage } from '@/components/media/BlurhashImage';
 import { ArticleHref } from '@/components/blog/ArticleHref';
+import { ExternalDomain } from '@/components/blog/ExternalDomain';
 import { GetArticlesResponse } from '@/routes/dashboard/blog';
 import { useQuery } from '@tanstack/react-query';
 
@@ -37,7 +38,7 @@ type SearchParams = {
 
 function ArticleCardSkeleton() {
   return (
-    <Card>
+    <Card className="rounded-none">
       <CardContent className="p-4">
         <Skeleton className="h-6 w-3/4 mb-2" />
         <div className="flex items-center mb-4">
@@ -288,7 +289,7 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
               <Card
                 key={article.article.id}
                 animationDelay={index * 80}
-                className="group relative overflow-hidden hover:border-primary/30 hover:shadow-[0_0_20px_-5px_rgba(249,115,22,0.1)] transition-all duration-500"
+                className="group relative overflow-hidden rounded-none hover:border-primary/30 hover:shadow-[0_0_20px_-5px_rgba(249,115,22,0.1)] transition-all duration-500"
               >
                 <CardContent className="p-0">
                   <ArticleHref
@@ -305,7 +306,7 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
                         {externalUrl && (
                           <>
                             <span>·</span>
-                            <span>External</span>
+                            <ExternalDomain url={externalUrl} className="max-w-[12rem]" iconClassName="size-3" />
                           </>
                         )}
                         <span>·</span>
@@ -332,7 +333,7 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
                       )}
                     </div>
 
-                    <div className="relative w-36 sm:w-48 md:w-56 flex-shrink-0 overflow-hidden rounded-lg my-4 mr-4">
+                    <div className="relative w-36 sm:w-48 md:w-56 flex-shrink-0 overflow-hidden my-4 mr-4">
                       {displayImage?.url ? (
                         <>
                           <BlurhashImage

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Folder, File, Trash2, Copy, MoreVertical, FolderOpen, Image } from "lucide-react";
 import { FileData, FolderData } from "@/services/storage";
+import { GenerateBlurhash } from "@/components/media/GenerateBlurhash";
 import { VITE_PUBLIC_S3_URL_PREFIX } from "@/services/constants";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
@@ -149,6 +150,14 @@ function FileDetailDialog({ file, onDelete }: { file: FileData; onDelete: (key: 
                       : "—"}
                   </p>
                 </div>
+                {file.is_image ? (
+                  <GenerateBlurhash
+                    fileKey={file.key}
+                    uploadId={file.id}
+                    blurhash={file.blurhash}
+                    testId="upload-blurhash"
+                  />
+                ) : null}
               </div>
             </div>
           </ScrollArea>

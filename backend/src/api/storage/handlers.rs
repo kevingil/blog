@@ -10,8 +10,9 @@ use crate::{
 
 use super::{
     dto::{
-        CreateFolderRequest, ListFilesQuery, ListFilesResponse, SuccessFlagResponse,
-        UpdateFolderRequest, UploadFileRequest, UploadFileResponse,
+        CreateFolderRequest, GenerateBlurhashRequest, GenerateBlurhashResponse, ListFilesQuery,
+        ListFilesResponse, SuccessFlagResponse, UpdateFolderRequest, UploadFileRequest,
+        UploadFileResponse,
     },
     state::StorageState,
 };
@@ -105,7 +106,9 @@ pub async fn upload_file(
     let recorded = service
         .put_recorded(
             &key,
-            content_type.as_deref().unwrap_or("application/octet-stream"),
+            content_type
+                .as_deref()
+                .unwrap_or("application/octet-stream"),
             file,
             Some(_authenticated.0.into_inner()),
         )
@@ -120,6 +123,45 @@ pub async fn upload_file(
         width: recorded.width,
         height: recorded.height,
         blurhash: recorded.blurhash,
+    })))
+}
+
+#[utoipa::path(
+    post,
+    path = "/storage/blurhash",
+    request_body = GenerateBlurhashRequest,
+    responses(
+        (status = 200, body = SuccessResponse<GenerateBlurhashResponse>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 404, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "storage",
+    operation_id = "generateStorageBlurhash"
+)]
+pub async fn generate_blurhash(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<StorageState>,
+    JsonBody(request): JsonBody<GenerateBlurhashRequest>,
+) -> ApiResult<GenerateBlurhashResponse> {
+    let service = state.service()?;
+    let recorded = if let Some(id) = request.id {
+        service.generate_blurhash_for_id(id).await?
+    } else {
+        service.generate_blurhash(&request.key).await?
+    };
+    let blurhash = recorded
+        .blurhash
+        .ok_or_else(|| AppError::InvalidInput("Could not read this image".to_owned()))?;
+    Ok(Json(SuccessResponse::new(GenerateBlurhashResponse {
+        id: recorded.id,
+        key: recorded.key,
+        url: recorded.url,
+        blurhash,
+        width: recorded.width,
+        height: recorded.height,
     })))
 }
 

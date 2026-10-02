@@ -5,8 +5,9 @@ use crate::api::auth::AuthState;
 
 use super::{
     handlers::{
-        __path_create_folder, __path_delete_file, __path_list_files, __path_update_folder,
-        __path_upload_file, create_folder, delete_file, list_files, update_folder, upload_file,
+        __path_create_folder, __path_delete_file, __path_generate_blurhash, __path_list_files,
+        __path_update_folder, __path_upload_file, create_folder, delete_file, generate_blurhash,
+        list_files, update_folder, upload_file,
     },
     state::StorageState,
 };
@@ -20,6 +21,7 @@ where
     OpenApiRouter::new()
         .routes(routes!(list_files))
         .routes(routes!(upload_file))
+        .routes(routes!(generate_blurhash))
         .routes(routes!(create_folder, update_folder))
         .routes(routes!(delete_file))
 }
