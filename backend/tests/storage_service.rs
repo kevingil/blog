@@ -1,8 +1,11 @@
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use async_trait::async_trait;
 use blog_backend::{
-    core::storage::{ObjectEntry, ObjectListing, ObjectStore, StorageService},
+    core::storage::{
+        ObjectEntry, ObjectListing, ObjectStore, StorageService, UploadFile, UploadRepository,
+    },
     error::AppError,
 };
 use chrono::{TimeZone, Utc};
@@ -21,6 +24,7 @@ struct ObjectStoreState {
     listing: ObjectListing,
     operations: Vec<Operation>,
     fail_copy_destination: Option<String>,
+    objects: HashMap<String, Vec<u8>>,
 }
 
 #[derive(Default)]
@@ -48,10 +52,18 @@ impl ObjectStore for MemoryObjectStore {
     }
 
     async fn put(&self, key: &str, data: Vec<u8>) -> Result<(), AppError> {
-        self.state()
-            .operations
-            .push(Operation::Put(key.to_owned(), data));
+        let mut state = self.state();
+        state.objects.insert(key.to_owned(), data.clone());
+        state.operations.push(Operation::Put(key.to_owned(), data));
         Ok(())
+    }
+
+    async fn get(&self, key: &str) -> Result<Vec<u8>, AppError> {
+        self.state()
+            .objects
+            .get(key)
+            .cloned()
+            .ok_or(AppError::NotFound)
     }
 
     async fn delete(&self, key: &str) -> Result<(), AppError> {
@@ -217,4 +229,158 @@ async fn cancellation_stops_object_store_admission() {
         Err(AppError::Internal)
     ));
     assert!(store.state().operations.is_empty());
+}
+
+fn solid_red_png() -> Vec<u8> {
+    let image = image::RgbaImage::from_pixel(8, 8, image::Rgba([220, 40, 40, 255]));
+    let mut bytes = Vec::new();
+    image::DynamicImage::ImageRgba8(image)
+        .write_to(
+            &mut std::io::Cursor::new(&mut bytes),
+            image::ImageFormat::Png,
+        )
+        .unwrap();
+    bytes
+}
+
+#[tokio::test]
+async fn generate_blurhash_reads_the_stored_image() {
+    let store = Arc::new(MemoryObjectStore::default());
+    let png = solid_red_png();
+    assert!(store.put("images/red.png", png).await.is_ok());
+    let service = StorageService::new(store, "https://cdn.example.test", CancellationToken::new());
+    let recorded = service.generate_blurhash("images/red.png").await.unwrap();
+    assert_eq!(
+        recorded.blurhash.as_deref(),
+        Some("LTPJVz|_fQ|_|_sofQsofQfQfQfQ")
+    );
+    assert_eq!(recorded.width, Some(8));
+    assert_eq!(recorded.height, Some(8));
+    assert_eq!(recorded.url, "https://cdn.example.test/images/red.png");
+    assert!(recorded.id.is_none());
+    assert!(matches!(
+        service.generate_blurhash("notes/draft.md").await,
+        Err(AppError::InvalidInput(_))
+    ));
+    assert!(matches!(
+        service.generate_blurhash("images/missing.png").await,
+        Err(AppError::NotFound)
+    ));
+}
+
+#[derive(Default)]
+struct MemoryUploads {
+    files: Mutex<Vec<UploadFile>>,
+}
+
+#[async_trait]
+impl UploadRepository for MemoryUploads {
+    async fn upsert(&self, file: UploadFile) -> Result<UploadFile, AppError> {
+        let mut files = self
+            .files
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(existing) = files.iter_mut().find(|stored| stored.s3_key == file.s3_key) {
+            *existing = file.clone();
+        } else {
+            files.push(file.clone());
+        }
+        Ok(file)
+    }
+
+    async fn find_by_id(&self, id: uuid::Uuid) -> Result<Option<UploadFile>, AppError> {
+        Ok(self
+            .files
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .find(|file| file.id == id)
+            .cloned())
+    }
+
+    async fn find_by_ids(&self, _ids: &[uuid::Uuid]) -> Result<Vec<UploadFile>, AppError> {
+        Ok(Vec::new())
+    }
+
+    async fn find_by_keys(&self, keys: &[String]) -> Result<Vec<UploadFile>, AppError> {
+        Ok(self
+            .files
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .filter(|file| keys.iter().any(|key| key == &file.s3_key))
+            .cloned()
+            .collect())
+    }
+
+    async fn find_by_public_url(&self, _url: &str) -> Result<Option<UploadFile>, AppError> {
+        Ok(None)
+    }
+
+    async fn find_by_public_urls(&self, _urls: &[String]) -> Result<Vec<UploadFile>, AppError> {
+        Ok(Vec::new())
+    }
+
+    async fn delete_by_key(&self, _key: &str) -> Result<(), AppError> {
+        Ok(())
+    }
+
+    async fn is_referenced(&self, _id: uuid::Uuid) -> Result<bool, AppError> {
+        Ok(false)
+    }
+
+    async fn rename_prefix(
+        &self,
+        _old_prefix: &str,
+        _new_prefix: &str,
+        _url_prefix: &str,
+    ) -> Result<(), AppError> {
+        Ok(())
+    }
+
+    async fn replace_body_refs(
+        &self,
+        _owner_kind: &str,
+        _owner_id: uuid::Uuid,
+        _upload_ids: &[uuid::Uuid],
+    ) -> Result<(), AppError> {
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn generate_blurhash_saves_the_hash_on_the_upload() {
+    let store = Arc::new(MemoryObjectStore::default());
+    let png = solid_red_png();
+    assert!(store.put("images/red.png", png).await.is_ok());
+    let uploads = Arc::new(MemoryUploads::default());
+    let owner = uuid::Uuid::new_v4();
+    uploads.files.lock().unwrap().push(UploadFile {
+        id: owner,
+        s3_key: "images/red.png".to_owned(),
+        public_url: "https://cdn.example.test/images/red.png".to_owned(),
+        filename: "red.png".to_owned(),
+        directory_path: "images".to_owned(),
+        content_type: "image/png".to_owned(),
+        byte_size: 12,
+        width: None,
+        height: None,
+        blurhash: None,
+        created_by: Some(owner),
+    });
+    let service = StorageService::new(store, "https://cdn.example.test", CancellationToken::new())
+        .with_uploads(uploads.clone());
+    let recorded = service.generate_blurhash_for_id(owner).await.unwrap();
+    assert_eq!(recorded.id, Some(owner));
+    assert_eq!(
+        recorded.blurhash.as_deref(),
+        Some("LTPJVz|_fQ|_|_sofQsofQfQfQfQ")
+    );
+    let saved = uploads.find_by_id(owner).await.unwrap().unwrap();
+    assert_eq!(
+        saved.blurhash.as_deref(),
+        Some("LTPJVz|_fQ|_|_sofQsofQfQfQfQ")
+    );
+    assert_eq!(saved.created_by, Some(owner));
+    assert_eq!(saved.byte_size, 12);
 }

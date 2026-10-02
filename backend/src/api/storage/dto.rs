@@ -96,6 +96,26 @@ pub struct UploadFileResponse {
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct GenerateBlurhashRequest {
+    #[serde(default)]
+    pub key: String,
+    pub id: Option<uuid::Uuid>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct GenerateBlurhashResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<uuid::Uuid>,
+    pub key: String,
+    pub url: String,
+    pub blurhash: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub height: Option<i32>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct CreateFolderRequest {
     pub path: String,
 }

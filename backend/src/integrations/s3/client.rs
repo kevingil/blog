@@ -138,6 +138,23 @@ impl ObjectStore for S3ObjectStore {
             .map_err(|_| AppError::External)
     }
 
+    async fn get(&self, key: &str) -> Result<Vec<u8>, AppError> {
+        let response = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .send()
+            .await
+            .map_err(|_| AppError::NotFound)?;
+        let bytes = response
+            .body
+            .collect()
+            .await
+            .map_err(|_| AppError::External)?;
+        Ok(bytes.into_bytes().to_vec())
+    }
+
     async fn copy(&self, source_key: &str, destination_key: &str) -> Result<(), AppError> {
         self.client
             .copy_object()

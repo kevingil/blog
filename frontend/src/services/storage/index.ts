@@ -2,6 +2,7 @@ import { Storage } from "@/client";
 import type {
     FileDataResponse,
     FolderDataResponse,
+    GenerateBlurhashResponse,
     ListFilesResponse,
 } from "@/client";
 import { generatedData } from "../generatedClient";
@@ -52,6 +53,16 @@ export async function deleteFile(key: string) {
 export async function createFolder(folderPath: string) {
     await generatedData<{ success: boolean }>(
         Storage.createStorageFolder({ body: { path: folderPath } }),
+    );
+}
+
+export type GeneratedBlurhash = GenerateBlurhashResponse;
+
+export async function generateBlurhash(input: { key?: string; id?: string }): Promise<GeneratedBlurhash> {
+    return generatedData<GeneratedBlurhash>(
+        Storage.generateStorageBlurhash({
+            body: input.id ? { id: input.id } : { key: input.key ?? "" },
+        }),
     );
 }
 

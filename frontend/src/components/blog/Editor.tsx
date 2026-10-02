@@ -7,7 +7,7 @@ import { format } from "date-fns"
 import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, ArrowUp, Square, Trash2, Mic, MessageSquare, X } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { VITE_API_BASE_URL } from "@/services/constants";
+import { VITE_API_BASE_URL, VITE_PUBLIC_S3_URL_PREFIX } from "@/services/constants";
 import { isAuthError } from '@/services/authenticatedFetch';
 import { submitAgentRequest } from '@/services/agent';
 import { addedTextRanges, type TextRange } from '@/lib/added-text';
@@ -19,6 +19,7 @@ import { SourcesManager } from './SourcesManager';
 import { ImageLoader } from './editor/ImageLoader';
 import { ImagePickerFromUploads } from './editor/ImagePickerFromUploads';
 import { BlurhashImage } from '@/components/media/BlurhashImage';
+import { GenerateBlurhash } from '@/components/media/GenerateBlurhash';
 import { 
   DEFAULT_IMAGE_PROMPT, 
   articleSchema, 
@@ -403,6 +404,12 @@ function takePendingDraft(slug: string): ArticleFormData | null {
   } catch {
     return null;
   }
+}
+
+function storageKeyFromUrl(url: string): string | undefined {
+  const prefix = (VITE_PUBLIC_S3_URL_PREFIX || "").replace(/\/$/, "");
+  if (!prefix || !url.startsWith(`${prefix}/`)) return undefined;
+  return decodeURIComponent(url.slice(prefix.length + 1));
 }
 
 export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
@@ -1863,10 +1870,24 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                             </div>
                           )}
                         </div>
-                        {currentHeader?.blurhash ? (
-                          <p className="font-mono text-xs break-all text-muted-foreground" data-testid="header-blurhash">
-                            blurhash {currentHeader.blurhash}
-                          </p>
+                        {previewImageUrl ? (
+                          <GenerateBlurhash
+                            fileKey={storageKeyFromUrl(previewImageUrl)}
+                            uploadId={currentHeader?.uploadId}
+                            blurhash={currentHeader?.blurhash}
+                            testId="header-blurhash"
+                            onGenerated={(result) => {
+                              setImageVersions((prev) => prev.map((version, index) => (
+                                index === currentVersionIndex
+                                  ? {
+                                      ...version,
+                                      blurhash: result.blurhash,
+                                      uploadId: result.id ?? version.uploadId,
+                                    }
+                                  : version
+                              )));
+                            }}
+                          />
                         ) : null}
                         
                         {/* Image Versions */}

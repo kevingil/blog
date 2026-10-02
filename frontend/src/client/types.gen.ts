@@ -41,6 +41,10 @@ export type Article = {
     } | null;
     created_at?: string | null;
     updated_at?: string | null;
+    /**
+     * Set when this row points at the author's post on another site.
+     */
+    external_url?: string | null;
 };
 
 export type ArticleListItem = {
@@ -240,6 +244,10 @@ export type CreateArticle = {
     authorId: string;
 };
 
+export type CreateExternalArticle = {
+    url: string;
+};
+
 export type CreateFolderRequest = {
     path: string;
 };
@@ -378,6 +386,20 @@ export type GenerateArticleRequest = {
 export type GenerateArticleResponse = {
     article: Article;
     request_id: string;
+};
+
+export type GenerateBlurhashRequest = {
+    key?: string;
+    id?: string | null;
+};
+
+export type GenerateBlurhashResponse = {
+    id?: string | null;
+    key: string;
+    url: string;
+    blurhash: string;
+    width?: number | null;
+    height?: number | null;
 };
 
 export type GenerateImageRequest = {
@@ -697,6 +719,7 @@ export type RecommendedArticle = {
     published_at?: string | null;
     created_at?: string | null;
     author?: string | null;
+    external_url?: string | null;
 };
 
 export type RegisterRequest = {
@@ -861,6 +884,10 @@ export type SuccessResponseArticle = {
         } | null;
         created_at?: string | null;
         updated_at?: string | null;
+        /**
+         * Set when this row points at the author's post on another site.
+         */
+        external_url?: string | null;
     };
 };
 
@@ -1035,6 +1062,17 @@ export type SuccessResponseGenerateArticleResponse = {
     };
 };
 
+export type SuccessResponseGenerateBlurhashResponse = {
+    data: {
+        id?: string | null;
+        key: string;
+        url: string;
+        blurhash: string;
+        width?: number | null;
+        height?: number | null;
+    };
+};
+
 export type SuccessResponseGenerateImageResponse = {
     data: {
         request_id: string;
@@ -1140,6 +1178,7 @@ export type SuccessResponseOptionVecRecommendedArticle = {
         published_at?: string | null;
         created_at?: string | null;
         author?: string | null;
+        external_url?: string | null;
     }>;
 };
 
@@ -2323,6 +2362,27 @@ export type CreateArticleResponses = {
 };
 
 export type CreateArticleResponse = CreateArticleResponses[keyof CreateArticleResponses];
+
+export type CreateExternalArticleData = {
+    body: CreateExternalArticle;
+    path?: never;
+    query?: never;
+    url: '/blog/articles/external';
+};
+
+export type CreateExternalArticleErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    409: ErrorEnvelope;
+};
+
+export type CreateExternalArticleError = CreateExternalArticleErrors[keyof CreateExternalArticleErrors];
+
+export type CreateExternalArticleResponses = {
+    201: SuccessResponseArticleListItem;
+};
+
+export type CreateExternalArticleResponse = CreateExternalArticleResponses[keyof CreateExternalArticleResponses];
 
 export type SearchArticlesData = {
     body?: never;
@@ -3892,6 +3952,28 @@ export type UpdateSourceResponses = {
 };
 
 export type UpdateSourceResponse = UpdateSourceResponses[keyof UpdateSourceResponses];
+
+export type GenerateStorageBlurhashData = {
+    body: GenerateBlurhashRequest;
+    path?: never;
+    query?: never;
+    url: '/storage/blurhash';
+};
+
+export type GenerateStorageBlurhashErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type GenerateStorageBlurhashError = GenerateStorageBlurhashErrors[keyof GenerateStorageBlurhashErrors];
+
+export type GenerateStorageBlurhashResponses = {
+    200: SuccessResponseGenerateBlurhashResponse;
+};
+
+export type GenerateStorageBlurhashResponse = GenerateStorageBlurhashResponses[keyof GenerateStorageBlurhashResponses];
 
 export type ListStorageFilesData = {
     body?: never;

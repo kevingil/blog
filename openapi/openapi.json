@@ -6709,6 +6709,81 @@
         ]
       }
     },
+    "/storage/blurhash": {
+      "post": {
+        "tags": [
+          "storage"
+        ],
+        "operationId": "generateStorageBlurhash",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateBlurhashRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_GenerateBlurhashResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/storage/files": {
       "get": {
         "tags": [
@@ -8959,6 +9034,61 @@
           },
           "request_id": {
             "type": "string"
+          }
+        }
+      },
+      "GenerateBlurhashRequest": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "GenerateBlurhashResponse": {
+        "type": "object",
+        "required": [
+          "key",
+          "url",
+          "blurhash"
+        ],
+        "properties": {
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "blurhash": {
+            "type": "string"
+          },
+          "width": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "height": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -11513,6 +11643,54 @@
               },
               "request_id": {
                 "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "SuccessResponse_GenerateBlurhashResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "key",
+              "url",
+              "blurhash"
+            ],
+            "properties": {
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "key": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "blurhash": {
+                "type": "string"
+              },
+              "width": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "height": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
               }
             }
           }
