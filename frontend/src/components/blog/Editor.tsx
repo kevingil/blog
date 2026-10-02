@@ -4,12 +4,15 @@ import { useAuth } from '@/services/auth/auth';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, ArrowUp, Square, Trash2, Mic, MessageSquare, X } from "lucide-react"
+import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Trash2, Mic, MessageSquare, X } from "lucide-react"
+import { AnimatePresence, motion } from "framer-motion"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { VITE_API_BASE_URL } from "@/services/constants";
 import { isAuthError } from '@/services/authenticatedFetch';
 import { submitAgentRequest } from '@/services/agent';
+import { generateArticle } from '@/services/llm/articles';
+import { scrapeAndCreateSource } from '@/services/sources';
 import { addedTextRanges, type TextRange } from '@/lib/added-text';
 import { useConversation } from '@/hooks/use-conversation';
 
@@ -33,12 +36,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import {
-  PromptInput,
-  PromptInputTextarea,
-  PromptInputActions,
-  PromptInputAction,
-} from "@/components/ui/prompt-input";
+import { AttachedSource, ChatComposer, WritingSuggestions } from "@/components/chat/ChatComposer";
 import { ChipInput } from "@/components/ui/chip-input";
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -405,17 +403,24 @@ function takePendingDraft(slug: string): ArticleFormData | null {
   }
 }
 
-export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
+export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: boolean; launchpad?: boolean }) {
   const { toast } = useToast()
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   
-  // Only use useParams when editing an existing article
-  const params = !isNew ? useParams({ from: '/dashboard/blog/edit/$blogSlug' }) : null;
-  const blogSlug = params?.blogSlug;
-  const search = !isNew ? useSearch({ from: '/dashboard/blog/edit/$blogSlug' }) : ({} as { requestId?: string });
-  const initialRequestId = (search as { requestId?: string }).requestId;
+  // Route params only exist on the edit page. The dashboard launchpad stays
+  // mounted and fills these in after the first send or voice start.
+  const routed = !isNew && !launchpad;
+  const params = routed ? useParams({ from: '/dashboard/blog/edit/$blogSlug' }) : null;
+  const search = routed ? useSearch({ from: '/dashboard/blog/edit/$blogSlug' }) : ({} as { requestId?: string });
+  const [launchedSlug, setLaunchedSlug] = useState<string | null>(null);
+  const [launchedRequestId, setLaunchedRequestId] = useState<string | null>(null);
+  const [launchPhase, setLaunchPhase] = useState<'landing' | 'editor'>(launchpad ? 'landing' : 'editor');
+  const [launching, setLaunching] = useState(false);
+  const blogSlug = params?.blogSlug ?? launchedSlug ?? undefined;
+  const initialRequestId = (search as { requestId?: string }).requestId ?? launchedRequestId ?? undefined;
+  const landing = launchpad && launchPhase === 'landing';
   
   // Loading states are now handled by React Query mutations
   // const [isLoading, setIsLoading] = useState(false);
@@ -489,6 +494,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   /* --------------------------------------------------------------------- */
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
+  const launchTokenRef = useRef(0);
+  const launchMessagesRef = useRef<ChatMessage[] | null>(null);
+  const launchpadSessionRef = useRef(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [inputMode, setInputMode] = useState<'text' | 'conversation'>('text');
@@ -985,6 +993,9 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         try {
           const result = await getConversationHistory(article.article.id);
           const loadedMessages = mapConversationMessages(result.messages || []);
+          if (launchpadSessionRef.current && loadedMessages.length === 0) {
+            return;
+          }
           setChatMessages(
             loadedMessages.length > 0 || initialRequestId
               ? loadedMessages
@@ -1199,7 +1210,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   const sendChat = async () => {
     const text = chatInput.trim();
     
-    if (!text) {
+    if (!text || (launchpad && !article?.article?.id)) {
       return;
     }
 
@@ -1210,6 +1221,95 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     }
 
     await sendChatWithMessage(text);
+  };
+
+  const beginFromLanding = async (mode: 'send' | 'voice', sources: AttachedSource[] = []) => {
+    if (!launchpad || launching) return;
+    const text = chatInput.trim();
+    if (mode === 'send' && !text) return;
+    if (!user?.id) {
+      toast({
+        title: "Error",
+        description: "User not found. Please log in again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const token = ++launchTokenRef.current;
+    launchpadSessionRef.current = true;
+    setLaunching(true);
+    setMobileChatOpen(true);
+
+    if (mode === 'voice') {
+      setInputMode('conversation');
+    } else {
+      const seed = [{ role: 'user', content: text, channel: 'text' } as ChatMessage];
+      launchMessagesRef.current = seed;
+      setChatMessages(seed);
+      setChatInput('');
+      setIsThinking(true);
+      setThinkingMessage('Starting…');
+    }
+
+    setLaunchPhase('editor');
+
+    const attachSources = async (articleId: string) => {
+      if (sources.length === 0) return;
+      await Promise.all(sources.map((source) =>
+        scrapeAndCreateSource({
+          article_id: articleId,
+          url: source.url,
+        }).catch((err) => {
+          console.error(`Failed to scrape source ${source.url}:`, err);
+          return null;
+        })
+      ));
+    };
+
+    try {
+      if (mode === 'voice') {
+        const created = await createArticle({
+          title: 'Untitled',
+          content: '',
+          tags: [],
+          publish: false,
+          authorId: String(user.id),
+        });
+        if (launchTokenRef.current !== token) return;
+        await attachSources(String(created.article.id));
+        if (launchTokenRef.current !== token) return;
+        queryClient.setQueryData(['article', created.article.slug], created);
+        setLaunchedSlug(created.article.slug);
+        return;
+      }
+
+      const { article, request_id } = await generateArticle(text);
+      if (launchTokenRef.current !== token) return;
+      await attachSources(String(article.id));
+      if (launchTokenRef.current !== token) return;
+      setLaunchedRequestId(request_id);
+      setLaunchedSlug(article.slug);
+    } catch (err) {
+      if (launchTokenRef.current !== token) return;
+      console.error('Failed to start writing:', err);
+      launchpadSessionRef.current = false;
+      launchMessagesRef.current = null;
+      setLaunchPhase('landing');
+      setInputMode('text');
+      setIsThinking(false);
+      setChatMessages([]);
+      if (mode === 'send') setChatInput(text);
+      toast({
+        title: "Error",
+        description: mode === 'voice'
+          ? "Could not start voice. Please try again."
+          : "Failed to start the article. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      if (launchTokenRef.current === token) setLaunching(false);
+    }
   };
 
   const performChatRequest = async (messageText: string, assistantIndex: number, isEditRequest: boolean, documentContent: string, documentMarkdown?: string) => {
@@ -1764,27 +1864,40 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           console.error('[Editor] Failed to load generation conversation history:', historyErr);
         }
 
-        const assistantIndex = loadedMessages.length;
-        setChatMessages([
-          ...loadedMessages,
-          { role: 'assistant', content: '' } as ChatMessage,
-        ]);
+        const seeded = loadedMessages.length > 0
+          ? loadedMessages
+          : (launchMessagesRef.current ?? []);
+        const last = seeded[seeded.length - 1];
+        if (last?.role === 'assistant' && last.content.trim()) {
+          setChatMessages(seeded);
+          setIsThinking(false);
+          return;
+        }
+        const assistantIndex = last?.role === 'assistant' ? seeded.length - 1 : seeded.length;
+        setChatMessages(
+          last?.role === 'assistant'
+            ? seeded
+            : [...seeded, { role: 'assistant', content: '' } as ChatMessage],
+        );
         await streamChatResponse(initialRequestId, assistantIndex, false);
       } catch (err) {
         console.error('[Editor] Failed to attach to generation session:', err);
       } finally {
         setChatLoading(false);
         // Strip requestId from URL so refresh doesn't re-attach.
-        navigate({
-          to: `/dashboard/blog/edit/${blogSlug}`,
-          replace: true,
-        });
+        // The launchpad stays on this screen so the chat never remounts.
+        if (!launchpad) {
+          navigate({
+            to: `/dashboard/blog/edit/${blogSlug}`,
+            replace: true,
+          });
+        }
       }
     })();
   }, [initialRequestId, article?.article?.id, isNew]);
 
   // Show loading state while fetching article
-  if (articleLoading && !isNew) {
+  if (articleLoading && !isNew && !launchpad) {
     return (
       <section className="flex-1 p-0 md:p-4">
         <div className="flex items-center justify-center h-64">
@@ -1795,7 +1908,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
   }
 
   // Show error state if fetch failed
-  if (error && !isNew) {
+  if (error && !isNew && !launchpad) {
     return (
       <section className="flex-1 p-0 md:p-4">
         <div className="flex items-center justify-center h-64">
@@ -1805,9 +1918,49 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
     );
   }
 
+  const voiceStatus = conversation.error
+    ? conversation.error
+    : conversation.caption
+      ? conversation.caption
+      : conversation.state === 'connecting'
+        ? 'Connecting to GPT-Live…'
+        : conversation.state === 'speaking'
+          ? 'Speaking…'
+          : 'Voice on · talk, or paste a link';
+
   return (
-      <section className="article-editor-shell">
-        <div className="article-editor-main px-2 pt-2 md:px-0 md:pt-0">
+      <motion.section
+        layout
+        data-writing-phase={launchpad ? launchPhase : 'editor'}
+        transition={{ layout: { duration: 0.55, ease: [0.22, 1, 0.36, 1] } }}
+        className={cn(
+          landing ? "writing-landing" : "article-editor-shell",
+          launchpad && !landing && "writing-launch-editor",
+        )}
+      >
+        <AnimatePresence>
+          {landing && (
+            <motion.div
+              key="writing-intro"
+              className="writing-landing-intro"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.35 }}
+            >
+              <h1 className="font-wordmark text-3xl font-medium tracking-tight text-balance md:text-4xl">
+                What are we writing today?
+              </h1>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        {!landing && (
+        <motion.div
+          className="article-editor-main px-2 pt-2 md:px-0 md:pt-0"
+          initial={launchpad ? { opacity: 0 } : false}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.4, delay: launchpad ? 0.08 : 0 }}
+        >
         {/* Article Metadata Card */}
         
             {/* Article Title Section with Image and Save */}
@@ -2351,11 +2504,20 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               </div>
           </form>
 
-      </div>
+      </motion.div>
+        )}
 
-      {/* Chat stays beside the draft on a wide screen, and covers it on a phone. */}
-        <div className={cn("article-editor-chat border rounded-sm", mobileChatOpen && "article-editor-chat-open")}>
-        <div className="article-editor-chat-mobile-bar">
+      {/* Same chat surface: centered on the dashboard, docked beside the draft after send. */}
+        <motion.div
+          layout
+          transition={{ layout: { duration: 0.55, ease: [0.22, 1, 0.36, 1] } }}
+          className={cn(
+            landing
+              ? "writing-landing-chat"
+              : cn("article-editor-chat border rounded-sm", mobileChatOpen && "article-editor-chat-open"),
+          )}
+        >
+        {!landing && <div className="article-editor-chat-mobile-bar">
           <span className="text-sm font-medium">Assistant</span>
           <Button
             type="button"
@@ -2367,8 +2529,14 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           >
             <X className="h-4 w-4" />
           </Button>
-        </div>
-        <div ref={chatMessagesRef} className="flex-1 space-y-2 overflow-y-auto p-3 md:p-1.5">
+        </div>}
+        <div
+          ref={chatMessagesRef}
+          className={cn(
+            "flex-1 space-y-2 overflow-y-auto p-3 md:p-1.5",
+            landing && "hidden",
+          )}
+        >
           {chatMessages.map((m, i) => {
             switch (m.role) {
               case 'tool': {
@@ -2519,42 +2687,38 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
               <ThinkShimmerBlock message={thinkingMessage} />
             )}
           </div>
-        <div className="p-2 space-y-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant={inputMode === 'conversation' ? 'default' : 'outline'}
-                className={cn(
-                  'h-7 w-7 px-0',
-                  inputMode === 'conversation' && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
-                )}
-                aria-pressed={inputMode === 'conversation'}
-                aria-label={inputMode === 'conversation' ? 'Turn voice off' : 'Turn voice on'}
-                title={inputMode === 'conversation' ? 'Voice on' : 'Voice off'}
-                disabled={isNew || !article?.article?.id}
-                onClick={() =>
-                  setInputMode((mode) => (mode === 'conversation' ? 'text' : 'conversation'))
-                }
-              >
-                <Mic className="h-3.5 w-3.5" />
-              </Button>
-              {inputMode === 'conversation' && (
-                <span className="truncate text-[11px] text-muted-foreground">
-                  {conversation.error
-                    ? conversation.error
-                    : conversation.caption
-                      ? conversation.caption
-                      : conversation.state === 'connecting'
-                        ? 'Connecting to GPT-Live…'
-                        : conversation.state === 'speaking'
-                          ? 'Speaking…'
-                          : 'Voice on · talk, or paste a link'}
-                </span>
-              )}
-            </div>
-            {!isNew && article?.article?.id && (
+        <div className={cn(!landing && "p-2")}>
+          <ChatComposer
+            variant={landing ? "landing" : "panel"}
+            value={chatInput}
+            onValueChange={setChatInput}
+            onSubmit={(sources) => {
+              if (landing) {
+                void beginFromLanding('send', sources);
+                return;
+              }
+              void sendChat();
+            }}
+            onVoice={(sources) => {
+              if (landing) {
+                void beginFromLanding('voice', sources);
+                return;
+              }
+              setInputMode((mode) => (mode === 'conversation' ? 'text' : 'conversation'));
+            }}
+            isLoading={landing ? launching : chatLoading}
+            disabled={launching || (launchpad && !landing && !article?.article?.id)}
+            placeholder={
+              landing
+                ? "Write an article about..."
+                : inputMode === 'conversation'
+                  ? "Talk with GPT-Live, or paste a link it should see…"
+                  : "Ask the assistant or click a quick action above…"
+            }
+            voiceOn={inputMode === 'conversation'}
+            voiceDisabled={landing ? launching : isNew || !article?.article?.id}
+            voiceStatus={voiceStatus}
+            accessory={!landing && !isNew && article?.article?.id ? (
               <Button
                 type="button"
                 size="sm"
@@ -2563,48 +2727,17 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
                 disabled={clearingChat}
                 onClick={clearChat}
               >
-                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                <Trash2 className="mr-1 h-3.5 w-3.5" />
                 {clearingChat ? 'Clearing…' : 'Clear chat'}
               </Button>
-            )}
-          </div>
-          <PromptInput
-            value={chatInput}
-            onValueChange={setChatInput}
-            onSubmit={sendChat}
-            isLoading={chatLoading}
-            className="flex-1"
-          >
-            <PromptInputTextarea
-              placeholder={
-                inputMode === 'conversation'
-                  ? "Talk with GPT-Live, or paste a link it should see…"
-                  : "Ask the assistant or click a quick action above…"
-              }
-              className="min-h-[44px]"
-            />
-            <PromptInputActions className="justify-end pt-2">
-              <PromptInputAction
-                tooltip={chatLoading ? "Stop generation" : "Send message"}
-              >
-                <Button
-                  variant="default"
-                  size="icon"
-                  className="h-8 w-8 rounded-full"
-                  disabled={!chatLoading && !chatInput.trim()}
-                  onClick={sendChat}
-                >
-                  {chatLoading ? (
-                    <Square className="size-5 fill-current" />
-                  ) : (
-                    <ArrowUp className="size-5" />
-                  )}
-                </Button>
-              </PromptInputAction>
-            </PromptInputActions>
-          </PromptInput>
+            ) : undefined}
+          />
+          {landing && chatInput.length === 0 && !launching && (
+            <WritingSuggestions onPick={setChatInput} />
+          )}
         </div>
-      </div>
+      </motion.div>
+      {!landing && (
       <button
         type="button"
         className="article-editor-chat-fab"
@@ -2614,6 +2747,7 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
         <MessageSquare />
         {chatLoading ? "Working" : "Chat"}
       </button>
+      )}
 
       {/* Version History Drawer */}
       <Drawer open={showVersions} onOpenChange={setShowVersions} direction="right">
@@ -2754,6 +2888,6 @@ export default function ArticleEditor({ isNew }: { isNew?: boolean }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </section>
+    </motion.section>
   );
 }
