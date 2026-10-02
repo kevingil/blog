@@ -4,10 +4,15 @@ import { createContext, useContext, ReactNode } from 'react';
 // Jotai atom for page title
 export const pageTitleAtom = atom<string>("Dashboard");
 
+// Blank editor on the New writing page. Shared so the header button and the page agree.
+export const blankEditorAtom = atom(false);
+
 // AdminDashboard Context type definition
 export interface AdminDashboardContext {
   pageTitle: string;
   setPageTitle: (title: string) => void;
+  blankEditor: boolean;
+  setBlankEditor: (open: boolean) => void;
 }
 
 // Create the AdminDashboard Context
@@ -22,9 +27,11 @@ interface AdminDashboardProviderProps {
 export function AdminDashboardProvider({ children }: AdminDashboardProviderProps) {
   const pageTitle = useAtomValue(pageTitleAtom);
   const setPageTitle = useSetAtom(pageTitleAtom);
+  const blankEditor = useAtomValue(blankEditorAtom);
+  const setBlankEditor = useSetAtom(blankEditorAtom);
 
   return (
-    <AdminDashboardContext.Provider value={{ pageTitle, setPageTitle }}>
+    <AdminDashboardContext.Provider value={{ pageTitle, setPageTitle, blankEditor, setBlankEditor }}>
       {children}
     </AdminDashboardContext.Provider>
   );

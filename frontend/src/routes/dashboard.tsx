@@ -9,7 +9,7 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { AdminDashboardProvider } from "@/services/dashboard/dashboard"
+import { AdminDashboardProvider, useAdminDashboard } from "@/services/dashboard/dashboard"
 // Preload child routes so they are discovered in route tree
 import './dashboard/blog/index'
 import './dashboard/blog/new'
@@ -45,7 +45,6 @@ export const Route = createFileRoute('/dashboard')({
 
 function DashboardLayout() {
   const location = useLocation();
-  const isEditorRoute = location.pathname.startsWith('/dashboard/blog/edit/');
 
   useLayoutEffect(() => {
     document.documentElement.scrollLeft = 0;
@@ -55,48 +54,50 @@ function DashboardLayout() {
 
   return (
     <AdminDashboardProvider>
-      <SidebarProvider
-        data-dashboard-shell
-        className="dashboard-shell h-screen overflow-hidden"
-        style={
-          {
-            "--sidebar-width": "calc(var(--spacing) * 72)",
-            "--header-height": "calc(var(--spacing) * 12)",
-          } as React.CSSProperties
-        }
-      >
-        <AppSidebar variant="inset" />
-        <SidebarInset className="flex h-full min-w-0 flex-col overflow-hidden">
-          <SiteHeader />
-          {isEditorRoute ? (
-            <DashboardEditorContent />
-          ) : (
-            <DashboardScrollableContent />
-          )}
-        </SidebarInset>
-      </SidebarProvider>
+      <DashboardShell />
     </AdminDashboardProvider>
   )
 }
 
-function DashboardEditorContent() {
-  return (
-    <div
-      data-dashboard-region="editor-content"
-      className="flex flex-1 flex-col min-h-0 min-w-0 overflow-hidden"
-    >
-      <Outlet />
-    </div>
-  );
-}
+function DashboardShell() {
+  const location = useLocation();
+  const { blankEditor, setBlankEditor } = useAdminDashboard();
+  const isWriting = location.pathname === "/dashboard" || location.pathname === "/dashboard/";
+  const isEditor =
+    location.pathname.startsWith("/dashboard/blog/edit/") ||
+    (isWriting && blankEditor);
 
-function DashboardScrollableContent() {
+  useLayoutEffect(() => {
+    if (!isWriting && blankEditor) {
+      setBlankEditor(false);
+    }
+  }, [isWriting, blankEditor, setBlankEditor]);
+
   return (
-    <div
-      data-dashboard-region="scrollable-content"
-      className="flex flex-1 flex-col min-h-0 min-w-0 overflow-y-auto overflow-x-hidden"
+    <SidebarProvider
+      data-dashboard-shell
+      className="dashboard-shell h-screen overflow-hidden"
+      style={
+        {
+          "--sidebar-width": "calc(var(--spacing) * 72)",
+          "--header-height": "calc(var(--spacing) * 12)",
+        } as React.CSSProperties
+      }
     >
-      <Outlet />
-    </div>
+      <AppSidebar variant="inset" />
+      <SidebarInset className="flex h-full min-w-0 flex-col overflow-hidden">
+        <SiteHeader />
+        <div
+          data-dashboard-region={isEditor ? "editor-content" : "scrollable-content"}
+          className={
+            isEditor
+              ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+              : "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto"
+          }
+        >
+          <Outlet />
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

@@ -5,6 +5,7 @@ import { getArticles } from '@/services/blog';
 import { type ArticleListItem, getDisplayTitle, getDisplayContent, getDisplayImage, externalArticleUrl } from '@/services/types';
 import { BlurhashImage } from '@/components/media/BlurhashImage';
 import { ArticleHref } from '@/components/blog/ArticleHref';
+import { ExternalDomain } from '@/components/blog/ExternalDomain';
 import { Link } from '@tanstack/react-router';
 import { createFileRoute } from '@tanstack/react-router';
 import { format } from 'date-fns';
@@ -77,7 +78,7 @@ function articleMeta(article: ArticleListItem) {
   };
 }
 
-const glassCard = "bg-card/90 dark:bg-card/80 backdrop-blur-md border border-border rounded-2xl hover:border-primary/30 hover:shadow-[0_0_20px_-5px_rgba(249,115,22,0.18)] transition-all duration-500";
+const glassCard = "bg-card/90 dark:bg-card/80 backdrop-blur-md border border-border hover:border-primary/30 hover:shadow-[0_0_20px_-5px_rgba(249,115,22,0.18)] transition-all duration-500";
 
 /* ════════════════════════════════════════
    ARTICLES SECTION
@@ -117,7 +118,7 @@ function ArticlesSection() {
 
           {/* Zone 2: Full article list */}
           {listArticles.length > 0 && (
-            <div className="rounded-xl bg-card/80 backdrop-blur-sm border border-border overflow-hidden">
+            <div className="bg-card/80 backdrop-blur-sm border border-border overflow-hidden">
               {listArticles.map((article, i) => {
                 const { title, image, dateStr, slug, plain, externalUrl } = articleMeta(article);
                 return (
@@ -130,7 +131,7 @@ function ArticlesSection() {
                       i < listArticles.length - 1 && "border-b border-border"
                     )}
                   >
-                    <div className="w-14 h-10 shrink-0 rounded-lg overflow-hidden bg-muted/40">
+                    <div className="w-14 h-10 shrink-0 overflow-hidden bg-muted/40">
                       {image?.url ? (
                         <BlurhashImage src={image.url} blurhash={image.blurhash} className="h-full w-full" imgClassName="w-full h-full object-cover object-center transition-transform duration-200 group-hover:scale-105" />
                       ) : (
@@ -147,8 +148,12 @@ function ArticlesSection() {
                         <span className="text-[11px] text-muted-foreground line-clamp-1">{plain}</span>
                       )}
                     </div>
-                    <span className="text-[11px] text-muted-foreground shrink-0">
-                      {externalUrl ? `External${dateStr ? ` · ${dateStr}` : ""}` : dateStr}
+                    <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground shrink-0">
+                      {externalUrl && (
+                        <ExternalDomain url={externalUrl} className="max-w-[9rem]" iconClassName="size-2.5" />
+                      )}
+                      {externalUrl && dateStr && <span>·</span>}
+                      {dateStr && <span className="shrink-0">{dateStr}</span>}
                     </span>
                   </ArticleHref>
                 );
@@ -175,7 +180,7 @@ function MainArticleCard({ article, index }: { article: ArticleListItem; index: 
         visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
       )}
     >
-      <div className="relative w-20 shrink-0 aspect-[3/2] lg:w-64 lg:self-stretch lg:min-h-0 lg:aspect-auto overflow-hidden rounded-lg">
+      <div className="relative w-20 shrink-0 aspect-[3/2] lg:w-64 lg:self-stretch lg:min-h-0 lg:aspect-auto overflow-hidden">
         {image?.url ? (
           <BlurhashImage src={image.url} blurhash={image.blurhash} className="h-full w-full" imgClassName="w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-105" />
         ) : (
@@ -190,9 +195,14 @@ function MainArticleCard({ article, index }: { article: ArticleListItem; index: 
         <h3 className="text-xs font-semibold tracking-tight text-foreground group-hover:text-primary transition-colors line-clamp-2">{title}</h3>
         <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">{plain}</p>
         <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1">
-          {author && <span>{author}</span>}
-          {externalUrl && <><span>·</span><span>External</span></>}
-          {dateStr && <><span>·</span><span>{dateStr}</span></>}
+          {author && <span className="truncate">{author}</span>}
+          {externalUrl && (
+            <>
+              <span>·</span>
+              <ExternalDomain url={externalUrl} className="max-w-[8rem]" iconClassName="size-2.5" />
+            </>
+          )}
+          {dateStr && <><span>·</span><span className="shrink-0">{dateStr}</span></>}
         </div>
       </div>
     </ArticleHref>
@@ -213,7 +223,7 @@ function CompactArticleCard({ article, index }: { article: ArticleListItem; inde
         visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
       )}
     >
-      <div className="relative w-20 shrink-0 aspect-[3/2] overflow-hidden rounded-lg">
+      <div className="relative w-20 shrink-0 aspect-[3/2] overflow-hidden">
         {image?.url ? (
           <BlurhashImage src={image.url} blurhash={image.blurhash} className="h-full w-full" imgClassName="w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-105" />
         ) : (
@@ -228,9 +238,14 @@ function CompactArticleCard({ article, index }: { article: ArticleListItem; inde
         <h3 className="text-[11px] font-semibold tracking-tight text-foreground group-hover:text-primary transition-colors line-clamp-2">{title}</h3>
         <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">{plain}</p>
         <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1">
-          {author && <span>{author}</span>}
-          {externalUrl && <><span>·</span><span>External</span></>}
-          {dateStr && <><span>·</span><span>{dateStr}</span></>}
+          {author && <span className="truncate">{author}</span>}
+          {externalUrl && (
+            <>
+              <span>·</span>
+              <ExternalDomain url={externalUrl} className="max-w-[7rem]" iconClassName="size-2.5" />
+            </>
+          )}
+          {dateStr && <><span>·</span><span className="shrink-0">{dateStr}</span></>}
         </div>
       </div>
     </ArticleHref>
@@ -365,8 +380,8 @@ function ArticlesSkeleton() {
     <div className="space-y-3">
       <div className="grid grid-cols-1 lg:grid-cols-3 lg:grid-rows-2 gap-2">
         {/* Main article placeholder - 2 cols, 2 rows on desktop; compact on mobile */}
-        <div className="lg:col-span-2 lg:row-span-2 rounded-xl bg-card border border-border overflow-hidden animate-pulse flex flex-row p-2.5 gap-3">
-          <div className="w-20 aspect-[3/2] shrink-0 lg:w-64 lg:self-stretch lg:min-h-0 lg:aspect-auto rounded-lg bg-muted/60" />
+        <div className="lg:col-span-2 lg:row-span-2 bg-card border border-border overflow-hidden animate-pulse flex flex-row p-2.5 gap-3">
+          <div className="w-20 aspect-[3/2] shrink-0 lg:w-64 lg:self-stretch lg:min-h-0 lg:aspect-auto bg-muted/60" />
           <div className="flex-1 space-y-1.5">
             <div className="h-3 w-3/4 bg-muted/60 rounded" />
             <div className="h-2.5 w-full bg-muted/40 rounded" />
@@ -374,26 +389,26 @@ function ArticlesSkeleton() {
           </div>
         </div>
         {/* Compact 1 */}
-        <div className="lg:col-start-3 rounded-xl bg-card border border-border overflow-hidden animate-pulse flex flex-row p-2.5 gap-3">
-          <div className="w-20 aspect-[3/2] shrink-0 rounded-lg bg-muted/60" />
+        <div className="lg:col-start-3 bg-card border border-border overflow-hidden animate-pulse flex flex-row p-2.5 gap-3">
+          <div className="w-20 aspect-[3/2] shrink-0 bg-muted/60" />
           <div className="flex-1 space-y-1.5">
             <div className="h-2.5 w-3/4 bg-muted/60 rounded" />
             <div className="h-2 w-full bg-muted/40 rounded" />
           </div>
         </div>
         {/* Compact 2 */}
-        <div className="lg:col-start-3 lg:row-start-2 rounded-xl bg-card border border-border overflow-hidden animate-pulse flex flex-row p-2.5 gap-3">
-          <div className="w-20 aspect-[3/2] shrink-0 rounded-lg bg-muted/60" />
+        <div className="lg:col-start-3 lg:row-start-2 bg-card border border-border overflow-hidden animate-pulse flex flex-row p-2.5 gap-3">
+          <div className="w-20 aspect-[3/2] shrink-0 bg-muted/60" />
           <div className="flex-1 space-y-1.5">
             <div className="h-2.5 w-3/4 bg-muted/60 rounded" />
             <div className="h-2 w-full bg-muted/40 rounded" />
           </div>
         </div>
       </div>
-      <div className="rounded-xl bg-card border border-border overflow-hidden">
+      <div className="bg-card border border-border overflow-hidden">
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="flex items-center gap-3 px-3 py-2.5 border-b border-border animate-pulse">
-            <div className="w-14 h-10 shrink-0 bg-muted/60 rounded-lg" />
+            <div className="w-14 h-10 shrink-0 bg-muted/60" />
             <div className="flex-1 flex flex-col gap-1">
               <div className="h-3.5 w-3/4 bg-muted/60 rounded" />
               <div className="h-3 w-full bg-muted/40 rounded" />

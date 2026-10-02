@@ -41,7 +41,7 @@ function AboutPage() {
         </div>
       ) : !profile ? (
         <div className="max-w-4xl mx-auto">
-          <Card>
+          <Card className="rounded-none">
             <CardContent className="py-12 text-center">
               <p className="text-muted-foreground">
                 No public profile has been configured yet.
@@ -57,7 +57,7 @@ function AboutPage() {
               {/* Profile Image / Logo */}
               {profile.image_url && (
                 <div className="md:col-span-1">
-                  <Card className="overflow-hidden p-0">
+                  <Card className="overflow-hidden rounded-none p-0">
                     <CardContent className="p-0">
                       <div className="relative">
                         <BlurhashImage
@@ -81,7 +81,7 @@ function AboutPage() {
 
               {/* Bio Content */}
               <div className={`${profile.image_url ? 'md:col-span-2' : 'md:col-span-3'}`}>
-                <Card>
+                <Card className="rounded-none">
                   <CardHeader>
                     <CardTitle>
                       {profile.type === 'organization' ? profile.name : 'About'}
@@ -111,7 +111,7 @@ function AboutPage() {
 
                 {/* Contact Information */}
                 {(profile.email_public || hasSocialLinks || profile.website_url) && (
-                  <Card className="mt-8">
+                  <Card className="mt-8 rounded-none">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Mail className="h-5 w-5" />

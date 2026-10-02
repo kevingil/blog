@@ -6,6 +6,7 @@ import { generateArticle } from '@/services/llm/articles';
 import { scrapeAndCreateSource } from '@/services/sources';
 import { AIChatLanding, AttachedSource } from '@/components/chat/AIChatLanding';
 import { useAdminDashboard } from '@/services/dashboard/dashboard';
+import ArticleEditor from '@/components/blog/Editor';
 
 export const Route = createFileRoute('/dashboard/')({
   component: DashboardIndex,
@@ -19,16 +20,17 @@ function DashboardIndex() {
   const [session, setSession] = useState(0);
   const sessionRef = useRef(session);
   sessionRef.current = session;
-  const { setPageTitle } = useAdminDashboard();
+  const { setPageTitle, blankEditor, setBlankEditor } = useAdminDashboard();
 
   useEffect(() => {
     const reset = () => {
       setSession((value) => value + 1);
       setIsGenerating(false);
+      setBlankEditor(false);
     };
     window.addEventListener("writing-session-reset", reset);
     return () => window.removeEventListener("writing-session-reset", reset);
-  }, []);
+  }, [setBlankEditor]);
 
   useEffect(() => {
     setPageTitle("New");
@@ -97,6 +99,10 @@ function DashboardIndex() {
       }
     }
   };
+
+  if (blankEditor) {
+    return <ArticleEditor isNew />;
+  }
 
   return (
     <section className="flex-1">
