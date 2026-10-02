@@ -9,8 +9,6 @@ type BlurhashImageProps = {
   imgClassName?: string;
 };
 
-const HOLD_MS = 900;
-
 export function BlurhashImage({
   src,
   alt = '',
@@ -19,11 +17,15 @@ export function BlurhashImage({
   imgClassName,
 }: BlurhashImageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [revealed, setRevealed] = useState(!blurhash);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const revealed = !blurhash || loadedSrc === src;
 
   useEffect(() => {
-    setRevealed(!blurhash);
-  }, [src, blurhash]);
+    const image = imageRef.current;
+    // Cached images can finish before React attaches the load handler.
+    setLoadedSrc(image?.complete && image.naturalWidth > 0 ? src : null);
+  }, [src]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -54,25 +56,18 @@ export function BlurhashImage({
           className="absolute inset-0 h-full w-full"
           style={{
             opacity: revealed ? 0 : 1,
-            transition: 'opacity 700ms ease',
           }}
         />
       ) : null}
       <img
+        ref={imageRef}
         src={src}
         alt={alt}
         className={imgClassName ?? 'h-full w-full object-cover'}
         style={{
           opacity: blurhash && !revealed ? 0 : 1,
-          transition: 'opacity 700ms ease',
         }}
-        onLoad={() => {
-          if (!blurhash) {
-            setRevealed(true);
-            return;
-          }
-          window.setTimeout(() => setRevealed(true), HOLD_MS);
-        }}
+        onLoad={() => setLoadedSrc(src)}
       />
     </div>
   );
