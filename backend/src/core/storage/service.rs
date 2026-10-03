@@ -257,6 +257,7 @@ impl StorageService {
                     created_by: existing.and_then(|file| file.created_by),
                 })
                 .await?;
+            uploads.attach_unlinked_images(&saved).await?;
             Some(saved.id)
         } else {
             None

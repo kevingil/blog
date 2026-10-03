@@ -27,6 +27,12 @@ pub trait UploadRepository: Send + Sync {
         owner_id: Uuid,
         upload_ids: &[Uuid],
     ) -> Result<(), AppError>;
+    /// Point articles that already use this image URL at the upload row.
+    ///
+    /// Older articles stored only `draft_image_url` / `published_image_url`.
+    /// Generating a blurhash has to record the upload id or the hash disappears
+    /// on the next load.
+    async fn attach_unlinked_images(&self, file: &UploadFile) -> Result<(), AppError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,9 +50,8 @@ pub async fn resolve_image(
     current_id: Option<Uuid>,
 ) -> Result<ResolvedImage, AppError> {
     if let Some(id) = selected_id {
-        let uploads = uploads.ok_or_else(|| {
-            AppError::InvalidInput("image library is unavailable".to_owned())
-        })?;
+        let uploads = uploads
+            .ok_or_else(|| AppError::InvalidInput("image library is unavailable".to_owned()))?;
         let file = uploads
             .find_by_id(id)
             .await?
@@ -74,7 +79,9 @@ pub async fn resolve_image(
             image: Some(file.asset()),
         });
     }
-    let upload_file_id = (requested_url == current_url).then_some(current_id).flatten();
+    let upload_file_id = (requested_url == current_url)
+        .then_some(current_id)
+        .flatten();
     Ok(ResolvedImage {
         url: requested_url.to_owned(),
         upload_file_id,
