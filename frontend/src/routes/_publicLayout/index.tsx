@@ -212,18 +212,13 @@ function TileMeta({
   author,
   externalUrl,
   dateStr,
-  onDark = false,
 }: {
   author?: string;
   externalUrl?: string | null;
   dateStr: string;
-  onDark?: boolean;
 }) {
   return (
-    <div className={cn(
-      "mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-3 text-[11px]",
-      onDark ? "text-white/75" : "text-muted-foreground",
-    )}>
+    <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-3 text-[11px] text-muted-foreground">
       {author && <span className="truncate">{author}</span>}
       {externalUrl && (
         <>
@@ -269,10 +264,8 @@ function ArticleTile({ article, index, kind }: { article: ArticleListItem; index
 }
 
 function tileFrameClass(kind: TileKind): string {
-  if (kind === "overlay") return "relative min-h-[280px] flex-col";
-  if (kind === "compact") return "flex-row";
-  if (kind === "feature" || kind === "split") return "flex-col lg:flex-row";
-  return "flex-col";
+  if (kind === "stack" || kind === "overlay") return "flex-col";
+  return "flex-row";
 }
 
 function TileBody({
@@ -292,66 +285,35 @@ function TileBody({
   externalUrl?: string | null;
   dateStr: string;
 }) {
-  if (kind === "overlay") {
-    return (
-      <>
-        <div className="absolute inset-0">
-          <TileCover image={image} />
-        </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/10" />
-        <div className="relative flex min-h-[280px] flex-1 flex-col justify-end p-4 text-white">
-          <h3 className="text-lg font-semibold tracking-tight line-clamp-2">{title}</h3>
-          {plain && <p className="mt-1.5 text-sm text-white/80 line-clamp-2">{plain}</p>}
-          <TileMeta author={author} externalUrl={externalUrl} dateStr={dateStr} onDark />
-        </div>
-      </>
-    );
-  }
-
-  if (kind === "compact") {
-    return (
-      <>
-        <div className="relative w-24 shrink-0 self-stretch overflow-hidden bg-muted/40 sm:w-28">
-          <TileCover image={image} />
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col p-3">
-          <h3 className="text-sm font-semibold tracking-tight text-foreground transition-colors line-clamp-2 group-hover:text-primary">{title}</h3>
-          {plain && <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{plain}</p>}
-          <TileMeta author={author} externalUrl={externalUrl} dateStr={dateStr} />
-        </div>
-      </>
-    );
-  }
-
-  const wide = kind === "feature" || kind === "split";
+  const band = kind === "stack" || kind === "overlay";
   return (
     <>
       <div
         className={cn(
           "relative shrink-0 overflow-hidden bg-muted/40",
-          kind === "feature" && "aspect-[16/8] lg:aspect-auto lg:w-1/2 lg:self-stretch",
-          kind === "split" && "aspect-[16/10] lg:aspect-auto lg:w-[44%] lg:self-stretch",
-          kind === "portrait" && "aspect-[3/4]",
-          kind === "stack" && "aspect-[16/9]",
+          kind === "feature" && "m-3 h-20 w-32 sm:h-24 sm:w-40",
+          kind === "split" && "m-3 h-16 w-24",
+          kind === "portrait" && "m-3 h-20 w-16",
+          kind === "compact" && "m-2.5 h-14 w-14",
+          kind === "stack" && "h-16 w-full",
+          kind === "overlay" && "h-12 w-full",
         )}
       >
         <TileCover image={image} />
       </div>
-      <div className={cn("flex min-w-0 flex-1 flex-col", kind === "feature" ? "justify-center p-6" : wide ? "p-5" : "p-4")}>
+      <div className={cn("flex min-w-0 flex-1 flex-col", band ? "p-3" : "py-3 pr-3", kind === "feature" && "sm:py-4 sm:pr-5")}>
         <h3
           className={cn(
             "font-semibold tracking-tight text-foreground transition-colors line-clamp-2 group-hover:text-primary",
-            kind === "feature" ? "text-2xl" : kind === "split" ? "text-lg" : kind === "stack" ? "text-base" : "text-sm",
+            kind === "feature" ? "text-lg" : kind === "split" ? "text-base" : "text-sm",
           )}
         >
           {title}
         </h3>
         {plain && (
           <p className={cn(
-            "mt-1.5 text-muted-foreground",
-            (kind === "feature" || kind === "split") && "text-sm line-clamp-3",
-            kind === "stack" && "text-xs line-clamp-2",
-            kind === "portrait" && "text-xs line-clamp-3",
+            "mt-1 text-muted-foreground",
+            kind === "feature" ? "text-sm line-clamp-3" : "text-xs line-clamp-2",
           )}>
             {plain}
           </p>
@@ -412,7 +374,7 @@ function ArticlesSkeleton() {
           className={cn(
             "animate-pulse overflow-hidden border border-border bg-card",
             tileSpanClass[kind],
-            kind === "feature" ? "h-64" : kind === "compact" ? "h-28" : "h-64",
+            kind === "compact" || kind === "overlay" ? "h-24" : "h-28",
           )}
         >
           <div className="h-2/3 bg-muted/50" />
