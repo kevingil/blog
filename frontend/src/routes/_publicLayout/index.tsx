@@ -142,7 +142,7 @@ const glassCard = "bg-card/90 dark:bg-card/80 backdrop-blur-md border border-bor
 function ArticlesSection() {
   const { data, isLoading } = useQuery({
     queryKey: ['home-articles'],
-    queryFn: () => getArticles(1, null, 'published', 24),
+    queryFn: () => getArticles(1, null, 'published', 12),
   });
 
   const articles = data?.articles ?? [];
@@ -158,7 +158,7 @@ function ArticlesSection() {
       ) : articles.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground text-sm">No articles yet.</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-2">
           {articles.map((article, index) => (
             <ArticleTile
               key={article.article.id}
@@ -218,7 +218,7 @@ function TileMeta({
   dateStr: string;
 }) {
   return (
-    <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-3 text-[11px] text-muted-foreground">
+    <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-1.5 text-[11px] text-muted-foreground">
       {author && <span className="truncate">{author}</span>}
       {externalUrl && (
         <>
@@ -291,30 +291,27 @@ function TileBody({
       <div
         className={cn(
           "relative shrink-0 overflow-hidden bg-muted/40",
-          kind === "feature" && "m-3 h-20 w-32 sm:h-24 sm:w-40",
-          kind === "split" && "m-3 h-16 w-24",
-          kind === "portrait" && "m-3 h-20 w-16",
-          kind === "compact" && "m-2.5 h-14 w-14",
-          kind === "stack" && "h-16 w-full",
-          kind === "overlay" && "h-12 w-full",
+          kind === "feature" && "m-2.5 h-14 w-24",
+          kind === "split" && "m-2.5 h-12 w-20",
+          kind === "portrait" && "m-2.5 h-14 w-12",
+          kind === "compact" && "m-2 h-10 w-10",
+          kind === "stack" && "h-10 w-full",
+          kind === "overlay" && "h-8 w-full",
         )}
       >
         <TileCover image={image} />
       </div>
-      <div className={cn("flex min-w-0 flex-1 flex-col", band ? "p-3" : "py-3 pr-3", kind === "feature" && "sm:py-4 sm:pr-5")}>
+      <div className={cn("flex min-w-0 flex-1 flex-col justify-center", band ? "px-3 py-2" : "py-2 pr-3")}>
         <h3
           className={cn(
-            "font-semibold tracking-tight text-foreground transition-colors line-clamp-2 group-hover:text-primary",
-            kind === "feature" ? "text-lg" : kind === "split" ? "text-base" : "text-sm",
+            "font-semibold tracking-tight text-foreground transition-colors line-clamp-1 group-hover:text-primary",
+            kind === "feature" ? "text-base" : "text-sm",
           )}
         >
           {title}
         </h3>
         {plain && (
-          <p className={cn(
-            "mt-1 text-muted-foreground",
-            kind === "feature" ? "text-sm line-clamp-3" : "text-xs line-clamp-2",
-          )}>
+          <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
             {plain}
           </p>
         )}
@@ -367,14 +364,14 @@ function ConnectSection() {
 function ArticlesSkeleton() {
   const kinds: TileKind[] = ["feature", "split", "compact", "overlay", "portrait", "stack", "compact"];
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-2">
       {kinds.map((kind, index) => (
         <div
           key={index}
           className={cn(
             "animate-pulse overflow-hidden border border-border bg-card",
             tileSpanClass[kind],
-            kind === "compact" || kind === "overlay" ? "h-24" : "h-28",
+            "h-16",
           )}
         >
           <div className="h-2/3 bg-muted/50" />
