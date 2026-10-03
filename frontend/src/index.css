@@ -426,7 +426,7 @@
   .article-editor-document {
     margin-inline: auto;
     max-width: 56rem;
-    padding: 1.15rem 0.85rem 5rem 3.6rem;
+    padding: 1.15rem 2.75rem 5rem;
     position: relative;
   }
 
@@ -462,95 +462,88 @@
     min-width: 0;
   }
 
-  .article-cover-opener {
+  .article-cover-preview {
     align-items: center;
-    background: color-mix(in oklab, var(--background) 72%, transparent);
-    backdrop-filter: blur(10px);
-    border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
-    border-radius: 0.5rem;
-    box-shadow: 0 8px 22px color-mix(in oklab, var(--foreground) 10%, transparent);
+    aspect-ratio: 16 / 9;
+    background: transparent;
+    border: 0;
+    border-radius: 1rem;
     cursor: pointer;
     display: flex;
-    height: 2rem;
     justify-content: center;
-    left: 0.7rem;
-    overflow: hidden;
-    position: absolute;
-    top: 1.35rem;
-    width: 2.35rem;
-    z-index: 2;
-  }
-
-  .article-cover-opener:hover {
-    background: var(--accent);
-  }
-
-  .article-cover-preview {
-    display: block;
     margin: 0 0 1.5rem;
-    width: 100%;
-    border: 0;
-    padding: 0;
-    background: transparent;
-    cursor: pointer;
-    border-radius: 1rem;
     overflow: hidden;
+    padding: 0;
+    position: relative;
+    width: 100%;
+  }
+
+  .article-cover-preview-empty {
+    background: color-mix(in oklab, var(--muted) 45%, transparent);
   }
 
   .article-cover-preview:hover {
-    outline: 1px solid color-mix(in oklab, var(--foreground) 18%, transparent);
-    outline-offset: 3px;
+    background: color-mix(in oklab, var(--muted) 70%, transparent);
   }
 
   .article-editor-rail {
     position: absolute;
-    top: 3rem;
-    right: 0.55rem;
+    top: 3.15rem;
     z-index: 20;
     display: none;
-    width: 9.35rem;
-    max-height: calc(100% - 3.6rem);
     flex-direction: column;
-    gap: 0.2rem;
-    padding: 0.35rem;
+    gap: 0.1rem;
+    max-height: calc(100% - 3.6rem);
     overflow: auto;
-    border-radius: 0.85rem;
-    background: transparent;
-    border: 0;
-    box-shadow: none;
+  }
+
+  .article-editor-rail-left {
+    left: 0.35rem;
+  }
+
+  .article-editor-rail-right {
+    right: 0.35rem;
   }
 
   .article-editor-rail > :where(button, a) {
-    width: 100%;
-    justify-content: flex-start;
+    width: 2rem;
+    height: 2rem;
+    min-width: 2rem;
+    justify-content: center;
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    color: var(--muted-foreground);
   }
 
-  .article-editor-rail > :where(button, a):not(.article-editor-save) {
-    background: color-mix(in oklab, var(--background) 78%, transparent);
-    border-color: color-mix(in oklab, var(--border) 75%, transparent);
-    box-shadow: 0 6px 16px color-mix(in oklab, var(--foreground) 8%, transparent);
-    backdrop-filter: blur(10px);
+  .article-editor-rail > :where(button, a):hover {
+    background: var(--accent);
+    color: var(--foreground);
   }
 
   .article-editor-rail .article-editor-save {
-    justify-content: center;
+    color: var(--primary);
+  }
+
+  .article-editor-mark {
+    position: absolute;
+    top: 0.28rem;
+    right: 0.28rem;
+    width: 0.32rem;
+    height: 0.32rem;
+    border-radius: 999px;
+    background: var(--primary);
   }
 
   @media (min-width: 768px) {
     .article-editor-document {
-      padding: 1.5rem 11rem 2.5rem 4.4rem;
+      padding: 1.5rem 3.25rem 2.5rem;
     }
 
     .article-editor-title {
       font-size: 2.25rem;
       margin-bottom: 0.85rem;
-    }
-
-    .article-cover-opener {
-      left: 0.85rem;
-      top: 1.7rem;
-      height: 2.15rem;
-      width: 2.5rem;
     }
 
     .article-editor-rail {

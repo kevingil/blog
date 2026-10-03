@@ -221,26 +221,6 @@ export function TipTapEditor({
       {sideControls}
       <div className="min-h-0 flex-1 overflow-auto">
         <article className="article-editor-document">
-          {onEditImage ? (
-            <button
-              type="button"
-              onClick={onEditImage}
-              className="article-cover-opener"
-              aria-label="Edit header image"
-            >
-              {imageUrl ? (
-                <BlurhashImage
-                  src={imageUrl}
-                  alt=""
-                  blurhash={imageBlurhash}
-                  className="h-full w-full"
-                  imgClassName="h-full w-full object-cover"
-                />
-              ) : (
-                <ImageIcon className="h-4 w-4 text-muted-foreground" />
-              )}
-            </button>
-          ) : null}
           <input
             value={title ?? ''}
             onChange={(event) => onTitleChange?.(event.target.value)}
@@ -253,20 +233,24 @@ export function TipTapEditor({
           />
           {titleError ? <p className="mb-2 text-sm text-red-500">{titleError}</p> : null}
           {meta}
-          {imageUrl ? (
+          {onEditImage ? (
             <button
               type="button"
               onClick={onEditImage}
-              className="article-cover-preview"
+              className={imageUrl ? 'article-cover-preview' : 'article-cover-preview article-cover-preview-empty'}
               aria-label="Edit header image"
             >
-              <BlurhashImage
-                src={imageUrl}
-                alt={title || 'Article image'}
-                blurhash={imageBlurhash}
-                className="aspect-video w-full"
-                imgClassName="h-full w-full object-cover"
-              />
+              {imageUrl ? (
+                <BlurhashImage
+                  src={imageUrl}
+                  alt={title || 'Article image'}
+                  blurhash={imageBlurhash}
+                  className="absolute inset-0"
+                  imgClassName="h-full w-full object-cover"
+                />
+              ) : (
+                <ImageIcon className="relative z-[1] h-5 w-5 text-muted-foreground" />
+              )}
             </button>
           ) : null}
           {authorName && (

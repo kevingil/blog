@@ -97,7 +97,7 @@ import {
 import { Link } from '@tanstack/react-router';
 import { ArticleListItem, ArticleVersion, ArticleVersionListResponse, isPublished, hasDraftChanges } from '@/services/types';
 import { Badge } from '@/components/ui/badge';
-import { Globe, EyeOff, History, Tag } from 'lucide-react';
+import { Eye, Globe, EyeOff, History, Save, Tag } from 'lucide-react';
 import { Dialog, DialogTitle, DialogContent, DialogTrigger, DialogDescription, DialogFooter, DialogHeader, DialogClose } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -2385,13 +2385,17 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
                     <>
                       <Button
                         type="button"
-                        size="sm"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 text-primary"
+                        aria-label={saveLabel}
+                        title={autosaveLabel || saveLabel}
                         onClick={() => {
                           handleSubmit((data) => onSubmit(data, false))();
                         }}
                         disabled={savePending}
                       >
-                        {saveLabel}
+                        <Save className="h-4 w-4" />
                       </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -2470,108 +2474,119 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
                     </>
                   )}
                   sideControls={(
-                    <div className="article-editor-rail" aria-label="Article actions">
-                      {autosaveLabel ? (
-                        <span className="px-1 pb-0.5 text-center text-[10px] text-muted-foreground">{autosaveLabel}</span>
-                      ) : null}
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="article-editor-save"
-                        onClick={() => {
-                          handleSubmit((data) => onSubmit(data, false))();
-                        }}
-                        disabled={savePending}
-                      >
-                        {saveLabel}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setResourcesOpen(true)}
-                        disabled={!article?.article.id}
-                      >
-                        <BookOpen className="h-4 w-4" />
-                        Resources
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={() => setTagsOpen(true)}>
-                        <Tag className="h-4 w-4" />
-                        Tags
-                        {watchedTags && watchedTags.length > 0 && (
-                          <Badge variant="secondary" className="ml-1">
-                            {watchedTags.length}
-                          </Badge>
-                        )}
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={() => setExternalOpen(true)}>
-                        <ExternalLinkIcon className="h-4 w-4" />
-                        External
-                        {watchedExternalUrl?.trim() && (
-                          <Badge variant="secondary" className="ml-1">
-                            on
-                          </Badge>
-                        )}
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={() => setPublishDrawerOpen(true)}>
-                        {isPublished(article?.article) ? (
-                          <Globe className="h-4 w-4" />
-                        ) : (
-                          <EyeOff className="h-4 w-4" />
-                        )}
-                        {isPublished(article?.article) ? "Published" : "Draft"}
-                        {isPublished(article?.article) && hasDraftChanges(article?.article) && (
-                          <Badge variant="secondary" className="ml-1">*</Badge>
-                        )}
-                      </Button>
-                      {!isNew && isPublished(article?.article) && hasDraftChanges(article?.article) && (
+                    <>
+                      <div className="article-editor-rail article-editor-rail-left" aria-label="Article actions">
                         <Button
                           type="button"
-                          variant="outline"
-                          size="sm"
+                          variant="ghost"
+                          size="icon"
+                          className="relative"
+                          aria-label="Resources"
+                          title="Resources"
+                          onClick={() => setResourcesOpen(true)}
+                          disabled={!article?.article.id}
+                        >
+                          <BookOpen className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="relative"
+                          aria-label="Tags"
+                          title="Tags"
+                          onClick={() => setTagsOpen(true)}
+                        >
+                          <Tag className="h-4 w-4" />
+                          {watchedTags && watchedTags.length > 0 ? <span className="article-editor-mark" /> : null}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="relative"
+                          aria-label="External link"
+                          title="External link"
+                          onClick={() => setExternalOpen(true)}
+                        >
+                          <ExternalLinkIcon className="h-4 w-4" />
+                          {watchedExternalUrl?.trim() ? <span className="article-editor-mark" /> : null}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="relative"
+                          aria-label={isPublished(article?.article) ? "Published" : "Draft"}
+                          title={isPublished(article?.article) ? "Published" : "Draft"}
                           onClick={() => setPublishDrawerOpen(true)}
                         >
-                          <RefreshCw className="h-4 w-4" />
-                          Update
+                          {isPublished(article?.article) ? (
+                            <Globe className="h-4 w-4" />
+                          ) : (
+                            <EyeOff className="h-4 w-4" />
+                          )}
+                          {isPublished(article?.article) && hasDraftChanges(article?.article) ? (
+                            <span className="article-editor-mark" />
+                          ) : null}
                         </Button>
-                      )}
-                      {!isNew && (
-                        <Button variant="outline" size="sm" asChild>
-                          <Link
-                            to="/blog"
-                            params={{ slug: article?.article.slug || '' }}
-                            search={{ page: undefined, tag: undefined, search: undefined }}
-                            target="_blank"
+                      </div>
+                      <div className="article-editor-rail article-editor-rail-right" aria-label="Article actions">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="article-editor-save"
+                          aria-label={saveLabel}
+                          title={autosaveLabel || saveLabel}
+                          onClick={() => {
+                            handleSubmit((data) => onSubmit(data, false))();
+                          }}
+                          disabled={savePending}
+                        >
+                          <Save className={cn('h-4 w-4', savePending && 'animate-pulse')} />
+                        </Button>
+                        {!isNew && (
+                          <Button variant="ghost" size="icon" asChild>
+                            <Link
+                              to="/blog"
+                              params={{ slug: article?.article.slug || '' }}
+                              search={{ page: undefined, tag: undefined, search: undefined }}
+                              target="_blank"
+                              aria-label="View"
+                              title="View"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Link>
+                          </Button>
+                        )}
+                        {!isNew && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label="History"
+                            title="History"
+                            onClick={() => setShowVersions(true)}
                           >
-                            <ExternalLinkIcon className="h-4 w-4" />
-                            View
-                          </Link>
-                        </Button>
-                      )}
-                      {!isNew && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowVersions(true)}
-                        >
-                          <History className="h-4 w-4" />
-                          History
-                        </Button>
-                      )}
-                      {!isNew && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={rewriteArticle}
-                          disabled={generatingRewrite}
-                        >
-                          <RefreshCw className={cn('h-4 w-4', generatingRewrite && 'animate-spin')} />
-                          Regenerate
-                        </Button>
-                      )}
-                    </div>
+                            <History className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {!isNew && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Regenerate"
+                            title="Regenerate"
+                            onClick={rewriteArticle}
+                            disabled={generatingRewrite}
+                          >
+                            <RefreshCw className={cn('h-4 w-4', generatingRewrite && 'animate-spin')} />
+                          </Button>
+                        )}
+                      </div>
+                    </>
                   )}
                 />
                 {errors.content && <p className="text-red-500">{errors.content.message}</p>}
