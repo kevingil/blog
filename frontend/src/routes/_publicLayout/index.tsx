@@ -75,29 +75,44 @@ function useReveal<T extends HTMLElement>() {
   return { ref, shown };
 }
 
-type TileSpan = 2 | 3 | 4;
+type TileKind = "feature" | "split" | "stack" | "overlay" | "compact" | "portrait";
 
-/** Pack a 6-column row with a random mix of wide, half, and narrow tiles. */
-function packTileSpans(count: number): TileSpan[] {
-  const spans: TileSpan[] = [];
+const tileSpan: Record<TileKind, 2 | 3 | 4 | 6> = {
+  feature: 6,
+  split: 4,
+  stack: 3,
+  overlay: 3,
+  compact: 2,
+  portrait: 2,
+};
+
+/** Pack a 6-column row with a random mix of tile shapes. */
+function packTiles(count: number): TileKind[] {
+  const kinds: TileKind[] = [];
   let remaining = 6;
+  const weights: [TileKind, number][] = [
+    ["feature", 2],
+    ["split", 4],
+    ["stack", 3],
+    ["overlay", 3],
+    ["compact", 2],
+    ["portrait", 2],
+  ];
   for (let i = 0; i < count; i++) {
-    const weighted: TileSpan[] = [];
-    const consider = (span: TileSpan, weight: number) => {
-      if (span > remaining) return;
+    const choices: TileKind[] = [];
+    for (const [kind, weight] of weights) {
+      const span = tileSpan[kind];
+      if (span > remaining) continue;
       const left = remaining - span;
-      if (left !== 0 && left !== 2 && left !== 3 && left !== 4) return;
-      for (let n = 0; n < weight; n++) weighted.push(span);
-    };
-    consider(4, 4);
-    consider(3, 3);
-    consider(2, 2);
-    const span = weighted[Math.floor(Math.random() * weighted.length)] ?? 2;
-    spans.push(span);
-    remaining -= span;
+      if (left !== 0 && left !== 2 && left !== 3 && left !== 4) continue;
+      for (let n = 0; n < weight; n++) choices.push(kind);
+    }
+    const kind = choices[Math.floor(Math.random() * choices.length)] ?? "compact";
+    kinds.push(kind);
+    remaining -= tileSpan[kind];
     if (remaining === 0) remaining = 6;
   }
-  return spans;
+  return kinds;
 }
 
 /* ─── Article helpers ─── */
@@ -127,12 +142,12 @@ const glassCard = "bg-card/90 dark:bg-card/80 backdrop-blur-md border border-bor
 function ArticlesSection() {
   const { data, isLoading } = useQuery({
     queryKey: ['home-articles'],
-    queryFn: () => getArticles(1, null, 'published', 12),
+    queryFn: () => getArticles(1, null, 'published', 24),
   });
 
   const articles = data?.articles ?? [];
   const spanKey = articles.map((article) => article.article.id).join("|");
-  const spans = useMemo(() => packTileSpans(articles.length), [spanKey, articles.length]);
+  const kinds = useMemo(() => packTiles(articles.length), [spanKey, articles.length]);
 
   return (
     <section className="mt-28 px-2 sm:px-0">
@@ -149,7 +164,7 @@ function ArticlesSection() {
               key={article.article.id}
               article={article}
               index={index}
-              span={spans[index] ?? 2}
+              kind={kinds[index] ?? "compact"}
             />
           ))}
         </div>
@@ -158,22 +173,84 @@ function ArticlesSection() {
   );
 }
 
-const tileSpanClass: Record<TileSpan, string> = {
-  2: "md:col-span-1 lg:col-span-2",
-  3: "md:col-span-1 lg:col-span-3",
-  4: "md:col-span-2 lg:col-span-4",
+const tileSpanClass: Record<TileKind, string> = {
+  feature: "md:col-span-2 lg:col-span-6",
+  split: "md:col-span-2 lg:col-span-4",
+  stack: "md:col-span-1 lg:col-span-3",
+  overlay: "md:col-span-1 lg:col-span-3",
+  compact: "md:col-span-1 lg:col-span-2",
+  portrait: "md:col-span-1 lg:col-span-2",
 };
 
-function ArticleTile({ article, index, span }: { article: ArticleListItem; index: number; span: TileSpan }) {
-  const { title, image, dateStr, plain, slug, author, externalUrl } = articleMeta(article);
+function TileCover({
+  image,
+  className,
+}: {
+  image: ReturnType<typeof articleMeta>["image"];
+  className?: string;
+}) {
+  if (image?.url) {
+    return (
+      <BlurhashImage
+        src={image.url}
+        blurhash={image.blurhash}
+        className={cn("h-full w-full", className)}
+        imgClassName="h-full w-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
+      />
+    );
+  }
+  return (
+    <div className={cn("flex h-full w-full items-center justify-center bg-muted/40", className)}>
+      <svg className="h-5 w-5 text-muted-foreground/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" />
+      </svg>
+    </div>
+  );
+}
+
+function TileMeta({
+  author,
+  externalUrl,
+  dateStr,
+  onDark = false,
+}: {
+  author?: string;
+  externalUrl?: string | null;
+  dateStr: string;
+  onDark?: boolean;
+}) {
+  return (
+    <div className={cn(
+      "mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-3 text-[11px]",
+      onDark ? "text-white/75" : "text-muted-foreground",
+    )}>
+      {author && <span className="truncate">{author}</span>}
+      {externalUrl && (
+        <>
+          {author && <span aria-hidden>·</span>}
+          <ExternalDomain url={externalUrl} className="max-w-[10rem]" iconClassName="size-2.5" />
+        </>
+      )}
+      {dateStr && (
+        <>
+          {(author || externalUrl) && <span aria-hidden>·</span>}
+          <span className="shrink-0">{dateStr}</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ArticleTile({ article, index, kind }: { article: ArticleListItem; index: number; kind: TileKind }) {
+  const meta = articleMeta(article);
   const { ref, shown } = useReveal<HTMLDivElement>();
-  const wide = span === 4;
+  const { title, image, dateStr, plain, slug, author, externalUrl } = meta;
 
   return (
     <div
       ref={ref}
       className={cn(
-        tileSpanClass[span],
+        tileSpanClass[kind],
         "min-w-0 motion-reduce:translate-y-0 motion-reduce:opacity-100",
         "transition-[opacity,transform] duration-700 ease-out",
         shown ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6",
@@ -183,65 +260,105 @@ function ArticleTile({ article, index, span }: { article: ArticleListItem; index
       <ArticleHref
         slug={slug}
         externalUrl={externalUrl}
-        className={cn(
-          glassCard,
-          "group flex h-full min-h-0 flex-col overflow-hidden",
-          wide && "lg:flex-row",
-        )}
+        className={cn(glassCard, "group flex h-full min-h-0 overflow-hidden", tileFrameClass(kind))}
       >
-        <div
-          className={cn(
-            "relative shrink-0 overflow-hidden bg-muted/40",
-            wide ? "aspect-[16/10] lg:aspect-auto lg:w-[44%] lg:self-stretch" : "aspect-[16/9]",
-          )}
-        >
-          {image?.url ? (
-            <BlurhashImage
-              src={image.url}
-              blurhash={image.blurhash}
-              className="h-full w-full"
-              imgClassName="h-full w-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              <svg className="h-5 w-5 text-muted-foreground/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" />
-              </svg>
-            </div>
-          )}
-        </div>
-        <div className={cn("flex min-w-0 flex-1 flex-col", wide ? "p-5" : "p-4")}>
-          <h3
-            className={cn(
-              "font-semibold tracking-tight text-foreground group-hover:text-primary transition-colors line-clamp-2",
-              wide ? "text-lg" : span === 3 ? "text-base" : "text-sm",
-            )}
-          >
-            {title}
-          </h3>
-          {plain && (
-            <p className={cn("mt-1.5 text-muted-foreground", wide ? "text-sm line-clamp-3" : "text-xs line-clamp-2")}>
-              {plain}
-            </p>
-          )}
-          <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-3 text-[11px] text-muted-foreground">
-            {author && <span className="truncate">{author}</span>}
-            {externalUrl && (
-              <>
-                {author && <span aria-hidden>·</span>}
-                <ExternalDomain url={externalUrl} className="max-w-[10rem]" iconClassName="size-2.5" />
-              </>
-            )}
-            {dateStr && (
-              <>
-                {(author || externalUrl) && <span aria-hidden>·</span>}
-                <span className="shrink-0">{dateStr}</span>
-              </>
-            )}
-          </div>
-        </div>
+        <TileBody kind={kind} title={title} image={image} plain={plain} author={author} externalUrl={externalUrl} dateStr={dateStr} />
       </ArticleHref>
     </div>
+  );
+}
+
+function tileFrameClass(kind: TileKind): string {
+  if (kind === "overlay") return "relative min-h-[280px] flex-col";
+  if (kind === "compact") return "flex-row";
+  if (kind === "feature" || kind === "split") return "flex-col lg:flex-row";
+  return "flex-col";
+}
+
+function TileBody({
+  kind,
+  title,
+  image,
+  plain,
+  author,
+  externalUrl,
+  dateStr,
+}: {
+  kind: TileKind;
+  title: string;
+  image: ReturnType<typeof articleMeta>["image"];
+  plain: string;
+  author?: string;
+  externalUrl?: string | null;
+  dateStr: string;
+}) {
+  if (kind === "overlay") {
+    return (
+      <>
+        <div className="absolute inset-0">
+          <TileCover image={image} />
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/10" />
+        <div className="relative flex min-h-[280px] flex-1 flex-col justify-end p-4 text-white">
+          <h3 className="text-lg font-semibold tracking-tight line-clamp-2">{title}</h3>
+          {plain && <p className="mt-1.5 text-sm text-white/80 line-clamp-2">{plain}</p>}
+          <TileMeta author={author} externalUrl={externalUrl} dateStr={dateStr} onDark />
+        </div>
+      </>
+    );
+  }
+
+  if (kind === "compact") {
+    return (
+      <>
+        <div className="relative w-24 shrink-0 self-stretch overflow-hidden bg-muted/40 sm:w-28">
+          <TileCover image={image} />
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col p-3">
+          <h3 className="text-sm font-semibold tracking-tight text-foreground transition-colors line-clamp-2 group-hover:text-primary">{title}</h3>
+          {plain && <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{plain}</p>}
+          <TileMeta author={author} externalUrl={externalUrl} dateStr={dateStr} />
+        </div>
+      </>
+    );
+  }
+
+  const wide = kind === "feature" || kind === "split";
+  return (
+    <>
+      <div
+        className={cn(
+          "relative shrink-0 overflow-hidden bg-muted/40",
+          kind === "feature" && "aspect-[16/8] lg:aspect-auto lg:w-1/2 lg:self-stretch",
+          kind === "split" && "aspect-[16/10] lg:aspect-auto lg:w-[44%] lg:self-stretch",
+          kind === "portrait" && "aspect-[3/4]",
+          kind === "stack" && "aspect-[16/9]",
+        )}
+      >
+        <TileCover image={image} />
+      </div>
+      <div className={cn("flex min-w-0 flex-1 flex-col", kind === "feature" ? "justify-center p-6" : wide ? "p-5" : "p-4")}>
+        <h3
+          className={cn(
+            "font-semibold tracking-tight text-foreground transition-colors line-clamp-2 group-hover:text-primary",
+            kind === "feature" ? "text-2xl" : kind === "split" ? "text-lg" : kind === "stack" ? "text-base" : "text-sm",
+          )}
+        >
+          {title}
+        </h3>
+        {plain && (
+          <p className={cn(
+            "mt-1.5 text-muted-foreground",
+            (kind === "feature" || kind === "split") && "text-sm line-clamp-3",
+            kind === "stack" && "text-xs line-clamp-2",
+            kind === "portrait" && "text-xs line-clamp-3",
+          )}>
+            {plain}
+          </p>
+        )}
+        <TileMeta author={author} externalUrl={externalUrl} dateStr={dateStr} />
+      </div>
+    </>
   );
 }
 
@@ -286,16 +403,16 @@ function ConnectSection() {
 
 /* ─── Skeleton ─── */
 function ArticlesSkeleton() {
-  const spans: TileSpan[] = [4, 2, 3, 3, 2, 4, 2];
+  const kinds: TileKind[] = ["feature", "split", "compact", "overlay", "portrait", "stack", "compact"];
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
-      {spans.map((span, index) => (
+      {kinds.map((kind, index) => (
         <div
           key={index}
           className={cn(
             "animate-pulse overflow-hidden border border-border bg-card",
-            tileSpanClass[span],
-            span === 4 ? "h-56" : "h-64",
+            tileSpanClass[kind],
+            kind === "feature" ? "h-64" : kind === "compact" ? "h-28" : "h-64",
           )}
         >
           <div className="h-2/3 bg-muted/50" />
