@@ -7,10 +7,12 @@ use uuid::Uuid;
 
 use crate::api::response::SuccessResponse;
 
+use crate::error::AppError;
+
 use super::{
     dto::{
-        ProjectCreateRequest, ProjectDetailResponse, ProjectListQuery, ProjectListResponse,
-        ProjectResponse, ProjectUpdateRequest, SuccessFlag,
+        GithubImportRequest, GithubImportResponse, ProjectCreateRequest, ProjectDetailResponse,
+        ProjectListQuery, ProjectListResponse, ProjectResponse, ProjectUpdateRequest, SuccessFlag,
     },
     error::{ProjectApiError, ProjectAuthenticated},
     state::ProjectState,
@@ -148,4 +150,43 @@ pub async fn delete_project(
 ) -> ApiResult<SuccessFlag> {
     state.service().delete(project_id(&id)?).await?;
     Ok(Json(SuccessResponse::new(SuccessFlag { success: true })))
+}
+
+#[utoipa::path(
+    post,
+    path = "/projects/github-import",
+    request_body = GithubImportRequest,
+    responses(
+        (status = 200, body = SuccessResponse<GithubImportResponse>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 404, body = crate::error::ErrorEnvelope),
+        (status = 502, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "projects",
+    operation_id = "importGithubProject"
+)]
+pub async fn import_github_project(
+    _authenticated: ProjectAuthenticated,
+    State(state): State<ProjectState>,
+    body: Result<Json<GithubImportRequest>, JsonRejection>,
+) -> ApiResult<GithubImportResponse> {
+    let Json(request) = body.map_err(|_| ProjectApiError::invalid_body())?;
+    let github = state.github().ok_or(AppError::Internal)?;
+    let draft = github
+        .import_repository(request.url.trim())
+        .await
+        .map_err(import_error)?;
+    Ok(Json(SuccessResponse::new(draft.into())))
+}
+
+fn import_error(error: AppError) -> ProjectApiError {
+    match error {
+        AppError::NotFound => ProjectApiError::not_found("GitHub repository not found"),
+        AppError::External => {
+            ProjectApiError::bad_gateway("Could not reach GitHub. Try again in a moment.")
+        }
+        other => other.into(),
+    }
 }

@@ -210,6 +210,35 @@ impl From<CoreProjectDetail> for ProjectDetailResponse {
     }
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct GithubImportRequest {
+    #[serde(default, deserialize_with = "null_default")]
+    pub url: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct GithubImportResponse {
+    pub title: String,
+    pub description: String,
+    pub content: String,
+    pub tags: Vec<String>,
+    pub image_url: String,
+    pub url: String,
+}
+
+impl From<crate::core::project::GithubProjectDraft> for GithubImportResponse {
+    fn from(value: crate::core::project::GithubProjectDraft) -> Self {
+        Self {
+            title: value.title,
+            description: value.description,
+            content: value.content,
+            tags: value.tags,
+            image_url: value.image_url,
+            url: value.url,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SuccessFlag {
     pub success: bool,

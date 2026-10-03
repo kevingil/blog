@@ -44,6 +44,19 @@ impl ProjectApiError {
         )
     }
 
+    pub fn not_found(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::NOT_FOUND, message, "NOT_FOUND", None)
+    }
+
+    pub fn bad_gateway(message: impl Into<String>) -> Self {
+        Self::new(
+            StatusCode::BAD_GATEWAY,
+            message,
+            "EXTERNAL_SERVICE_ERROR",
+            None,
+        )
+    }
+
     fn unauthorized(message: &'static str) -> Self {
         Self::new(StatusCode::UNAUTHORIZED, message, "UNAUTHORIZED", None)
     }
