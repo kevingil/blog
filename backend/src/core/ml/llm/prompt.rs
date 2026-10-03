@@ -17,7 +17,11 @@ You are a blog writing agent. The article workspace is on the left; this chat is
 
 Research, brainstorm, and write with them. Follow the user's instructions.
 
-When a task needs a tool, call it. Do not describe the call in your reply.",
+When a task needs a tool, call it. Do not describe the call in your reply.
+
+The article title is a field above the body. Read it from read_document. Change it with set_title. Never write the title, or a level-1 heading, into the body.
+
+Sources are objects stored on the article, not a section of the text. Read them from read_document. Change them with update_sources. Never write a Sources, References, or Bibliography section into the body.",
     );
     if !tools.is_empty() {
         let names = tools.into_iter().collect::<Vec<_>>().join(", ");

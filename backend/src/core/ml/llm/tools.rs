@@ -94,6 +94,8 @@ pub struct ToolCallRequest {
 struct DocumentState {
     html: String,
     markdown: String,
+    title: String,
+    sources: Vec<ArticleSourceView>,
 }
 
 #[derive(Clone)]
@@ -126,9 +128,38 @@ impl ToolContext {
             document: Arc::new(RwLock::new(DocumentState {
                 html: html.into(),
                 markdown: unescape_markdown(&markdown.into()),
+                title: String::new(),
+                sources: Vec::new(),
             })),
             cancellation,
         }
+    }
+
+    pub fn document_title(&self) -> Result<String, AppError> {
+        self.document
+            .read()
+            .map(|state| state.title.clone())
+            .map_err(|_| AppError::Internal)
+    }
+
+    pub fn set_document_title(&self, title: impl Into<String>) -> Result<(), AppError> {
+        self.document.write().map_err(|_| AppError::Internal)?.title = title.into();
+        Ok(())
+    }
+
+    pub fn document_sources(&self) -> Result<Vec<ArticleSourceView>, AppError> {
+        self.document
+            .read()
+            .map(|state| state.sources.clone())
+            .map_err(|_| AppError::Internal)
+    }
+
+    pub fn set_document_sources(&self, sources: Vec<ArticleSourceView>) -> Result<(), AppError> {
+        self.document
+            .write()
+            .map_err(|_| AppError::Internal)?
+            .sources = sources;
+        Ok(())
     }
 
     pub fn document_markdown(&self) -> Result<String, AppError> {
@@ -177,6 +208,29 @@ pub trait DraftSaver: Send + Sync {
         article_id: Uuid,
         markdown_content: &str,
     ) -> Result<(), AppError>;
+
+    async fn update_draft_title(&self, article_id: Uuid, title: &str) -> Result<(), AppError> {
+        let _ = (article_id, title);
+        Ok(())
+    }
+}
+
+/// A source object stored on the article, separate from the body text.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ArticleSourceView {
+    pub id: Uuid,
+    pub title: String,
+    pub url: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SourceEdit {
+    pub id: Option<Uuid>,
+    pub title: String,
+    pub url: String,
+    pub content: String,
+    pub replace_content: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -275,6 +329,19 @@ pub trait SourceResourcePort: Send + Sync {
         selection: SourceSelection,
         request_id: &str,
     ) -> Result<SourceResource, AppError>;
+
+    /// Add, update, or remove the article's source objects.
+    async fn apply_edits(
+        &self,
+        article_id: Uuid,
+        upserts: Vec<SourceEdit>,
+        remove_ids: Vec<Uuid>,
+    ) -> Result<Vec<SourceResource>, AppError> {
+        let _ = (article_id, upserts, remove_ids);
+        Err(AppError::InvalidInput(
+            "updating sources is not available".to_owned(),
+        ))
+    }
 }
 
 #[async_trait]
@@ -362,6 +429,95 @@ impl SourceResourcePort for crate::core::source::SourceService {
             .await?;
         Ok(source.into())
     }
+
+    async fn apply_edits(
+        &self,
+        article_id: Uuid,
+        upserts: Vec<SourceEdit>,
+        remove_ids: Vec<Uuid>,
+    ) -> Result<Vec<SourceResource>, AppError> {
+        let mut existing = self.get_by_article_id(article_id).await?;
+        for id in &remove_ids {
+            if !existing.iter().any(|source| source.id == *id) {
+                return Err(AppError::NotFound);
+            }
+        }
+        for edit in &upserts {
+            if let Some(id) = edit.id
+                && !existing.iter().any(|source| source.id == id)
+            {
+                return Err(AppError::NotFound);
+            }
+        }
+        for id in &remove_ids {
+            self.delete(*id).await?;
+            existing.retain(|source| source.id != *id);
+        }
+        for edit in upserts {
+            if let Some(id) = edit.id {
+                let Some(current) = existing.iter().find(|source| source.id == id) else {
+                    return Err(AppError::NotFound);
+                };
+                let mut request = crate::core::source::UpdateSourceRequest {
+                    title: (!edit.title.trim().is_empty()).then(|| edit.title.clone()),
+                    url: Some(edit.url.clone()),
+                    ..crate::core::source::UpdateSourceRequest::default()
+                };
+                if edit.replace_content && !edit.content.trim().is_empty() {
+                    request.content = Some(edit.content);
+                }
+                self.update(current.id, request).await?;
+                continue;
+            }
+            let url_key = edit.url.trim().to_ascii_lowercase();
+            if !url_key.is_empty()
+                && let Some(current) = existing
+                    .iter()
+                    .find(|source| source.url.trim().eq_ignore_ascii_case(&url_key))
+            {
+                let mut request = crate::core::source::UpdateSourceRequest {
+                    title: (!edit.title.trim().is_empty()).then(|| edit.title.clone()),
+                    ..crate::core::source::UpdateSourceRequest::default()
+                };
+                if edit.replace_content && !edit.content.trim().is_empty() {
+                    request.content = Some(edit.content);
+                }
+                self.update(current.id, request).await?;
+                continue;
+            }
+            let title = if edit.title.trim().is_empty() {
+                if edit.url.trim().is_empty() {
+                    return Err(AppError::InvalidInput(
+                        "a source needs a title or a url".to_owned(),
+                    ));
+                }
+                edit.url.trim().to_owned()
+            } else {
+                edit.title.trim().to_owned()
+            };
+            let content = if edit.content.trim().is_empty() {
+                title.clone()
+            } else {
+                edit.content
+            };
+            let created = self
+                .create(crate::core::source::CreateSourceRequest {
+                    article_id,
+                    title,
+                    content,
+                    url: edit.url.trim().to_owned(),
+                    source_type: if edit.url.trim().is_empty() {
+                        "manual".to_owned()
+                    } else {
+                        "web".to_owned()
+                    },
+                    meta_data: None,
+                })
+                .await?;
+            existing.push(created);
+        }
+        SourceResourcePort::list(self, article_id).await
+    }
 }
 
 impl From<crate::core::source::Source> for SourceResource {
@@ -387,7 +543,7 @@ impl Tool for ReadDocumentTool {
     fn info(&self) -> ToolInfo {
         ToolInfo {
             name: "read_document".to_owned(),
-            description: "Read the full document with line numbers. Use line numbers to reference content for replace_lines. The sections array shows each heading with its line number.".to_owned(),
+            description: "Read the article. title is a separate field above the body; change it with set_title, never by writing it into the body. sources are separate objects; change them with update_sources, never by writing a Sources section into the body. content is the body with line numbers for replace_lines. The sections array shows each body heading with its line number.".to_owned(),
             parameters: BTreeMap::new(),
             required: Vec::new(),
             parallel_safe: false,
@@ -429,11 +585,17 @@ impl Tool for ReadDocumentTool {
                     .then(|| json!({"heading": trimmed, "line": index + 1, "level": level}))
             })
             .collect::<Vec<_>>();
+        let title = context.document_title()?;
+        let sources = context.document_sources()?;
         let result = json!({
+            "title": title,
+            "title_field": "The title is stored separately from the body. Use set_title to change it. Do not write the title or a level-1 heading into the body.",
             "content": numbered,
             "total_lines": lines.len(),
             "total_chars": content.len(),
             "sections": sections,
+            "sources": source_views_json(&sources),
+            "sources_field": "Sources are objects stored on the article, not body text. Use update_sources to add, change, or remove them. Do not write a Sources, References, or Bibliography section into the body.",
             "tool_name": "read_document",
         });
         Ok(ToolResponse::text(
@@ -444,11 +606,20 @@ impl Tool for ReadDocumentTool {
 
 pub struct ReplaceLinesTool {
     draft_saver: Option<Arc<dyn DraftSaver>>,
+    sources: Option<Arc<dyn SourceResourcePort>>,
 }
 
 impl ReplaceLinesTool {
     pub fn new(draft_saver: Option<Arc<dyn DraftSaver>>) -> Self {
-        Self { draft_saver }
+        Self {
+            draft_saver,
+            sources: None,
+        }
+    }
+
+    pub fn with_sources(mut self, sources: Arc<dyn SourceResourcePort>) -> Self {
+        self.sources = Some(sources);
+        self
     }
 }
 
@@ -466,7 +637,7 @@ impl Tool for ReplaceLinesTool {
     fn info(&self) -> ToolInfo {
         ToolInfo {
             name: "replace_lines".to_owned(),
-            description: "Replace lines in the document by line number. Use read_document to see line numbers and section boundaries. Works for rewriting, insertion, and deletion.".to_owned(),
+            description: "Replace lines in the article body by line number. Use read_document to see line numbers and section boundaries. Works for rewriting, insertion, and deletion. The body must not include the title or a Sources section. Change the title with set_title and sources with update_sources. A leading level-1 heading is saved as the title and removed from the body. A trailing Sources, References, or Bibliography section is saved as source objects and removed from the body.".to_owned(),
             parameters: BTreeMap::from([
                 ("start_line".to_owned(), json!({"type": "integer"})),
                 ("end_line".to_owned(), json!({"type": "integer"})),
@@ -550,16 +721,26 @@ impl Tool for ReplaceLinesTool {
             );
             output.join("\n")
         };
-        save_working_markdown(&context, self.draft_saver.as_ref(), new_markdown.clone()).await?;
+        let committed = commit_draft(
+            &context,
+            self.draft_saver.as_ref(),
+            self.sources.as_ref(),
+            new_markdown,
+        )
+        .await?;
 
         let result_value = json!({
             "old_str": old_content,
             "new_str": input.new_content,
-            "new_markdown": new_markdown,
+            "new_markdown": committed.markdown,
             "reason": input.reason,
             "tool_name": "replace_lines",
             "start_line": input.start_line,
             "end_line": end,
+            "title_updated": committed.title_updated,
+            "new_title": committed.new_title,
+            "sources_updated": committed.sources_updated,
+            "sources": source_views_json(&committed.sources),
         });
         let result = result_value
             .as_object()
@@ -1116,13 +1297,274 @@ async fn save_working_markdown(
     Ok(())
 }
 
+struct DraftCommit {
+    markdown: String,
+    title_updated: bool,
+    new_title: String,
+    sources_updated: bool,
+    sources: Vec<ArticleSourceView>,
+}
+
+async fn commit_draft(
+    context: &ToolContext,
+    saver: Option<&Arc<dyn DraftSaver>>,
+    sources: Option<&Arc<dyn SourceResourcePort>>,
+    markdown: String,
+) -> Result<DraftCommit, AppError> {
+    let current_title = context.document_title()?;
+    let normalized = normalize_draft(&markdown, &current_title);
+    let mut title_updated = false;
+    let mut new_title = current_title;
+    if let Some(title) = normalized.title {
+        context.set_document_title(title.clone())?;
+        if let (Some(saver), Some(article_id)) = (saver, context.article_id)
+            && let Err(error) = saver.update_draft_title(article_id, &title).await
+        {
+            tracing::warn!(%error, %article_id, "failed to persist copilot title edit");
+        }
+        new_title = title;
+        title_updated = true;
+    }
+    save_working_markdown(context, saver, normalized.markdown.clone()).await?;
+
+    let mut saved_sources = context.document_sources()?;
+    let mut sources_updated = false;
+    if !normalized.extracted_sources.is_empty()
+        && let (Some(port), Some(article_id)) = (sources, context.article_id)
+    {
+        let saved = port
+            .apply_edits(article_id, normalized.extracted_sources, Vec::new())
+            .await?;
+        saved_sources = saved.iter().map(ArticleSourceView::from).collect();
+        context.set_document_sources(saved_sources.clone())?;
+        sources_updated = true;
+    }
+
+    Ok(DraftCommit {
+        markdown: normalized.markdown,
+        title_updated,
+        new_title,
+        sources_updated,
+        sources: saved_sources,
+    })
+}
+
+pub struct SetTitleTool {
+    draft_saver: Option<Arc<dyn DraftSaver>>,
+}
+
+impl SetTitleTool {
+    pub fn new(draft_saver: Option<Arc<dyn DraftSaver>>) -> Self {
+        Self { draft_saver }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct SetTitleInput {
+    title: String,
+    #[serde(default)]
+    reason: String,
+}
+
+#[async_trait]
+impl Tool for SetTitleTool {
+    fn info(&self) -> ToolInfo {
+        ToolInfo {
+            name: "set_title".to_owned(),
+            description: "Set the article title. The title is a field above the body, not a line in the body. Do not write the title into the article with replace_lines or apply_patch.".to_owned(),
+            parameters: BTreeMap::from([
+                ("title".to_owned(), json!({"type": "string"})),
+                ("reason".to_owned(), json!({"type": "string"})),
+            ]),
+            required: vec!["title".to_owned(), "reason".to_owned()],
+            parallel_safe: false,
+        }
+    }
+
+    async fn run(
+        &self,
+        context: ToolContext,
+        call: ToolCallRequest,
+    ) -> Result<ToolResponse, AppError> {
+        let input: SetTitleInput = match serde_json::from_str(&call.input) {
+            Ok(input) => input,
+            Err(_) => return Ok(ToolResponse::error("Invalid input format")),
+        };
+        let title = input.title.trim();
+        if title.is_empty() || title.contains('\n') || title.contains('\r') {
+            return Ok(ToolResponse::error("title must be a single non-empty line"));
+        }
+        let title = title.to_owned();
+        context.set_document_title(title.clone())?;
+        if let (Some(saver), Some(article_id)) = (self.draft_saver.as_ref(), context.article_id)
+            && let Err(error) = saver.update_draft_title(article_id, &title).await
+        {
+            tracing::warn!(%error, %article_id, "failed to persist copilot title edit");
+        }
+        structured_result(json!({
+            "new_title": title,
+            "title_updated": true,
+            "reason": input.reason,
+            "tool_name": "set_title",
+        }))
+    }
+}
+
+pub struct UpdateSourcesTool {
+    sources: Arc<dyn SourceResourcePort>,
+}
+
+impl UpdateSourcesTool {
+    pub fn new(sources: Arc<dyn SourceResourcePort>) -> Self {
+        Self { sources }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateSourcesInput {
+    #[serde(default)]
+    sources: Vec<UpdateSourceItem>,
+    #[serde(default)]
+    remove_ids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateSourceItem {
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    url: String,
+    #[serde(default)]
+    note: String,
+}
+
+#[async_trait]
+impl Tool for UpdateSourcesTool {
+    fn info(&self) -> ToolInfo {
+        ToolInfo {
+            name: "update_sources".to_owned(),
+            description: "Edit the article's source objects. Sources are not part of the body. Pass sources to add or update, and remove_ids to delete. Use a null id to add a source. Use the id from read_document to update one. Do not write a Sources, References, or Bibliography section into the article text.".to_owned(),
+            parameters: BTreeMap::from([
+                (
+                    "sources".to_owned(),
+                    json!({
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": ["string", "null"], "description": "Existing source id. Null adds a source."},
+                                "title": {"type": "string"},
+                                "url": {"type": "string"},
+                                "note": {"type": "string", "description": "Short note stored with the source. Empty leaves the existing note unchanged when updating."}
+                            },
+                            "required": ["id", "title", "url", "note"]
+                        }
+                    }),
+                ),
+                (
+                    "remove_ids".to_owned(),
+                    json!({"type": "array", "items": {"type": "string"}}),
+                ),
+            ]),
+            required: vec!["sources".to_owned(), "remove_ids".to_owned()],
+            parallel_safe: false,
+        }
+    }
+
+    async fn run(
+        &self,
+        context: ToolContext,
+        call: ToolCallRequest,
+    ) -> Result<ToolResponse, AppError> {
+        let input: UpdateSourcesInput = match serde_json::from_str(&call.input) {
+            Ok(input) => input,
+            Err(_) => return Ok(ToolResponse::error("Invalid input format")),
+        };
+        if input.sources.is_empty() && input.remove_ids.is_empty() {
+            return Ok(ToolResponse::error("sources or remove_ids is required"));
+        }
+        let Some(article_id) = context.article_id else {
+            return Ok(ToolResponse::error("No article ID available"));
+        };
+        let mut upserts = Vec::new();
+        for source in input.sources {
+            let id = match source
+                .id
+                .as_deref()
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+            {
+                Some(id) => match Uuid::parse_str(id) {
+                    Ok(id) => Some(id),
+                    Err(_) => return Ok(ToolResponse::error(format!("Invalid source id: {id}"))),
+                },
+                None => None,
+            };
+            let replace_content = !source.note.trim().is_empty();
+            upserts.push(SourceEdit {
+                id,
+                title: source.title,
+                url: source.url,
+                content: source.note,
+                replace_content,
+            });
+        }
+        let mut remove_ids = Vec::new();
+        for id in input.remove_ids {
+            let id = id.trim();
+            if id.is_empty() {
+                continue;
+            }
+            match Uuid::parse_str(id) {
+                Ok(id) => remove_ids.push(id),
+                Err(_) => return Ok(ToolResponse::error(format!("Invalid source id: {id}"))),
+            }
+        }
+        let saved = match self
+            .sources
+            .apply_edits(article_id, upserts, remove_ids)
+            .await
+        {
+            Ok(saved) => saved,
+            Err(AppError::NotFound) => {
+                return Ok(ToolResponse::error(
+                    "One or more source ids were not found on this article. Call read_document and use those ids.",
+                ));
+            }
+            Err(AppError::InvalidInput(message)) => return Ok(ToolResponse::error(message)),
+            Err(error) => return Err(error),
+        };
+        let views = saved
+            .iter()
+            .map(ArticleSourceView::from)
+            .collect::<Vec<_>>();
+        context.set_document_sources(views.clone())?;
+        structured_result(json!({
+            "sources": source_views_json(&views),
+            "sources_updated": true,
+            "tool_name": "update_sources",
+        }))
+    }
+}
+
 pub struct ApplyPatchTool {
     draft_saver: Option<Arc<dyn DraftSaver>>,
+    sources: Option<Arc<dyn SourceResourcePort>>,
 }
 
 impl ApplyPatchTool {
     pub fn new(draft_saver: Option<Arc<dyn DraftSaver>>) -> Self {
-        Self { draft_saver }
+        Self {
+            draft_saver,
+            sources: None,
+        }
+    }
+
+    pub fn with_sources(mut self, sources: Arc<dyn SourceResourcePort>) -> Self {
+        self.sources = Some(sources);
+        self
     }
 }
 
@@ -1143,7 +1585,7 @@ impl Tool for ApplyPatchTool {
     fn info(&self) -> ToolInfo {
         ToolInfo {
             name: "apply_patch".to_owned(),
-            description: "Apply an edit to the article on the backend. The editor receives the saved draft. To create a draft in an empty document, set old_str to an empty string and new_str to the full markdown. To edit, set old_str to the exact current text (it must match once) and new_str to the replacement. Alternatively pass a *** Begin Patch block in patch.".to_owned(),
+            description: "Apply an edit to the article body on the backend. The editor receives the saved draft. To create a draft in an empty document, set old_str to an empty string and new_str to the full markdown. To edit, set old_str to the exact current body text (it must match once) and new_str to the replacement. Alternatively pass a *** Begin Patch block in patch. Do not include the title or a Sources section. Change the title with set_title and sources with update_sources. A leading level-1 heading is saved as the title and removed from the body. A trailing Sources, References, or Bibliography section is saved as source objects and removed from the body.".to_owned(),
             parameters: BTreeMap::from([
                 (
                     "patch".to_owned(),
@@ -1188,13 +1630,23 @@ impl Tool for ApplyPatchTool {
             Ok(applied) => applied,
             Err(error) => return Ok(ToolResponse::error(error)),
         };
-        save_working_markdown(&context, self.draft_saver.as_ref(), new_markdown.clone()).await?;
+        let committed = commit_draft(
+            &context,
+            self.draft_saver.as_ref(),
+            self.sources.as_ref(),
+            new_markdown,
+        )
+        .await?;
         let result_value = json!({
             "old_str": old_str,
             "new_str": new_str,
-            "new_markdown": new_markdown,
+            "new_markdown": committed.markdown,
             "reason": input.reason,
             "tool_name": "apply_patch",
+            "title_updated": committed.title_updated,
+            "new_title": committed.new_title,
+            "sources_updated": committed.sources_updated,
+            "sources": source_views_json(&committed.sources),
         });
         let result = result_value
             .as_object()
@@ -1462,6 +1914,190 @@ fn web_result_json(result: &WebSearchResult) -> Value {
         }
     }
     value
+}
+
+impl From<&SourceResource> for ArticleSourceView {
+    fn from(source: &SourceResource) -> Self {
+        Self {
+            id: source.id,
+            title: source.title.clone(),
+            url: source.url.clone(),
+            content: source.content.clone(),
+        }
+    }
+}
+
+fn source_views_json(sources: &[ArticleSourceView]) -> Value {
+    Value::Array(
+        sources
+            .iter()
+            .map(|source| {
+                json!({
+                    "id": source.id,
+                    "title": source.title,
+                    "url": source.url,
+                    "note": source.content.chars().take(280).collect::<String>(),
+                })
+            })
+            .collect(),
+    )
+}
+
+struct NormalizedDraft {
+    markdown: String,
+    title: Option<String>,
+    extracted_sources: Vec<SourceEdit>,
+}
+
+fn normalize_draft(markdown: &str, current_title: &str) -> NormalizedDraft {
+    let (title, body) = split_leading_title(markdown, current_title);
+    let (body, extracted_sources) = split_trailing_sources(&body);
+    NormalizedDraft {
+        markdown: body,
+        title,
+        extracted_sources,
+    }
+}
+
+fn split_leading_title(markdown: &str, current_title: &str) -> (Option<String>, String) {
+    let trimmed = markdown.trim_start();
+    let Some(first) = trimmed.lines().next() else {
+        return (None, markdown.to_owned());
+    };
+    let rest = trimmed[first.len()..].trim_start_matches(['\r', '\n']);
+    if let Some(title) = h1_text(first) {
+        return (Some(title), rest.to_owned());
+    }
+    let current = current_title.trim();
+    if !current.is_empty() && first.trim() == current {
+        return (None, rest.to_owned());
+    }
+    (None, markdown.to_owned())
+}
+
+fn h1_text(line: &str) -> Option<String> {
+    let trimmed = line.trim();
+    let hashes = trimmed
+        .chars()
+        .take_while(|character| *character == '#')
+        .count();
+    if hashes != 1 {
+        return None;
+    }
+    let rest = trimmed[hashes..].trim();
+    if rest.is_empty() {
+        return None;
+    }
+    Some(rest.to_owned())
+}
+
+fn split_trailing_sources(markdown: &str) -> (String, Vec<SourceEdit>) {
+    let lines = markdown.split('\n').collect::<Vec<_>>();
+    let mut start = None;
+    for (index, line) in lines.iter().enumerate() {
+        if !is_heading(line) {
+            continue;
+        }
+        if sources_heading(line) {
+            start = Some(index);
+        } else {
+            start = None;
+        }
+    }
+    let Some(start) = start else {
+        return (markdown.to_owned(), Vec::new());
+    };
+    let extracted = lines[start + 1..]
+        .iter()
+        .filter_map(|line| parse_source_line(line))
+        .map(|(title, url)| SourceEdit {
+            id: None,
+            title,
+            url,
+            content: String::new(),
+            replace_content: false,
+        })
+        .collect::<Vec<_>>();
+    let body = lines[..start].join("\n").trim_end().to_owned();
+    (body, extracted)
+}
+
+fn is_heading(line: &str) -> bool {
+    let trimmed = line.trim();
+    let hashes = trimmed
+        .chars()
+        .take_while(|character| *character == '#')
+        .count();
+    hashes > 0 && hashes <= 6 && !trimmed[hashes..].trim().is_empty()
+}
+
+fn sources_heading(line: &str) -> bool {
+    let trimmed = line.trim();
+    let hashes = trimmed
+        .chars()
+        .take_while(|character| *character == '#')
+        .count();
+    if hashes == 0 || hashes > 6 {
+        return false;
+    }
+    let text = trimmed[hashes..]
+        .trim()
+        .trim_end_matches(':')
+        .to_ascii_lowercase();
+    matches!(
+        text.as_str(),
+        "sources" | "references" | "bibliography" | "citations"
+    )
+}
+
+fn parse_source_line(line: &str) -> Option<(String, String)> {
+    let mut text = line.trim();
+    if text.is_empty() {
+        return None;
+    }
+    text = text.trim_start_matches(['-', '*', '+']).trim();
+    let numbered = text
+        .find(|character: char| {
+            !(character.is_ascii_digit() || character == '.' || character == ')')
+        })
+        .unwrap_or(text.len());
+    if numbered > 0 && numbered < text.len() {
+        let prefix = &text[..numbered];
+        if prefix.chars().any(|character| character.is_ascii_digit()) {
+            text = text[numbered..].trim();
+        }
+    }
+    if text.is_empty() {
+        return None;
+    }
+    if let Some(rest) = text.strip_prefix('[')
+        && let Some((title, after)) = rest.split_once("](")
+        && let Some(url) = after.split(')').next()
+    {
+        let title = title.trim();
+        let url = url.trim();
+        if !title.is_empty() || !url.is_empty() {
+            return Some((
+                if title.is_empty() {
+                    url.to_owned()
+                } else {
+                    title.to_owned()
+                },
+                url.to_owned(),
+            ));
+        }
+    }
+    if text.starts_with("http://") || text.starts_with("https://") {
+        return Some((text.to_owned(), text.to_owned()));
+    }
+    for separator in [" — ", " – ", " - ", ": "] {
+        if let Some((title, url)) = text.rsplit_once(separator)
+            && url.trim().starts_with("http")
+        {
+            return Some((title.trim().to_owned(), url.trim().to_owned()));
+        }
+    }
+    Some((text.to_owned(), String::new()))
 }
 
 fn source_resource_json(source: &SourceResource) -> Value {
