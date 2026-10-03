@@ -80,7 +80,7 @@ import {
   ReasoningStep 
 } from "@/components/prompt-kit/chain-of-thought";
 import { cn } from '@/lib/utils';
-import { Wrench, BookOpen, FileSearch, PlusCircle, FileText, ImageIcon, MoreHorizontal } from "lucide-react";
+import { Wrench, BookOpen, FileSearch, PlusCircle, FileText, MoreHorizontal } from "lucide-react";
 import { 
   updateArticle, 
   getArticle, 
@@ -882,6 +882,15 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
   const articleWhenLabel = articleWhenDate && !Number.isNaN(articleWhenDate.getTime())
     ? `${articleIsLive ? "Published" : "Updated"} ${format(articleWhenDate, "MMM d, yyyy")}`
     : null;
+  const savePending = createArticleMutation.isPending || updateArticleMutation.isPending;
+  const saveLabel = savePending ? (isNew ? 'Creating...' : 'Saving...') : 'Save';
+  const autosaveLabel = autosaveStatus === 'saving' || savePending
+    ? 'Saving…'
+    : autosaveStatus === 'saved'
+      ? 'Saved'
+      : autosaveStatus === 'error'
+        ? 'Not saved'
+        : '';
   const watchedImageUrl = useWatch({ control, name: 'image_url' });
   const draftKey = draftSnapshot({
     title: watchedTitle,
@@ -2009,31 +2018,7 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
         >
         {/* Article Metadata Card */}
         
-            {/* Article Title Section with Image and Save */}
-            <div className="mb-2">
-              <div className="flex min-w-0 flex-row items-center gap-2">
-                {/* Edit Image Trigger */}
                 <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
-                  <DialogTrigger asChild>
-                    <button
-                      type="button"
-                      className="w-10 h-8 flex items-center justify-center rounded-md border border-border overflow-hidden cursor-pointer hover:bg-accent transition-colors flex-shrink-0"
-                    >
-                      {(stagedImageUrl || article?.article.draft_image_url) ? (
-                        <BlurhashImage
-                          src={stagedImageUrl || article?.article.draft_image_url || ''}
-                          alt="Article header"
-                          blurhash={currentHeader?.blurhash ?? article?.article.draft_image?.blurhash}
-                          className="h-full w-full"
-                          imgClassName="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <ImageIcon className="w-5 h-5 text-muted-foreground" />
-                      )}
-                    </button>
-                  </DialogTrigger>
-
-                  {/* Modal content for image editing */}
                   <DialogContent className="sm:max-w-4xl">
                     <DialogHeader>
                       <DialogTitle>Edit Header Image</DialogTitle>
@@ -2274,238 +2259,6 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
-
-                {/* Title Input */}
-                <div className="min-w-0 flex-1">
-                  <Input
-                    {...register('title')}
-                    placeholder="Article Title"
-                    className="w-full min-w-0 text-base font-medium md:text-lg"
-                  />
-                  {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title.message}</p>}
-                  <div className="mt-1 flex min-w-0 items-center gap-2 overflow-hidden text-xs text-muted-foreground">
-                    <span
-                      className={cn(
-                        "inline-flex h-5 shrink-0 items-center rounded-none border px-1.5 text-[10px] font-semibold uppercase tracking-wide",
-                        articleIsLive
-                          ? "border-primary/50 bg-primary/10 text-primary"
-                          : "border-border bg-muted text-foreground",
-                      )}
-                      data-testid="article-status-badge"
-                    >
-                      {articleIsLive ? "Live" : "Draft"}
-                    </span>
-                    <span className="truncate font-mono">
-                      {article?.article.slug ? `/${article.article.slug}` : "Not saved"}
-                    </span>
-                    {articleWordCount > 0 && (
-                      <span className="shrink-0">{articleWordCount.toLocaleString()} words</span>
-                    )}
-                    {articleWhenLabel && (
-                      <span className="shrink-0">{articleWhenLabel}</span>
-                    )}
-                    {articleIsLive && hasDraftChanges(article?.article) && (
-                      <span className="shrink-0 text-primary">Unpublished edits</span>
-                    )}
-                    {watchedExternalUrl?.trim() && (
-                      <span className="shrink-0">External</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Publish button when unpublished changes */}
-                {!isNew && isPublished(article?.article) && hasDraftChanges(article?.article) && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPublishDrawerOpen(true)}
-                    className="hidden shrink-0 md:inline-flex"
-                  >
-                    <RefreshCw className="h-4 w-4 mr-1" />
-                    Update Published
-                  </Button>
-                )}
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="shrink-0 md:hidden"
-                      aria-label="Article options"
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-52">
-                    <DropdownMenuItem
-                      disabled={!article?.article.id}
-                      onSelect={() => window.setTimeout(() => setResourcesOpen(true), 0)}
-                    >
-                      <BookOpen />
-                      Resources
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => window.setTimeout(() => setTagsOpen(true), 0)}>
-                      <Tag />
-                      Tags
-                      {watchedTags && watchedTags.length > 0 && (
-                        <span className="ml-auto text-xs text-muted-foreground">{watchedTags.length}</span>
-                      )}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => window.setTimeout(() => setExternalOpen(true), 0)}>
-                      <ExternalLinkIcon />
-                      External
-                      {watchedExternalUrl?.trim() && (
-                        <span className="ml-auto text-xs text-muted-foreground">on</span>
-                      )}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => window.setTimeout(() => setPublishDrawerOpen(true), 0)}>
-                      {isPublished(article?.article) ? <Globe /> : <EyeOff />}
-                      {isPublished(article?.article) ? "Published" : "Draft"}
-                    </DropdownMenuItem>
-                    {!isNew && isPublished(article?.article) && hasDraftChanges(article?.article) && (
-                      <DropdownMenuItem onSelect={() => window.setTimeout(() => setPublishDrawerOpen(true), 0)}>
-                        <RefreshCw />
-                        Update published
-                      </DropdownMenuItem>
-                    )}
-                    {!isNew && (
-                      <DropdownMenuItem asChild>
-                        <Link
-                          to="/blog"
-                          params={{ slug: article?.article.slug || '' }}
-                          search={{ page: undefined, tag: undefined, search: undefined }}
-                          target="_blank"
-                        >
-                          <ExternalLinkIcon />
-                          View
-                        </Link>
-                      </DropdownMenuItem>
-                    )}
-                    {!isNew && (
-                      <DropdownMenuItem onSelect={() => window.setTimeout(() => setShowVersions(true), 0)}>
-                        <History />
-                        History
-                      </DropdownMenuItem>
-                    )}
-                    {!isNew && (
-                      <DropdownMenuItem
-                        disabled={generatingRewrite}
-                        onSelect={() => rewriteArticle()}
-                      >
-                        <RefreshCw />
-                        Regenerate
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                <span className="hidden min-w-14 text-right text-xs text-muted-foreground sm:inline">
-                  {autosaveStatus === 'saving' || createArticleMutation.isPending || updateArticleMutation.isPending
-                    ? 'Saving…'
-                    : autosaveStatus === 'saved'
-                      ? 'Saved'
-                      : autosaveStatus === 'error'
-                        ? 'Not saved'
-                        : ''}
-                </span>
-                {/* Save Button */}
-                <Button
-                  type="button"
-                  onClick={() => {
-                    handleSubmit((data) => onSubmit(data, false))();
-                  }}
-                  disabled={createArticleMutation.isPending || updateArticleMutation.isPending}
-                  className="flex-shrink-0"
-                >
-                  {(createArticleMutation.isPending || updateArticleMutation.isPending) ? 
-                    (isNew ? 'Creating...' : 'Saving...') : 
-                    'Save'
-                  }
-                </Button>
-
-              </div>
-            </div>
-
-            {/* Article tools stay on one row at desktop widths. Phones use the options menu. */}
-            <div className="mb-2 hidden flex-wrap items-center gap-1.5 md:flex">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setResourcesOpen(true)}
-                disabled={!article?.article.id}
-              >
-                <BookOpen className="h-4 w-4" />
-                Resources
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => setTagsOpen(true)}>
-                <Tag className="h-4 w-4" />
-                Tags
-                {watchedTags && watchedTags.length > 0 && (
-                  <Badge variant="secondary" className="ml-1">
-                    {watchedTags.length}
-                  </Badge>
-                )}
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => setExternalOpen(true)}>
-                <ExternalLinkIcon className="h-4 w-4" />
-                External
-                {watchedExternalUrl?.trim() && (
-                  <Badge variant="secondary" className="ml-1">
-                    on
-                  </Badge>
-                )}
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => setPublishDrawerOpen(true)}>
-                {isPublished(article?.article) ? (
-                  <Globe className="h-4 w-4" />
-                ) : (
-                  <EyeOff className="h-4 w-4" />
-                )}
-                {isPublished(article?.article) ? "Published" : "Draft"}
-                {isPublished(article?.article) && hasDraftChanges(article?.article) && (
-                  <Badge variant="secondary" className="ml-1">*</Badge>
-                )}
-              </Button>
-              {!isNew && (
-                <Button variant="outline" size="sm" asChild>
-                  <Link
-                    to="/blog"
-                    params={{ slug: article?.article.slug || '' }}
-                    search={{ page: undefined, tag: undefined, search: undefined }}
-                    target="_blank"
-                  >
-                    <ExternalLinkIcon className="h-4 w-4" />
-                    View
-                  </Link>
-                </Button>
-              )}
-              {!isNew && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowVersions(true)}
-                >
-                  <History className="h-4 w-4" />
-                  History
-                </Button>
-              )}
-              {!isNew && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={rewriteArticle}
-                  disabled={generatingRewrite}
-                >
-                  <RefreshCw className={cn('h-4 w-4', generatingRewrite && 'animate-spin')} />
-                  Regenerate
-                </Button>
-              )}
-            </div>
             {article?.article.id && (
               <SourcesManager
                 articleId={article.article.id}
@@ -2581,16 +2334,245 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
               />
             </Drawer>
 
-          <form className="flex-1 flex flex-col min-h-0 min-w-0">
+          <form
+            className="flex-1 flex flex-col min-h-0 min-w-0"
+            onSubmit={(event) => event.preventDefault()}
+          >
               <div className="flex-1 flex flex-col border border-border rounded-sm min-h-0 min-w-0">
                 <TipTapEditor
                   content={watchedContent || ''}
                   onChange={onContentChange}
                   highlights={addedRanges}
                   title={watchedTitle}
+                  onTitleChange={(value) => setValue('title', value, { shouldDirty: true, shouldValidate: true })}
+                  titleError={errors.title?.message}
                   authorName={user?.name}
                   imageUrl={previewImageUrl}
+                  imageBlurhash={currentHeader?.blurhash ?? article?.article.draft_image?.blurhash}
+                  onEditImage={() => setImageModalOpen(true)}
                   tags={watchedTags}
+                  meta={(
+                    <div className="article-editor-meta">
+                      <span
+                        className={cn(
+                          "inline-flex h-5 shrink-0 items-center rounded-none border px-1.5 text-[10px] font-semibold uppercase tracking-wide",
+                          articleIsLive
+                            ? "border-primary/50 bg-primary/10 text-primary"
+                            : "border-border bg-muted text-foreground",
+                        )}
+                        data-testid="article-status-badge"
+                      >
+                        {articleIsLive ? "Live" : "Draft"}
+                      </span>
+                      <span className="truncate font-mono">
+                        {article?.article.slug ? `/${article.article.slug}` : "Not saved"}
+                      </span>
+                      {articleWordCount > 0 && (
+                        <span className="shrink-0">{articleWordCount.toLocaleString()} words</span>
+                      )}
+                      {articleWhenLabel && (
+                        <span className="shrink-0">{articleWhenLabel}</span>
+                      )}
+                      {articleIsLive && hasDraftChanges(article?.article) && (
+                        <span className="shrink-0 text-primary">Unpublished edits</span>
+                      )}
+                      {watchedExternalUrl?.trim() && (
+                        <span className="shrink-0">External</span>
+                      )}
+                    </div>
+                  )}
+                  mobileControls={(
+                    <>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          handleSubmit((data) => onSubmit(data, false))();
+                        }}
+                        disabled={savePending}
+                      >
+                        {saveLabel}
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="size-8"
+                            aria-label="Article options"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52">
+                          <DropdownMenuItem
+                            disabled={!article?.article.id}
+                            onSelect={() => window.setTimeout(() => setResourcesOpen(true), 0)}
+                          >
+                            <BookOpen />
+                            Resources
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => window.setTimeout(() => setTagsOpen(true), 0)}>
+                            <Tag />
+                            Tags
+                            {watchedTags && watchedTags.length > 0 && (
+                              <span className="ml-auto text-xs text-muted-foreground">{watchedTags.length}</span>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => window.setTimeout(() => setExternalOpen(true), 0)}>
+                            <ExternalLinkIcon />
+                            External
+                            {watchedExternalUrl?.trim() && (
+                              <span className="ml-auto text-xs text-muted-foreground">on</span>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => window.setTimeout(() => setPublishDrawerOpen(true), 0)}>
+                            {isPublished(article?.article) ? <Globe /> : <EyeOff />}
+                            {isPublished(article?.article) ? "Published" : "Draft"}
+                          </DropdownMenuItem>
+                          {!isNew && isPublished(article?.article) && hasDraftChanges(article?.article) && (
+                            <DropdownMenuItem onSelect={() => window.setTimeout(() => setPublishDrawerOpen(true), 0)}>
+                              <RefreshCw />
+                              Update published
+                            </DropdownMenuItem>
+                          )}
+                          {!isNew && (
+                            <DropdownMenuItem asChild>
+                              <Link
+                                to="/blog"
+                                params={{ slug: article?.article.slug || '' }}
+                                search={{ page: undefined, tag: undefined, search: undefined }}
+                                target="_blank"
+                              >
+                                <ExternalLinkIcon />
+                                View
+                              </Link>
+                            </DropdownMenuItem>
+                          )}
+                          {!isNew && (
+                            <DropdownMenuItem onSelect={() => window.setTimeout(() => setShowVersions(true), 0)}>
+                              <History />
+                              History
+                            </DropdownMenuItem>
+                          )}
+                          {!isNew && (
+                            <DropdownMenuItem
+                              disabled={generatingRewrite}
+                              onSelect={() => rewriteArticle()}
+                            >
+                              <RefreshCw />
+                              Regenerate
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </>
+                  )}
+                  sideControls={(
+                    <div className="article-editor-rail" aria-label="Article actions">
+                      {autosaveLabel ? (
+                        <span className="px-1 pb-0.5 text-center text-[10px] text-muted-foreground">{autosaveLabel}</span>
+                      ) : null}
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="article-editor-save"
+                        onClick={() => {
+                          handleSubmit((data) => onSubmit(data, false))();
+                        }}
+                        disabled={savePending}
+                      >
+                        {saveLabel}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setResourcesOpen(true)}
+                        disabled={!article?.article.id}
+                      >
+                        <BookOpen className="h-4 w-4" />
+                        Resources
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setTagsOpen(true)}>
+                        <Tag className="h-4 w-4" />
+                        Tags
+                        {watchedTags && watchedTags.length > 0 && (
+                          <Badge variant="secondary" className="ml-1">
+                            {watchedTags.length}
+                          </Badge>
+                        )}
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setExternalOpen(true)}>
+                        <ExternalLinkIcon className="h-4 w-4" />
+                        External
+                        {watchedExternalUrl?.trim() && (
+                          <Badge variant="secondary" className="ml-1">
+                            on
+                          </Badge>
+                        )}
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setPublishDrawerOpen(true)}>
+                        {isPublished(article?.article) ? (
+                          <Globe className="h-4 w-4" />
+                        ) : (
+                          <EyeOff className="h-4 w-4" />
+                        )}
+                        {isPublished(article?.article) ? "Published" : "Draft"}
+                        {isPublished(article?.article) && hasDraftChanges(article?.article) && (
+                          <Badge variant="secondary" className="ml-1">*</Badge>
+                        )}
+                      </Button>
+                      {!isNew && isPublished(article?.article) && hasDraftChanges(article?.article) && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPublishDrawerOpen(true)}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          Update
+                        </Button>
+                      )}
+                      {!isNew && (
+                        <Button variant="outline" size="sm" asChild>
+                          <Link
+                            to="/blog"
+                            params={{ slug: article?.article.slug || '' }}
+                            search={{ page: undefined, tag: undefined, search: undefined }}
+                            target="_blank"
+                          >
+                            <ExternalLinkIcon className="h-4 w-4" />
+                            View
+                          </Link>
+                        </Button>
+                      )}
+                      {!isNew && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowVersions(true)}
+                        >
+                          <History className="h-4 w-4" />
+                          History
+                        </Button>
+                      )}
+                      {!isNew && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={rewriteArticle}
+                          disabled={generatingRewrite}
+                        >
+                          <RefreshCw className={cn('h-4 w-4', generatingRewrite && 'animate-spin')} />
+                          Regenerate
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 />
                 {errors.content && <p className="text-red-500">{errors.content.message}</p>}
               </div>

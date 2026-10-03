@@ -423,6 +423,141 @@
     margin-bottom: 1rem;
   }
 
+  .article-editor-document {
+    margin-inline: auto;
+    max-width: 56rem;
+    padding: 1.15rem 0.85rem 5rem 3.6rem;
+    position: relative;
+  }
+
+  .article-editor-title {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: var(--foreground);
+    font-family: inherit;
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin: 0 0 0.65rem;
+    outline: none;
+    padding: 0;
+    width: 100%;
+  }
+
+  .article-editor-title::placeholder {
+    color: color-mix(in oklab, var(--muted-foreground) 50%, transparent);
+  }
+
+  .article-editor-meta {
+    align-items: center;
+    color: var(--muted-foreground);
+    display: flex;
+    font-size: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.5rem;
+    margin-bottom: 1.25rem;
+    min-width: 0;
+  }
+
+  .article-cover-opener {
+    align-items: center;
+    background: color-mix(in oklab, var(--background) 72%, transparent);
+    backdrop-filter: blur(10px);
+    border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+    border-radius: 0.5rem;
+    box-shadow: 0 8px 22px color-mix(in oklab, var(--foreground) 10%, transparent);
+    cursor: pointer;
+    display: flex;
+    height: 2rem;
+    justify-content: center;
+    left: 0.7rem;
+    overflow: hidden;
+    position: absolute;
+    top: 1.35rem;
+    width: 2.35rem;
+    z-index: 2;
+  }
+
+  .article-cover-opener:hover {
+    background: var(--accent);
+  }
+
+  .article-cover-preview {
+    display: block;
+    margin: 0 0 1.5rem;
+    width: 100%;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 1rem;
+    overflow: hidden;
+  }
+
+  .article-cover-preview:hover {
+    outline: 1px solid color-mix(in oklab, var(--foreground) 18%, transparent);
+    outline-offset: 3px;
+  }
+
+  .article-editor-rail {
+    position: absolute;
+    top: 3rem;
+    right: 0.55rem;
+    z-index: 20;
+    display: none;
+    width: 9.35rem;
+    max-height: calc(100% - 3.6rem);
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.35rem;
+    overflow: auto;
+    border-radius: 0.85rem;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .article-editor-rail > :where(button, a) {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .article-editor-rail > :where(button, a):not(.article-editor-save) {
+    background: color-mix(in oklab, var(--background) 78%, transparent);
+    border-color: color-mix(in oklab, var(--border) 75%, transparent);
+    box-shadow: 0 6px 16px color-mix(in oklab, var(--foreground) 8%, transparent);
+    backdrop-filter: blur(10px);
+  }
+
+  .article-editor-rail .article-editor-save {
+    justify-content: center;
+  }
+
+  @media (min-width: 768px) {
+    .article-editor-document {
+      padding: 1.5rem 11rem 2.5rem 4.4rem;
+    }
+
+    .article-editor-title {
+      font-size: 2.25rem;
+      margin-bottom: 0.85rem;
+    }
+
+    .article-cover-opener {
+      left: 0.85rem;
+      top: 1.7rem;
+      height: 2.15rem;
+      width: 2.5rem;
+    }
+
+    .article-editor-rail {
+      display: flex;
+    }
+  }
+
   .article-editor .ProseMirror {
     outline: none;
   }

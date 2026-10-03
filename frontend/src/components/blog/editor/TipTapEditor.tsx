@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import {
@@ -6,6 +6,7 @@ import {
   Code,
   Heading2,
   Heading3,
+  ImageIcon,
   Italic,
   Link2,
   List,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Toggle } from '@/components/ui/toggle';
 import { Badge } from '@/components/ui/badge';
+import { BlurhashImage } from '@/components/media/BlurhashImage';
 import type { TextRange } from '@/lib/added-text';
 import { htmlToMarkdown, looksLikeMarkdown, markdownToHtml } from './markdown';
 import {
@@ -45,9 +47,16 @@ interface TipTapEditorProps {
   onChange: (markdown: string) => void;
   highlights?: TextRange[];
   title?: string;
+  onTitleChange?: (title: string) => void;
+  titleError?: string;
   authorName?: string;
   imageUrl?: string;
+  imageBlurhash?: string | null;
+  onEditImage?: () => void;
   tags?: string[];
+  meta?: ReactNode;
+  sideControls?: ReactNode;
+  mobileControls?: ReactNode;
 }
 
 export function TipTapEditor({
@@ -55,9 +64,16 @@ export function TipTapEditor({
   onChange,
   highlights = EMPTY_RANGES,
   title,
+  onTitleChange,
+  titleError,
   authorName,
   imageUrl,
+  imageBlurhash,
+  onEditImage,
   tags,
+  meta,
+  sideControls,
+  mobileControls,
 }: TipTapEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -139,8 +155,9 @@ export function TipTapEditor({
   }, [editor, content, highlightKey]);
 
   return (
-    <div className="article-editor flex h-full min-h-0 flex-col bg-background">
-      <div className="flex shrink-0 items-center gap-0 overflow-x-auto border-b px-0.5 py-0.5 [scrollbar-width:none] md:gap-0.5 md:px-1 md:py-1 [&::-webkit-scrollbar]:hidden [&_button]:shrink-0 [&_button]:max-md:h-7 [&_button]:max-md:min-w-7 [&_button]:max-md:px-1">
+    <div className="article-editor relative flex h-full min-h-0 flex-col bg-background">
+      <div className="flex shrink-0 items-center gap-0 border-b border-border/50 px-0.5 py-0.5 md:px-1 md:py-1">
+        <div className="flex min-w-0 flex-1 items-center gap-0 overflow-x-auto [scrollbar-width:none] md:gap-0.5 [&::-webkit-scrollbar]:hidden [&_button]:shrink-0 [&_button]:max-md:h-7 [&_button]:max-md:min-w-7 [&_button]:max-md:px-1">
         <Toggle size="sm" type="button" pressed={!!editor?.isActive('bold')} onPressedChange={() => editor?.chain().focus().toggleBold().run()} aria-label="Bold" title="Bold">
           <Bold className="h-3.5 w-3.5" />
         </Toggle>
@@ -194,17 +211,64 @@ export function TipTapEditor({
         >
           <Link2 className="h-3.5 w-3.5" />
         </Toggle>
+        </div>
+        {mobileControls ? (
+          <div className="flex shrink-0 items-center gap-1 pr-1 md:hidden">
+            {mobileControls}
+          </div>
+        ) : null}
       </div>
+      {sideControls}
       <div className="min-h-0 flex-1 overflow-auto">
-        <article className="mx-auto max-w-4xl px-4 pb-20 pt-4 md:px-8 md:pb-8 md:pt-6">
-          {title && <h1 className="mb-3 text-2xl font-bold md:mb-4 md:text-4xl">{title}</h1>}
-          {imageUrl && (
-            <img
-              src={imageUrl}
-              alt={title || 'Article image'}
-              className="mb-6 aspect-video w-full rounded-2xl object-cover"
-            />
-          )}
+        <article className="article-editor-document">
+          {onEditImage ? (
+            <button
+              type="button"
+              onClick={onEditImage}
+              className="article-cover-opener"
+              aria-label="Edit header image"
+            >
+              {imageUrl ? (
+                <BlurhashImage
+                  src={imageUrl}
+                  alt=""
+                  blurhash={imageBlurhash}
+                  className="h-full w-full"
+                  imgClassName="h-full w-full object-cover"
+                />
+              ) : (
+                <ImageIcon className="h-4 w-4 text-muted-foreground" />
+              )}
+            </button>
+          ) : null}
+          <input
+            value={title ?? ''}
+            onChange={(event) => onTitleChange?.(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.preventDefault();
+            }}
+            placeholder="Article Title"
+            aria-label="Article title"
+            className="article-editor-title"
+          />
+          {titleError ? <p className="mb-2 text-sm text-red-500">{titleError}</p> : null}
+          {meta}
+          {imageUrl ? (
+            <button
+              type="button"
+              onClick={onEditImage}
+              className="article-cover-preview"
+              aria-label="Edit header image"
+            >
+              <BlurhashImage
+                src={imageUrl}
+                alt={title || 'Article image'}
+                blurhash={imageBlurhash}
+                className="aspect-video w-full"
+                imgClassName="h-full w-full object-cover"
+              />
+            </button>
+          ) : null}
           {authorName && (
             <div className="mb-6 flex items-center">
               <p className="font-semibold">{authorName}</p>
