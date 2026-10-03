@@ -61,6 +61,21 @@ export async function updateProject(id: string, payload: {
   return generatedData<Project>(Projects.updateProject({ path: { id }, body: payload }));
 }
 
+export type GithubProjectImport = {
+  title: string;
+  description: string;
+  content: string;
+  tags: string[];
+  image_url: string;
+  url: string;
+};
+
+export async function importProjectFromGithub(url: string): Promise<GithubProjectImport> {
+  return generatedData<GithubProjectImport>(
+    Projects.importGithubProject({ body: { url } }),
+  );
+}
+
 export async function deleteProject(id: string): Promise<{ success: boolean }> {
   // Protected endpoint - requires auth
   return generatedData<{ success: boolean }>(Projects.deleteProject({ path: { id } }));

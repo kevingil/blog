@@ -10,6 +10,8 @@ import { createProject } from '@/services/projects';
 import { ChipInput } from '@/components/ui/chip-input';
 import { useEffect } from 'react';
 import { useAdminDashboard } from '@/services/dashboard/dashboard';
+import { GithubImportButton, ProjectImagePreview } from '@/components/projects/github-import-button';
+import type { GithubProjectImport } from '@/services/projects';
 
 export const Route = createFileRoute('/dashboard/projects/new')({
   component: NewProjectPage,
@@ -34,6 +36,18 @@ function NewProjectPage() {
     defaultValues: { title: '', description: '', content: '', tags: [], image_url: '', url: '' },
   });
   const watchedTags = watch('tags');
+  const watchedImageUrl = watch('image_url');
+  const watchedUrl = watch('url');
+
+  const applyGithubImport = (project: GithubProjectImport) => {
+    const options = { shouldDirty: true, shouldValidate: true } as const;
+    setValue('title', project.title, options);
+    setValue('description', project.description, options);
+    setValue('content', project.content, options);
+    setValue('tags', project.tags, options);
+    setValue('image_url', project.image_url, options);
+    setValue('url', project.url, options);
+  };
 
   useEffect(() => {
     setPageTitle("New Project");
@@ -53,7 +67,10 @@ function NewProjectPage() {
 
   return (
     <section className="flex-1 p-0 md:p-4">
-      <h1 className="text-lg lg:text-2xl font-medium text-foreground mb-6">New Project</h1>
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <h1 className="text-lg lg:text-2xl font-medium text-foreground">New Project</h1>
+        <GithubImportButton initialUrl={watchedUrl} onImported={applyGithubImport} />
+      </div>
       <Card>
         <CardContent className="p-4">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -84,6 +101,7 @@ function NewProjectPage() {
             <div>
               <label className="block text-sm font-medium">Image URL</label>
               <Input {...register('image_url')} />
+              <ProjectImagePreview url={watchedImageUrl} />
               {errors.image_url && <p className="text-sm text-red-500">{errors.image_url.message as string}</p>}
             </div>
             <div>
