@@ -997,6 +997,35 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
     }
   }, [article, isNew, reset]);
 
+  // Older articles gain their blurhash on the upload row after generation.
+  // Keep the open header in sync when that payload arrives after first paint.
+  useEffect(() => {
+    const savedHash = article?.article.draft_image?.blurhash;
+    const savedId = article?.article.draft_image?.id ?? article?.article.draft_upload_file_id ?? undefined;
+    const savedUrl = article?.article.draft_image?.url || article?.article.draft_image_url;
+    if (!savedUrl || (!savedHash && !savedId)) {
+      return;
+    }
+    setImageVersions((prev) => {
+      let changed = false;
+      const next = prev.map((version) => {
+        if (version.url !== savedUrl && version.url !== article?.article.draft_image_url) {
+          return version;
+        }
+        if (version.blurhash && version.uploadId) {
+          return version;
+        }
+        changed = true;
+        return {
+          ...version,
+          blurhash: version.blurhash ?? savedHash,
+          uploadId: version.uploadId ?? savedId,
+        };
+      });
+      return changed ? next : prev;
+    });
+  }, [article]);
+
   // Load conversation history with artifacts when article is loaded.
   // Generation handoff owns the initial requestId load so it can append the
   // streaming assistant placeholder without a competing history refresh.
@@ -2049,6 +2078,10 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
                                     }
                                   : version
                               )));
+                              if (blogSlug) {
+                                void queryClient.invalidateQueries({ queryKey: ['article', blogSlug] });
+                                void queryClient.invalidateQueries({ queryKey: ['articles'] });
+                              }
                             }}
                           />
                         ) : null}
