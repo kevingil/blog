@@ -1263,7 +1263,8 @@ impl DieselArticleRepository {
         if articles.is_empty() {
             return Ok(articles);
         }
-        let uploads = crate::database::repository::upload::DieselUploadRepository::new(self.pool.clone());
+        let uploads =
+            crate::database::repository::upload::DieselUploadRepository::new(self.pool.clone());
         let ids = articles
             .iter()
             .flat_map(|article| {
@@ -1274,24 +1275,38 @@ impl DieselArticleRepository {
             })
             .flatten()
             .collect::<Vec<_>>();
-        let by_id = crate::database::repository::upload::asset_map(uploads.find_by_ids(&ids).await?);
+        let by_id =
+            crate::database::repository::upload::asset_map(uploads.find_by_ids(&ids).await?);
+        let header_files = unlinked_header_files(&uploads, &articles, &by_id).await?;
         let mut urls = Vec::new();
         for article in &articles {
             urls.extend(crate::database::repository::upload::markdown_image_urls(
                 &article.draft_content,
             ));
             if let Some(content) = &article.published_content {
-                urls.extend(crate::database::repository::upload::markdown_image_urls(content));
+                urls.extend(crate::database::repository::upload::markdown_image_urls(
+                    content,
+                ));
             }
         }
         let body_files = uploads.find_by_public_urls(&urls).await?;
         for article in &mut articles {
             article.draft_image = article
                 .draft_upload_file_id
-                .and_then(|id| by_id.get(&id).cloned());
+                .and_then(|id| by_id.get(&id).cloned())
+                .or_else(|| {
+                    crate::core::storage::header_upload(&article.draft_image_url, &header_files)
+                        .map(crate::core::storage::UploadFile::asset)
+                });
             article.published_image = article
                 .published_upload_file_id
-                .and_then(|id| by_id.get(&id).cloned());
+                .and_then(|id| by_id.get(&id).cloned())
+                .or_else(|| {
+                    article.published_image_url.as_deref().and_then(|url| {
+                        crate::core::storage::header_upload(url, &header_files)
+                            .map(crate::core::storage::UploadFile::asset)
+                    })
+                });
             let draft_urls =
                 crate::database::repository::upload::markdown_image_urls(&article.draft_content);
             let published_urls = article
@@ -1310,6 +1325,55 @@ impl DieselArticleRepository {
         }
         Ok(articles)
     }
+}
+
+async fn unlinked_header_files(
+    uploads: &crate::database::repository::upload::DieselUploadRepository,
+    articles: &[Article],
+    linked: &std::collections::HashMap<Uuid, crate::core::storage::ImageAsset>,
+) -> Result<Vec<crate::core::storage::UploadFile>, AppError> {
+    let mut urls = Vec::new();
+    for article in articles {
+        if article
+            .draft_upload_file_id
+            .is_none_or(|id| !linked.contains_key(&id))
+        {
+            push_unique_url(&mut urls, &article.draft_image_url);
+        }
+        if article
+            .published_upload_file_id
+            .is_none_or(|id| !linked.contains_key(&id))
+            && let Some(url) = &article.published_image_url
+        {
+            push_unique_url(&mut urls, url);
+        }
+    }
+    if urls.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut keys = Vec::new();
+    for url in &urls {
+        for key in crate::core::storage::candidate_object_keys(url) {
+            if !keys.contains(&key) {
+                keys.push(key);
+            }
+        }
+    }
+    let mut files = uploads.find_by_public_urls(&urls).await?;
+    for file in uploads.find_by_keys(&keys).await? {
+        if files.iter().all(|existing| existing.id != file.id) {
+            files.push(file);
+        }
+    }
+    Ok(files)
+}
+
+fn push_unique_url(urls: &mut Vec<String>, url: &str) {
+    let url = url.trim();
+    if url.is_empty() || urls.iter().any(|existing| existing == url) {
+        return;
+    }
+    urls.push(url.to_owned());
 }
 
 fn map_diesel_error(error: DieselError) -> AppError {

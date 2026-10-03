@@ -9,8 +9,14 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::{
-    core::storage::{ImageAsset, UploadFile, UploadRepository, public_url},
-    database::{models::upload::{NewUploadFileRow, UploadFileRow}, pool::PgPool},
+    core::storage::{
+        ImageAsset, UploadFile, UploadRepository, public_url, unlinked_image_like_patterns,
+        urls_match_upload,
+    },
+    database::{
+        models::upload::{NewUploadFileRow, UploadFileRow},
+        pool::PgPool,
+    },
     error::AppError,
     schema::{
         account, article, article_version, organization, page, project, upload_file_refs,
@@ -303,6 +309,116 @@ impl UploadRepository for DieselUploadRepository {
         }
         Ok(())
     }
+
+    async fn attach_unlinked_images(&self, file: &UploadFile) -> Result<(), AppError> {
+        let patterns = unlinked_image_like_patterns(file);
+        let mut connection = self.connection().await?;
+        let draft_ids = matching_image_ids(
+            &mut connection,
+            file,
+            &patterns,
+            "SELECT id, coalesce(draft_image_url, '') AS image_url \
+             FROM article \
+             WHERE draft_upload_file_id IS NULL \
+               AND coalesce(draft_image_url, '') <> '' \
+               AND (draft_image_url = $1 \
+                    OR draft_image_url LIKE $2 ESCAPE '\\' \
+                    OR draft_image_url LIKE $3 ESCAPE '\\')",
+        )
+        .await?;
+        if !draft_ids.is_empty() {
+            diesel::update(
+                article::table.filter(
+                    article::id
+                        .eq_any(&draft_ids)
+                        .and(article::draft_upload_file_id.is_null()),
+                ),
+            )
+            .set(article::draft_upload_file_id.eq(file.id))
+            .execute(&mut connection)
+            .await
+            .map_err(|_| AppError::Database)?;
+        }
+        let published_ids = matching_image_ids(
+            &mut connection,
+            file,
+            &patterns,
+            "SELECT id, coalesce(published_image_url, '') AS image_url \
+             FROM article \
+             WHERE published_upload_file_id IS NULL \
+               AND coalesce(published_image_url, '') <> '' \
+               AND (published_image_url = $1 \
+                    OR published_image_url LIKE $2 ESCAPE '\\' \
+                    OR published_image_url LIKE $3 ESCAPE '\\')",
+        )
+        .await?;
+        if !published_ids.is_empty() {
+            diesel::update(
+                article::table.filter(
+                    article::id
+                        .eq_any(&published_ids)
+                        .and(article::published_upload_file_id.is_null()),
+                ),
+            )
+            .set(article::published_upload_file_id.eq(file.id))
+            .execute(&mut connection)
+            .await
+            .map_err(|_| AppError::Database)?;
+        }
+        let version_ids = matching_image_ids(
+            &mut connection,
+            file,
+            &patterns,
+            "SELECT id, coalesce(image_url, '') AS image_url \
+             FROM article_version \
+             WHERE upload_file_id IS NULL \
+               AND coalesce(image_url, '') <> '' \
+               AND (image_url = $1 OR image_url LIKE $2 ESCAPE '\\' OR image_url LIKE $3 ESCAPE '\\')",
+        )
+        .await?;
+        if !version_ids.is_empty() {
+            diesel::update(
+                article_version::table.filter(
+                    article_version::id
+                        .eq_any(&version_ids)
+                        .and(article_version::upload_file_id.is_null()),
+                ),
+            )
+            .set(article_version::upload_file_id.eq(file.id))
+            .execute(&mut connection)
+            .await
+            .map_err(|_| AppError::Database)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, diesel::QueryableByName)]
+struct UnlinkedImageRow {
+    #[diesel(sql_type = diesel::sql_types::Uuid)]
+    id: Uuid,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    image_url: String,
+}
+
+async fn matching_image_ids(
+    connection: &mut diesel_async::AsyncPgConnection,
+    file: &UploadFile,
+    patterns: &[String; 2],
+    query: &str,
+) -> Result<Vec<Uuid>, AppError> {
+    let rows = diesel::sql_query(query)
+        .bind::<diesel::sql_types::Text, _>(&file.public_url)
+        .bind::<diesel::sql_types::Text, _>(&patterns[0])
+        .bind::<diesel::sql_types::Text, _>(&patterns[1])
+        .get_results::<UnlinkedImageRow>(connection)
+        .await
+        .map_err(|_| AppError::Database)?;
+    Ok(rows
+        .into_iter()
+        .filter(|row| urls_match_upload(&row.image_url, file))
+        .map(|row| row.id)
+        .collect())
 }
 
 impl From<UploadFileRow> for UploadFile {
@@ -359,22 +475,18 @@ async fn rewrite_stored_url(
     old_url: &str,
     new_url: &str,
 ) -> Result<(), AppError> {
-    diesel::sql_query(
-        "UPDATE article SET draft_image_url = $2 WHERE draft_image_url = $1",
-    )
-    .bind::<diesel::sql_types::Text, _>(old_url)
-    .bind::<diesel::sql_types::Text, _>(new_url)
-    .execute(connection)
-    .await
-    .map_err(|_| AppError::Database)?;
-    diesel::sql_query(
-        "UPDATE article SET published_image_url = $2 WHERE published_image_url = $1",
-    )
-    .bind::<diesel::sql_types::Text, _>(old_url)
-    .bind::<diesel::sql_types::Text, _>(new_url)
-    .execute(connection)
-    .await
-    .map_err(|_| AppError::Database)?;
+    diesel::sql_query("UPDATE article SET draft_image_url = $2 WHERE draft_image_url = $1")
+        .bind::<diesel::sql_types::Text, _>(old_url)
+        .bind::<diesel::sql_types::Text, _>(new_url)
+        .execute(connection)
+        .await
+        .map_err(|_| AppError::Database)?;
+    diesel::sql_query("UPDATE article SET published_image_url = $2 WHERE published_image_url = $1")
+        .bind::<diesel::sql_types::Text, _>(old_url)
+        .bind::<diesel::sql_types::Text, _>(new_url)
+        .execute(connection)
+        .await
+        .map_err(|_| AppError::Database)?;
     diesel::sql_query(
         "UPDATE article SET draft_content = replace(draft_content, $1, $2) WHERE strpos(draft_content, $1) > 0",
     )
@@ -391,14 +503,12 @@ async fn rewrite_stored_url(
     .execute(connection)
     .await
     .map_err(|_| AppError::Database)?;
-    diesel::sql_query(
-        "UPDATE article_version SET image_url = $2 WHERE image_url = $1",
-    )
-    .bind::<diesel::sql_types::Text, _>(old_url)
-    .bind::<diesel::sql_types::Text, _>(new_url)
-    .execute(connection)
-    .await
-    .map_err(|_| AppError::Database)?;
+    diesel::sql_query("UPDATE article_version SET image_url = $2 WHERE image_url = $1")
+        .bind::<diesel::sql_types::Text, _>(old_url)
+        .bind::<diesel::sql_types::Text, _>(new_url)
+        .execute(connection)
+        .await
+        .map_err(|_| AppError::Database)?;
     diesel::sql_query(
         "UPDATE article_version SET content = replace(content, $1, $2) WHERE strpos(content, $1) > 0",
     )
