@@ -45,6 +45,11 @@ export type Article = {
      * Set when this row points at the author's post on another site.
      */
     external_url?: string | null;
+    draft_upload_file_id?: string | null;
+    published_upload_file_id?: string | null;
+    draft_image?: null | ImageAsset;
+    published_image?: null | ImageAsset;
+    body_images?: Array<ImageAsset>;
 };
 
 export type ArticleListItem = {
@@ -242,6 +247,11 @@ export type CreateArticle = {
     tags?: Array<string>;
     publish?: boolean;
     authorId: string;
+    /**
+     * When set, the public article opens this link. Empty keeps it on this site.
+     */
+    external_url?: string | null;
+    image_upload_id?: string | null;
 };
 
 export type CreateExternalArticle = {
@@ -368,6 +378,10 @@ export type FileDataResponse = {
     size_raw: number;
     url: string;
     is_image: boolean;
+    id?: string | null;
+    blurhash?: string | null;
+    width?: number | null;
+    height?: number | null;
 };
 
 export type FolderDataResponse = {
@@ -412,8 +426,29 @@ export type GenerateImageResponse = {
     request_id: string;
 };
 
+export type GithubImportRequest = {
+    url?: string;
+};
+
+export type GithubImportResponse = {
+    title: string;
+    description: string;
+    content: string;
+    tags: Array<string>;
+    image_url: string;
+    url: string;
+};
+
 export type HealthResponse = {
     status: string;
+};
+
+export type ImageAsset = {
+    id: string;
+    url: string;
+    blurhash?: string | null;
+    width?: number | null;
+    height?: number | null;
 };
 
 export type ImageGenerationResponse = {
@@ -591,6 +626,7 @@ export type PageCreateRequest = {
         [key: string]: unknown;
     } | null;
     is_published?: boolean;
+    image_upload_id?: string | null;
 };
 
 export type PageListResponse = {
@@ -614,6 +650,8 @@ export type PageResponse = {
     is_published: boolean;
     created_at: string;
     updated_at: string;
+    upload_file_id?: string | null;
+    image?: null | ImageAsset;
 };
 
 export type PageUpdateRequest = {
@@ -625,6 +663,7 @@ export type PageUpdateRequest = {
         [key: string]: unknown;
     } | null;
     is_published?: boolean | null;
+    image_upload_id?: string | null;
 };
 
 export type PendingArtifactsResponse = {
@@ -649,6 +688,7 @@ export type ProfileUpdateRequest = {
         [key: string]: string;
     } | null;
     meta_description?: string | null;
+    profile_upload_file_id?: string | null;
 };
 
 export type ProjectCreateRequest = {
@@ -658,6 +698,7 @@ export type ProjectCreateRequest = {
     tags?: Array<string>;
     image_url?: string;
     url?: string;
+    image_upload_id?: string | null;
 };
 
 export type ProjectDetailResponse = {
@@ -682,6 +723,8 @@ export type ProjectResponse = {
     url?: string;
     created_at: string;
     updated_at: string;
+    upload_file_id?: string | null;
+    image?: null | ImageAsset;
 };
 
 export type ProjectUpdateRequest = {
@@ -691,6 +734,7 @@ export type ProjectUpdateRequest = {
     tags?: Array<string> | null;
     image_url?: string | null;
     url?: string | null;
+    image_upload_id?: string | null;
 };
 
 export type PublicProfileResponse = {
@@ -705,6 +749,7 @@ export type PublicProfileResponse = {
     };
     meta_description: string;
     website_url?: string | null;
+    image?: null | ImageAsset;
 };
 
 export type PublishArticleRequest = {
@@ -720,6 +765,7 @@ export type RecommendedArticle = {
     created_at?: string | null;
     author?: string | null;
     external_url?: string | null;
+    image?: null | ImageAsset;
 };
 
 export type RegisterRequest = {
@@ -888,6 +934,11 @@ export type SuccessResponseArticle = {
          * Set when this row points at the author's post on another site.
          */
         external_url?: string | null;
+        draft_upload_file_id?: string | null;
+        published_upload_file_id?: string | null;
+        draft_image?: null | ImageAsset;
+        published_image?: null | ImageAsset;
+        body_images?: Array<ImageAsset>;
     };
 };
 
@@ -1079,6 +1130,17 @@ export type SuccessResponseGenerateImageResponse = {
     };
 };
 
+export type SuccessResponseGithubImportResponse = {
+    data: {
+        title: string;
+        description: string;
+        content: string;
+        tags: Array<string>;
+        image_url: string;
+        url: string;
+    };
+};
+
 export type SuccessResponseImageGenerationResponse = {
     data: {
         id: string;
@@ -1179,6 +1241,7 @@ export type SuccessResponseOptionVecRecommendedArticle = {
         created_at?: string | null;
         author?: string | null;
         external_url?: string | null;
+        image?: null | ImageAsset;
     }>;
 };
 
@@ -1222,6 +1285,8 @@ export type SuccessResponsePageResponse = {
         is_published: boolean;
         created_at: string;
         updated_at: string;
+        upload_file_id?: string | null;
+        image?: null | ImageAsset;
     };
 };
 
@@ -1271,6 +1336,8 @@ export type SuccessResponseProjectResponse = {
         url?: string;
         created_at: string;
         updated_at: string;
+        upload_file_id?: string | null;
+        image?: null | ImageAsset;
     };
 };
 
@@ -1287,6 +1354,7 @@ export type SuccessResponsePublicProfileResponse = {
         };
         meta_description: string;
         website_url?: string | null;
+        image?: null | ImageAsset;
     };
 };
 
@@ -1411,6 +1479,12 @@ export type SuccessResponseUploadFileResponse = {
         success: boolean;
         url: string;
         key: string;
+        id?: string | null;
+        content_type: string;
+        byte_size: number;
+        width?: number | null;
+        height?: number | null;
+        blurhash?: string | null;
     };
 };
 
@@ -1426,6 +1500,7 @@ export type SuccessResponseUserProfileResponse = {
         };
         meta_description: string;
         organization_id?: string | null;
+        image?: null | ImageAsset;
     };
 };
 
@@ -1625,6 +1700,11 @@ export type UpdateArticle = {
     image_url?: string;
     tags?: Array<string>;
     published_at?: number | null;
+    /**
+     * `null` or `""` removes the external link. Omit the field to leave it unchanged.
+     */
+    external_url?: string | null;
+    image_upload_id?: string | null;
 };
 
 export type UpdateFolderRequest = {
@@ -1662,6 +1742,12 @@ export type UploadFileResponse = {
     success: boolean;
     url: string;
     key: string;
+    id?: string | null;
+    content_type: string;
+    byte_size: number;
+    width?: number | null;
+    height?: number | null;
+    blurhash?: string | null;
 };
 
 export type UserInsightStatusResponse = {
@@ -1683,6 +1769,7 @@ export type UserProfileResponse = {
     };
     meta_description: string;
     organization_id?: string | null;
+    image?: null | ImageAsset;
 };
 
 export type UserResponse = {
@@ -3714,6 +3801,28 @@ export type CreateProjectResponses = {
 };
 
 export type CreateProjectResponse = CreateProjectResponses[keyof CreateProjectResponses];
+
+export type ImportGithubProjectData = {
+    body: GithubImportRequest;
+    path?: never;
+    query?: never;
+    url: '/projects/github-import';
+};
+
+export type ImportGithubProjectErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    502: ErrorEnvelope;
+};
+
+export type ImportGithubProjectError = ImportGithubProjectErrors[keyof ImportGithubProjectErrors];
+
+export type ImportGithubProjectResponses = {
+    200: SuccessResponseGithubImportResponse;
+};
+
+export type ImportGithubProjectResponse = ImportGithubProjectResponses[keyof ImportGithubProjectResponses];
 
 export type DeleteProjectData = {
     body?: never;
