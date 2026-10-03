@@ -92,6 +92,8 @@ export type StreamEventType =
   | 'tool_use'
   | 'tool_result'
   | 'document_update'
+  | 'title_update'
+  | 'sources_update'
   | 'tool_group_start'
   | 'tool_status'
   | 'tool_group_complete'
