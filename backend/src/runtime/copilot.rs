@@ -80,6 +80,7 @@ impl AgentRequestQueue for CopilotRuntime {
                 message: request.message,
                 document_content: request.document_content,
                 document_markdown: request.document_markdown,
+                document_title: request.document_title,
                 article_id: request.article_id,
                 channel: request.channel,
             })
@@ -197,6 +198,7 @@ impl LiveHarness for CopilotLiveHarness {
                 message: turn.message,
                 document_content: turn.document_content,
                 document_markdown: turn.document_markdown,
+                document_title: String::new(),
                 article_id: turn.article_id,
                 channel: "live".to_owned(),
             })
