@@ -271,6 +271,7 @@ async fn generate_blurhash_reads_the_stored_image() {
 #[derive(Default)]
 struct MemoryUploads {
     files: Mutex<Vec<UploadFile>>,
+    attached: Mutex<Vec<UploadFile>>,
 }
 
 #[async_trait]
@@ -346,6 +347,14 @@ impl UploadRepository for MemoryUploads {
     ) -> Result<(), AppError> {
         Ok(())
     }
+
+    async fn attach_unlinked_images(&self, file: &UploadFile) -> Result<(), AppError> {
+        self.attached
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(file.clone());
+        Ok(())
+    }
 }
 
 #[tokio::test]
@@ -383,4 +392,14 @@ async fn generate_blurhash_saves_the_hash_on_the_upload() {
     );
     assert_eq!(saved.created_by, Some(owner));
     assert_eq!(saved.byte_size, 12);
+    let attached = uploads
+        .attached
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    assert_eq!(attached.len(), 1);
+    assert_eq!(attached[0].id, owner);
+    assert_eq!(
+        attached[0].blurhash.as_deref(),
+        Some("LTPJVz|_fQ|_|_sofQsofQfQfQfQ")
+    );
 }
