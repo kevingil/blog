@@ -160,6 +160,7 @@ async fn manager_persists_messages_streams_snapshot_and_shuts_down_owned_tasks()
             message: "finish it".to_owned(),
             document_content: String::new(),
             document_markdown: "draft".to_owned(),
+            document_title: String::new(),
             article_id: article_id.to_string(),
             channel: "text".to_owned(),
         })
@@ -250,6 +251,7 @@ async fn voice_turn_emits_transcript_and_speech_into_the_same_session() {
             message: "tighten the intro".to_owned(),
             document_content: String::new(),
             document_markdown: "draft".to_owned(),
+            document_title: String::new(),
             article_id: article_id.to_string(),
             channel: "voice".to_owned(),
         })
@@ -314,6 +316,7 @@ async fn live_turn_keeps_the_transcript_and_skips_speech_synthesis() {
             message: "tighten the intro".to_owned(),
             document_content: String::new(),
             document_markdown: "draft".to_owned(),
+            document_title: String::new(),
             article_id: Uuid::new_v4().to_string(),
             channel: "live".to_owned(),
         })
@@ -469,6 +472,7 @@ async fn backend_edit_streams_the_saved_draft_and_replays_tool_execution() {
             message: "write it".to_owned(),
             document_content: String::new(),
             document_markdown: String::new(),
+            document_title: String::new(),
             article_id: article_id.to_string(),
             channel: "text".to_owned(),
         })
@@ -490,6 +494,7 @@ async fn backend_edit_streams_the_saved_draft_and_replays_tool_execution() {
             message: "continue".to_owned(),
             document_content: String::new(),
             document_markdown: "Hello draft".to_owned(),
+            document_title: String::new(),
             article_id: article_id.to_string(),
             channel: "text".to_owned(),
         })
@@ -546,6 +551,7 @@ async fn empty_client_document_uses_the_stored_article() {
             message: "look at the draft".to_owned(),
             document_content: String::new(),
             document_markdown: String::new(),
+            document_title: String::new(),
             article_id: Uuid::new_v4().to_string(),
             channel: "text".to_owned(),
         })
