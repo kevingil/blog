@@ -23,14 +23,15 @@ import {
 } from "@/components/ui/sidebar"
 import { Link, useLocation, useNavigate } from "@tanstack/react-router"
 import { ArticleListItem, isPublished } from "@/services/types"
+import { cn } from "@/lib/utils"
 
 function formatArticleMeta(article: ArticleListItem["article"]): string {
   const fmt = (s: string) =>
     new Date(s).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
-  if (isPublished(article)) {
-    return `Published ${fmt(article.published_at!)}`
+  if (isPublished(article) && article.published_at) {
+    return `Published · ${fmt(article.published_at)}`
   }
-  return article.created_at ? `Created ${fmt(article.created_at)} · Draft` : "Draft"
+  return article.created_at ? `Draft · ${fmt(article.created_at)}` : "Draft"
 }
 import { useEffect, useRef } from "react"
 import { FetchNextPageOptions, InfiniteQueryObserverResult, InfiniteData, useQueryClient } from "@tanstack/react-query"
@@ -163,18 +164,41 @@ export function NavDocuments({
         <SidebarMenu className="flex-1 overflow-y-auto min-h-0">
           {visibleArticles.map((articleItem) => {
               const editUrl = `/dashboard/blog/edit/${articleItem.article.slug || ''}`
+              const published = isPublished(articleItem.article)
+              const meta = formatArticleMeta(articleItem.article)
               return (
                 <SidebarMenuItem key={articleItem.article.id}>
-                  <SidebarMenuButton isActive={location.pathname === editUrl} asChild className="h-8 rounded-lg font-normal">
+                  <SidebarMenuButton
+                    isActive={location.pathname === editUrl}
+                    asChild
+                    className="h-auto min-h-8 items-start rounded-lg py-1.5 font-normal [&>span:last-child]:whitespace-normal"
+                  >
                     <Link 
                       to={editUrl} 
-                      title={formatArticleMeta(articleItem.article)}
+                      title={articleItem.article.draft_title}
                       className="px-2"
                       onClick={() => {
                         queryClient.invalidateQueries({ queryKey: ['article', articleItem.article.slug] })
                       }}
                     >
-                      <span className="truncate text-sm text-sidebar-foreground/85">{articleItem.article.draft_title}</span>
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="truncate text-sm leading-tight text-sidebar-foreground/85">
+                          {articleItem.article.draft_title}
+                        </span>
+                        <span className="flex min-w-0 items-center gap-1.5 text-[11px] leading-tight text-sidebar-foreground/45">
+                          <span
+                            className={cn(
+                              "size-1.5 shrink-0 rounded-full",
+                              published
+                                ? "bg-emerald-600 dark:bg-emerald-400"
+                                : "bg-amber-600 dark:bg-amber-400",
+                            )}
+                            title={published ? "Published" : "Draft"}
+                            aria-label={published ? "Published" : "Draft"}
+                          />
+                          <span className="truncate">{meta}</span>
+                        </span>
+                      </span>
                     </Link>
                   </SidebarMenuButton>
                   <DropdownMenu>
