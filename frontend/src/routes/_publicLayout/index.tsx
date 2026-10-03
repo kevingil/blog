@@ -180,7 +180,7 @@ function ArticleTags({ tags }: { tags: string[] }) {
   return (
     <div className="mt-auto flex max-w-[9rem] flex-wrap justify-end gap-1 pt-1">
       {tags.slice(0, 3).map((tag) => (
-        <span key={tag} className="text-[10px] uppercase tracking-wide text-muted-foreground/80">
+        <span key={tag} className="rounded-sm bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
           {tag}
         </span>
       ))}
