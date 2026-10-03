@@ -5,9 +5,9 @@ use crate::api::auth::AuthState;
 
 use super::{
     handlers::{
-        __path_create_project, __path_delete_project, __path_get_project, __path_list_projects,
-        __path_update_project, create_project, delete_project, get_project, list_projects,
-        update_project,
+        __path_create_project, __path_delete_project, __path_get_project,
+        __path_import_github_project, __path_list_projects, __path_update_project, create_project,
+        delete_project, get_project, import_github_project, list_projects, update_project,
     },
     state::ProjectState,
 };
@@ -19,6 +19,7 @@ where
     ProjectState: FromRef<S>,
 {
     OpenApiRouter::new()
+        .routes(routes!(import_github_project))
         .routes(routes!(list_projects, create_project))
         .routes(routes!(get_project, update_project, delete_project))
 }

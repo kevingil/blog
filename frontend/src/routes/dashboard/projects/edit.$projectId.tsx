@@ -11,6 +11,8 @@ import { getProject, updateProject } from '@/services/projects';
 import { useQuery } from '@tanstack/react-query';
 import { ChipInput } from '@/components/ui/chip-input';
 import { useAdminDashboard } from '@/services/dashboard/dashboard';
+import { GithubImportButton, ProjectImagePreview } from '@/components/projects/github-import-button';
+import type { GithubProjectImport } from '@/services/projects';
 
 export const Route = createFileRoute('/dashboard/projects/edit/$projectId')({
   component: EditProjectPage,
@@ -47,6 +49,18 @@ function EditProjectPage() {
     defaultValues: { title: '', description: '', content: '', tags: [], image_url: '', url: '', created_at: '' },
   });
   const watchedTags = watch('tags');
+  const watchedImageUrl = watch('image_url');
+  const watchedUrl = watch('url');
+
+  const applyGithubImport = (project: GithubProjectImport) => {
+    const options = { shouldDirty: true, shouldValidate: true } as const;
+    setValue('title', project.title, options);
+    setValue('description', project.description, options);
+    setValue('content', project.content, options);
+    setValue('tags', project.tags, options);
+    setValue('image_url', project.image_url, options);
+    setValue('url', project.url, options);
+  };
 
   // Sync fetched data to form once after load
   // Avoid calling reset during render to prevent render loops
@@ -79,7 +93,10 @@ function EditProjectPage() {
 
   return (
     <section className="flex-1 min-h-0 overflow-auto p-0 md:p-4">
-      <h1 className="text-lg lg:text-2xl font-medium text-foreground mb-6">Edit Project</h1>
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <h1 className="text-lg lg:text-2xl font-medium text-foreground">Edit Project</h1>
+        <GithubImportButton initialUrl={watchedUrl} onImported={applyGithubImport} />
+      </div>
       {isLoading ? (
         <div>Loading project...</div>
       ) : (error || !detail) ? (
@@ -120,6 +137,7 @@ function EditProjectPage() {
             <div>
               <label className="block text-sm font-medium">Image URL</label>
               <Input {...register('image_url')} />
+              <ProjectImagePreview url={watchedImageUrl} />
               {errors.image_url && <p className="text-sm text-red-500">{errors.image_url.message as string}</p>}
             </div>
             <div>

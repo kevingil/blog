@@ -5935,6 +5935,81 @@
         ]
       }
     },
+    "/projects/github-import": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "operationId": "importGithubProject",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GithubImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_GithubImportResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/projects/{id}": {
       "get": {
         "tags": [
@@ -7827,6 +7902,46 @@
               "null"
             ],
             "description": "Set when this row points at the author's post on another site."
+          },
+          "draft_upload_file_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "published_upload_file_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "draft_image": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImageAsset"
+              }
+            ]
+          },
+          "published_image": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImageAsset"
+              }
+            ]
+          },
+          "body_images": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageAsset"
+            }
           }
         }
       },
@@ -8528,6 +8643,20 @@
           "authorId": {
             "type": "string",
             "format": "uuid"
+          },
+          "external_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "When set, the public article opens this link. Empty keeps it on this site."
+          },
+          "image_upload_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -8979,6 +9108,33 @@
           },
           "is_image": {
             "type": "boolean"
+          },
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "blurhash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "width": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "height": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -9123,6 +9279,48 @@
           }
         }
       },
+      "GithubImportRequest": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "GithubImportResponse": {
+        "type": "object",
+        "required": [
+          "title",
+          "description",
+          "content",
+          "tags",
+          "image_url",
+          "url"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "image_url": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
       "HealthResponse": {
         "type": "object",
         "required": [
@@ -9131,6 +9329,42 @@
         "properties": {
           "status": {
             "type": "string"
+          }
+        }
+      },
+      "ImageAsset": {
+        "type": "object",
+        "required": [
+          "id",
+          "url"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string"
+          },
+          "blurhash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "width": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "height": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -9869,6 +10103,13 @@
           },
           "is_published": {
             "type": "boolean"
+          },
+          "image_upload_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -9957,6 +10198,23 @@
           },
           "updated_at": {
             "type": "string"
+          },
+          "upload_file_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "image": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImageAsset"
+              }
+            ]
           }
         }
       },
@@ -10002,6 +10260,13 @@
               "boolean",
               "null"
             ]
+          },
+          "image_upload_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -10092,6 +10357,13 @@
               "string",
               "null"
             ]
+          },
+          "profile_upload_file_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -10118,6 +10390,13 @@
           },
           "url": {
             "type": "string"
+          },
+          "image_upload_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -10210,6 +10489,23 @@
           },
           "updated_at": {
             "type": "string"
+          },
+          "upload_file_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "image": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImageAsset"
+              }
+            ]
           }
         }
       },
@@ -10254,6 +10550,13 @@
               "string",
               "null"
             ]
+          },
+          "image_upload_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -10305,6 +10608,16 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "image": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImageAsset"
+              }
             ]
           }
         }
@@ -10369,6 +10682,16 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "image": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImageAsset"
+              }
             ]
           }
         }
@@ -10995,6 +11318,46 @@
                   "null"
                 ],
                 "description": "Set when this row points at the author's post on another site."
+              },
+              "draft_upload_file_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "published_upload_file_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "draft_image": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ImageAsset"
+                  }
+                ]
+              },
+              "published_image": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ImageAsset"
+                  }
+                ]
+              },
+              "body_images": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ImageAsset"
+                }
               }
             }
           }
@@ -11715,6 +12078,48 @@
           }
         }
       },
+      "SuccessResponse_GithubImportResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "title",
+              "description",
+              "content",
+              "tags",
+              "image_url",
+              "url"
+            ],
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "image_url": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
       "SuccessResponse_ImageGenerationResponse": {
         "type": "object",
         "required": [
@@ -12147,6 +12552,16 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "image": {
+                      "oneOf": [
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "$ref": "#/components/schemas/ImageAsset"
+                        }
+                      ]
                     }
                   }
                 }
@@ -12312,6 +12727,23 @@
               },
               "updated_at": {
                 "type": "string"
+              },
+              "upload_file_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "image": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ImageAsset"
+                  }
+                ]
               }
             }
           }
@@ -12495,6 +12927,23 @@
               },
               "updated_at": {
                 "type": "string"
+              },
+              "upload_file_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "image": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ImageAsset"
+                  }
+                ]
               }
             }
           }
@@ -12554,6 +13003,16 @@
                 "type": [
                   "string",
                   "null"
+                ]
+              },
+              "image": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ImageAsset"
+                  }
                 ]
               }
             }
@@ -12997,7 +13456,9 @@
             "required": [
               "success",
               "url",
-              "key"
+              "key",
+              "content_type",
+              "byte_size"
             ],
             "properties": {
               "success": {
@@ -13008,6 +13469,40 @@
               },
               "key": {
                 "type": "string"
+              },
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "content_type": {
+                "type": "string"
+              },
+              "byte_size": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "width": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "height": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "blurhash": {
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             }
           }
@@ -13065,6 +13560,16 @@
                   "null"
                 ],
                 "format": "uuid"
+              },
+              "image": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ImageAsset"
+                  }
+                ]
               }
             }
           }
@@ -13898,6 +14403,20 @@
               "null"
             ],
             "format": "int64"
+          },
+          "external_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`null` or `\"\"` removes the external link. Omit the field to leave it unchanged."
+          },
+          "image_upload_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           }
         }
       },
@@ -13993,7 +14512,9 @@
         "required": [
           "success",
           "url",
-          "key"
+          "key",
+          "content_type",
+          "byte_size"
         ],
         "properties": {
           "success": {
@@ -14004,6 +14525,40 @@
           },
           "key": {
             "type": "string"
+          },
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "byte_size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "width": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "height": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "blurhash": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -14084,6 +14639,16 @@
               "null"
             ],
             "format": "uuid"
+          },
+          "image": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImageAsset"
+              }
+            ]
           }
         }
       },

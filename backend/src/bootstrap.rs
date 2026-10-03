@@ -82,6 +82,7 @@ use crate::{
     integrations::{
         exa::ExaClient,
         fetch::{HttpExternalPages, HttpFetchExtract},
+        github::GithubClient,
         llm::GroqClient,
         openai::OpenAiClient,
         s3::S3ObjectStore,
@@ -245,7 +246,8 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
     let project = ProjectState::new(Arc::new(ProjectService::new(
         Arc::new(DieselProjectRepository::new(pool.clone())),
         tags,
-    )));
+    )))
+    .with_github(Arc::new(GithubClient::new()?));
     let source_service = Arc::new(SourceService::new(
         Arc::new(DieselSourceRepository::new(pool.clone())),
         articles.clone(),
