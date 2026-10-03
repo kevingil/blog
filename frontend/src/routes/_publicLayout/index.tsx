@@ -60,6 +60,7 @@ function articleMeta(article: ArticleListItem) {
     slug: article.article.slug as string,
     author: article.author?.name,
     externalUrl: externalArticleUrl(article.article),
+    tags: (article.tags ?? []).map((tag) => tag.name).filter((name) => name.length > 0),
   };
 }
 
@@ -174,27 +175,37 @@ function LeadArticle({ article }: { article: ArticleListItem }) {
   );
 }
 
+function ArticleTags({ tags }: { tags: string[] }) {
+  if (tags.length === 0) return null;
+  return (
+    <div className="mt-auto flex max-w-[9rem] flex-wrap justify-end gap-1 pt-1">
+      {tags.slice(0, 3).map((tag) => (
+        <span key={tag} className="text-[10px] uppercase tracking-wide text-muted-foreground/80">
+          {tag}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function ArticleRow({ article, bordered }: { article: ArticleListItem; bordered: boolean }) {
-  const { title, image, dateStr, plain, slug, author, externalUrl } = articleMeta(article);
+  const { title, image, dateStr, plain, slug, author, externalUrl, tags } = articleMeta(article);
   return (
     <ArticleHref
       slug={slug}
       externalUrl={externalUrl}
       className={cn(
-        "group flex items-center gap-3 px-3 py-2.5 hover:bg-accent transition-colors",
+        "group flex items-start gap-3 px-3 py-2.5 hover:bg-accent transition-colors",
         bordered && "border-b border-border",
       )}
     >
-      <div className="relative h-10 w-14 shrink-0 overflow-hidden bg-muted/40">
+      <div className="relative mt-0.5 h-10 w-14 shrink-0 overflow-hidden bg-muted/40">
         <Cover image={image} />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-3">
-          <h3 className="min-w-0 flex-1 truncate text-sm text-foreground/90 transition-colors group-hover:text-primary">
-            {title}
-          </h3>
-          {dateStr && <span className="hidden shrink-0 text-[11px] text-muted-foreground sm:inline">{dateStr}</span>}
-        </div>
+        <h3 className="truncate text-sm text-foreground/90 transition-colors group-hover:text-primary">
+          {title}
+        </h3>
         {plain && <p className="truncate text-xs text-muted-foreground">{plain}</p>}
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground sm:hidden">
           {author && <span className="truncate">{author}</span>}
@@ -212,6 +223,13 @@ function ArticleRow({ article, bordered }: { article: ArticleListItem; bordered:
             )}
           </div>
         )}
+        <div className="mt-1 flex justify-end sm:hidden">
+          <ArticleTags tags={tags} />
+        </div>
+      </div>
+      <div className="hidden min-h-full shrink-0 flex-col items-end self-stretch sm:flex">
+        {dateStr && <span className="text-[11px] text-muted-foreground">{dateStr}</span>}
+        <ArticleTags tags={tags} />
       </div>
     </ArticleHref>
   );
