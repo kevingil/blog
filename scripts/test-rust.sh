@@ -26,6 +26,7 @@ case "$mode" in
       datasource_service \
       exa_client \
       fetch_extract \
+      github_import \
       health \
       image_http \
       image_service \
