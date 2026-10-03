@@ -423,6 +423,134 @@
     margin-bottom: 1rem;
   }
 
+  .article-editor-document {
+    margin-inline: auto;
+    max-width: 56rem;
+    padding: 1.15rem 2.75rem 5rem;
+    position: relative;
+  }
+
+  .article-editor-title {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: var(--foreground);
+    font-family: inherit;
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin: 0 0 0.65rem;
+    outline: none;
+    padding: 0;
+    width: 100%;
+  }
+
+  .article-editor-title::placeholder {
+    color: color-mix(in oklab, var(--muted-foreground) 50%, transparent);
+  }
+
+  .article-editor-meta {
+    align-items: center;
+    color: var(--muted-foreground);
+    display: flex;
+    font-size: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.5rem;
+    margin-bottom: 1.25rem;
+    min-width: 0;
+  }
+
+  .article-cover-preview {
+    align-items: center;
+    aspect-ratio: 16 / 9;
+    background: transparent;
+    border: 0;
+    border-radius: 1rem;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    margin: 0 0 1.5rem;
+    overflow: hidden;
+    padding: 0;
+    position: relative;
+    width: 100%;
+  }
+
+  .article-cover-preview-empty {
+    background: color-mix(in oklab, var(--muted) 45%, transparent);
+  }
+
+  .article-cover-preview:hover {
+    background: color-mix(in oklab, var(--muted) 70%, transparent);
+  }
+
+  .article-editor-rail {
+    position: absolute;
+    top: 3.15rem;
+    z-index: 20;
+    display: none;
+    flex-direction: column;
+    gap: 0.1rem;
+    max-height: calc(100% - 3.6rem);
+    overflow: auto;
+  }
+
+  .article-editor-rail-left {
+    left: 0.35rem;
+  }
+
+  .article-editor-rail-right {
+    right: 0.35rem;
+  }
+
+  .article-editor-rail > :where(button, a) {
+    width: 2rem;
+    height: 2rem;
+    min-width: 2rem;
+    justify-content: center;
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    color: var(--muted-foreground);
+  }
+
+  .article-editor-rail > :where(button, a):hover {
+    background: var(--accent);
+    color: var(--foreground);
+  }
+
+  .article-editor-rail .article-editor-save {
+    color: var(--primary);
+  }
+
+  .article-editor-mark {
+    position: absolute;
+    top: 0.28rem;
+    right: 0.28rem;
+    width: 0.32rem;
+    height: 0.32rem;
+    border-radius: 999px;
+    background: var(--primary);
+  }
+
+  @media (min-width: 768px) {
+    .article-editor-document {
+      padding: 1.5rem 3.25rem 2.5rem;
+    }
+
+    .article-editor-title {
+      font-size: 2.25rem;
+      margin-bottom: 0.85rem;
+    }
+
+    .article-editor-rail {
+      display: flex;
+    }
+  }
+
   .article-editor .ProseMirror {
     outline: none;
   }
