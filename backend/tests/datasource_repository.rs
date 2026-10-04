@@ -200,7 +200,8 @@ async fn postgres_data_content_image_insight_and_source_repositories_preserve_co
     let content_id = Uuid::new_v4();
     let mut crawled = CrawledContent {
         id: content_id,
-        data_source_id,
+        data_source_id: Some(data_source_id),
+        topic_id: None,
         url: format!("https://{suffix}.example.com/post"),
         title: None,
         content: "Crawled body".to_owned(),
@@ -277,6 +278,9 @@ async fn postgres_data_content_image_insight_and_source_repositories_preserve_co
         icon: None,
         created_at: None,
         updated_at: None,
+        check_frequency: "daily".to_owned(),
+        next_check_at: None,
+        is_enabled: true,
     };
     topics.save(&mut topic_value).await?;
     assert_eq!(topics.find_all().await?.len(), 1);
@@ -322,6 +326,7 @@ async fn postgres_data_content_image_insight_and_source_repositories_preserve_co
         is_pinned: false,
         is_used_in_article: false,
         meta_data: None,
+        data_source_id: None,
     };
     insights.save(&mut insight_value).await?;
     let loaded_insight = insights.find_by_id(insight_id).await?;

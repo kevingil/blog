@@ -245,6 +245,14 @@ async fn every_data_source_insight_and_source_route_requires_authentication() ->
         (Method::GET, "/insights".to_owned()),
         (Method::GET, "/insights/search?q=test".to_owned()),
         (Method::GET, "/insights/unread-count".to_owned()),
+        (Method::GET, "/insights/trackers".to_owned()),
+        (Method::POST, "/insights/trackers".to_owned()),
+        (Method::PUT, format!("/insights/trackers/subject/{id}")),
+        (Method::DELETE, format!("/insights/trackers/domain/{id}")),
+        (
+            Method::POST,
+            format!("/insights/trackers/subject/{id}/check"),
+        ),
         (Method::GET, "/insights/topics".to_owned()),
         (Method::POST, "/insights/topics".to_owned()),
         (Method::GET, format!("/insights/topics/{id}")),
@@ -444,6 +452,11 @@ fn generated_openapi_contains_every_data_domain_operation() -> TestResult {
         "deleteDataSource",
         "triggerDataSourceCrawl",
         "getDataSourceContent",
+        "listTrackers",
+        "createTracker",
+        "updateTracker",
+        "deleteTracker",
+        "checkTracker",
         "listInsights",
         "searchInsights",
         "getUnreadInsightCount",
@@ -472,7 +485,7 @@ fn generated_openapi_contains_every_data_domain_operation() -> TestResult {
             "missing OpenAPI operation {operation_id}"
         );
     }
-    assert_eq!(operation_ids.len(), 31);
+    assert_eq!(operation_ids.len(), 36);
     assert_eq!(
         document["components"]["schemas"]["DataSourceCreateRequest"]["properties"]["name"]["minLength"],
         1

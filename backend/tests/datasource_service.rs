@@ -59,7 +59,8 @@ fn source(id: Uuid, organization_id: Option<Uuid>, user_id: Option<Uuid>, url: &
 fn content(id: Uuid, data_source_id: Uuid) -> CrawledContent {
     CrawledContent {
         id,
-        data_source_id,
+        data_source_id: Some(data_source_id),
+        topic_id: None,
         url: "https://example.com/post".to_owned(),
         title: Some("Post".to_owned()),
         content: "Body".to_owned(),
@@ -219,7 +220,7 @@ impl CrawledContentRepository for Store {
     ) -> Result<(Vec<CrawledContent>, i64), AppError> {
         let values: Vec<_> = lock(&self.contents)?
             .iter()
-            .filter(|value| value.data_source_id == id)
+            .filter(|value| value.data_source_id == Some(id))
             .cloned()
             .collect();
         Ok((
@@ -281,7 +282,7 @@ impl CrawledContentRepository for Store {
     ) -> Result<Option<CrawledContent>, AppError> {
         Ok(lock(&self.contents)?
             .iter()
-            .find(|value| value.data_source_id == data_source_id && value.url == url)
+            .find(|value| value.data_source_id == Some(data_source_id) && value.url == url)
             .cloned())
     }
 
@@ -306,14 +307,14 @@ impl CrawledContentRepository for Store {
     }
 
     async fn delete_by_data_source_id(&self, id: Uuid) -> Result<(), AppError> {
-        lock(&self.contents)?.retain(|value| value.data_source_id != id);
+        lock(&self.contents)?.retain(|value| value.data_source_id != Some(id));
         Ok(())
     }
 
     async fn count_by_data_source_id(&self, id: Uuid) -> Result<i64, AppError> {
         Ok(lock(&self.contents)?
             .iter()
-            .filter(|value| value.data_source_id == id)
+            .filter(|value| value.data_source_id == Some(id))
             .count() as i64)
     }
 }
