@@ -150,6 +150,7 @@ impl ContentCrawler {
             embedding: Some(embedding.clone()),
             meta_data: None,
             created_at: None,
+            image_url: None,
         };
         tokio::select! {
             biased;

@@ -3,7 +3,10 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-use crate::{core::datasource::CrawledContentResponse, error::AppError};
+use crate::{
+    core::{datasource::CrawledContentResponse, ml::llm::page_image},
+    error::AppError,
+};
 
 use super::{
     ContentTopicMatch, ContentTopicMatchRepository, EmbeddingPort, Insight,
@@ -167,6 +170,7 @@ impl InsightService {
         period_start: Option<DateTime<Utc>>,
         period_end: Option<DateTime<Utc>>,
         data_source_id: Option<Uuid>,
+        image_url: Option<String>,
     ) -> Result<InsightResponse, AppError> {
         let embedding = self
             .embeddings
@@ -191,6 +195,9 @@ impl InsightService {
             is_pinned: false,
             is_used_in_article: false,
             meta_data: None,
+            image_url: image_url
+                .as_deref()
+                .and_then(|value| page_image(std::iter::once(value))),
         };
         self.insights.save(&mut insight).await?;
         if let Some(topic_id) = insight.topic_id {

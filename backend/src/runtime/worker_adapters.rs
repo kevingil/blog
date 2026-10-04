@@ -10,7 +10,7 @@ use crate::{
     core::{
         datasource::{CrawledContent, DataSource, DataSourceRepository},
         insight::{InsightContentRepository, InsightService, InsightTopic, InsightTopicRepository},
-        ml::llm::ResearchPort,
+        ml::llm::{ResearchPort, page_image},
         worker::{Clock, InsightGenerationPort, InsightTopicResult, WorkerFailure},
     },
     error::AppError,
@@ -140,6 +140,7 @@ pub struct NewInsight {
     pub period_start: DateTime<Utc>,
     pub period_end: DateTime<Utc>,
     pub data_source_id: Option<Uuid>,
+    pub image_url: Option<String>,
 }
 
 #[async_trait]
@@ -169,6 +170,7 @@ impl InsightWriter for InsightService {
             Some(insight.period_start),
             Some(insight.period_end),
             insight.data_source_id,
+            insight.image_url,
         )
         .await
         .map(|_| ())
@@ -318,6 +320,7 @@ impl RuntimeInsightGenerator {
                 embedding: None,
                 meta_data: None,
                 created_at: Some(self.clock.now()),
+                image_url: page_image(std::iter::once(page.image.as_str())),
             };
             tokio::select! {
                 biased;
@@ -374,6 +377,9 @@ impl RuntimeInsightGenerator {
             period_start,
             period_end,
             data_source_id,
+            image_url: contents
+                .iter()
+                .find_map(|content| content.image_url.clone()),
         };
         tokio::select! {
             biased;
