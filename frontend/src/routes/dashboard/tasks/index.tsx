@@ -4,7 +4,7 @@ export const Route = createFileRoute("/dashboard/tasks/")({
   beforeLoad: () => {
     throw redirect({
       to: "/dashboard/insights",
-      search: { tab: "tasks" },
+      search: { tab: "runs" },
     });
   },
 });

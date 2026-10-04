@@ -69,10 +69,10 @@ export function TaskRunList() {
           </Select>
           <Select value={taskNameFilter} onValueChange={setTaskNameFilter}>
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filter task" />
+              <SelectValue placeholder="Filter run" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All tasks</SelectItem>
+              <SelectItem value="all">All runs</SelectItem>
               <SelectItem value="insight">Insight Generator</SelectItem>
               <SelectItem value="pipeline">Full Pipeline</SelectItem>
               <SelectItem value="crawl">Content Crawler</SelectItem>
@@ -92,20 +92,20 @@ export function TaskRunList() {
         </CardHeader>
         <CardContent className="px-0">
           {isLoading ? (
-            <div className="px-6 py-10 text-sm text-muted-foreground">Loading task history...</div>
+            <div className="px-6 py-10 text-sm text-muted-foreground">Loading runs...</div>
           ) : isError ? (
             <div className="px-6 py-10 text-sm text-destructive">
-              Task history could not be loaded.
+              Runs could not be loaded.
             </div>
           ) : runs.length === 0 ? (
             <div className="px-6 py-10 text-sm text-muted-foreground">
-              No task runs recorded yet. A Check now from What to watch writes one.
+              No runs recorded yet. A Check now from What to watch writes one.
             </div>
           ) : (
             <Table noWrapper>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="px-6">Task</TableHead>
+                  <TableHead className="px-6">Run</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Kind</TableHead>
                   <TableHead>Started</TableHead>

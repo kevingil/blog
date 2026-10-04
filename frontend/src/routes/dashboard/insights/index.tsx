@@ -53,11 +53,14 @@ import {
 import { useWorkerStatuses } from "@/hooks/use-worker-statuses";
 import { getWorkerDisplayName, type WorkerStatus } from "@/services/workers";
 
-type InsightsTab = "briefings" | "watch" | "tasks";
+type InsightsTab = "briefings" | "watch" | "runs";
 
 function insightsTab(value: unknown): InsightsTab {
-  if (value === "watch" || value === "tasks") {
-    return value;
+  if (value === "watch") {
+    return "watch";
+  }
+  if (value === "runs" || value === "tasks") {
+    return "runs";
   }
   return "briefings";
 }
@@ -170,7 +173,7 @@ function InsightsPage() {
         <TabsList>
           <TabsTrigger value="briefings">Briefings</TabsTrigger>
           <TabsTrigger value="watch">What to watch</TabsTrigger>
-          <TabsTrigger value="tasks">Tasks</TabsTrigger>
+          <TabsTrigger value="runs">Runs</TabsTrigger>
         </TabsList>
 
         <TabsContent value="briefings" className="space-y-6">
@@ -290,7 +293,7 @@ function InsightsPage() {
           <TrackerPanel insightRunning={workerStatuses.insight?.state === "running"} />
         </TabsContent>
 
-        <TabsContent value="tasks">
+        <TabsContent value="runs">
           <TaskRunList />
         </TabsContent>
       </Tabs>
