@@ -45,6 +45,7 @@ pub struct CrawledContent {
     pub embedding: Option<Vec<f32>>,
     pub meta_data: Option<MetaData>,
     pub created_at: Option<DateTime<Utc>>,
+    pub image_url: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -199,6 +200,8 @@ pub struct CrawledContentResponse {
     pub data_source_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data_source_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_url: Option<String>,
 }
 
 impl From<CrawledContent> for CrawledContentResponse {
@@ -217,6 +220,7 @@ impl From<CrawledContent> for CrawledContentResponse {
             created_at: value.created_at,
             data_source_name: None,
             data_source_url: None,
+            image_url: value.image_url,
         }
     }
 }

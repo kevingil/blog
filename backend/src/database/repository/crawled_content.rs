@@ -346,6 +346,7 @@ impl From<CrawledContentRow> for CrawledContent {
             embedding: row.embedding.map(|value| value.to_vec()),
             meta_data: metadata(row.meta_data),
             created_at: row.created_at,
+            image_url: row.image_url,
         }
     }
 }
@@ -364,6 +365,7 @@ fn new_row(content: &CrawledContent, now: chrono::DateTime<chrono::Utc>) -> NewC
         meta_data: metadata_value(content.meta_data.as_ref()),
         created_at: content.created_at.unwrap_or(now),
         topic_id: content.topic_id,
+        image_url: content.image_url.clone(),
     }
 }
 
@@ -382,6 +384,7 @@ fn changeset(content: &CrawledContent) -> CrawledContentChangeset {
             .meta_data
             .as_ref()
             .map(|value| metadata_value(Some(value))),
+        image_url: content.image_url.clone(),
     }
 }
 

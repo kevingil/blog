@@ -58,6 +58,7 @@ pub struct Insight {
     pub is_pinned: bool,
     pub is_used_in_article: bool,
     pub meta_data: Option<MetaData>,
+    pub image_url: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -167,6 +168,8 @@ pub struct InsightResponse {
     pub topic_color: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub topic_icon: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_url: Option<String>,
 }
 
 impl From<Insight> for InsightResponse {
@@ -190,6 +193,7 @@ impl From<Insight> for InsightResponse {
             topic_name: None,
             topic_color: None,
             topic_icon: None,
+            image_url: value.image_url,
         }
     }
 }

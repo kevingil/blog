@@ -312,6 +312,7 @@ impl From<InsightRow> for Insight {
             is_used_in_article: row.is_used_in_article.unwrap_or_default(),
             meta_data: row.meta_data.and_then(metadata),
             data_source_id: row.data_source_id,
+            image_url: row.image_url,
         }
     }
 }
@@ -336,6 +337,7 @@ fn new_row(value: &Insight) -> NewInsightRow {
         is_used_in_article: value.is_used_in_article,
         meta_data: metadata_value(value.meta_data.as_ref()),
         data_source_id: value.data_source_id,
+        image_url: value.image_url.clone(),
     }
 }
 
