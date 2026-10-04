@@ -196,7 +196,9 @@ async fn exa_search(
             "text": "Deterministic fixture article content.",
             "highlights": ["Deterministic fixture highlight."],
             "summary": "Deterministic fixture summary.",
-            "favicon": "https://fixture.example.com/favicon.ico"
+            "image": "http://localhost:8090/fixture-image.svg",
+            "favicon": "https://fixture.example.com/favicon.ico",
+            "extras": {"imageLinks": ["http://localhost:8090/fixture-image.svg"]}
         }]
     }))
 }

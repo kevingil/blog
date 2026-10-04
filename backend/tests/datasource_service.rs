@@ -70,6 +70,7 @@ fn content(id: Uuid, data_source_id: Uuid) -> CrawledContent {
         embedding: None,
         meta_data: None,
         created_at: Some(Utc::now()),
+        image_url: None,
     }
 }
 
