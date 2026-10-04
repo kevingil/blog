@@ -9065,6 +9065,12 @@
               "string",
               "null"
             ]
+          },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -10047,6 +10053,12 @@
             ]
           },
           "topic_icon": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "image_url": {
             "type": [
               "string",
               "null"
@@ -14246,6 +14258,12 @@
                     "string",
                     "null"
                   ]
+                },
+                "image_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               }
             }
@@ -14486,6 +14504,12 @@
                   ]
                 },
                 "topic_icon": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "image_url": {
                   "type": [
                     "string",
                     "null"

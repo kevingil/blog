@@ -241,6 +241,7 @@ export type CrawledContentResponse = {
     created_at: string;
     data_source_name?: string | null;
     data_source_url?: string | null;
+    image_url?: string | null;
 };
 
 export type CreateArticle = {
@@ -507,6 +508,7 @@ export type InsightResponse = {
     topic_name?: string | null;
     topic_color?: string | null;
     topic_icon?: string | null;
+    image_url?: string | null;
 };
 
 export type InsightTopicCreateRequest = {
@@ -1560,6 +1562,7 @@ export type SuccessResponseVecCrawledContentResponse = {
         created_at: string;
         data_source_name?: string | null;
         data_source_url?: string | null;
+        image_url?: string | null;
     }>;
 };
 
@@ -1612,6 +1615,7 @@ export type SuccessResponseVecInsightResponse = {
         topic_name?: string | null;
         topic_color?: string | null;
         topic_icon?: string | null;
+        image_url?: string | null;
     }>;
 };
 

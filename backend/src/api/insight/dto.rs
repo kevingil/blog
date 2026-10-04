@@ -178,6 +178,8 @@ pub struct InsightResponse {
     pub topic_color: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub topic_icon: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_url: Option<String>,
 }
 
 impl From<CoreInsightResponse> for InsightResponse {
@@ -201,6 +203,7 @@ impl From<CoreInsightResponse> for InsightResponse {
             topic_name: value.topic_name,
             topic_color: value.topic_color,
             topic_icon: value.topic_icon,
+            image_url: value.image_url,
         }
     }
 }
@@ -278,6 +281,8 @@ pub struct CrawledContentResponse {
     pub data_source_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data_source_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_url: Option<String>,
 }
 
 impl From<CoreCrawledContentResponse> for CrawledContentResponse {
@@ -296,6 +301,7 @@ impl From<CoreCrawledContentResponse> for CrawledContentResponse {
             created_at: timestamp(value.created_at),
             data_source_name: value.data_source_name,
             data_source_url: value.data_source_url,
+            image_url: value.image_url,
         }
     }
 }

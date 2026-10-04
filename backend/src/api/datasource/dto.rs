@@ -309,6 +309,8 @@ pub struct CrawledContentResponse {
     pub data_source_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data_source_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_url: Option<String>,
 }
 
 impl From<CoreCrawledContentResponse> for CrawledContentResponse {
@@ -327,6 +329,7 @@ impl From<CoreCrawledContentResponse> for CrawledContentResponse {
             created_at: timestamp(value.created_at),
             data_source_name: value.data_source_name,
             data_source_url: value.data_source_url,
+            image_url: value.image_url,
         }
     }
 }
