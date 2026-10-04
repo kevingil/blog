@@ -297,7 +297,12 @@ function TrackerPanel({ insightRunning }: { insightRunning: boolean }) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">What to watch</CardTitle>
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="text-base">What to watch</CardTitle>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/dashboard/insights/sources">Manage sites</Link>
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <form
