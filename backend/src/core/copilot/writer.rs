@@ -44,12 +44,12 @@ impl WriterAgent {
                 &writer_user_prompt(title, prompt),
             )
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         let content = self
             .text
             .generate_text(EDITOR_SYSTEM_PROMPT, &draft)
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         let embedding = self.embeddings.generate_embedding(&content).await?;
         Ok(GeneratedArticle {
             draft_title: title.to_owned(),

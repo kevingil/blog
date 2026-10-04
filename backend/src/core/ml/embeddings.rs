@@ -31,7 +31,9 @@ impl EmbeddingService {
         let truncated = truncate_utf8(text, MAX_EMBEDDING_TEXT_LENGTH);
         let embedding = self.provider.generate_embedding(truncated).await?;
         if embedding.len() != EMBEDDING_DIMENSIONS {
-            return Err(AppError::External);
+            return Err(AppError::external(
+                "embedding response had the wrong dimensions",
+            ));
         }
         Ok(embedding)
     }

@@ -31,7 +31,7 @@ impl ProfileRepository for MemoryProfiles {
     async fn get_public_profile(&self) -> Result<PublicProfile, AppError> {
         self.public_profile
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .clone()
             .ok_or(AppError::NotFound)
     }
@@ -39,7 +39,7 @@ impl ProfileRepository for MemoryProfiles {
     async fn is_user_admin(&self, user_id: Uuid) -> Result<bool, AppError> {
         self.admin
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .get(&user_id)
             .copied()
             .ok_or(AppError::NotFound)
@@ -51,14 +51,14 @@ impl ProfileAccountRepository for MemoryProfiles {
     async fn find_profile_account(&self, id: Uuid) -> Result<ProfileAccount, AppError> {
         self.accounts
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .get(&id)
             .cloned()
             .ok_or(AppError::NotFound)
     }
 
     async fn update_profile_account(&self, account: &ProfileAccount) -> Result<(), AppError> {
-        let mut accounts = self.accounts.lock().map_err(|_| AppError::Internal)?;
+        let mut accounts = self.accounts.lock().map_err(AppError::internal)?;
         if !accounts.contains_key(&account.id) {
             return Err(AppError::NotFound);
         }
@@ -72,14 +72,14 @@ impl SiteSettingsRepository for MemoryProfiles {
     async fn get(&self) -> Result<SiteSettings, AppError> {
         self.settings
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .clone()
             .ok_or(AppError::NotFound)
     }
 
     async fn save(&self, settings: &mut SiteSettings) -> Result<(), AppError> {
         settings.id = 1;
-        *self.settings.lock().map_err(|_| AppError::Internal)? = Some(settings.clone());
+        *self.settings.lock().map_err(AppError::internal)? = Some(settings.clone());
         Ok(())
     }
 }
@@ -94,7 +94,7 @@ impl OrganizationRepository for MemoryProfileOrganizations {
     async fn find_by_id(&self, id: Uuid) -> Result<Organization, AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .get(&id)
             .cloned()
             .ok_or(AppError::NotFound)
@@ -103,7 +103,7 @@ impl OrganizationRepository for MemoryProfileOrganizations {
     async fn find_by_slug(&self, slug: &str) -> Result<Organization, AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .values()
             .find(|organization| organization.slug == slug)
             .cloned()
@@ -114,7 +114,7 @@ impl OrganizationRepository for MemoryProfileOrganizations {
         Ok(self
             .values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .values()
             .cloned()
             .collect())
@@ -123,7 +123,7 @@ impl OrganizationRepository for MemoryProfileOrganizations {
     async fn save(&self, organization: &mut Organization) -> Result<(), AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .insert(organization.id, organization.clone());
         Ok(())
     }
@@ -131,7 +131,7 @@ impl OrganizationRepository for MemoryProfileOrganizations {
     async fn update(&self, organization: &Organization) -> Result<(), AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .insert(organization.id, organization.clone());
         Ok(())
     }
@@ -139,7 +139,7 @@ impl OrganizationRepository for MemoryProfileOrganizations {
     async fn delete(&self, id: Uuid) -> Result<(), AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .remove(&id)
             .map(|_| ())
             .ok_or(AppError::NotFound)
@@ -233,21 +233,18 @@ async fn profile_user_get_and_update_preserve_partial_fields_and_not_found() {
     );
 
     let updated = service
-        .update_user_profile(
-            account_id,
-            ProfileUpdateRequest {
-                name: Some("Updated Name".to_owned()),
-                bio: Some("Updated bio".to_owned()),
-                profile_image: Some("https://example.com/updated.jpg".to_owned()),
-                email_public: Some("updated@example.com".to_owned()),
-                social_links: Some(BTreeMap::from([
-                    ("twitter".to_owned(), "updated".to_owned()),
-                    ("github".to_owned(), "newaccount".to_owned()),
-                ])),
-                meta_description: Some("Updated meta".to_owned()),
-                profile_upload_file_id: None,
-            },
-        )
+        .update_user_profile(account_id, ProfileUpdateRequest {
+            name: Some("Updated Name".to_owned()),
+            bio: Some("Updated bio".to_owned()),
+            profile_image: Some("https://example.com/updated.jpg".to_owned()),
+            email_public: Some("updated@example.com".to_owned()),
+            social_links: Some(BTreeMap::from([
+                ("twitter".to_owned(), "updated".to_owned()),
+                ("github".to_owned(), "newaccount".to_owned()),
+            ])),
+            meta_description: Some("Updated meta".to_owned()),
+            profile_upload_file_id: None,
+        })
         .await;
     assert!(
         matches!(updated, Ok(ref response) if response.name == "Updated Name" && response.social_links.get("github").map(String::as_str) == Some("newaccount"))

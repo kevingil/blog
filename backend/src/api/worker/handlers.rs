@@ -121,16 +121,13 @@ pub async fn run_worker(
     let organization_id = organization_id(&auth, account_id).await;
     let run_id = state
         .manager()
-        .run_now(
-            &name,
-            RunMetadata {
-                user_id: Some(account_id.into_inner()),
-                organization_id,
-                triggered_by_user_id: Some(account_id.into_inner()),
-                parent_run_id: None,
-                trigger_source: "manual".to_owned(),
-            },
-        )
+        .run_now(&name, RunMetadata {
+            user_id: Some(account_id.into_inner()),
+            organization_id,
+            triggered_by_user_id: Some(account_id.into_inner()),
+            parent_run_id: None,
+            trigger_source: "manual".to_owned(),
+        })
         .await
         .map_err(map_run_error)?;
     Ok(Json(SuccessResponse::new(RunWorkerResponse {
@@ -184,9 +181,7 @@ fn map_run_error(error: WorkerManagerError) -> AppError {
         WorkerManagerError::NotRunning => {
             AppError::InvalidInput("Worker is not running".to_owned())
         }
-        WorkerManagerError::ShuttingDown
-        | WorkerManagerError::InvalidConfig
-        | WorkerManagerError::TaskRunPersistence => AppError::Internal,
+        other => AppError::internal(other),
     }
 }
 

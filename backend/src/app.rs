@@ -165,7 +165,22 @@ pub fn router(state: AppState, cors_origins: &[String]) -> anyhow::Result<Router
     let middleware = ServiceBuilder::new()
         .layer(SetRequestIdLayer::new(request_id.clone(), MakeRequestUuid))
         .layer(PropagateRequestIdLayer::new(request_id))
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http().make_span_with(|request: &axum::extract::Request| {
+                let request_id = request
+                    .headers()
+                    .get("x-request-id")
+                    .and_then(|value| value.to_str().ok())
+                    .unwrap_or("");
+                tracing::info_span!(
+                    "request",
+                    method = %request.method(),
+                    uri = %request.uri(),
+                    version = ?request.version(),
+                    request_id = %request_id,
+                )
+            }),
+        )
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,
             DEFAULT_REQUEST_TIMEOUT,

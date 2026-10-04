@@ -69,7 +69,7 @@ impl ChatMessageRepository for MemoryChatRepository {
             .cloned()
             .collect::<Vec<_>>();
         messages.sort_by(|left, right| right.created_at.cmp(&left.created_at));
-        messages.truncate(usize::try_from(limit).map_err(|_| AppError::Internal)?);
+        messages.truncate(usize::try_from(limit).map_err(AppError::internal)?);
         Ok(messages)
     }
 
@@ -105,7 +105,7 @@ impl ChatMessageRepository for MemoryChatRepository {
         let mut state = self.state();
         state.metadata_updates += 1;
         if state.fail_metadata_update == Some(state.metadata_updates) {
-            return Err(AppError::Database);
+            return Err(AppError::database("no underlying error was recorded"));
         }
         let Some(message) = state.messages.iter_mut().find(|message| message.id == id) else {
             return Ok(0);
@@ -120,7 +120,7 @@ impl ChatMessageRepository for MemoryChatRepository {
         state
             .messages
             .retain(|message| message.article_id != article_id);
-        u64::try_from(before - state.messages.len()).map_err(|_| AppError::Internal)
+        u64::try_from(before - state.messages.len()).map_err(AppError::internal)
     }
 }
 
@@ -355,7 +355,7 @@ async fn artifact_accept_keeps_first_write_when_user_action_write_fails() {
     repository.state().fail_metadata_update = Some(2);
 
     let accepted = service.accept_artifact(message_id, "looks good").await;
-    assert!(matches!(accepted, Err(AppError::Internal)));
+    assert!(matches!(accepted, Err(AppError::Internal(_))));
     let stored = repository.state().messages.first().cloned();
     assert!(stored.is_some());
     let metadata = stored
@@ -406,6 +406,6 @@ async fn invalid_artifact_is_rejected_before_repository_write_and_cancellation_s
     let cancelled = service
         .save_message(Uuid::new_v4(), "user", "message", None)
         .await;
-    assert!(matches!(cancelled, Err(AppError::Internal)));
+    assert!(matches!(cancelled, Err(AppError::Internal(_))));
     assert!(repository.state().messages.is_empty());
 }

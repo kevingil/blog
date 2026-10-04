@@ -267,6 +267,7 @@ fn manager_error(error: ManagerError) -> AppError {
         ManagerError::StreamAlreadyTaken => {
             AppError::Conflict("request stream already taken".to_owned())
         }
-        ManagerError::Dependency | ManagerError::ShutdownTimeout(_) => AppError::Internal,
+        ManagerError::Dependency => AppError::internal("copilot dependency is unavailable"),
+        ManagerError::ShutdownTimeout(_) => AppError::internal("copilot shutdown timed out"),
     }
 }

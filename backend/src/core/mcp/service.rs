@@ -10,8 +10,8 @@ use super::{
     client::McpClient,
     tool::McpTool,
     types::{
-        ConnectorRefresh, CreateMcpConnector, McpConnector, UpdateMcpConnector, TRANSPORT_HTTP,
-        TRANSPORT_SSE, TRANSPORT_STDIO, sanitize_tool_prefix,
+        ConnectorRefresh, CreateMcpConnector, McpConnector, TRANSPORT_HTTP, TRANSPORT_SSE,
+        TRANSPORT_STDIO, UpdateMcpConnector, sanitize_tool_prefix,
     },
 };
 
@@ -160,9 +160,11 @@ impl McpConnectorService {
             match attach_connector(&connector).await {
                 Ok(attached) => {
                     names.extend(attached.iter().map(|tool| tool.qualified_name.clone()));
-                    tools.extend(attached.into_iter().map(|tool| {
-                        Arc::new(tool) as Arc<dyn crate::core::ml::llm::Tool>
-                    }));
+                    tools.extend(
+                        attached
+                            .into_iter()
+                            .map(|tool| Arc::new(tool) as Arc<dyn crate::core::ml::llm::Tool>),
+                    );
                     self.clear_error(connector).await?;
                 }
                 Err(error) => {
@@ -174,7 +176,11 @@ impl McpConnectorService {
         Ok(names)
     }
 
-    async fn record_error(&self, mut connector: McpConnector, error: &AppError) -> Result<(), AppError> {
+    async fn record_error(
+        &self,
+        mut connector: McpConnector,
+        error: &AppError,
+    ) -> Result<(), AppError> {
         connector.last_error = error.to_string();
         self.repository.update(&connector).await?;
         Ok(())
@@ -190,7 +196,7 @@ impl McpConnectorService {
 
     fn cancelled(&self) -> Result<(), AppError> {
         if self.cancellation.is_cancelled() {
-            Err(AppError::Internal)
+            Err(AppError::internal("request cancelled"))
         } else {
             Ok(())
         }
@@ -245,11 +251,9 @@ fn validate_connector(connector: &McpConnector) -> Result<(), AppError> {
         TRANSPORT_STDIO if connector.command.trim().is_empty() => Err(AppError::InvalidInput(
             "command is required for stdio connectors".to_owned(),
         )),
-        TRANSPORT_HTTP | TRANSPORT_SSE if connector.url.trim().is_empty() => {
-            Err(AppError::InvalidInput(
-                "url is required for http/sse connectors".to_owned(),
-            ))
-        }
+        TRANSPORT_HTTP | TRANSPORT_SSE if connector.url.trim().is_empty() => Err(
+            AppError::InvalidInput("url is required for http/sse connectors".to_owned()),
+        ),
         _ => Ok(()),
     }
 }

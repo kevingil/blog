@@ -33,12 +33,14 @@ pub type AuthResult<T> = Result<T, AuthApiError>;
 pub struct AuthApiError {
     status: StatusCode,
     body: AuthErrorResponse,
+    cause: String,
 }
 
 impl AuthApiError {
     fn invalid_body() -> Self {
         Self {
             status: StatusCode::BAD_REQUEST,
+            cause: "Invalid request body".to_owned(),
             body: AuthErrorResponse {
                 error: "Invalid request body".to_owned(),
                 code: "INVALID_INPUT",
@@ -58,6 +60,7 @@ impl AuthApiError {
             .collect();
         Self {
             status: StatusCode::BAD_REQUEST,
+            cause: first_error.clone(),
             body: AuthErrorResponse {
                 error: first_error,
                 code: "VALIDATION_ERROR",
@@ -69,6 +72,7 @@ impl AuthApiError {
     fn unauthorized(message: &'static str) -> Self {
         Self {
             status: StatusCode::UNAUTHORIZED,
+            cause: message.to_owned(),
             body: AuthErrorResponse {
                 error: message.to_owned(),
                 code: "UNAUTHORIZED",
@@ -80,6 +84,7 @@ impl AuthApiError {
 
 impl From<AppError> for AuthApiError {
     fn from(error: AppError) -> Self {
+        let cause = error.to_string();
         let (status, message, code) = match error {
             AppError::InvalidInput(message) => (StatusCode::BAD_REQUEST, message, "INVALID_INPUT"),
             AppError::Unauthorized => (
@@ -102,17 +107,17 @@ impl From<AppError> for AuthApiError {
                 "resource already exists".to_owned(),
                 "ALREADY_EXISTS",
             ),
-            AppError::Database => (
+            AppError::Database(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Database error".to_owned(),
                 "DATABASE_ERROR",
             ),
-            AppError::External => (
+            AppError::External(_) => (
                 StatusCode::BAD_GATEWAY,
                 "external service error".to_owned(),
                 "EXTERNAL_SERVICE_ERROR",
             ),
-            AppError::Internal => (
+            AppError::Internal(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Internal server error".to_owned(),
                 "INTERNAL_ERROR",
@@ -120,6 +125,7 @@ impl From<AppError> for AuthApiError {
         };
         Self {
             status,
+            cause,
             body: AuthErrorResponse {
                 error: message,
                 code,
@@ -131,6 +137,7 @@ impl From<AppError> for AuthApiError {
 
 impl IntoResponse for AuthApiError {
     fn into_response(self) -> Response {
+        crate::error::log_error_response(self.status, self.body.code, &self.cause);
         (self.status, Json(self.body)).into_response()
     }
 }
@@ -258,10 +265,11 @@ pub async fn update_password(
     request: Request,
 ) -> AuthResult<Json<SuccessResponse<MessageResponse>>> {
     let account_id = authenticated_account_id(request.headers(), &state)?;
-    let body: UpdatePasswordRequest = parse_and_validate(
-        request,
-        &["currentPassword", "newPassword", "confirmPassword"],
-    )
+    let body: UpdatePasswordRequest = parse_and_validate(request, &[
+        "currentPassword",
+        "newPassword",
+        "confirmPassword",
+    ])
     .await?;
     state
         .service()

@@ -246,7 +246,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               tooltip="New"
               isActive={isWriting}
               onClick={startWriting}
-              className="h-9 rounded-xl bg-sidebar-accent px-3 font-medium text-sidebar-foreground shadow-none hover:bg-sidebar-accent/80 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground"
+              className="h-9 rounded-xl border border-sidebar-border bg-transparent px-3 font-medium text-sidebar-foreground shadow-none hover:bg-sidebar-accent/40 data-[active=true]:border-transparent data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground"
             >
               <Plus />
               <span>New</span>

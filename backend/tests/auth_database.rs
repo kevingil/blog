@@ -222,7 +222,7 @@ async fn postgres_repository_and_http_auth_flow_preserve_atomic_fields() -> Test
     drop(connection);
     assert!(matches!(
         repository.find_by_id(invalid_social_id).await,
-        Err(AppError::Database)
+        Err(AppError::Database(_))
     ));
     assert!(
         repository

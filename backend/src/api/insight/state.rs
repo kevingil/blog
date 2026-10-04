@@ -58,7 +58,9 @@ impl InsightState {
     }
 
     pub fn trackers(&self) -> Result<&TrackerCatalog, AppError> {
-        self.trackers.as_deref().ok_or(AppError::Internal)
+        self.trackers
+            .as_deref()
+            .ok_or(AppError::internal("insight trackers are not configured"))
     }
 
     pub fn workers(&self) -> Option<&Arc<WorkerManager>> {

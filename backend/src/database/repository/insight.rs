@@ -34,7 +34,7 @@ impl DieselInsightRepository {
         diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>,
         AppError,
     > {
-        self.pool.get().await.map_err(|_| AppError::Database)
+        self.pool.get().await.map_err(AppError::database)
     }
 
     async fn list_filtered(
@@ -56,7 +56,7 @@ impl DieselInsightRepository {
             .select(count_star())
             .first(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
 
         let mut query = insight::table.into_boxed();
         if let Some(id) = organization_id {
@@ -73,7 +73,7 @@ impl DieselInsightRepository {
             .select(InsightRow::as_select())
             .load(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         Ok((rows_into_domain(rows), total))
     }
 }
@@ -88,7 +88,7 @@ impl InsightRepository for DieselInsightRepository {
             .first(&mut connection)
             .await
             .optional()
-            .map_err(|_| AppError::Database)?
+            .map_err(AppError::database)?
             .ok_or(AppError::NotFound)
             .map(Into::into)
     }
@@ -136,7 +136,7 @@ impl InsightRepository for DieselInsightRepository {
             .load(&mut connection)
             .await
             .map(rows_into_domain)
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 
     async fn search_similar(
@@ -166,7 +166,7 @@ impl InsightRepository for DieselInsightRepository {
             .execute(&mut connection)
             .await
             .map(|_| ())
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 
     async fn mark_as_read(&self, id: Uuid) -> Result<(), AppError> {
@@ -176,7 +176,7 @@ impl InsightRepository for DieselInsightRepository {
             .execute(&mut connection)
             .await
             .map(|_| ())
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 
     async fn toggle_pinned(&self, id: Uuid) -> Result<(), AppError> {
@@ -186,7 +186,7 @@ impl InsightRepository for DieselInsightRepository {
             .execute(&mut connection)
             .await
             .map(|_| ())
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 
     async fn mark_as_used_in_article(&self, id: Uuid) -> Result<(), AppError> {
@@ -196,7 +196,7 @@ impl InsightRepository for DieselInsightRepository {
             .execute(&mut connection)
             .await
             .map(|_| ())
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 
     async fn delete(&self, id: Uuid) -> Result<(), AppError> {
@@ -204,7 +204,7 @@ impl InsightRepository for DieselInsightRepository {
         match diesel::delete(insight::table.find(id))
             .execute(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?
+            .map_err(AppError::database)?
         {
             0 => Err(AppError::NotFound),
             _ => Ok(()),
@@ -221,7 +221,7 @@ impl InsightRepository for DieselInsightRepository {
             .await
             .optional()
             .map(|row| row.map(Into::into))
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 
     async fn find_latest_by_data_source_id(
@@ -237,7 +237,7 @@ impl InsightRepository for DieselInsightRepository {
             .await
             .optional()
             .map(|row| row.map(Into::into))
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 
     async fn count_unread(&self, organization_id: Uuid) -> Result<i64, AppError> {
@@ -248,7 +248,7 @@ impl InsightRepository for DieselInsightRepository {
             .select(count_star())
             .first(&mut connection)
             .await
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 
     async fn count_all_unread(&self) -> Result<i64, AppError> {
@@ -258,7 +258,7 @@ impl InsightRepository for DieselInsightRepository {
             .select(count_star())
             .first(&mut connection)
             .await
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 }
 
@@ -268,7 +268,7 @@ async fn similar(
     embedding: &[f32],
     limit: i64,
 ) -> Result<Vec<Insight>, AppError> {
-    let mut connection = pool.get().await.map_err(|_| AppError::Database)?;
+    let mut connection = pool.get().await.map_err(AppError::database)?;
     let mut query = insight::table
         .filter(insight::embedding.is_not_null())
         .order(insight::embedding.cosine_distance(Vector::from(embedding.to_vec())))
@@ -284,7 +284,7 @@ async fn similar(
         .load(&mut connection)
         .await
         .map(rows_into_domain)
-        .map_err(|_| AppError::Database)
+        .map_err(AppError::database)
 }
 
 impl From<InsightRow> for Insight {

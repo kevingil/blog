@@ -87,12 +87,12 @@ impl ChatPersistencePort for MemoryChat {
             meta_data: metadata
                 .map(serde_json::to_value)
                 .transpose()
-                .map_err(|_| AppError::Internal)?,
+                .map_err(AppError::internal)?,
             created_at: Some(Utc::now()),
         };
         self.messages
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .push(message.clone());
         Ok(message)
     }
@@ -101,7 +101,7 @@ impl ChatPersistencePort for MemoryChat {
         let messages = self
             .messages
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .iter()
             .filter(|message| message.article_id == article_id)
             .cloned()
@@ -449,11 +449,9 @@ async fn backend_edit_streams_the_saved_draft_and_replays_tool_execution() {
         vec![scripted_complete("Next", Vec::new(), FinishReason::EndTurn)],
     ]));
     let store = Arc::new(InMemorySessionStore::default());
-    let agent = Agent::new(
-        provider.clone(),
-        store.clone(),
-        vec![Arc::new(ApplyPatchTool::new(None))],
-    );
+    let agent = Agent::new(provider.clone(), store.clone(), vec![Arc::new(
+        ApplyPatchTool::new(None),
+    )]);
     let chat = Arc::new(MemoryChat::default());
     let manager = CopilotManager::new(
         agent,

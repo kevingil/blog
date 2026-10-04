@@ -40,7 +40,7 @@ async fn fetch_extract_uses_go_compatible_title_main_content_and_truncation() ->
         adapter
             .fetch_extract(&format!("http://{address}/missing"))
             .await,
-        Err(AppError::External)
+        Err(AppError::External(_))
     ));
 
     server.abort();

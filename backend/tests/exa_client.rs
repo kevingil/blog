@@ -76,29 +76,22 @@ async fn exa_adapter_preserves_request_defaults_headers_paths_and_results() -> T
     let server = tokio::spawn(async move { axum::serve(listener, app).await });
     let client = ExaClient::with_base_url("test-key", format!("http://{address}"))?;
 
-    let search = RecommendationSearchPort::search(
-        &client,
-        "Rust",
-        SearchOptions {
-            include_text: true,
-            include_highlights: true,
-            include_summary: true,
-            use_autoprompt: true,
-            include_domains: vec!["example.com".to_owned()],
-            start_date: "2026-01-01".to_owned(),
-            end_date: "2026-07-27".to_owned(),
-            ..SearchOptions::default()
-        },
-    )
+    let search = RecommendationSearchPort::search(&client, "Rust", SearchOptions {
+        include_text: true,
+        include_highlights: true,
+        include_summary: true,
+        use_autoprompt: true,
+        include_domains: vec!["example.com".to_owned()],
+        start_date: "2026-01-01".to_owned(),
+        end_date: "2026-07-27".to_owned(),
+        ..SearchOptions::default()
+    })
     .await?;
     let similar = client
-        .find_similar(
-            "https://example.com",
-            SimilarOptions {
-                exclude_source_domain: true,
-                ..SimilarOptions::default()
-            },
-        )
+        .find_similar("https://example.com", SimilarOptions {
+            exclude_source_domain: true,
+            ..SimilarOptions::default()
+        })
         .await?;
     let research = ResearchPort::search(&client, "Axum research").await?;
     let answer = client.answer("What is Axum?").await?;
@@ -153,7 +146,7 @@ async fn exa_adapter_rejects_invalid_input_and_unconfigured_calls() -> TestResul
     assert!(!unconfigured.is_configured());
     assert!(matches!(
         RecommendationSearchPort::search(&unconfigured, "query", SearchOptions::default()).await,
-        Err(AppError::External)
+        Err(AppError::External(_))
     ));
     let configured = ExaClient::new("key")?;
     assert!(matches!(

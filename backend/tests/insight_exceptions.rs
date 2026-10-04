@@ -30,7 +30,7 @@ struct Store {
 }
 
 fn lock<T>(value: &Mutex<T>) -> Result<MutexGuard<'_, T>, AppError> {
-    value.lock().map_err(|_| AppError::Internal)
+    value.lock().map_err(AppError::internal)
 }
 
 fn insight(id: Uuid, organization_id: Uuid) -> Insight {
@@ -552,10 +552,9 @@ async fn test_service_create_insight() -> TestResult {
     assert!(!value.is_pinned);
     assert!(!value.is_used_in_article);
     assert!(lock(&store.topics)?[0].last_insight_at.is_some());
-    assert_eq!(
-        lock(&store.embedding_inputs)?.as_slice(),
-        ["New Insight New summary"]
-    );
+    assert_eq!(lock(&store.embedding_inputs)?.as_slice(), [
+        "New Insight New summary"
+    ]);
 
     let without_topic = service(store.clone())
         .create_insight(
@@ -574,13 +573,10 @@ async fn test_service_create_insight() -> TestResult {
     assert_eq!(without_topic.topic_id, None);
     assert_eq!(without_topic.key_points, None);
     assert!(without_topic.source_content_ids.is_empty());
-    assert_eq!(
-        lock(&store.embedding_inputs)?.as_slice(),
-        [
-            "New Insight New summary".to_owned(),
-            "Second Insight Second summary".to_owned()
-        ]
-    );
+    assert_eq!(lock(&store.embedding_inputs)?.as_slice(), [
+        "New Insight New summary".to_owned(),
+        "Second Insight Second summary".to_owned()
+    ]);
     assert_eq!(lock(&store.insights)?.len(), 2);
     Ok(())
 }
@@ -657,16 +653,13 @@ async fn test_service_create_topic() -> TestResult {
     let store = Arc::new(Store::default());
     let organization_id = Uuid::new_v4();
     let value = service(store.clone())
-        .create_topic(
-            Some(organization_id),
-            InsightTopicCreateRequest {
-                name: "New Topic".to_owned(),
-                description: Some("Test description".to_owned()),
-                keywords: Some(vec!["keyword1".to_owned(), "keyword2".to_owned()]),
-                color: Some("#FF0000".to_owned()),
-                icon: Some("star".to_owned()),
-            },
-        )
+        .create_topic(Some(organization_id), InsightTopicCreateRequest {
+            name: "New Topic".to_owned(),
+            description: Some("Test description".to_owned()),
+            keywords: Some(vec!["keyword1".to_owned(), "keyword2".to_owned()]),
+            color: Some("#FF0000".to_owned()),
+            icon: Some("star".to_owned()),
+        })
         .await?;
     assert_eq!(value.organization_id, Some(organization_id));
     assert_eq!(value.name, "New Topic");
@@ -679,35 +672,28 @@ async fn test_service_create_topic() -> TestResult {
     assert_eq!(value.icon.as_deref(), Some("star"));
     assert!(!value.is_auto_generated);
     assert_eq!(value.content_count, 0);
-    assert_eq!(
-        lock(&store.embedding_inputs)?.as_slice(),
-        ["New Topic Test description keyword1 keyword2"]
-    );
+    assert_eq!(lock(&store.embedding_inputs)?.as_slice(), [
+        "New Topic Test description keyword1 keyword2"
+    ]);
 
     let minimal = service(store.clone())
-        .create_topic(
-            Some(organization_id),
-            InsightTopicCreateRequest {
-                name: "Minimal Topic".to_owned(),
-                description: None,
-                keywords: None,
-                color: None,
-                icon: None,
-            },
-        )
+        .create_topic(Some(organization_id), InsightTopicCreateRequest {
+            name: "Minimal Topic".to_owned(),
+            description: None,
+            keywords: None,
+            color: None,
+            icon: None,
+        })
         .await?;
     assert_eq!(minimal.name, "Minimal Topic");
     assert_eq!(minimal.description, None);
     assert_eq!(minimal.keywords, None);
     assert_eq!(minimal.color, None);
     assert_eq!(minimal.icon, None);
-    assert_eq!(
-        lock(&store.embedding_inputs)?.as_slice(),
-        [
-            "New Topic Test description keyword1 keyword2".to_owned(),
-            "Minimal Topic".to_owned()
-        ]
-    );
+    assert_eq!(lock(&store.embedding_inputs)?.as_slice(), [
+        "New Topic Test description keyword1 keyword2".to_owned(),
+        "Minimal Topic".to_owned()
+    ]);
     assert_eq!(lock(&store.topics)?.len(), 2);
     Ok(())
 }

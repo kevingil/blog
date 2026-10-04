@@ -99,7 +99,7 @@ impl AuthService {
             .clone()
             .acquire_owned()
             .await
-            .map_err(|_| AppError::Internal)?;
+            .map_err(AppError::internal)?;
         tokio::task::spawn_blocking(move || {
             let _permit = permit;
             // bcrypt's non-truncating API reserves one byte for a C-style terminator
@@ -111,10 +111,10 @@ impl AuthService {
             } else {
                 non_truncating_hash(password, BCRYPT_COST)
             }
-            .map_err(|_| AppError::Internal)
+            .map_err(AppError::internal)
         })
         .await
-        .map_err(|_| AppError::Internal)?
+        .map_err(AppError::internal)?
     }
 
     async fn verify_password(
@@ -133,7 +133,7 @@ impl AuthService {
             .clone()
             .acquire_owned()
             .await
-            .map_err(|_| AppError::Internal)?;
+            .map_err(AppError::internal)?;
         tokio::task::spawn_blocking(move || {
             let _permit = permit;
             let verified = if password.len() == BCRYPT_MAX_PASSWORD_BYTES {
@@ -147,7 +147,7 @@ impl AuthService {
             }
         })
         .await
-        .map_err(|_| AppError::Internal)?
+        .map_err(AppError::internal)?
     }
 
     pub async fn login(&self, input: LoginInput) -> Result<LoginResult, AppError> {
@@ -284,9 +284,11 @@ impl AuthService {
 
     pub fn issue_token(&self, id: AccountId) -> Result<String, AppError> {
         let now = Utc::now().timestamp();
-        let lifetime = i64::try_from(TOKEN_LIFETIME.as_secs()).map_err(|_| AppError::Internal)?;
-        let expires_at = now.checked_add(lifetime).ok_or(AppError::Internal)?;
-        let exp = usize::try_from(expires_at).map_err(|_| AppError::Internal)?;
+        let lifetime = i64::try_from(TOKEN_LIFETIME.as_secs()).map_err(AppError::internal)?;
+        let expires_at = now
+            .checked_add(lifetime)
+            .ok_or(AppError::internal("token expiry overflowed"))?;
+        let exp = usize::try_from(expires_at).map_err(AppError::internal)?;
         let claims = Claims {
             sub: id.0.to_string(),
             exp,
@@ -297,7 +299,7 @@ impl AuthService {
             &claims,
             &EncodingKey::from_secret(&self.jwt_secret),
         )
-        .map_err(|_| AppError::Internal)
+        .map_err(AppError::internal)
     }
 
     pub fn validate_token(&self, token: &str) -> Result<TokenData<Claims>, AppError> {

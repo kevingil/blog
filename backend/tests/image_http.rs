@@ -157,7 +157,7 @@ impl ImageGenerationQueue for Queue {
 
     async fn enqueue(&self, job: ImageGenerationJob) -> Result<(), AppError> {
         if *lock(&self.fail) {
-            return Err(AppError::External);
+            return Err(AppError::external("no underlying error was recorded"));
         }
         lock(&self.jobs).push(job);
         Ok(())
@@ -270,16 +270,15 @@ async fn generate_persists_pending_record_before_queueing_exact_job() -> TestRes
         Some(&json!(article_id))
     );
     drop(images);
-    assert_eq!(
-        lock(&fixture.queue.jobs).as_slice(),
-        &[ImageGenerationJob {
+    assert_eq!(lock(&fixture.queue.jobs).as_slice(), &[
+        ImageGenerationJob {
             image_id: lock(&fixture.images.values)[0].id,
             request_id: request_id.to_owned(),
             article_id,
             prompt: "A city at dawn".to_owned(),
             generate_prompt: true,
-        }]
-    );
+        }
+    ]);
     Ok(())
 }
 

@@ -54,15 +54,12 @@ impl RuntimeAgentQueue {
             jobs,
             streams: Arc::new(Mutex::new(HashMap::new())),
         });
-        (
-            queue,
-            AgentQueueWorker {
-                jobs: receiver,
-                chat,
-                articles,
-                openai,
-            },
-        )
+        (queue, AgentQueueWorker {
+            jobs: receiver,
+            chat,
+            articles,
+            openai,
+        })
     }
 
     async fn submit_request(&self, request: ChatRequest) -> Result<String, AppError> {
@@ -70,14 +67,14 @@ impl RuntimeAgentQueue {
         let (events, receiver) = mpsc::channel(EVENT_QUEUE_CAPACITY);
         self.streams
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .insert(request_id.clone(), receiver);
         if self.jobs.send(AgentJob { request, events }).await.is_err() {
             self.streams
                 .lock()
-                .map_err(|_| AppError::Internal)?
+                .map_err(AppError::internal)?
                 .remove(&request_id);
-            return Err(AppError::External);
+            return Err(AppError::external("agent request queue is closed"));
         }
         Ok(request_id)
     }
@@ -215,9 +212,12 @@ async fn send_error(events: mpsc::Sender<AgentStreamEvent>, error: &str) {
 }
 
 async fn send_event(events: &mpsc::Sender<AgentStreamEvent>, value: Value) -> Result<(), AppError> {
-    let fields: Map<String, Value> = value.as_object().cloned().ok_or(AppError::Internal)?;
+    let fields: Map<String, Value> = value
+        .as_object()
+        .cloned()
+        .ok_or(AppError::internal("agent event payload was not an object"))?;
     events
         .send(AgentStreamEvent::new(fields))
         .await
-        .map_err(|_| AppError::External)
+        .map_err(AppError::external)
 }

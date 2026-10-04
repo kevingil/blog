@@ -23,7 +23,7 @@ impl OrganizationRepository for MemoryOrganizations {
     async fn find_by_id(&self, id: Uuid) -> Result<Organization, AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .get(&id)
             .cloned()
             .ok_or(AppError::NotFound)
@@ -32,7 +32,7 @@ impl OrganizationRepository for MemoryOrganizations {
     async fn find_by_slug(&self, slug: &str) -> Result<Organization, AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .values()
             .find(|organization| organization.slug == slug)
             .cloned()
@@ -43,7 +43,7 @@ impl OrganizationRepository for MemoryOrganizations {
         Ok(self
             .values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .values()
             .cloned()
             .collect())
@@ -52,13 +52,13 @@ impl OrganizationRepository for MemoryOrganizations {
     async fn save(&self, organization: &mut Organization) -> Result<(), AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .insert(organization.id, organization.clone());
         Ok(())
     }
 
     async fn update(&self, organization: &Organization) -> Result<(), AppError> {
-        let mut values = self.values.lock().map_err(|_| AppError::Internal)?;
+        let mut values = self.values.lock().map_err(AppError::internal)?;
         if !values.contains_key(&organization.id) {
             return Err(AppError::NotFound);
         }
@@ -69,7 +69,7 @@ impl OrganizationRepository for MemoryOrganizations {
     async fn delete(&self, id: Uuid) -> Result<(), AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .remove(&id)
             .map(|_| ())
             .ok_or(AppError::NotFound)
@@ -88,7 +88,7 @@ impl OrganizationAccountRepository for MemoryOrganizationAccounts {
         account_id: Uuid,
         organization_id: Option<Uuid>,
     ) -> Result<bool, AppError> {
-        let mut values = self.values.lock().map_err(|_| AppError::Internal)?;
+        let mut values = self.values.lock().map_err(AppError::internal)?;
         let Some(value) = values.get_mut(&account_id) else {
             return Ok(false);
         };
@@ -233,37 +233,28 @@ async fn organization_update_preserves_partial_slug_and_not_found_cases() {
     }
     let service = service(organizations, accounts);
     let renamed = service
-        .update(
-            original.id,
-            OrganizationUpdateRequest {
-                name: Some("Updated Name".to_owned()),
-                ..OrganizationUpdateRequest::default()
-            },
-        )
+        .update(original.id, OrganizationUpdateRequest {
+            name: Some("Updated Name".to_owned()),
+            ..OrganizationUpdateRequest::default()
+        })
         .await;
     assert!(
         matches!(renamed, Ok(ref value) if value.name == "Updated Name" && value.slug == "original-slug")
     );
 
     let re_slugged = service
-        .update(
-            original.id,
-            OrganizationUpdateRequest {
-                slug: Some("new-slug".to_owned()),
-                ..OrganizationUpdateRequest::default()
-            },
-        )
+        .update(original.id, OrganizationUpdateRequest {
+            slug: Some("new-slug".to_owned()),
+            ..OrganizationUpdateRequest::default()
+        })
         .await;
     assert!(matches!(re_slugged, Ok(ref value) if value.slug == "new-slug"));
 
     let conflict = service
-        .update(
-            original.id,
-            OrganizationUpdateRequest {
-                slug: Some("taken-slug".to_owned()),
-                ..OrganizationUpdateRequest::default()
-            },
-        )
+        .update(original.id, OrganizationUpdateRequest {
+            slug: Some("taken-slug".to_owned()),
+            ..OrganizationUpdateRequest::default()
+        })
         .await;
     assert!(matches!(conflict, Err(AppError::Conflict(_))));
     assert!(matches!(

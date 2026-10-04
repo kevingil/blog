@@ -385,14 +385,14 @@ async fn exercise_repository(
     );
     assert!(matches!(
         repository.search_by_embedding(&vec![0.0; 1536], -1).await,
-        Err(AppError::Database)
+        Err(AppError::Database(_))
     ));
 
     let popular_tags = repository.get_popular_tags(10_000).await?;
     assert!(repository.get_popular_tags(0).await?.is_empty());
     assert!(matches!(
         repository.get_popular_tags(-1).await,
-        Err(AppError::Database)
+        Err(AppError::Database(_))
     ));
     let popular_position = popular_tags
         .iter()
@@ -443,7 +443,7 @@ async fn exercise_repository(
     invalid_draft.draft_title = "x".repeat(501);
     assert!(matches!(
         repository.save_draft(&mut invalid_draft).await,
-        Err(AppError::Database)
+        Err(AppError::Database(_))
     ));
     repository.drain_background_tasks().await?;
     let after_failed_mutation = repository.find_by_id(first.id).await?;
@@ -675,7 +675,7 @@ async fn exercise_repository(
         closing_repository
             .shutdown_background_tasks(StdDuration::from_millis(100))
             .await,
-        Err(AppError::Internal)
+        Err(AppError::Internal(_))
     ));
     release_sender
         .send(())
@@ -687,7 +687,7 @@ async fn exercise_repository(
     closing_article.draft_content = "Must not be persisted".to_owned();
     assert!(matches!(
         closing_repository.save_draft(&mut closing_article).await,
-        Err(AppError::Internal)
+        Err(AppError::Internal(_))
     ));
     let persisted_after_rejection = repository.find_by_id(first.id).await?;
     assert_eq!(
@@ -704,11 +704,11 @@ async fn exercise_repository(
     );
     assert!(matches!(
         closing_repository.drain_background_tasks().await,
-        Err(AppError::Internal)
+        Err(AppError::Internal(_))
     ));
     assert!(matches!(
         closing_repository.drain_background_tasks().await,
-        Err(AppError::Internal)
+        Err(AppError::Internal(_))
     ));
     closing_repository.drain_background_tasks().await?;
 

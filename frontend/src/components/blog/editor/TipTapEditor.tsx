@@ -66,7 +66,7 @@ interface TipTapEditorProps {
 function imageFiles(list: FileList | null | undefined): File[] {
   if (!list || list.length === 0) return [];
   return Array.from(list).filter((file) => (
-    file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(file.name)
+    file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|avif|heic|heif|svg)$/i.test(file.name)
   ));
 }
 

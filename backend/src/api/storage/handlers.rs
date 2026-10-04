@@ -1,6 +1,10 @@
 use axum::{
     Json,
-    extract::{Multipart, Path, Query, State, multipart::MultipartRejection},
+    extract::{
+        Multipart, Path, Query, State,
+        multipart::{Field, MultipartRejection},
+    },
+    http::StatusCode,
 };
 
 use crate::{
@@ -18,6 +22,19 @@ use super::{
 };
 
 type ApiResult<T> = Result<Json<SuccessResponse<T>>, AppError>;
+
+async fn file_bytes(field: Field<'_>) -> Result<Vec<u8>, AppError> {
+    match field.bytes().await {
+        Ok(bytes) => Ok(bytes.to_vec()),
+        Err(error) if error.status() == StatusCode::PAYLOAD_TOO_LARGE => {
+            Err(AppError::InvalidInput("File is too large".to_owned()))
+        }
+        Err(error) if error.status().is_client_error() => {
+            Err(AppError::InvalidInput("Invalid request body".to_owned()))
+        }
+        Err(error) => Err(AppError::internal(error)),
+    }
+}
 
 #[utoipa::path(
     get,
@@ -87,13 +104,7 @@ pub async fn upload_file(
             }
             Some("file") if file.is_none() => {
                 content_type = field.content_type().map(str::to_owned);
-                file = Some(
-                    field
-                        .bytes()
-                        .await
-                        .map_err(|_| AppError::Internal)?
-                        .to_vec(),
-                );
+                file = Some(file_bytes(field).await?);
             }
             _ => {}
         }

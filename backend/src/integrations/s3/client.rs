@@ -78,15 +78,19 @@ impl ObjectStore for S3ObjectStore {
         if let Some(delimiter) = delimiter {
             request = request.delimiter(delimiter);
         }
-        let response = request.send().await.map_err(|_| AppError::External)?;
+        let response = request.send().await.map_err(AppError::external)?;
         let mut objects = Vec::with_capacity(response.contents().len());
         for object in response.contents() {
-            let key = object.key().ok_or(AppError::External)?;
-            let modified = object.last_modified().ok_or(AppError::External)?;
+            let key = object
+                .key()
+                .ok_or(AppError::external("object listing is missing a key"))?;
+            let modified = object
+                .last_modified()
+                .ok_or(AppError::external("object listing is missing a timestamp"))?;
             let last_modified = Utc
                 .timestamp_opt(modified.secs(), modified.subsec_nanos())
                 .single()
-                .ok_or(AppError::External)?;
+                .ok_or(AppError::external("object timestamp is invalid"))?;
             objects.push(ObjectEntry {
                 key: key.to_owned(),
                 last_modified,
@@ -124,7 +128,7 @@ impl ObjectStore for S3ObjectStore {
             .send()
             .await
             .map(|_| ())
-            .map_err(|_| AppError::External)
+            .map_err(AppError::external)
     }
 
     async fn delete(&self, key: &str) -> Result<(), AppError> {
@@ -135,7 +139,7 @@ impl ObjectStore for S3ObjectStore {
             .send()
             .await
             .map(|_| ())
-            .map_err(|_| AppError::External)
+            .map_err(AppError::external)
     }
 
     async fn get(&self, key: &str) -> Result<Vec<u8>, AppError> {
@@ -147,11 +151,7 @@ impl ObjectStore for S3ObjectStore {
             .send()
             .await
             .map_err(|_| AppError::NotFound)?;
-        let bytes = response
-            .body
-            .collect()
-            .await
-            .map_err(|_| AppError::External)?;
+        let bytes = response.body.collect().await.map_err(AppError::external)?;
         Ok(bytes.into_bytes().to_vec())
     }
 
@@ -164,6 +164,6 @@ impl ObjectStore for S3ObjectStore {
             .send()
             .await
             .map(|_| ())
-            .map_err(|_| AppError::External)
+            .map_err(AppError::external)
     }
 }

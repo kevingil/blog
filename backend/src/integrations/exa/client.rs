@@ -43,7 +43,7 @@ impl ExaClient {
         let client = Client::builder()
             .timeout(REQUEST_TIMEOUT)
             .build()
-            .map_err(|_| AppError::Internal)?;
+            .map_err(AppError::internal)?;
         Ok(Self {
             client,
             api_key: SecretString::from(api_key.into()),
@@ -65,7 +65,7 @@ impl ExaClient {
         Response: for<'de> Deserialize<'de>,
     {
         if !self.is_configured() {
-            return Err(AppError::External);
+            return Err(AppError::external("Exa client is not configured"));
         }
         let response = self
             .client
@@ -74,11 +74,14 @@ impl ExaClient {
             .json(request)
             .send()
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         if response.status() != StatusCode::OK {
-            return Err(AppError::External);
+            return Err(AppError::external(format!(
+                "upstream returned {}",
+                response.status()
+            )));
         }
-        response.json().await.map_err(|_| AppError::External)
+        response.json().await.map_err(AppError::external)
     }
 }
 
@@ -263,28 +266,25 @@ impl RecommendationSearchPort for ExaClient {
             ));
         }
         let response: ExaSearchResponse = self
-            .post(
-                "/search",
-                &ExaSearchRequest {
-                    query,
-                    r#type: "auto",
-                    num_results: if options.num_results == 0 {
-                        10
-                    } else {
-                        options.num_results
-                    },
-                    include_domains: options.include_domains,
-                    exclude_domains: options.exclude_domains,
-                    start_crawl_date: &options.start_date,
-                    end_crawl_date: &options.end_date,
-                    start_published_date: &options.start_date,
-                    end_published_date: &options.end_date,
-                    use_autoprompt: options.use_autoprompt,
-                    text: options.include_text,
-                    highlights: options.include_highlights,
-                    summary: options.include_summary,
+            .post("/search", &ExaSearchRequest {
+                query,
+                r#type: "auto",
+                num_results: if options.num_results == 0 {
+                    10
+                } else {
+                    options.num_results
                 },
-            )
+                include_domains: options.include_domains,
+                exclude_domains: options.exclude_domains,
+                start_crawl_date: &options.start_date,
+                end_crawl_date: &options.end_date,
+                start_published_date: &options.start_date,
+                end_published_date: &options.end_date,
+                use_autoprompt: options.use_autoprompt,
+                text: options.include_text,
+                highlights: options.include_highlights,
+                summary: options.include_summary,
+            })
             .await?;
         Ok(response.into())
     }
@@ -298,23 +298,20 @@ impl RecommendationSearchPort for ExaClient {
             return Err(AppError::InvalidInput("URL cannot be empty".to_owned()));
         }
         let response: ExaSearchResponse = self
-            .post(
-                "/findSimilar",
-                &ExaSimilarRequest {
-                    url,
-                    num_results: if options.num_results == 0 {
-                        10
-                    } else {
-                        options.num_results
-                    },
-                    include_domains: options.include_domains,
-                    exclude_domains: options.exclude_domains,
-                    exclude_source_domain: options.exclude_source_domain,
-                    text: options.include_text,
-                    highlights: options.include_highlights,
-                    summary: options.include_summary,
+            .post("/findSimilar", &ExaSimilarRequest {
+                url,
+                num_results: if options.num_results == 0 {
+                    10
+                } else {
+                    options.num_results
                 },
-            )
+                include_domains: options.include_domains,
+                exclude_domains: options.exclude_domains,
+                exclude_source_domain: options.exclude_source_domain,
+                text: options.include_text,
+                highlights: options.include_highlights,
+                summary: options.include_summary,
+            })
             .await?;
         Ok(response.into())
     }
@@ -337,24 +334,21 @@ impl ResearchPort for ExaClient {
             ));
         }
         let response: ExaSearchResponse = self
-            .post(
-                "/search",
-                &ExaSearchRequest {
-                    query,
-                    r#type: "auto",
-                    num_results: 10,
-                    include_domains: Vec::new(),
-                    exclude_domains: Vec::new(),
-                    start_crawl_date: "",
-                    end_crawl_date: "",
-                    start_published_date: "",
-                    end_published_date: "",
-                    use_autoprompt: true,
-                    text: true,
-                    highlights: true,
-                    summary: true,
-                },
-            )
+            .post("/search", &ExaSearchRequest {
+                query,
+                r#type: "auto",
+                num_results: 10,
+                include_domains: Vec::new(),
+                exclude_domains: Vec::new(),
+                start_crawl_date: "",
+                end_crawl_date: "",
+                start_published_date: "",
+                end_published_date: "",
+                use_autoprompt: true,
+                text: true,
+                highlights: true,
+                summary: true,
+            })
             .await?;
         Ok(WebSearchResponse {
             results: response
@@ -394,21 +388,18 @@ impl ResearchPort for ExaClient {
             .map(|value| vec![value.to_owned()])
             .unwrap_or_default();
         let response: ExaSearchResponse = self
-            .post(
-                "/search",
-                &ExaDeepSearchRequest {
-                    query,
-                    search_type: "deep",
-                    num_results: 8,
-                    include_domains,
-                    contents: ExaDeepContents {
-                        highlights: true,
-                        text: ExaDeepText {
-                            max_characters: 4_000,
-                        },
+            .post("/search", &ExaDeepSearchRequest {
+                query,
+                search_type: "deep",
+                num_results: 8,
+                include_domains,
+                contents: ExaDeepContents {
+                    highlights: true,
+                    text: ExaDeepText {
+                        max_characters: 4_000,
                     },
                 },
-            )
+            })
             .await?;
         Ok(WebSearchResponse {
             results: response
@@ -444,13 +435,10 @@ impl ResearchPort for ExaClient {
             ));
         }
         let response: ExaAnswerResponse = self
-            .post(
-                "/answer",
-                &ExaAnswerRequest {
-                    query: question,
-                    text: true,
-                },
-            )
+            .post("/answer", &ExaAnswerRequest {
+                query: question,
+                text: true,
+            })
             .await?;
         Ok(AnswerResponse {
             answer: response.answer,

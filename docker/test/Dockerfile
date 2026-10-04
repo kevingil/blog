@@ -1,7 +1,7 @@
 FROM rust:1.92.0-bookworm@sha256:e90e846de4124376164ddfbaab4b0774c7bdeef5e738866295e5a90a34a307a2
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpq-dev lld pkg-config \
+    && apt-get install -y --no-install-recommends libheif-examples libpq-dev lld pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 ENV CARGO_BUILD_JOBS=1 \

@@ -30,7 +30,7 @@ impl DieselSkillRepository {
         diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>,
         AppError,
     > {
-        self.pool.get().await.map_err(|_| AppError::Database)
+        self.pool.get().await.map_err(AppError::database)
     }
 }
 
@@ -43,7 +43,7 @@ impl SkillRepository for DieselSkillRepository {
             .select(AgentSkillRow::as_select())
             .load::<AgentSkillRow>(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         Ok(rows.into_iter().map(AgentSkill::from).collect())
     }
 
@@ -55,7 +55,7 @@ impl SkillRepository for DieselSkillRepository {
             .first::<AgentSkillRow>(&mut connection)
             .await
             .optional()
-            .map_err(|_| AppError::Database)?
+            .map_err(AppError::database)?
             .ok_or(AppError::NotFound)?;
         Ok(row.into())
     }
@@ -67,7 +67,7 @@ impl SkillRepository for DieselSkillRepository {
             .returning(AgentSkillRow::as_returning())
             .get_result::<AgentSkillRow>(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         Ok(inserted.into())
     }
 
@@ -85,7 +85,7 @@ impl SkillRepository for DieselSkillRepository {
             .get_result::<AgentSkillRow>(&mut connection)
             .await
             .optional()
-            .map_err(|_| AppError::Database)?
+            .map_err(AppError::database)?
             .ok_or(AppError::NotFound)?;
         Ok(updated.into())
     }
@@ -95,7 +95,7 @@ impl SkillRepository for DieselSkillRepository {
         let deleted = diesel::delete(agent_skill::table.find(id))
             .execute(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         if deleted == 0 {
             Err(AppError::NotFound)
         } else {

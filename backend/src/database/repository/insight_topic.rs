@@ -35,7 +35,7 @@ impl DieselInsightTopicRepository {
         diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>,
         AppError,
     > {
-        self.pool.get().await.map_err(|_| AppError::Database)
+        self.pool.get().await.map_err(AppError::database)
     }
 }
 
@@ -285,6 +285,6 @@ fn rows_into_domain(rows: Vec<InsightTopicRow>) -> Vec<InsightTopic> {
     rows.into_iter().map(Into::into).collect()
 }
 
-fn map_error(_: DieselError) -> AppError {
-    AppError::Database
+fn map_error(error: DieselError) -> AppError {
+    AppError::database(error)
 }

@@ -21,7 +21,7 @@ struct Store {
 }
 
 fn lock<T>(value: &Mutex<T>) -> Result<MutexGuard<'_, T>, AppError> {
-    value.lock().map_err(|_| AppError::Internal)
+    value.lock().map_err(AppError::internal)
 }
 
 fn image(id: Uuid, request_id: &str) -> ImageGeneration {

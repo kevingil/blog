@@ -308,7 +308,7 @@ async fn openai_embedding_adapter_rejects_invalid_configuration_and_input() -> T
     assert!(!unconfigured.is_configured());
     assert!(matches!(
         unconfigured.generate_embedding("input").await,
-        Err(AppError::External)
+        Err(AppError::External(_))
     ));
     assert!(matches!(
         OpenAiClient::with_base_url("key", ""),

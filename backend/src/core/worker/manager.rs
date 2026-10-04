@@ -299,12 +299,9 @@ impl WorkerManager {
                 return Err(WorkerManagerError::AlreadyRunning);
             }
             let cancellation = self.root_cancellation.child_token();
-            state.running.insert(
-                name.to_owned(),
-                RunningWorker {
-                    cancellation: cancellation.clone(),
-                },
-            );
+            state.running.insert(name.to_owned(), RunningWorker {
+                cancellation: cancellation.clone(),
+            });
             (worker, cancellation)
         };
         if metadata.trigger_source.is_empty() {
@@ -466,7 +463,7 @@ impl WorkerManager {
         };
         timeout(self.config.finalization_timeout, service.finish_run(input))
             .await
-            .map_err(|_| AppError::Internal)??;
+            .map_err(AppError::internal)??;
         if let Ok(result) = result {
             for warning in &result.warnings {
                 timeout(
@@ -481,7 +478,7 @@ impl WorkerManager {
                     }),
                 )
                 .await
-                .map_err(|_| AppError::Internal)??;
+                .map_err(AppError::internal)??;
             }
         }
         Ok(())
@@ -503,7 +500,7 @@ impl WorkerManager {
             }),
         )
         .await
-        .map_err(|_| AppError::Internal)??;
+        .map_err(AppError::internal)??;
         Ok(())
     }
 

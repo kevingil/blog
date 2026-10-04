@@ -30,7 +30,7 @@ impl DieselImageRepository {
         diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>,
         AppError,
     > {
-        self.pool.get().await.map_err(|_| AppError::Database)
+        self.pool.get().await.map_err(AppError::database)
     }
 }
 
@@ -44,7 +44,7 @@ impl ImageRepository for DieselImageRepository {
             .first(&mut connection)
             .await
             .optional()
-            .map_err(|_| AppError::Database)?
+            .map_err(AppError::database)?
             .ok_or(AppError::NotFound)
             .map(Into::into)
     }
@@ -57,7 +57,7 @@ impl ImageRepository for DieselImageRepository {
             .first(&mut connection)
             .await
             .optional()
-            .map_err(|_| AppError::Database)?
+            .map_err(AppError::database)?
             .ok_or(AppError::NotFound)
             .map(Into::into)
     }
@@ -72,7 +72,7 @@ impl ImageRepository for DieselImageRepository {
             .execute(&mut connection)
             .await
             .map(|_| ())
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 
     async fn update(&self, image: &ImageGeneration) -> Result<(), AppError> {
@@ -81,13 +81,13 @@ impl ImageRepository for DieselImageRepository {
             .set(changeset(image))
             .execute(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         if affected == 0 {
             diesel::insert_into(imagen_request::table)
                 .values(new_row(image))
                 .execute(&mut connection)
                 .await
-                .map_err(|_| AppError::Database)?;
+                .map_err(AppError::database)?;
         }
         Ok(())
     }

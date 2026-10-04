@@ -65,7 +65,7 @@ impl DieselUserInsightStatusRepository {
         diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>,
         AppError,
     > {
-        self.pool.get().await.map_err(|_| AppError::Database)
+        self.pool.get().await.map_err(AppError::database)
     }
 
     pub async fn upsert(&self, status: &mut UserInsightStatus) -> Result<(), AppError> {
@@ -104,7 +104,7 @@ impl DieselUserInsightStatusRepository {
             .execute(&mut connection)
             .await
             .map(|_| ())
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 
     pub async fn find_by_user_id(&self, user_id: Uuid) -> Result<Vec<UserInsightStatus>, AppError> {
@@ -135,7 +135,7 @@ impl DieselUserInsightStatusRepository {
         .execute(&mut connection)
         .await
         .map(|_| ())
-        .map_err(|_| AppError::Database)
+        .map_err(AppError::database)
     }
 
     async fn find_by_user_filter(
@@ -159,7 +159,7 @@ impl DieselUserInsightStatusRepository {
             .load(&mut connection)
             .await
             .map(|rows: Vec<UserInsightStatusRow>| rows.into_iter().map(Into::into).collect())
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 }
 
@@ -179,7 +179,7 @@ impl UserInsightStatusRepository for DieselUserInsightStatusRepository {
             .await
             .optional()
             .map(|row| row.map(Into::into))
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 
     async fn mark_as_read(&self, user_id: Uuid, insight_id: Uuid) -> Result<(), AppError> {
@@ -197,7 +197,7 @@ impl UserInsightStatusRepository for DieselUserInsightStatusRepository {
         .execute(&mut connection)
         .await
         .map(|_| ())
-        .map_err(|_| AppError::Database)
+        .map_err(AppError::database)
     }
 
     async fn toggle_pinned(&self, user_id: Uuid, insight_id: Uuid) -> Result<bool, AppError> {
@@ -216,7 +216,7 @@ impl UserInsightStatusRepository for DieselUserInsightStatusRepository {
         .get_result::<PinnedResult>(&mut connection)
         .await
         .map(|result| result.is_pinned)
-        .map_err(|_| AppError::Database)
+        .map_err(AppError::database)
     }
 
     async fn mark_as_used_in_article(
@@ -238,7 +238,7 @@ impl UserInsightStatusRepository for DieselUserInsightStatusRepository {
         .execute(&mut connection)
         .await
         .map(|_| ())
-        .map_err(|_| AppError::Database)
+        .map_err(AppError::database)
     }
 
     async fn get_status_map_for_insights(
@@ -264,7 +264,7 @@ impl UserInsightStatusRepository for DieselUserInsightStatusRepository {
                     })
                     .collect()
             })
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 
     async fn count_unread_by_user_id(&self, user_id: Uuid) -> Result<i64, AppError> {
@@ -275,7 +275,7 @@ impl UserInsightStatusRepository for DieselUserInsightStatusRepository {
             .select(count_star())
             .first(&mut connection)
             .await
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 }
 

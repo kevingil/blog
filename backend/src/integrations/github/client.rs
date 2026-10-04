@@ -29,14 +29,14 @@ impl GithubClient {
     pub fn with_api_base(api_base: &str) -> Result<Self, AppError> {
         let api_base = api_base.trim_end_matches('/').to_owned();
         if api_base.is_empty() {
-            return Err(AppError::Internal);
+            return Err(AppError::internal("GitHub API base URL is empty"));
         }
         let http = Client::builder()
             .timeout(Duration::from_secs(20))
             .redirect(reqwest::redirect::Policy::limited(2))
             .user_agent("blog-copilot")
             .build()
-            .map_err(|_| AppError::Internal)?;
+            .map_err(AppError::internal)?;
         Ok(Self { http, api_base })
     }
 
@@ -48,12 +48,14 @@ impl GithubClient {
             .header("X-GitHub-Api-Version", "2022-11-28")
             .send()
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         ensure_same_host(&self.api_base, response.url())?;
         let status = response.status();
-        let bytes = response.bytes().await.map_err(|_| AppError::External)?;
+        let bytes = response.bytes().await.map_err(AppError::external)?;
         if bytes.len() > MAX_BODY_BYTES {
-            return Err(AppError::External);
+            return Err(AppError::external(
+                "GitHub response exceeded the size limit",
+            ));
         }
         Ok((status, bytes.to_vec()))
     }
@@ -72,9 +74,9 @@ impl GithubImportPort for GithubClient {
             return Err(AppError::NotFound);
         }
         if !status.is_success() {
-            return Err(AppError::External);
+            return Err(AppError::external(format!("GitHub returned {status}")));
         }
-        let repo: GithubRepo = serde_json::from_slice(&body).map_err(|_| AppError::External)?;
+        let repo: GithubRepo = serde_json::from_slice(&body).map_err(AppError::external)?;
         let reference = location
             .reference
             .clone()
@@ -91,11 +93,13 @@ impl GithubImportPort for GithubClient {
             "{}/repos/{}/{}/readme",
             self.api_base, location.owner, location.repo
         ))
-        .map_err(|_| AppError::Internal)?;
+        .map_err(AppError::internal)?;
         readme_url.query_pairs_mut().append_pair("ref", &reference);
         let readme = match self.get_bytes(readme_url.as_str()).await? {
             (status, _) if status == StatusCode::NOT_FOUND => String::new(),
-            (status, _) if !status.is_success() => return Err(AppError::External),
+            (status, _) if !status.is_success() => {
+                return Err(AppError::external(format!("GitHub returned {status}")));
+            }
             (_, body) => decode_readme(&body)?,
         };
 
@@ -261,28 +265,28 @@ fn invalid_github_url() -> AppError {
 }
 
 fn ensure_same_host(api_base: &str, final_url: &Url) -> Result<(), AppError> {
-    let base = Url::parse(api_base).map_err(|_| AppError::Internal)?;
+    let base = Url::parse(api_base).map_err(AppError::internal)?;
     if final_url.host() != base.host() {
-        return Err(AppError::External);
+        return Err(AppError::external("GitHub redirected to a different host"));
     }
     Ok(())
 }
 
 fn decode_readme(body: &[u8]) -> Result<String, AppError> {
-    let payload: GithubReadme = serde_json::from_slice(body).map_err(|_| AppError::External)?;
+    let payload: GithubReadme = serde_json::from_slice(body).map_err(AppError::external)?;
     if payload.content.trim().is_empty() {
         return Ok(String::new());
     }
     if !payload.encoding.is_empty() && !payload.encoding.eq_ignore_ascii_case("base64") {
-        return Err(AppError::External);
+        return Err(AppError::external("GitHub readme was not base64"));
     }
     let cleaned: String = payload
         .content
         .chars()
         .filter(|character| !character.is_whitespace())
         .collect();
-    let bytes = STANDARD.decode(cleaned).map_err(|_| AppError::External)?;
-    String::from_utf8(bytes).map_err(|_| AppError::External)
+    let bytes = STANDARD.decode(cleaned).map_err(AppError::external)?;
+    String::from_utf8(bytes).map_err(AppError::external)
 }
 
 fn readme_title(markdown: &str) -> Option<String> {

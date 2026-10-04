@@ -23,7 +23,7 @@ impl PageRepository for MemoryPages {
     async fn find_by_id(&self, id: Uuid) -> Result<Page, AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .get(&id)
             .cloned()
             .ok_or(AppError::NotFound)
@@ -32,7 +32,7 @@ impl PageRepository for MemoryPages {
     async fn find_by_slug(&self, slug: &str) -> Result<Page, AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .values()
             .find(|page| page.slug == slug)
             .cloned()
@@ -40,8 +40,8 @@ impl PageRepository for MemoryPages {
     }
 
     async fn list(&self, options: PageListOptions) -> Result<(Vec<Page>, i64), AppError> {
-        *self.last_list.lock().map_err(|_| AppError::Internal)? = Some(options);
-        let values = self.values.lock().map_err(|_| AppError::Internal)?;
+        *self.last_list.lock().map_err(AppError::internal)? = Some(options);
+        let values = self.values.lock().map_err(AppError::internal)?;
         let pages: Vec<_> = values
             .values()
             .filter(|page| {
@@ -57,7 +57,7 @@ impl PageRepository for MemoryPages {
     async fn save(&self, page: &mut Page) -> Result<(), AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .insert(page.id, page.clone());
         Ok(())
     }
@@ -65,7 +65,7 @@ impl PageRepository for MemoryPages {
     async fn delete(&self, id: Uuid) -> Result<(), AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .remove(&id)
             .map(|_| ())
             .ok_or(AppError::NotFound)
@@ -184,28 +184,22 @@ async fn page_update_changes_only_provided_fields_and_preserves_not_found() {
     let service = PageService::new(repository);
 
     let updated = service
-        .update(
-            value.id,
-            PageUpdateRequest {
-                title: Some("Updated Contact".to_owned()),
-                content: Some("Updated content here".to_owned()),
-                is_published: Some(false),
-                ..PageUpdateRequest::default()
-            },
-        )
+        .update(value.id, PageUpdateRequest {
+            title: Some("Updated Contact".to_owned()),
+            content: Some("Updated content here".to_owned()),
+            is_published: Some(false),
+            ..PageUpdateRequest::default()
+        })
         .await;
     assert!(
         matches!(updated, Ok(ref page) if page.title == "Updated Contact" && page.content == "Updated content here" && !page.is_published && page.description == "Original description")
     );
 
     let partial = service
-        .update(
-            value.id,
-            PageUpdateRequest {
-                description: Some("New contact description".to_owned()),
-                ..PageUpdateRequest::default()
-            },
-        )
+        .update(value.id, PageUpdateRequest {
+            description: Some("New contact description".to_owned()),
+            ..PageUpdateRequest::default()
+        })
         .await;
     assert!(
         matches!(partial, Ok(ref page) if page.title == "Updated Contact" && page.description == "New contact description")

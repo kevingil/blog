@@ -173,7 +173,9 @@ pub async fn import_github_project(
     body: Result<Json<GithubImportRequest>, JsonRejection>,
 ) -> ApiResult<GithubImportResponse> {
     let Json(request) = body.map_err(|_| ProjectApiError::invalid_body())?;
-    let github = state.github().ok_or(AppError::Internal)?;
+    let github = state
+        .github()
+        .ok_or(AppError::internal("GitHub import is not configured"))?;
     let draft = github
         .import_repository(request.url.trim())
         .await
@@ -184,8 +186,9 @@ pub async fn import_github_project(
 fn import_error(error: AppError) -> ProjectApiError {
     match error {
         AppError::NotFound => ProjectApiError::not_found("GitHub repository not found"),
-        AppError::External => {
+        AppError::External(cause) => {
             ProjectApiError::bad_gateway("Could not reach GitHub. Try again in a moment.")
+                .with_cause(format!("external service operation failed: {cause}"))
         }
         other => other.into(),
     }

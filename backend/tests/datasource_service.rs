@@ -28,7 +28,7 @@ struct Store {
 }
 
 fn lock<T>(value: &Mutex<T>) -> Result<MutexGuard<'_, T>, AppError> {
-    value.lock().map_err(|_| AppError::Internal)
+    value.lock().map_err(AppError::internal)
 }
 
 fn source(id: Uuid, organization_id: Option<Uuid>, user_id: Option<Uuid>, url: &str) -> DataSource {
@@ -456,28 +456,22 @@ async fn test_service_update() -> TestResult {
         "https://taken.test",
     ));
     let updated = service(store.clone())
-        .update(
-            id,
-            DataSourceUpdateRequest {
-                name: Some("Updated".to_owned()),
-                url: Some("https://updated.test".to_owned()),
-                crawl_frequency: Some("hourly".to_owned()),
-                is_enabled: Some(false),
-                ..DataSourceUpdateRequest::default()
-            },
-        )
+        .update(id, DataSourceUpdateRequest {
+            name: Some("Updated".to_owned()),
+            url: Some("https://updated.test".to_owned()),
+            crawl_frequency: Some("hourly".to_owned()),
+            is_enabled: Some(false),
+            ..DataSourceUpdateRequest::default()
+        })
         .await?;
     assert_eq!(updated.name, "Updated");
     assert!(!updated.is_enabled);
     assert!(matches!(
         service(store.clone())
-            .update(
-                id,
-                DataSourceUpdateRequest {
-                    url: Some("https://taken.test".to_owned()),
-                    ..DataSourceUpdateRequest::default()
-                }
-            )
+            .update(id, DataSourceUpdateRequest {
+                url: Some("https://taken.test".to_owned()),
+                ..DataSourceUpdateRequest::default()
+            })
             .await,
         Err(AppError::Conflict(_))
     ));
@@ -680,7 +674,7 @@ async fn test_recommendation_service_recommend() -> TestResult {
                 }
             )
             .await,
-        Err(AppError::External)
+        Err(AppError::External(_))
     ));
     Ok(())
 }

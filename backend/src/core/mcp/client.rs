@@ -15,7 +15,9 @@ use tokio::{
 
 use crate::error::AppError;
 
-use super::types::{McpConnector, McpToolDescriptor, TRANSPORT_HTTP, TRANSPORT_SSE, TRANSPORT_STDIO};
+use super::types::{
+    McpConnector, McpToolDescriptor, TRANSPORT_HTTP, TRANSPORT_SSE, TRANSPORT_STDIO,
+};
 
 const PROTOCOL_VERSION: &str = "2024-11-05";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
@@ -158,7 +160,7 @@ impl HttpMcpTransport {
             client: reqwest::Client::builder()
                 .timeout(REQUEST_TIMEOUT)
                 .build()
-                .map_err(|_| AppError::Internal)?,
+                .map_err(AppError::internal)?,
             url: connector.url.clone(),
             headers: connector.headers.clone(),
             next_id: AtomicU64::new(1),
@@ -190,9 +192,12 @@ impl McpTransport for HttpMcpTransport {
                 .header("accept", "application/json, text/event-stream")
                 .json(&payload),
         );
-        let response = builder.send().await.map_err(|_| AppError::External)?;
+        let response = builder.send().await.map_err(AppError::external)?;
         if !response.status().is_success() {
-            return Err(AppError::External);
+            return Err(AppError::external(format!(
+                "MCP server returned {}",
+                response.status()
+            )));
         }
         let content_type = response
             .headers()
@@ -201,10 +206,10 @@ impl McpTransport for HttpMcpTransport {
             .unwrap_or_default()
             .to_owned();
         if content_type.contains("text/event-stream") {
-            let text = response.text().await.map_err(|_| AppError::External)?;
+            let text = response.text().await.map_err(AppError::external)?;
             return parse_json_rpc_result(&first_sse_data(&text));
         }
-        let body: Value = response.json().await.map_err(|_| AppError::External)?;
+        let body: Value = response.json().await.map_err(AppError::external)?;
         parse_json_rpc_result(&body)
     }
 
@@ -220,11 +225,14 @@ impl McpTransport for HttpMcpTransport {
                 .header("content-type", "application/json")
                 .json(&payload),
         );
-        let response = builder.send().await.map_err(|_| AppError::External)?;
+        let response = builder.send().await.map_err(AppError::external)?;
         if response.status().is_success() || response.status().as_u16() == 202 {
             Ok(())
         } else {
-            Err(AppError::External)
+            Err(AppError::external(format!(
+                "MCP server returned {}",
+                response.status()
+            )))
         }
     }
 }
@@ -251,7 +259,7 @@ impl StdioMcpTransport {
         for (key, value) in &connector.env {
             command.env(key, value);
         }
-        let child = command.spawn().map_err(|_| AppError::External)?;
+        let child = command.spawn().map_err(AppError::external)?;
         Ok(Self {
             child: tokio::sync::Mutex::new(child),
             next_id: AtomicU64::new(1),
@@ -269,24 +277,30 @@ impl McpTransport for StdioMcpTransport {
             "method": method,
             "params": params,
         });
-        let encoded = serde_json::to_vec(&payload).map_err(|_| AppError::Internal)?;
+        let encoded = serde_json::to_vec(&payload).map_err(AppError::internal)?;
         let mut child = self.child.lock().await;
-        let stdin = child.stdin.as_mut().ok_or(AppError::External)?;
+        let stdin = child
+            .stdin
+            .as_mut()
+            .ok_or(AppError::external("MCP process is missing stdin"))?;
         let header = format!("Content-Length: {}\r\n\r\n", encoded.len());
         stdin
             .write_all(header.as_bytes())
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         stdin
             .write_all(&encoded)
             .await
-            .map_err(|_| AppError::External)?;
-        stdin.flush().await.map_err(|_| AppError::External)?;
-        let stdout = child.stdout.as_mut().ok_or(AppError::External)?;
+            .map_err(AppError::external)?;
+        stdin.flush().await.map_err(AppError::external)?;
+        let stdout = child
+            .stdout
+            .as_mut()
+            .ok_or(AppError::external("MCP process is missing stdout"))?;
         let body = timeout(REQUEST_TIMEOUT, read_stdio_message(stdout))
             .await
-            .map_err(|_| AppError::External)?
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?
+            .map_err(AppError::external)?;
         parse_json_rpc_result(&body)
     }
 
@@ -296,26 +310,29 @@ impl McpTransport for StdioMcpTransport {
             "method": method,
             "params": params,
         });
-        let encoded = serde_json::to_vec(&payload).map_err(|_| AppError::Internal)?;
+        let encoded = serde_json::to_vec(&payload).map_err(AppError::internal)?;
         let mut child = self.child.lock().await;
-        let stdin = child.stdin.as_mut().ok_or(AppError::External)?;
+        let stdin = child
+            .stdin
+            .as_mut()
+            .ok_or(AppError::external("MCP process is missing stdin"))?;
         let header = format!("Content-Length: {}\r\n\r\n", encoded.len());
         stdin
             .write_all(header.as_bytes())
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         stdin
             .write_all(&encoded)
             .await
-            .map_err(|_| AppError::External)?;
-        stdin.flush().await.map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
+        stdin.flush().await.map_err(AppError::external)?;
         Ok(())
     }
 }
 
 fn parse_json_rpc_result(body: &Value) -> Result<Value, AppError> {
-    if body.get("error").is_some() {
-        return Err(AppError::External);
+    if let Some(error) = body.get("error") {
+        return Err(AppError::external(format!("MCP tool returned {error}")));
     }
     Ok(body.get("result").cloned().unwrap_or(Value::Null))
 }

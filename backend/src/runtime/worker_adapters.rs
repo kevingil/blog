@@ -100,7 +100,7 @@ impl InsightTextGenerator for OpenAiClient {
         &self,
         request: InsightGenerationRequest,
     ) -> Result<GeneratedInsight, AppError> {
-        let input = serde_json::to_string(&request).map_err(|_| AppError::Internal)?;
+        let input = serde_json::to_string(&request).map_err(AppError::internal)?;
         let response = self.generate_provider_text(&input).await?;
         decode_generated_insight(&response)
     }
@@ -116,7 +116,7 @@ impl InsightTextGenerator for GroqClient {
         &self,
         request: InsightGenerationRequest,
     ) -> Result<GeneratedInsight, AppError> {
-        let input = serde_json::to_string(&request).map_err(|_| AppError::Internal)?;
+        let input = serde_json::to_string(&request).map_err(AppError::internal)?;
         let response = self.generate_text(&input).await?;
         decode_generated_insight(&response)
     }
@@ -124,7 +124,7 @@ impl InsightTextGenerator for GroqClient {
 
 pub(crate) fn decode_generated_insight(response: &str) -> Result<GeneratedInsight, AppError> {
     serde_json::from_str::<GeneratedInsight>(response)
-        .map_err(|_| AppError::External)?
+        .map_err(AppError::external)?
         .validate()
 }
 
