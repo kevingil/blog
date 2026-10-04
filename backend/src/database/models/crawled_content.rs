@@ -22,6 +22,7 @@ pub struct CrawledContentRow {
     pub meta_data: Option<Value>,
     pub created_at: Option<DateTime<Utc>>,
     pub topic_id: Option<Uuid>,
+    pub image_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Insertable)]
@@ -39,6 +40,7 @@ pub struct NewCrawledContentRow {
     pub meta_data: Value,
     pub created_at: DateTime<Utc>,
     pub topic_id: Option<Uuid>,
+    pub image_url: Option<String>,
 }
 
 #[derive(Debug, Clone, AsChangeset)]
@@ -55,4 +57,5 @@ pub struct CrawledContentChangeset {
     pub published_at: Option<DateTime<Utc>>,
     pub embedding: Option<Vector>,
     pub meta_data: Option<Value>,
+    pub image_url: Option<String>,
 }

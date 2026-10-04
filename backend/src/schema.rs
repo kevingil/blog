@@ -148,6 +148,7 @@ diesel::table! {
         meta_data -> Nullable<Jsonb>,
         created_at -> Nullable<Timestamptz>,
         topic_id -> Nullable<Uuid>,
+        image_url -> Nullable<Text>,
     }
 }
 
@@ -289,6 +290,7 @@ diesel::table! {
         is_used_in_article -> Nullable<Bool>,
         meta_data -> Nullable<Jsonb>,
         data_source_id -> Nullable<Uuid>,
+        image_url -> Nullable<Text>,
     }
 }
 
