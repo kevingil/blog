@@ -36,6 +36,7 @@ export interface Insight {
   topic_name?: string;
   topic_color?: string;
   topic_icon?: string;
+  image_url?: string;
 }
 
 export interface Tracker {
@@ -78,6 +79,7 @@ export interface CrawledContent {
   created_at: string;
   data_source_name?: string;
   data_source_url?: string;
+  image_url?: string;
 }
 
 export interface InsightWithSources extends Insight {

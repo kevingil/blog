@@ -12,6 +12,7 @@ import {
   markInsightAsRead, 
   toggleInsightPinned,
 } from '@/services/insights';
+import { ResearchImage } from './research-image';
 
 export const Route = createFileRoute('/dashboard/insights/$insightId')({
   component: InsightDetailPage,
@@ -87,6 +88,11 @@ function InsightDetailPage() {
         <ArrowLeft className="w-4 h-4 mr-1" />
         Back to Insights
       </Link>
+
+      <ResearchImage
+        src={insight.image_url}
+        className="mb-6 aspect-video w-full rounded-lg object-cover"
+      />
 
       {/* Header */}
       <div className="mb-6">
@@ -177,7 +183,11 @@ function InsightDetailPage() {
               {insight.source_contents.map((content) => (
                 <div key={content.id} className="border rounded-lg p-4">
                   <div className="flex items-start justify-between gap-2">
-                    <div>
+                    <ResearchImage
+                      src={content.image_url}
+                      className="h-12 w-16 shrink-0 rounded object-cover"
+                    />
+                    <div className="min-w-0 flex-1">
                       <h4 className="font-medium">{content.title || 'Untitled'}</h4>
                       <a
                         href={content.url}

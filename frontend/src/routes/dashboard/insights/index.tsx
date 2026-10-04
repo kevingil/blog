@@ -33,6 +33,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { useToast } from "@/hooks/use-toast";
+import { ResearchImage } from "./research-image";
 import { useAdminDashboard } from "@/services/dashboard/dashboard";
 import {
   checkTracker,
@@ -470,8 +471,12 @@ function InsightCard({ insight, onMarkAsRead, onTogglePin, formatDate }: Insight
       onClick={() => !insight.is_read && onMarkAsRead(insight.id)}
     >
       <Card
-        className={`cursor-pointer transition-all hover:border-primary/50 ${!insight.is_read ? "border-l-4 border-l-primary" : ""}`}
+        className={`cursor-pointer overflow-hidden transition-all hover:border-primary/50 ${!insight.is_read ? "border-l-4 border-l-primary" : ""}`}
       >
+        <ResearchImage
+          src={insight.image_url}
+          className="-mt-6 aspect-video w-full object-cover"
+        />
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-2">
             <CardTitle className="text-sm font-medium line-clamp-2 flex-1">{insight.title}</CardTitle>
