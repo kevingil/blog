@@ -55,6 +55,7 @@ pub async fn list_task_runs(
             task_name: query.task_name.unwrap_or_default(),
             status: query.status.unwrap_or_default(),
             kind: query.kind.unwrap_or_default(),
+            include_unscoped: true,
             limit: query
                 .limit
                 .as_deref()
@@ -161,6 +162,9 @@ async fn ensure_run_access(
     account_id: AccountId,
     run: &TaskRun,
 ) -> Result<(), AppError> {
+    if run.organization_id.is_none() && run.user_id.is_none() {
+        return Ok(());
+    }
     if let Some(organization_id) = organization_id(auth, account_id).await {
         if run.organization_id == Some(organization_id) {
             return Ok(());
