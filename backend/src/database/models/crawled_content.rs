@@ -11,7 +11,7 @@ use crate::schema::crawled_content;
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct CrawledContentRow {
     pub id: Uuid,
-    pub data_source_id: Uuid,
+    pub data_source_id: Option<Uuid>,
     pub url: String,
     pub title: Option<String>,
     pub content: String,
@@ -21,13 +21,14 @@ pub struct CrawledContentRow {
     pub embedding: Option<Vector>,
     pub meta_data: Option<Value>,
     pub created_at: Option<DateTime<Utc>>,
+    pub topic_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Insertable)]
 #[diesel(table_name = crawled_content)]
 pub struct NewCrawledContentRow {
     pub id: Uuid,
-    pub data_source_id: Uuid,
+    pub data_source_id: Option<Uuid>,
     pub url: String,
     pub title: Option<String>,
     pub content: String,
@@ -37,13 +38,15 @@ pub struct NewCrawledContentRow {
     pub embedding: Option<Vector>,
     pub meta_data: Value,
     pub created_at: DateTime<Utc>,
+    pub topic_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, AsChangeset)]
 #[diesel(table_name = crawled_content)]
 #[diesel(treat_none_as_null = true)]
 pub struct CrawledContentChangeset {
-    pub data_source_id: Uuid,
+    pub data_source_id: Option<Uuid>,
+    pub topic_id: Option<Uuid>,
     pub url: String,
     pub title: Option<String>,
     pub content: String,

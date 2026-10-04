@@ -26,6 +26,7 @@ pub struct InsightRow {
     pub is_pinned: Option<bool>,
     pub is_used_in_article: Option<bool>,
     pub meta_data: Option<Value>,
+    pub data_source_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Insertable)]
@@ -47,6 +48,7 @@ pub struct NewInsightRow {
     pub is_pinned: bool,
     pub is_used_in_article: bool,
     pub meta_data: Value,
+    pub data_source_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, AsChangeset)]
@@ -68,4 +70,5 @@ pub struct InsightChangeset {
     pub is_pinned: Option<bool>,
     pub is_used_in_article: Option<bool>,
     pub meta_data: Option<Value>,
+    pub data_source_id: Option<Uuid>,
 }
