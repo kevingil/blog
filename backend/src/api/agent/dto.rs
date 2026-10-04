@@ -20,6 +20,8 @@ pub struct ChatRequest {
     pub document_content: String,
     #[serde(default)]
     pub document_markdown: String,
+    #[serde(default)]
+    pub document_title: String,
     pub article_id: String,
     #[serde(default)]
     pub channel: String,
@@ -92,6 +94,8 @@ pub struct ConversationTurnRequest {
     pub document_content: String,
     #[serde(default)]
     pub document_markdown: String,
+    #[serde(default)]
+    pub document_title: String,
     #[serde(default)]
     pub message: String,
     #[serde(default)]

@@ -13,6 +13,8 @@ import { ArticleData, RecommendedArticle, isPublished, getDisplayTitle, getDispl
 import { BlurhashImage } from '@/components/media/BlurhashImage';
 import { Link } from "@tanstack/react-router"
 import { cn } from "@/lib/utils"
+import { ArticleSources, type ArticleCitation } from "@/components/blog/ArticleSources";
+import { VITE_API_BASE_URL } from "@/services/constants";
 
 export const Route = createFileRoute('/_publicLayout/blog/$blogSlug')({
   component: Page,
@@ -173,6 +175,37 @@ function ArticleContent({ slug, articleData }: { slug: string, articleData: Arti
   // Use draft content for preview mode, otherwise prefer published content
   const displayTitle = article ? (isPreview ? article.draft_title : getDisplayTitle(article)) : '';
   const displayContent = article ? (isPreview ? article.draft_content : getDisplayContent(article)) : '';
+  const [sources, setSources] = useState<ArticleCitation[]>([]);
+
+  useEffect(() => {
+    const articleId = article?.id;
+    if (!articleId) {
+      setSources([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(`${VITE_API_BASE_URL}/blog/articles/${articleId}/sources`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (cancelled) return;
+        const list = payload?.data?.sources;
+        if (!Array.isArray(list)) {
+          setSources([]);
+          return;
+        }
+        setSources(list.map((source: { id?: string; title?: string; url?: string }) => ({
+          id: String(source.id || source.url || source.title),
+          title: source.title || '',
+          url: source.url || '',
+        })));
+      })
+      .catch(() => {
+        if (!cancelled) setSources([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [article?.id]);
   const displayImage = article
     ? (isPreview ? getDisplayImage(article, false) : getDisplayImage(article))
     : null;
@@ -222,6 +255,7 @@ function ArticleContent({ slug, articleData }: { slug: string, articleData: Arti
       </div>
       <div className="blog-post prose max-w-none mb-8" dangerouslySetInnerHTML={{ __html: marked(displayContent || '') }}
       />
+      <ArticleSources sources={sources} />
       <div className="flex flex-wrap gap-2 mb-8">
         {articleData?.tags?.map((tag) => (
           <Badge key={tag.tag_id} variant="secondary" className='text-primary border-solid border-1 border-indigo-500'>{tag.tag_name?.toUpperCase()}</Badge>

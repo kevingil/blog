@@ -47,12 +47,14 @@ interface SourcesManagerProps {
   articleId: string;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  reloadToken?: number;
 }
 
 interface SourcesManagerContentProps {
   articleId?: string;
   className?: string;
   showHeader?: boolean;
+  reloadToken?: number;
 }
 
 interface SourceFormData {
@@ -66,6 +68,7 @@ export function SourcesManagerContent({
   articleId,
   className,
   showHeader = true,
+  reloadToken = 0,
 }: SourcesManagerContentProps) {
   const { toast } = useToast();
   const [sources, setSources] = useState<ArticleSource[]>([]);
@@ -95,7 +98,7 @@ export function SourcesManagerContent({
 
     setSources([]);
     handleCancelEdit();
-  }, [articleId]);
+  }, [articleId, reloadToken]);
 
   // Reset form when modal opens/closes or selected source changes
   useEffect(() => {
@@ -623,7 +626,7 @@ export function SourcesManagerContent({
   );
 }
 
-export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManagerProps) {
+export function SourcesManager({ articleId, isOpen, onOpenChange, reloadToken = 0 }: SourcesManagerProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[85vh] max-h-[90vh] w-[90vw] min-w-[90vw] flex-col overflow-hidden p-0">
@@ -633,7 +636,7 @@ export function SourcesManager({ articleId, isOpen, onOpenChange }: SourcesManag
             Manage sources and references for this article. Add web links to scrape content automatically, or add manual sources.
           </DialogDescription>
         </DialogHeader>
-        <SourcesManagerContent articleId={articleId} />
+        <SourcesManagerContent articleId={articleId} reloadToken={reloadToken} />
       </DialogContent>
     </Dialog>
   );

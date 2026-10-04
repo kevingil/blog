@@ -75,71 +75,11 @@ async fn responses(
     Json(request): Json<Value>,
 ) -> Response<Body> {
     record(&state, "/v1/responses", &request).await;
-    let input = response_input_text(&request);
-    let output_text = if request.get("model").and_then(Value::as_str) == Some("openai/gpt-oss-120b")
-    {
-        json!({
-            "title": "Fixture insight",
-            "summary": "A deterministic fixture summary.",
-            "content": "Deterministic fixture insight content grounded in the supplied articles.",
-            "key_points": [
-                "First fixture takeaway",
-                "Second fixture takeaway",
-                "Third fixture takeaway"
-            ]
-        })
-        .to_string()
-    } else {
-        format!("Fixture response: {input}")
-    };
+    let decision = fixture_response(&request);
     if request.get("stream").and_then(Value::as_bool) == Some(true) {
-        let completed = json!({
-            "id": "resp_fixture",
-            "object": "response",
-            "status": "completed",
-            "output": [{
-                "type": "message",
-                "id": "msg_fixture",
-                "role": "assistant",
-                "status": "completed",
-                "content": [{"type": "output_text", "text": output_text, "annotations": []}]
-            }],
-            "usage": {
-                "input_tokens": 4,
-                "output_tokens": 4,
-                "input_tokens_details": {"cached_tokens": 0}
-            }
-        });
-        let stream = [
-            format!(
-                "data: {}",
-                json!({"type": "response.output_text.delta", "delta": output_text})
-            ),
-            format!(
-                "data: {}",
-                json!({"type": "response.completed", "response": completed})
-            ),
-            "data: [DONE]".to_owned(),
-        ]
-        .join("\n\n");
-        return Response::builder()
-            .header(CONTENT_TYPE, "text/event-stream")
-            .body(Body::from(format!("{stream}\n\n")))
-            .unwrap_or_else(|_| Response::new(Body::empty()));
+        return sse_response(&decision);
     }
-    Json(json!({
-        "id": "resp_fixture",
-        "status": "completed",
-        "output": [{
-            "type": "message",
-            "content": [{
-                "type": "output_text",
-                "text": output_text
-            }]
-        }],
-        "usage": {"input_tokens": 4, "output_tokens": 4}
-    }))
-    .into_response()
+    Json(completed_response(&decision)).into_response()
 }
 
 async fn transcriptions(State(state): State<FixtureState>, body: Bytes) -> Json<Value> {
@@ -396,4 +336,373 @@ fn response_input_text(request: &Value) -> String {
         .filter_map(|part| part.get("text").and_then(Value::as_str))
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+struct FixtureDecision {
+    text: String,
+    calls: Vec<FixtureCall>,
+}
+
+struct FixtureCall {
+    id: &'static str,
+    name: &'static str,
+    arguments: String,
+}
+
+fn fixture_response(request: &Value) -> FixtureDecision {
+    if request.get("model").and_then(Value::as_str) == Some("openai/gpt-oss-120b") {
+        return FixtureDecision {
+            text: json!({
+                "title": "Fixture insight",
+                "summary": "A deterministic fixture summary.",
+                "content": "Deterministic fixture insight content grounded in the supplied articles.",
+                "key_points": [
+                    "First fixture takeaway",
+                    "Second fixture takeaway",
+                    "Third fixture takeaway"
+                ]
+            })
+            .to_string(),
+            calls: Vec::new(),
+        };
+    }
+    let input = response_input_text(request);
+    let user_text = latest_user_text(request);
+    let request_text = chat_request_text(&user_text);
+    let calls = if tools_already_ran(request) {
+        Vec::new()
+    } else {
+        plan_editor_tools(request_text)
+    };
+    let text = if !calls.is_empty() {
+        String::new()
+    } else if tools_already_ran(request) && editor_edit_requested(request_text) {
+        "Updated the article. The title and sources stay in their own fields, outside the body."
+            .to_owned()
+    } else {
+        format!("Fixture response: {input}")
+    };
+    FixtureDecision { text, calls }
+}
+
+fn latest_user_text(request: &Value) -> String {
+    if let Some(input) = request.get("input").and_then(Value::as_str) {
+        return input.to_owned();
+    }
+    request
+        .get("input")
+        .and_then(Value::as_array)
+        .and_then(|items| {
+            items.iter().rev().find_map(|item| {
+                (item.get("role").and_then(Value::as_str) == Some("user")).then(|| {
+                    item.get("content")
+                        .and_then(Value::as_array)
+                        .into_iter()
+                        .flatten()
+                        .filter(|part| {
+                            part.get("type").and_then(Value::as_str) == Some("input_text")
+                        })
+                        .filter_map(|part| part.get("text").and_then(Value::as_str))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                })
+            })
+        })
+        .unwrap_or_default()
+}
+
+fn chat_request_text(user_text: &str) -> &str {
+    user_text
+        .split("--- Document Context ---")
+        .next()
+        .unwrap_or(user_text)
+        .trim()
+}
+
+fn tools_already_ran(request: &Value) -> bool {
+    let Some(items) = request.get("input").and_then(Value::as_array) else {
+        return false;
+    };
+    let Some(last_user) = items
+        .iter()
+        .rposition(|item| item.get("role").and_then(Value::as_str) == Some("user"))
+    else {
+        return false;
+    };
+    items[last_user + 1..]
+        .iter()
+        .any(|item| item.get("type").and_then(Value::as_str) == Some("function_call_output"))
+}
+
+fn editor_edit_requested(text: &str) -> bool {
+    requested_title(text).is_some() || !requested_sources(text).is_empty()
+}
+
+fn plan_editor_tools(text: &str) -> Vec<FixtureCall> {
+    let mut calls = Vec::new();
+    if let Some(title) = requested_title(text) {
+        calls.push(FixtureCall {
+            id: "call_title",
+            name: "set_title",
+            arguments:
+                json!({"title": title, "reason": "The title is stored separately from the body."})
+                    .to_string(),
+        });
+    }
+    let sources = requested_sources(text);
+    if !sources.is_empty() {
+        let sources = sources
+            .into_iter()
+            .map(|(title, url)| json!({"id": null, "title": title, "url": url, "note": "Added from the editor request."}))
+            .collect::<Vec<_>>();
+        calls.push(FixtureCall {
+            id: "call_sources",
+            name: "update_sources",
+            arguments: json!({"sources": sources, "remove_ids": []}).to_string(),
+        });
+    }
+    calls
+}
+
+fn requested_title(text: &str) -> Option<String> {
+    let lower = text.to_ascii_lowercase();
+    let marker = [
+        "title to ",
+        "rename the article to ",
+        "rename it to ",
+        "set title ",
+    ]
+    .iter()
+    .find_map(|marker| lower.find(marker).map(|index| (index, marker.len())))?;
+    let rest = text[marker.0 + marker.1..].trim_start();
+    let title = if let Some(stripped) = rest.strip_prefix('"') {
+        stripped.split('"').next().unwrap_or("").trim()
+    } else if let Some(stripped) = rest.strip_prefix('\'') {
+        stripped.split('\'').next().unwrap_or("").trim()
+    } else {
+        rest.split(" and ").next().unwrap_or(rest).trim()
+    };
+    let title = title
+        .trim_matches(|character: char| matches!(character, '"' | '\'' | '.'))
+        .trim();
+    (!title.is_empty() && title.len() <= 180).then(|| title.to_owned())
+}
+
+fn requested_sources(text: &str) -> Vec<(String, String)> {
+    let lower = text.to_ascii_lowercase();
+    if !lower.contains("source") && !lower.contains("citation") && !lower.contains("reference") {
+        return Vec::new();
+    }
+    let mut sources = Vec::new();
+    let mut index = 0;
+    while index < text.len() {
+        let rest = &text[index..];
+        let Some(relative) = rest.find("https://").or_else(|| rest.find("http://")) else {
+            break;
+        };
+        let start = index + relative;
+        let end = text[start..]
+            .find(|character: char| {
+                character.is_whitespace() || matches!(character, '"' | '\'' | ')' | ',' | '>' | ']')
+            })
+            .map(|offset| start + offset)
+            .unwrap_or(text.len());
+        let url = text[start..end].trim_end_matches('.').to_owned();
+        if !url.is_empty() {
+            let title = quoted_before(&text[..start]).unwrap_or_else(|| host_title(&url));
+            sources.push((title, url));
+        }
+        index = end.max(start + 1);
+    }
+    if sources.is_empty()
+        && let Some(title) = quoted_after_source_label(text)
+    {
+        sources.push((title, String::new()));
+    }
+    sources
+}
+
+fn quoted_before(text: &str) -> Option<String> {
+    let window = text
+        .chars()
+        .rev()
+        .take(160)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<String>();
+    let (before_last, _) = window.rsplit_once('"')?;
+    let (_, title) = before_last.rsplit_once('"')?;
+    let title = title.trim();
+    (!title.is_empty()).then(|| title.to_owned())
+}
+
+fn quoted_after_source_label(text: &str) -> Option<String> {
+    let lower = text.to_ascii_lowercase();
+    let start = ["source titled ", "source called ", "source \""]
+        .iter()
+        .find_map(|marker| lower.find(marker).map(|index| index + marker.len()))?;
+    let rest = text[start..].trim_start_matches('"');
+    let title = rest.split(['"', '\n']).next().unwrap_or("").trim();
+    (!title.is_empty() && title.len() <= 180).then(|| title.trim_matches('"').to_owned())
+}
+
+fn host_title(url: &str) -> String {
+    url.trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .split('/')
+        .next()
+        .unwrap_or(url)
+        .to_owned()
+}
+
+fn completed_response(decision: &FixtureDecision) -> Value {
+    let output = if decision.calls.is_empty() {
+        json!([{
+            "type": "message",
+            "id": "msg_fixture",
+            "role": "assistant",
+            "status": "completed",
+            "content": [{"type": "output_text", "text": decision.text, "annotations": []}]
+        }])
+    } else {
+        Value::Array(decision.calls.iter().map(function_call_item).collect())
+    };
+    json!({
+        "id": "resp_fixture",
+        "object": "response",
+        "status": "completed",
+        "output": output,
+        "usage": {
+            "input_tokens": 4,
+            "output_tokens": 4,
+            "input_tokens_details": {"cached_tokens": 0}
+        }
+    })
+}
+
+fn function_call_item(call: &FixtureCall) -> Value {
+    json!({
+        "type": "function_call",
+        "id": format!("fc_{}", call.id),
+        "call_id": call.id,
+        "name": call.name,
+        "arguments": call.arguments,
+        "status": "completed",
+    })
+}
+
+fn sse_response(decision: &FixtureDecision) -> Response<Body> {
+    let mut events = Vec::new();
+    if decision.calls.is_empty() {
+        events.push(json!({"type": "response.output_text.delta", "delta": decision.text}));
+    } else {
+        for call in &decision.calls {
+            let item = function_call_item(call);
+            events.push(json!({"type": "response.output_item.added", "item": item}));
+            events.push(json!({
+                "type": "response.function_call_arguments.done",
+                "item_id": format!("fc_{}", call.id),
+                "arguments": call.arguments,
+            }));
+        }
+    }
+    events.push(json!({"type": "response.completed", "response": completed_response(decision)}));
+    let mut stream = events
+        .into_iter()
+        .map(|event| format!("data: {event}"))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    stream.push_str("\n\ndata: [DONE]\n\n");
+    Response::builder()
+        .header(CONTENT_TYPE, "text/event-stream")
+        .body(Body::from(stream))
+        .unwrap_or_else(|_| Response::new(Body::empty()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plans_title_and_sources_from_the_chat_request() {
+        let request = json!({
+            "input": [{
+                "type": "message",
+                "role": "user",
+                "content": [{
+                    "type": "input_text",
+                    "text": "Set the title to \"RSI Is a Systems Problem\" and add a source \"GraalVM\" https://www.graalvm.org\n\n--- Document Context ---\nTitle: Old\nTitle is a separate field. Edit it with set_title."
+                }]
+            }]
+        });
+        let decision = fixture_response(&request);
+        assert_eq!(decision.calls.len(), 2);
+        assert_eq!(decision.calls[0].name, "set_title");
+        assert!(
+            decision.calls[0]
+                .arguments
+                .contains("RSI Is a Systems Problem")
+        );
+        assert_eq!(decision.calls[1].name, "update_sources");
+        assert!(
+            decision.calls[1]
+                .arguments
+                .contains("https://www.graalvm.org")
+        );
+        assert!(decision.calls[1].arguments.contains("GraalVM"));
+    }
+
+    #[test]
+    fn document_context_does_not_trigger_editor_tools() {
+        let request = json!({
+            "input": "Tighten the intro\n\n--- Document Context ---\nTitle: Old\nTitle is a separate field. Edit it with set_title. Sources are separate objects."
+        });
+        let decision = fixture_response(&request);
+        assert!(decision.calls.is_empty());
+        assert!(decision.text.starts_with("Fixture response:"));
+    }
+
+    #[test]
+    fn confirms_after_the_editor_tools_have_run() {
+        let request = json!({
+            "input": [
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{
+                        "type": "input_text",
+                        "text": "Set the title to \"RSI Is a Systems Problem\"\n\n--- Document Context ---\nTitle: Old"
+                    }]
+                },
+                {"type": "function_call_output", "call_id": "call_title", "output": "{}"}
+            ]
+        });
+        let decision = fixture_response(&request);
+        assert!(decision.calls.is_empty());
+        assert!(decision.text.contains("outside the body"));
+    }
+
+    #[test]
+    fn a_later_request_still_edits_after_an_earlier_tool_turn() {
+        let request = json!({
+            "input": [
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Set the title to \"First\"\n\n--- Document Context ---\nTitle: Old"}]
+                },
+                {"type": "function_call_output", "call_id": "call_title", "output": "{}"},
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Set the title to \"Second Title\" and add a source \"OpenJDK\" https://openjdk.org\n\n--- Document Context ---\nTitle: First"}]
+                }
+            ]
+        });
+        let decision = fixture_response(&request);
+        assert_eq!(decision.calls.len(), 2);
+        assert!(decision.calls[0].arguments.contains("Second Title"));
+        assert!(decision.calls[1].arguments.contains("https://openjdk.org"));
+    }
 }

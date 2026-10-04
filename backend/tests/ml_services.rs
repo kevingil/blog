@@ -102,6 +102,9 @@ fn copilot_prompt_only_advertises_registered_tools() {
     assert!(prompt.contains("Follow the user's instructions"));
     assert!(prompt.contains("read_document"));
     assert!(prompt.contains("replace_lines"));
+    assert!(prompt.contains("set_title"));
+    assert!(prompt.contains("update_sources"));
+    assert!(prompt.contains("Never write the title"));
     assert!(!prompt.contains("ask_question"));
     assert!(!prompt.contains("web_search"));
     assert!(!prompt.contains("sandbox"));

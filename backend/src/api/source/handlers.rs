@@ -9,9 +9,9 @@ use crate::api::{auth::AuthenticatedAccount, response::SuccessResponse};
 
 use super::{
     dto::{
-        CreateSourceRequest, ScrapeSourceRequest, SearchSourcesResponse, SourceListQuery,
-        SourceListResponse, SourceResponse, SourceSearchQuery, SourcesResponse, SuccessFlag,
-        UpdateSourceRequest,
+        CreateSourceRequest, PublicSourceResponse, PublicSourcesResponse, ScrapeSourceRequest,
+        SearchSourcesResponse, SourceListQuery, SourceListResponse, SourceResponse,
+        SourceSearchQuery, SourcesResponse, SuccessFlag, UpdateSourceRequest,
     },
     error::SourceApiError,
     state::SourceState,
@@ -107,6 +107,39 @@ pub async fn scrape_and_create_source(
         StatusCode::CREATED,
         Json(SuccessResponse::new(value.into())),
     ))
+}
+
+#[utoipa::path(
+    get,
+    path = "/blog/articles/{articleId}/sources",
+    params(("articleId" = Uuid, Path)),
+    responses(
+        (status = 200, body = SuccessResponse<PublicSourcesResponse>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    tag = "sources",
+    operation_id = "listPublicArticleSources"
+)]
+pub async fn list_public_article_sources(
+    State(state): State<SourceState>,
+    Path(article_id): Path<String>,
+) -> ApiResult<PublicSourcesResponse> {
+    let article_id = parse_article_id(&article_id)?;
+    let sources = state
+        .service()
+        .get_by_article_id(article_id)
+        .await?
+        .into_iter()
+        .map(|source| PublicSourceResponse {
+            id: source.id,
+            title: source.title,
+            url: source.url,
+        })
+        .collect();
+    Ok(Json(SuccessResponse::new(PublicSourcesResponse {
+        sources,
+    })))
 }
 
 #[utoipa::path(

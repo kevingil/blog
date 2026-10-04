@@ -204,6 +204,18 @@ pub struct SourcesResponse {
     pub sources: Vec<SourceResponse>,
 }
 
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct PublicSourceResponse {
+    pub id: Uuid,
+    pub title: String,
+    pub url: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PublicSourcesResponse {
+    pub sources: Vec<PublicSourceResponse>,
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SearchSourcesResponse {
     pub sources: Vec<SourceResponse>,

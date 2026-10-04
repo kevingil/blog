@@ -2115,6 +2115,57 @@
         ]
       }
     },
+    "/blog/articles/{articleId}/sources": {
+      "get": {
+        "tags": [
+          "sources"
+        ],
+        "operationId": "listPublicArticleSources",
+        "parameters": [
+          {
+            "name": "articleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_PublicSourcesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/blog/articles/{id}/recommended": {
       "get": {
         "tags": [
@@ -8149,6 +8200,9 @@
           "documentMarkdown": {
             "type": "string"
           },
+          "documentTitle": {
+            "type": "string"
+          },
           "articleId": {
             "type": "string"
           },
@@ -8479,6 +8533,9 @@
             "type": "string"
           },
           "documentMarkdown": {
+            "type": "string"
+          },
+          "documentTitle": {
             "type": "string"
           },
           "message": {
@@ -10619,6 +10676,40 @@
                 "$ref": "#/components/schemas/ImageAsset"
               }
             ]
+          }
+        }
+      },
+      "PublicSourceResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "url"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "PublicSourcesResponse": {
+        "type": "object",
+        "required": [
+          "sources"
+        ],
+        "properties": {
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicSourceResponse"
+            }
           }
         }
       },
@@ -13014,6 +13105,28 @@
                     "$ref": "#/components/schemas/ImageAsset"
                   }
                 ]
+              }
+            }
+          }
+        }
+      },
+      "SuccessResponse_PublicSourcesResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "sources"
+            ],
+            "properties": {
+              "sources": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PublicSourceResponse"
+                }
               }
             }
           }
