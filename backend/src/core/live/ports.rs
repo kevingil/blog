@@ -38,7 +38,7 @@ struct DisconnectedHarness;
 #[async_trait]
 impl LiveHarness for DisconnectedHarness {
     async fn run_turn(&self, _turn: LiveTurn) -> Result<LiveTurnHandle, AppError> {
-        Err(AppError::External)
+        Err(AppError::external("live session is not connected"))
     }
 }
 
@@ -47,6 +47,6 @@ struct DisconnectedUpstream;
 #[async_trait]
 impl LiveUpstream for DisconnectedUpstream {
     async fn connect(&self) -> Result<Box<dyn LiveConnection>, AppError> {
-        Err(AppError::External)
+        Err(AppError::external("live session is not connected"))
     }
 }

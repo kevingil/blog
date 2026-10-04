@@ -76,7 +76,7 @@ impl OpenAiClient {
             client: Client::builder()
                 .timeout(REQUEST_TIMEOUT)
                 .build()
-                .map_err(|_| AppError::Internal)?,
+                .map_err(AppError::internal)?,
             api_key: SecretString::from(api_key),
             base_url,
             embedding_model: DEFAULT_EMBEDDING_MODEL.to_owned(),
@@ -142,7 +142,7 @@ impl OpenAiClient {
 
     pub async fn generate_embedding(&self, text: &str) -> Result<Vec<f32>, AppError> {
         if !self.is_configured() {
-            return Err(AppError::External);
+            return Err(AppError::external("OpenAI client is not configured"));
         }
         if text.trim().is_empty() {
             return Err(AppError::InvalidInput(
@@ -160,26 +160,33 @@ impl OpenAiClient {
             })
             .send()
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         if !response.status().is_success() {
-            return Err(AppError::External);
+            return Err(AppError::external(format!(
+                "upstream returned {}",
+                response.status()
+            )));
         }
-        let body: EmbeddingResponse = response.json().await.map_err(|_| AppError::External)?;
+        let body: EmbeddingResponse = response.json().await.map_err(AppError::external)?;
         let embedding = body
             .data
             .into_iter()
             .min_by_key(|item| item.index)
-            .ok_or(AppError::External)?
+            .ok_or(AppError::external(
+                "embedding response contained no vectors",
+            ))?
             .embedding;
         if embedding.len() != EMBEDDING_DIMENSIONS {
-            return Err(AppError::External);
+            return Err(AppError::external(
+                "embedding response had the wrong dimensions",
+            ));
         }
         Ok(embedding)
     }
 
     pub async fn generate_text(&self, instructions: &str, input: &str) -> Result<String, AppError> {
         if !self.is_configured() {
-            return Err(AppError::External);
+            return Err(AppError::external("OpenAI client is not configured"));
         }
         if input.trim().is_empty() {
             return Err(AppError::InvalidInput(
@@ -193,11 +200,14 @@ impl OpenAiClient {
             .json(&ResponseRequest::text(instructions, input))
             .send()
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         if !response.status().is_success() {
-            return Err(AppError::External);
+            return Err(AppError::external(format!(
+                "upstream returned {}",
+                response.status()
+            )));
         }
-        let body: ResponseBody = response.json().await.map_err(|_| AppError::External)?;
+        let body: ResponseBody = response.json().await.map_err(AppError::external)?;
         let text = body
             .output
             .into_iter()
@@ -206,7 +216,7 @@ impl OpenAiClient {
             .collect::<Vec<_>>()
             .join("");
         if text.is_empty() {
-            Err(AppError::External)
+            Err(AppError::external("model response was empty"))
         } else {
             Ok(text)
         }
@@ -214,7 +224,7 @@ impl OpenAiClient {
 
     pub async fn generate_provider_text(&self, input: &str) -> Result<String, AppError> {
         if !self.is_configured() {
-            return Err(AppError::External);
+            return Err(AppError::external("OpenAI client is not configured"));
         }
         if input.trim().is_empty() {
             return Err(AppError::InvalidInput(
@@ -242,11 +252,14 @@ impl OpenAiClient {
             })
             .send()
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         if !response.status().is_success() {
-            return Err(AppError::External);
+            return Err(AppError::external(format!(
+                "upstream returned {}",
+                response.status()
+            )));
         }
-        let body: ResponseBody = response.json().await.map_err(|_| AppError::External)?;
+        let body: ResponseBody = response.json().await.map_err(AppError::external)?;
         let text = body
             .output
             .into_iter()
@@ -255,7 +268,7 @@ impl OpenAiClient {
             .collect::<Vec<_>>()
             .join("");
         if text.trim().is_empty() {
-            Err(AppError::External)
+            Err(AppError::external("model response was empty"))
         } else {
             Ok(text)
         }
@@ -263,7 +276,7 @@ impl OpenAiClient {
 
     pub async fn generate_image(&self, prompt: &str) -> Result<GeneratedImage, AppError> {
         if !self.is_configured() {
-            return Err(AppError::External);
+            return Err(AppError::external("OpenAI client is not configured"));
         }
         if prompt.trim().is_empty() {
             return Err(AppError::InvalidInput(
@@ -281,23 +294,30 @@ impl OpenAiClient {
             })
             .send()
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         if !response.status().is_success() {
-            return Err(AppError::External);
+            return Err(AppError::external(format!(
+                "upstream returned {}",
+                response.status()
+            )));
         }
-        let body: ImageResponse = response.json().await.map_err(|_| AppError::External)?;
-        let image = body.data.into_iter().next().ok_or(AppError::External)?;
+        let body: ImageResponse = response.json().await.map_err(AppError::external)?;
+        let image = body
+            .data
+            .into_iter()
+            .next()
+            .ok_or(AppError::external("image response contained no image"))?;
         if let Some(url) = image.url.filter(|value| !value.is_empty()) {
             return Ok(GeneratedImage::Url(url));
         }
         let encoded = image
             .b64_json
             .filter(|value| !value.is_empty())
-            .ok_or(AppError::External)?;
+            .ok_or(AppError::external("image response contained no image"))?;
         STANDARD
             .decode(encoded)
             .map(GeneratedImage::Bytes)
-            .map_err(|_| AppError::External)
+            .map_err(AppError::external)
     }
 
     pub async fn transcribe_audio(
@@ -306,7 +326,7 @@ impl OpenAiClient {
         mime_type: &str,
     ) -> Result<String, AppError> {
         if !self.is_configured() {
-            return Err(AppError::External);
+            return Err(AppError::external("OpenAI client is not configured"));
         }
         if audio.is_empty() {
             return Err(AppError::InvalidInput("audio is empty".to_owned()));
@@ -330,13 +350,16 @@ impl OpenAiClient {
             .multipart(form)
             .send()
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         if !response.status().is_success() {
-            return Err(AppError::External);
+            return Err(AppError::external(format!(
+                "upstream returned {}",
+                response.status()
+            )));
         }
-        let body: TranscriptionResponse = response.json().await.map_err(|_| AppError::External)?;
+        let body: TranscriptionResponse = response.json().await.map_err(AppError::external)?;
         if body.text.trim().is_empty() {
-            Err(AppError::External)
+            Err(AppError::external("transcription response was empty"))
         } else {
             Ok(body.text)
         }
@@ -347,7 +370,7 @@ impl OpenAiClient {
         text: &str,
     ) -> Result<crate::core::speech::SpeechAudio, AppError> {
         if !self.is_configured() {
-            return Err(AppError::External);
+            return Err(AppError::external("OpenAI client is not configured"));
         }
         if text.trim().is_empty() {
             return Err(AppError::InvalidInput("speech text is empty".to_owned()));
@@ -364,13 +387,16 @@ impl OpenAiClient {
             })
             .send()
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         if !response.status().is_success() {
-            return Err(AppError::External);
+            return Err(AppError::external(format!(
+                "upstream returned {}",
+                response.status()
+            )));
         }
-        let bytes = response.bytes().await.map_err(|_| AppError::External)?;
+        let bytes = response.bytes().await.map_err(AppError::external)?;
         if bytes.is_empty() {
-            return Err(AppError::External);
+            return Err(AppError::external("speech response was empty"));
         }
         Ok(crate::core::speech::SpeechAudio {
             bytes: bytes.to_vec(),
@@ -1386,18 +1412,14 @@ async fn process_response_event(
                     thought_signature: Vec::new(),
                 };
                 state.pending_calls.insert(item_id, call.clone());
-                send_provider_event(
-                    sender,
-                    cancellation,
-                    ProviderEvent {
-                        event_type: ProviderEventType::ToolUseStart,
-                        content: String::new(),
-                        thinking: String::new(),
-                        response: None,
-                        tool_call: Some(call),
-                        error: None,
-                    },
-                )
+                send_provider_event(sender, cancellation, ProviderEvent {
+                    event_type: ProviderEventType::ToolUseStart,
+                    content: String::new(),
+                    thinking: String::new(),
+                    response: None,
+                    tool_call: Some(call),
+                    error: None,
+                })
                 .await?;
             } else if item.get("type").and_then(serde_json::Value::as_str) == Some("reasoning") {
                 for part in item
@@ -1430,18 +1452,14 @@ async fn process_response_event(
             let item_id = string_field(event, "item_id");
             if let Some(call) = state.pending_calls.get_mut(&item_id) {
                 call.input.push_str(&string_field(event, "delta"));
-                send_provider_event(
-                    sender,
-                    cancellation,
-                    ProviderEvent {
-                        event_type: ProviderEventType::ToolUseDelta,
-                        content: String::new(),
-                        thinking: String::new(),
-                        response: None,
-                        tool_call: Some(call.clone()),
-                        error: None,
-                    },
-                )
+                send_provider_event(sender, cancellation, ProviderEvent {
+                    event_type: ProviderEventType::ToolUseDelta,
+                    content: String::new(),
+                    thinking: String::new(),
+                    response: None,
+                    tool_call: Some(call.clone()),
+                    error: None,
+                })
                 .await?;
             }
         }
@@ -1451,18 +1469,14 @@ async fn process_response_event(
                 call.input = string_field(event, "arguments");
                 call.finished = true;
                 state.tool_calls.push(call.clone());
-                send_provider_event(
-                    sender,
-                    cancellation,
-                    ProviderEvent {
-                        event_type: ProviderEventType::ToolUseStop,
-                        content: String::new(),
-                        thinking: String::new(),
-                        response: None,
-                        tool_call: Some(call),
-                        error: None,
-                    },
-                )
+                send_provider_event(sender, cancellation, ProviderEvent {
+                    event_type: ProviderEventType::ToolUseStop,
+                    content: String::new(),
+                    thinking: String::new(),
+                    response: None,
+                    tool_call: Some(call),
+                    error: None,
+                })
                 .await?;
             }
         }

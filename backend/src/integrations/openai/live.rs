@@ -25,13 +25,13 @@ struct TungsteniteLiveConnection {
 #[async_trait]
 impl LiveConnection for TungsteniteLiveConnection {
     async fn send_event(&mut self, event: Value) -> Result<(), AppError> {
-        let text = serde_json::to_string(&event).map_err(|_| AppError::Internal)?;
+        let text = serde_json::to_string(&event).map_err(AppError::internal)?;
         self.socket
             .send(Message::Text(text.into()))
             .await
             .map_err(|error| {
                 tracing::warn!(%error, "gpt-live send failed");
-                AppError::External
+                AppError::external(error)
             })
     }
 
@@ -41,18 +41,17 @@ impl LiveConnection for TungsteniteLiveConnection {
                 None => return Ok(None),
                 Some(Err(error)) => {
                     tracing::warn!(%error, "gpt-live receive failed");
-                    return Err(AppError::External);
+                    return Err(AppError::external(error));
                 }
                 Some(Ok(Message::Text(text))) => {
-                    let value =
-                        serde_json::from_str(text.as_str()).map_err(|_| AppError::External)?;
+                    let value = serde_json::from_str(text.as_str()).map_err(AppError::external)?;
                     return Ok(Some(value));
                 }
                 Some(Ok(Message::Ping(payload))) => {
                     self.socket
                         .send(Message::Pong(payload))
                         .await
-                        .map_err(|_| AppError::External)?;
+                        .map_err(AppError::external)?;
                 }
                 Some(Ok(Message::Close(_))) => return Ok(None),
                 Some(Ok(_)) => {}
@@ -68,7 +67,7 @@ impl LiveUpstream for OpenAiClient {
         let url = live_websocket_url(base_url);
         let mut request = url.into_client_request().map_err(|error| {
             tracing::warn!(%error, "gpt-live url was rejected");
-            AppError::External
+            AppError::external(error)
         })?;
         if !api_key.is_empty() {
             let value = HeaderValue::from_str(&format!("Bearer {api_key}")).map_err(|_| {
@@ -78,7 +77,7 @@ impl LiveUpstream for OpenAiClient {
         }
         let (socket, _response) = connect_async(request).await.map_err(|error| {
             tracing::warn!(%error, "gpt-live websocket connection failed");
-            AppError::External
+            AppError::external(error)
         })?;
         Ok(Box::new(TungsteniteLiveConnection { socket }))
     }

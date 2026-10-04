@@ -47,7 +47,7 @@ impl DieselSourceRepository {
         diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>,
         AppError,
     > {
-        self.pool.get().await.map_err(|_| AppError::Database)
+        self.pool.get().await.map_err(AppError::database)
     }
 }
 
@@ -61,7 +61,7 @@ impl SourceRepository for DieselSourceRepository {
             .first(&mut connection)
             .await
             .optional()
-            .map_err(|_| AppError::Database)?
+            .map_err(AppError::database)?
             .ok_or(AppError::NotFound)
             .map(Into::into)
     }
@@ -75,7 +75,7 @@ impl SourceRepository for DieselSourceRepository {
             .load(&mut connection)
             .await
             .map(|rows: Vec<SourceRow>| rows.into_iter().map(Into::into).collect())
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 
     async fn list(
@@ -93,7 +93,7 @@ impl SourceRepository for DieselSourceRepository {
             .select(count_star())
             .first(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         let rows = article_source::table
             .order(article_source::created_at.desc())
             .offset((page - 1) * per_page)
@@ -101,7 +101,7 @@ impl SourceRepository for DieselSourceRepository {
             .select(SourceRow::as_select())
             .load::<SourceRow>(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         let mut result = Vec::with_capacity(rows.len());
         for row in rows {
             let article_data = article::table
@@ -110,7 +110,7 @@ impl SourceRepository for DieselSourceRepository {
                 .first::<(Option<String>, String)>(&mut connection)
                 .await
                 .optional()
-                .map_err(|_| AppError::Database)?;
+                .map_err(AppError::database)?;
             let (title, slug) = article_data.unwrap_or_default();
             result.push(SourceWithArticle {
                 source: row.into(),
@@ -131,7 +131,7 @@ impl SourceRepository for DieselSourceRepository {
             .execute(&mut connection)
             .await
             .map(|_| ())
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 
     async fn update(&self, source: &Source) -> Result<(), AppError> {
@@ -140,13 +140,13 @@ impl SourceRepository for DieselSourceRepository {
             .set(changeset(source))
             .execute(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         if affected == 0 {
             diesel::insert_into(article_source::table)
                 .values(new_row(source))
                 .execute(&mut connection)
                 .await
-                .map_err(|_| AppError::Database)?;
+                .map_err(AppError::database)?;
         }
         Ok(())
     }
@@ -156,7 +156,7 @@ impl SourceRepository for DieselSourceRepository {
         match diesel::delete(article_source::table.find(id))
             .execute(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?
+            .map_err(AppError::database)?
         {
             0 => Err(AppError::NotFound),
             _ => Ok(()),
@@ -183,7 +183,7 @@ impl SourceRepository for DieselSourceRepository {
             .load(&mut connection)
             .await
             .map(|rows: Vec<SourceRow>| rows.into_iter().map(Into::into).collect())
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 }
 

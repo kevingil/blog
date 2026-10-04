@@ -30,7 +30,7 @@ impl HttpExternalPages {
                 .user_agent(USER_AGENT)
                 .redirect(reqwest::redirect::Policy::none())
                 .build()
-                .map_err(|_| AppError::Internal)?,
+                .map_err(AppError::internal)?,
         })
     }
 
@@ -653,7 +653,7 @@ async fn read_limited(
         ));
     }
     let mut body = Vec::new();
-    while let Some(chunk) = response.chunk().await.map_err(|_| AppError::External)? {
+    while let Some(chunk) = response.chunk().await.map_err(AppError::external)? {
         if body.len().saturating_add(chunk.len()) > max_bytes {
             return Err(AppError::InvalidInput(
                 "that page is too large to import".to_owned(),

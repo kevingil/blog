@@ -60,7 +60,7 @@ impl Tool for McpTool {
             .client
             .call_tool(&self.remote_name, arguments)
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         let content = mcp_result_text(&result);
         let mut object = Map::new();
         object.insert(

@@ -15,6 +15,7 @@ use crate::{
 pub struct PageApiError {
     status: StatusCode,
     body: ErrorEnvelope,
+    cause: String,
 }
 
 impl PageApiError {
@@ -54,10 +55,12 @@ impl PageApiError {
         code: &'static str,
         details: Option<BTreeMap<String, String>>,
     ) -> Self {
+        let error = error.into();
         Self {
             status,
+            cause: error.clone(),
             body: ErrorEnvelope {
-                error: error.into(),
+                error,
                 code,
                 details,
             },
@@ -67,7 +70,8 @@ impl PageApiError {
 
 impl From<AppError> for PageApiError {
     fn from(error: AppError) -> Self {
-        match error {
+        let cause = error.to_string();
+        let mut mapped = match error {
             AppError::InvalidInput(message) => {
                 Self::new(StatusCode::BAD_REQUEST, message, "INVALID_INPUT", None)
             }
@@ -84,30 +88,33 @@ impl From<AppError> for PageApiError {
             AppError::Conflict(message) => {
                 Self::new(StatusCode::CONFLICT, message, "ALREADY_EXISTS", None)
             }
-            AppError::Database => Self::new(
+            AppError::Database(_) => Self::new(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Database error",
                 "DATABASE_ERROR",
                 None,
             ),
-            AppError::External => Self::new(
+            AppError::External(_) => Self::new(
                 StatusCode::BAD_GATEWAY,
                 "external service operation failed",
                 "EXTERNAL_SERVICE_ERROR",
                 None,
             ),
-            AppError::Internal => Self::new(
+            AppError::Internal(_) => Self::new(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Internal server error",
                 "INTERNAL_ERROR",
                 None,
             ),
-        }
+        };
+        mapped.cause = cause;
+        mapped
     }
 }
 
 impl IntoResponse for PageApiError {
     fn into_response(self) -> Response {
+        crate::error::log_error_response(self.status, self.body.code, &self.cause);
         (self.status, Json(self.body)).into_response()
     }
 }

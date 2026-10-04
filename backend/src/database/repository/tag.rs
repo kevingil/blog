@@ -35,7 +35,7 @@ impl DieselTagRepository {
         diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>,
         AppError,
     > {
-        self.pool.get().await.map_err(|_| AppError::Database)
+        self.pool.get().await.map_err(AppError::database)
     }
 }
 
@@ -207,6 +207,6 @@ fn map_diesel_error(error: DieselError) -> AppError {
         DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => {
             AppError::Conflict("resource already exists".to_owned())
         }
-        _ => AppError::Database,
+        other => AppError::database(other),
     }
 }

@@ -6,9 +6,7 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 
-use super::types::{
-    AgentSkill, CreateAgentSkill, UpdateAgentSkill, format_active_skills,
-};
+use super::types::{AgentSkill, CreateAgentSkill, UpdateAgentSkill, format_active_skills};
 
 #[async_trait]
 pub trait SkillRepository: Send + Sync {
@@ -30,10 +28,7 @@ pub struct SkillService {
 }
 
 impl SkillService {
-    pub fn new(
-        repository: Arc<dyn SkillRepository>,
-        cancellation: CancellationToken,
-    ) -> Arc<Self> {
+    pub fn new(repository: Arc<dyn SkillRepository>, cancellation: CancellationToken) -> Arc<Self> {
         Arc::new(Self {
             repository,
             cancellation,
@@ -71,7 +66,11 @@ impl SkillService {
         self.repository.create(&skill).await
     }
 
-    pub async fn update(&self, id: Uuid, request: UpdateAgentSkill) -> Result<AgentSkill, AppError> {
+    pub async fn update(
+        &self,
+        id: Uuid,
+        request: UpdateAgentSkill,
+    ) -> Result<AgentSkill, AppError> {
         self.cancelled()?;
         let mut skill = self.repository.find(id).await?;
         if let Some(name) = request.name {
@@ -96,9 +95,12 @@ impl SkillService {
     }
 
     async fn ensure_unique_name(&self, name: &str, skip: Option<Uuid>) -> Result<(), AppError> {
-        let exists = self.repository.list().await?.into_iter().any(|skill| {
-            Some(skill.id) != skip && skill.name.eq_ignore_ascii_case(name)
-        });
+        let exists = self
+            .repository
+            .list()
+            .await?
+            .into_iter()
+            .any(|skill| Some(skill.id) != skip && skill.name.eq_ignore_ascii_case(name));
         if exists {
             Err(AppError::InvalidInput(
                 "a skill with this name already exists".to_owned(),
@@ -110,7 +112,7 @@ impl SkillService {
 
     fn cancelled(&self) -> Result<(), AppError> {
         if self.cancellation.is_cancelled() {
-            Err(AppError::Internal)
+            Err(AppError::internal("request cancelled"))
         } else {
             Ok(())
         }
@@ -136,7 +138,9 @@ fn validate_name(name: &str) -> Result<String, AppError> {
 fn validate_instructions(instructions: &str) -> Result<String, AppError> {
     let instructions = instructions.trim();
     if instructions.is_empty() {
-        Err(AppError::InvalidInput("instructions are required".to_owned()))
+        Err(AppError::InvalidInput(
+            "instructions are required".to_owned(),
+        ))
     } else {
         Ok(instructions.to_owned())
     }

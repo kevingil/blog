@@ -237,7 +237,7 @@ async fn handle_client_command(
                     "Let me take care of that.",
                 )))
                 .await
-                .map_err(|_| AppError::External)?;
+                .map_err(AppError::external)?;
             if state.in_flight {
                 state.pending = message;
             } else {
@@ -290,7 +290,7 @@ async fn handle_upstream_event(
                 notes
                     .send(SessionNote::Upstream(note))
                     .await
-                    .map_err(|_| AppError::External)?;
+                    .map_err(AppError::external)?;
             }
         }
         "session.input_transcript.delta" => {
@@ -344,7 +344,7 @@ async fn handle_upstream_event(
             notes
                 .send(SessionNote::Upstream(acknowledge))
                 .await
-                .map_err(|_| AppError::External)?;
+                .map_err(AppError::external)?;
             if message.trim().is_empty() {
                 return Ok(());
             }

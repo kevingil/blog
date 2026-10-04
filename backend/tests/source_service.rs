@@ -23,7 +23,7 @@ struct Store {
 }
 
 fn lock<T>(value: &Mutex<T>) -> Result<MutexGuard<'_, T>, AppError> {
-    value.lock().map_err(|_| AppError::Internal)
+    value.lock().map_err(AppError::internal)
 }
 
 fn source(id: Uuid, article_id: Uuid, url: &str) -> Source {
@@ -229,11 +229,13 @@ async fn test_service_upsert_agent_resource_creates_source() -> TestResult {
     let value = service(store.clone())
         .upsert_agent_resource(resource(Uuid::new_v4()))
         .await?;
-    let metadata = value.meta_data.ok_or(AppError::Internal)?;
+    let metadata = value
+        .meta_data
+        .ok_or(AppError::internal("no underlying error was recorded"))?;
     let resource = metadata
         .get("resource")
         .and_then(Value::as_object)
-        .ok_or(AppError::Internal)?;
+        .ok_or(AppError::internal("no underlying error was recorded"))?;
     assert_eq!(
         resource.get("usage_status"),
         Some(&Value::String("used".to_owned()))
@@ -272,13 +274,10 @@ async fn create_update_search_and_scrape_use_injected_ports() -> TestResult {
         .await?;
     assert_eq!(value.source_type, "manual");
     let updated = service(store.clone())
-        .update(
-            value.id,
-            UpdateSourceRequest {
-                content: Some("Updated".to_owned()),
-                ..UpdateSourceRequest::default()
-            },
-        )
+        .update(value.id, UpdateSourceRequest {
+            content: Some("Updated".to_owned()),
+            ..UpdateSourceRequest::default()
+        })
         .await?;
     assert_eq!(updated.embedding, Some(vec![0.25; 4]));
     assert_eq!(

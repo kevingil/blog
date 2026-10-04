@@ -130,7 +130,7 @@ impl InsightService {
             .embeddings
             .generate_embedding(&request.query)
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         self.insights
             .search_similar(&embedding, semantic_limit(request.limit))
             .await
@@ -147,7 +147,7 @@ impl InsightService {
             .embeddings
             .generate_embedding(query)
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         self.insights
             .search_similar_by_org(organization_id, &embedding, semantic_limit(limit))
             .await
@@ -172,7 +172,7 @@ impl InsightService {
             .embeddings
             .generate_embedding(&format!("{title} {summary}"))
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         let mut insight = Insight {
             id: Uuid::new_v4(),
             organization_id,
@@ -360,7 +360,7 @@ impl InsightService {
                 request.keywords.as_deref(),
             ))
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         let mut topic = InsightTopic {
             id: Uuid::new_v4(),
             organization_id,
@@ -417,7 +417,7 @@ impl InsightService {
                         topic.keywords.as_deref(),
                     ))
                     .await
-                    .map_err(|_| AppError::External)?,
+                    .map_err(AppError::external)?,
             );
         }
         self.topics.update(&topic).await?;
@@ -441,7 +441,9 @@ impl InsightService {
                 score_count = scores.len(),
                 "insight topic similarity result is internally inconsistent"
             );
-            return Err(AppError::Internal);
+            return Err(AppError::internal(
+                "insight topic similarity result is internally inconsistent",
+            ));
         }
         let mut matches: Vec<_> = topics
             .iter()
@@ -479,7 +481,7 @@ impl InsightService {
             .embeddings
             .generate_embedding(query)
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         self.contents
             .search_similar(&embedding, semantic_limit(limit))
             .await
@@ -496,7 +498,7 @@ impl InsightService {
             .embeddings
             .generate_embedding(query)
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         self.contents
             .search_similar_by_org(organization_id, &embedding, semantic_limit(limit))
             .await

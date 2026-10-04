@@ -79,7 +79,7 @@ impl StorageService {
     pub async fn list_files(&self, prefix: &str) -> Result<ListResult, AppError> {
         let listing = tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => return Err(AppError::Internal),
+            () = self.cancellation.cancelled() => return Err(AppError::internal("request cancelled")),
             result = self.store.list(prefix, Some("/")) => result?,
         };
         let mut files = listing
@@ -158,7 +158,7 @@ impl StorageService {
         if is_heif_upload(&key, &content_type, &data) {
             let converted = tokio::select! {
                 biased;
-                () = self.cancellation.cancelled() => return Err(AppError::Internal),
+                () = self.cancellation.cancelled() => return Err(AppError::internal("request cancelled")),
                 result = transcode_heif_to_jpeg(&data) => result?,
             };
             data = converted;
@@ -175,7 +175,7 @@ impl StorageService {
         };
         tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => return Err(AppError::Internal),
+            () = self.cancellation.cancelled() => return Err(AppError::internal("request cancelled")),
             result = self.store.put_with_content_type(&key, data, &content_type) => result?,
         }
         let url = public_url(&self.url_prefix, &key);
@@ -227,7 +227,7 @@ impl StorageService {
         }
         let bytes = tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => return Err(AppError::Internal),
+            () = self.cancellation.cancelled() => return Err(AppError::internal("request cancelled")),
             result = self.store.get(key) => result?,
         };
         let (hash, width, height) = blurhash_from_bytes(&bytes)
@@ -311,7 +311,7 @@ impl StorageService {
         }
         tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => return Err(AppError::Internal),
+            () = self.cancellation.cancelled() => return Err(AppError::internal("request cancelled")),
             result = self.store.delete(key) => result?,
         }
         if let Some(uploads) = &self.uploads {
@@ -332,22 +332,22 @@ impl StorageService {
     pub async fn update_folder(&self, old_path: &str, new_path: &str) -> Result<(), AppError> {
         let listing = tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => return Err(AppError::Internal),
+            () = self.cancellation.cancelled() => return Err(AppError::internal("request cancelled")),
             result = self.store.list(old_path, None) => result?,
         };
         for object in listing.objects {
             if self.cancellation.is_cancelled() {
-                return Err(AppError::Internal);
+                return Err(AppError::internal("request cancelled"));
             }
             let new_key = object.key.replacen(old_path, new_path, 1);
             tokio::select! {
                 biased;
-                () = self.cancellation.cancelled() => return Err(AppError::Internal),
+                () = self.cancellation.cancelled() => return Err(AppError::internal("request cancelled")),
                 result = self.store.copy(&object.key, &new_key) => result?,
             }
             tokio::select! {
                 biased;
-                () = self.cancellation.cancelled() => return Err(AppError::Internal),
+                () = self.cancellation.cancelled() => return Err(AppError::internal("request cancelled")),
                 result = self.store.delete(&object.key) => result?,
             }
         }

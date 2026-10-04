@@ -37,16 +37,13 @@ impl RuntimeImageQueue {
         storage: Arc<StorageService>,
     ) -> (Arc<Self>, ImageQueueWorker) {
         let (jobs, receiver) = mpsc::channel(QUEUE_CAPACITY);
-        (
-            Arc::new(Self { jobs }),
-            ImageQueueWorker {
-                jobs: receiver,
-                service,
-                articles,
-                openai,
-                storage,
-            },
-        )
+        (Arc::new(Self { jobs }), ImageQueueWorker {
+            jobs: receiver,
+            service,
+            articles,
+            openai,
+            storage,
+        })
     }
 }
 
@@ -61,7 +58,7 @@ impl ImageGenerationQueue for RuntimeImageQueue {
     }
 
     async fn enqueue(&self, job: ImageGenerationJob) -> Result<(), AppError> {
-        self.jobs.send(job).await.map_err(|_| AppError::External)
+        self.jobs.send(job).await.map_err(AppError::external)
     }
 }
 

@@ -70,8 +70,9 @@ pub fn load_verification_seed(path: &Path) -> Result<Option<VerificationSeed>, A
     if !path.exists() {
         return Ok(None);
     }
-    let bytes = fs::read(path).map_err(|_| AppError::Internal)?;
-    serde_json::from_slice(&bytes).map_err(|_| AppError::InvalidInput("seed file is not valid JSON".to_owned()))
+    let bytes = fs::read(path).map_err(AppError::internal)?;
+    serde_json::from_slice(&bytes)
+        .map_err(|_| AppError::InvalidInput("seed file is not valid JSON".to_owned()))
 }
 
 pub fn validate_seed(seed: &VerificationSeed) -> Result<(), AppError> {

@@ -33,7 +33,7 @@ impl DieselMcpConnectorRepository {
         diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>,
         AppError,
     > {
-        self.pool.get().await.map_err(|_| AppError::Database)
+        self.pool.get().await.map_err(AppError::database)
     }
 }
 
@@ -46,7 +46,7 @@ impl McpConnectorRepository for DieselMcpConnectorRepository {
             .select(McpConnectorRow::as_select())
             .load::<McpConnectorRow>(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         rows.into_iter().map(TryFrom::try_from).collect()
     }
 
@@ -58,7 +58,7 @@ impl McpConnectorRepository for DieselMcpConnectorRepository {
             .first::<McpConnectorRow>(&mut connection)
             .await
             .optional()
-            .map_err(|_| AppError::Database)?
+            .map_err(AppError::database)?
             .ok_or(AppError::NotFound)?
             .try_into()
     }
@@ -70,7 +70,7 @@ impl McpConnectorRepository for DieselMcpConnectorRepository {
             .returning(McpConnectorRow::as_returning())
             .get_result::<McpConnectorRow>(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         inserted.try_into()
     }
 
@@ -93,7 +93,7 @@ impl McpConnectorRepository for DieselMcpConnectorRepository {
             .get_result::<McpConnectorRow>(&mut connection)
             .await
             .optional()
-            .map_err(|_| AppError::Database)?
+            .map_err(AppError::database)?
             .ok_or(AppError::NotFound)?;
         updated.try_into()
     }
@@ -103,7 +103,7 @@ impl McpConnectorRepository for DieselMcpConnectorRepository {
         let deleted = diesel::delete(mcp_connector::table.find(id))
             .execute(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         if deleted == 0 {
             Err(AppError::NotFound)
         } else {

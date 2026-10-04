@@ -25,7 +25,7 @@ impl HttpFetchExtract {
                 .timeout(REQUEST_TIMEOUT)
                 .user_agent(USER_AGENT)
                 .build()
-                .map_err(|_| AppError::Internal)?,
+                .map_err(AppError::internal)?,
         })
     }
 
@@ -41,7 +41,7 @@ impl HttpFetchExtract {
 
     fn extract_pdf(body: &[u8], url: String) -> Result<ScrapedContent, AppError> {
         let content = pdf_extract::extract_text_from_mem(body)
-            .map_err(|_| AppError::External)?
+            .map_err(AppError::external)?
             .trim()
             .to_owned();
         if content.is_empty() {
@@ -65,8 +65,8 @@ impl HttpFetchExtract {
     fn extract_html(body: &[u8], url: String) -> Result<ScrapedContent, AppError> {
         let html = String::from_utf8_lossy(body);
         let document = Html::parse_document(&html);
-        let title_selector = Selector::parse("title").map_err(|_| AppError::Internal)?;
-        let heading_selector = Selector::parse("h1").map_err(|_| AppError::Internal)?;
+        let title_selector = Selector::parse("title").map_err(AppError::internal)?;
+        let heading_selector = Selector::parse("h1").map_err(AppError::internal)?;
         let title = document
             .select(&title_selector)
             .next()
@@ -86,10 +86,10 @@ impl HttpFetchExtract {
             "body",
         ];
         let text_selector =
-            Selector::parse("p, h1, h2, h3, h4, h5, h6, li").map_err(|_| AppError::Internal)?;
+            Selector::parse("p, h1, h2, h3, h4, h5, h6, li").map_err(AppError::internal)?;
         let mut content = String::new();
         for selector in content_selectors {
-            let selector = Selector::parse(selector).map_err(|_| AppError::Internal)?;
+            let selector = Selector::parse(selector).map_err(AppError::internal)?;
             let Some(root) = document.select(&selector).next() else {
                 continue;
             };
@@ -125,16 +125,19 @@ impl FetchExtractPort for HttpFetchExtract {
             .get(url.clone())
             .send()
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         if !response.status().is_success() {
-            return Err(AppError::External);
+            return Err(AppError::external(format!(
+                "upstream returned {}",
+                response.status()
+            )));
         }
         let is_pdf = response
             .headers()
             .get(CONTENT_TYPE)
             .and_then(|value| value.to_str().ok())
             .is_some_and(|value| value.contains("application/pdf"));
-        let body = response.bytes().await.map_err(|_| AppError::External)?;
+        let body = response.bytes().await.map_err(AppError::external)?;
         if is_pdf || body.starts_with(b"%PDF") {
             Self::extract_pdf(&body, url.to_string())
         } else {

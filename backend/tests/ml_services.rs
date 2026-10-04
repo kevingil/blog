@@ -19,10 +19,7 @@ struct CapturingProvider {
 #[async_trait]
 impl EmbeddingGenerator for CapturingProvider {
     async fn generate_embedding(&self, text: &str) -> Result<Vec<f32>, AppError> {
-        *self
-            .embedding_input
-            .lock()
-            .map_err(|_| AppError::Internal)? = text.to_owned();
+        *self.embedding_input.lock().map_err(AppError::internal)? = text.to_owned();
         Ok(vec![0.25; EMBEDDING_DIMENSIONS])
     }
 }
@@ -32,7 +29,7 @@ impl TextGenerationPort for CapturingProvider {
     async fn generate_text(&self, instructions: &str, input: &str) -> Result<String, AppError> {
         self.text_calls
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .push((instructions.to_owned(), input.to_owned()));
         Ok("cinematic illustration".to_owned())
     }

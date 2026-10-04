@@ -20,7 +20,7 @@ impl TagRepository for MemoryTags {
     async fn find_by_id(&self, id: i32) -> Result<Tag, AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .get(&id)
             .cloned()
             .ok_or(AppError::NotFound)
@@ -29,7 +29,7 @@ impl TagRepository for MemoryTags {
     async fn find_by_name(&self, name: &str) -> Result<Tag, AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .values()
             .find(|tag| tag.name.eq_ignore_ascii_case(name))
             .cloned()
@@ -37,7 +37,7 @@ impl TagRepository for MemoryTags {
     }
 
     async fn find_by_ids(&self, ids: &[i64]) -> Result<Vec<Tag>, AppError> {
-        let values = self.values.lock().map_err(|_| AppError::Internal)?;
+        let values = self.values.lock().map_err(AppError::internal)?;
         Ok(ids
             .iter()
             .filter_map(|id| i32::try_from(*id).ok())
@@ -46,7 +46,7 @@ impl TagRepository for MemoryTags {
     }
 
     async fn ensure_exists(&self, names: &[String]) -> Result<Vec<i64>, AppError> {
-        let mut values = self.values.lock().map_err(|_| AppError::Internal)?;
+        let mut values = self.values.lock().map_err(AppError::internal)?;
         let mut ids = Vec::new();
         for name in names {
             if let Some(tag) = values
@@ -55,15 +55,12 @@ impl TagRepository for MemoryTags {
             {
                 ids.push(i64::from(tag.id));
             } else {
-                let id = i32::try_from(values.len() + 1).map_err(|_| AppError::Internal)?;
-                values.insert(
+                let id = i32::try_from(values.len() + 1).map_err(AppError::internal)?;
+                values.insert(id, Tag {
                     id,
-                    Tag {
-                        id,
-                        name: name.clone(),
-                        created_at: None,
-                    },
-                );
+                    name: name.clone(),
+                    created_at: None,
+                });
                 ids.push(i64::from(id));
             }
         }
@@ -74,16 +71,16 @@ impl TagRepository for MemoryTags {
         Ok(self
             .values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .values()
             .cloned()
             .collect())
     }
 
     async fn save(&self, tag: &mut Tag) -> Result<(), AppError> {
-        let mut values = self.values.lock().map_err(|_| AppError::Internal)?;
+        let mut values = self.values.lock().map_err(AppError::internal)?;
         if tag.id == 0 {
-            tag.id = i32::try_from(values.len() + 1).map_err(|_| AppError::Internal)?;
+            tag.id = i32::try_from(values.len() + 1).map_err(AppError::internal)?;
         }
         values.insert(tag.id, tag.clone());
         Ok(())
@@ -92,7 +89,7 @@ impl TagRepository for MemoryTags {
     async fn delete(&self, id: i32) -> Result<(), AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .remove(&id)
             .map(|_| ())
             .ok_or(AppError::NotFound)
@@ -102,7 +99,7 @@ impl TagRepository for MemoryTags {
         Ok(self
             .used
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .get(&id)
             .copied()
             .unwrap_or(false))

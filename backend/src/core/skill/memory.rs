@@ -19,13 +19,13 @@ impl SkillRepository for InMemorySkillRepository {
         self.skills
             .lock()
             .map(|skills| skills.clone())
-            .map_err(|_| AppError::Internal)
+            .map_err(AppError::internal)
     }
 
     async fn find(&self, id: Uuid) -> Result<AgentSkill, AppError> {
         self.skills
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .iter()
             .find(|skill| skill.id == id)
             .cloned()
@@ -39,13 +39,13 @@ impl SkillRepository for InMemorySkillRepository {
         saved.updated_at = Some(now);
         self.skills
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .push(saved.clone());
         Ok(saved)
     }
 
     async fn update(&self, skill: &AgentSkill) -> Result<AgentSkill, AppError> {
-        let mut skills = self.skills.lock().map_err(|_| AppError::Internal)?;
+        let mut skills = self.skills.lock().map_err(AppError::internal)?;
         let Some(existing) = skills.iter_mut().find(|item| item.id == skill.id) else {
             return Err(AppError::NotFound);
         };
@@ -57,7 +57,7 @@ impl SkillRepository for InMemorySkillRepository {
     }
 
     async fn delete(&self, id: Uuid) -> Result<(), AppError> {
-        let mut skills = self.skills.lock().map_err(|_| AppError::Internal)?;
+        let mut skills = self.skills.lock().map_err(AppError::internal)?;
         let before = skills.len();
         skills.retain(|skill| skill.id != id);
         if skills.len() == before {

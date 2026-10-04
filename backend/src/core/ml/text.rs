@@ -32,7 +32,7 @@ impl TextGenerationService {
             .generate_text(IMAGE_PROMPT_SYSTEM, article_text)
             .await?;
         if prompt.is_empty() {
-            return Err(AppError::External);
+            return Err(AppError::external("image prompt response was empty"));
         }
         Ok(prompt)
     }

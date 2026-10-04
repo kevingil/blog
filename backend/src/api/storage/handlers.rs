@@ -32,7 +32,7 @@ async fn file_bytes(field: Field<'_>) -> Result<Vec<u8>, AppError> {
         Err(error) if error.status().is_client_error() => {
             Err(AppError::InvalidInput("Invalid request body".to_owned()))
         }
-        Err(_) => Err(AppError::Internal),
+        Err(error) => Err(AppError::internal(error)),
     }
 }
 

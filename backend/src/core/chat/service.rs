@@ -45,7 +45,7 @@ impl ChatMessageService {
     ) -> Result<ChatMessage, AppError> {
         validate_metadata(metadata.as_ref())?;
         let meta_data = match metadata {
-            Some(value) => serde_json::to_value(value).map_err(|_| AppError::Internal)?,
+            Some(value) => serde_json::to_value(value).map_err(AppError::internal)?,
             None => json!({}),
         };
         let mut message = ChatMessage {
@@ -58,9 +58,9 @@ impl ChatMessageService {
         };
         tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => Err(AppError::Internal),
+            () = self.cancellation.cancelled() => Err(AppError::internal("request cancelled")),
             result = self.repository.create(&mut message) => {
-                result.map_err(|_| AppError::Internal)?;
+                result.map_err(AppError::internal)?;
                 Ok(message)
             }
         }
@@ -78,9 +78,9 @@ impl ChatMessageService {
         };
         let mut messages = tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => return Err(AppError::Internal),
+            () = self.cancellation.cancelled() => return Err(AppError::internal("request cancelled")),
             result = self.repository.list_by_article(article_id, limit) => {
-                result.map_err(|_| AppError::Internal)?
+                result.map_err(AppError::internal)?
             }
         };
         messages.reverse();
@@ -90,9 +90,9 @@ impl ChatMessageService {
     pub async fn clear_conversation_history(&self, article_id: Uuid) -> Result<(), AppError> {
         tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => Err(AppError::Internal),
+            () = self.cancellation.cancelled() => Err(AppError::internal("request cancelled")),
             result = self.repository.delete_by_article(article_id) => {
-                result.map(|_| ()).map_err(|_| AppError::Internal)
+                result.map(|_| ()).map_err(AppError::internal)
             }
         }
     }
@@ -103,12 +103,12 @@ impl ChatMessageService {
         metadata: Option<MessageMetadata>,
     ) -> Result<(), AppError> {
         validate_metadata(metadata.as_ref())?;
-        let value = serde_json::to_value(metadata).map_err(|_| AppError::Internal)?;
+        let value = serde_json::to_value(metadata).map_err(AppError::internal)?;
         let rows = tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => return Err(AppError::Internal),
+            () = self.cancellation.cancelled() => return Err(AppError::internal("request cancelled")),
             result = self.repository.update_metadata(message_id, value) => {
-                result.map_err(|_| AppError::Internal)?
+                result.map_err(AppError::internal)?
             }
         };
         if rows == 0 {
@@ -140,12 +140,12 @@ impl ChatMessageService {
     pub async fn get_message_by_id(&self, message_id: Uuid) -> Result<ChatMessage, AppError> {
         tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => Err(AppError::Internal),
+            () = self.cancellation.cancelled() => Err(AppError::internal("request cancelled")),
             result = self.repository.find_by_id(message_id) => {
                 match result {
                     Ok(message) => Ok(message),
                     Err(AppError::NotFound) => Err(AppError::NotFound),
-                    Err(_) => Err(AppError::Internal),
+                    Err(error) => Err(AppError::internal(error)),
                 }
             }
         }
@@ -154,9 +154,9 @@ impl ChatMessageService {
     pub async fn pending_artifacts(&self, article_id: Uuid) -> Result<Vec<ChatMessage>, AppError> {
         tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => Err(AppError::Internal),
+            () = self.cancellation.cancelled() => Err(AppError::internal("request cancelled")),
             result = self.repository.list_pending_artifacts(article_id) => {
-                result.map_err(|_| AppError::Internal)
+                result.map_err(AppError::internal)
             }
         }
     }
@@ -232,7 +232,7 @@ fn parse_metadata(value: Option<Value>) -> Result<MessageMetadata, AppError> {
     match value {
         None | Some(Value::Null) => Ok(MessageMetadata::default()),
         Some(Value::Object(ref object)) if object.is_empty() => Ok(MessageMetadata::default()),
-        Some(value) => serde_json::from_value(value).map_err(|_| AppError::Internal),
+        Some(value) => serde_json::from_value(value).map_err(AppError::internal),
     }
 }
 

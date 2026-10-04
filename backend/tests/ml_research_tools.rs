@@ -88,7 +88,7 @@ impl SourceResourcePort for FixtureSources {
         let source = Self::source(article_id, &result.text);
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .push(source.clone());
         Ok(source)
     }
@@ -97,7 +97,7 @@ impl SourceResourcePort for FixtureSources {
         Ok(self
             .values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .iter()
             .filter(|source| source.article_id == article_id)
             .cloned()
@@ -123,7 +123,7 @@ impl SourceResourcePort for FixtureSources {
         source.title = selection.title;
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .push(source.clone());
         Ok(source)
     }
@@ -147,14 +147,11 @@ async fn answer_and_search_tools_preserve_structured_artifacts() {
     let sources = Arc::new(FixtureSources::default());
     let article_id = Uuid::new_v4();
     let answer = AskQuestionTool::new(research.clone())
-        .run(
-            context(Some(article_id)),
-            ToolCallRequest {
-                id: "answer".to_owned(),
-                name: "ask_question".to_owned(),
-                input: r#"{"question":"What changed?"}"#.to_owned(),
-            },
-        )
+        .run(context(Some(article_id)), ToolCallRequest {
+            id: "answer".to_owned(),
+            name: "ask_question".to_owned(),
+            input: r#"{"question":"What changed?"}"#.to_owned(),
+        })
         .await;
     assert!(answer.is_ok());
     let Ok(answer) = answer else {
@@ -170,14 +167,11 @@ async fn answer_and_search_tools_preserve_structured_artifacts() {
     assert_eq!(answer.result["citation_count"], 1);
 
     let search = SearchWebSourcesTool::new(research, sources.clone())
-        .run(
-            context(Some(article_id)),
-            ToolCallRequest {
-                id: "search".to_owned(),
-                name: "search_web_sources".to_owned(),
-                input: r#"{"query":"Rust migration"}"#.to_owned(),
-            },
-        )
+        .run(context(Some(article_id)), ToolCallRequest {
+            id: "search".to_owned(),
+            name: "search_web_sources".to_owned(),
+            input: r#"{"query":"Rust migration"}"#.to_owned(),
+        })
         .await;
     assert!(search.is_ok());
     let Ok(search) = search else {
@@ -197,14 +191,11 @@ async fn relevant_and_selection_tools_delegate_ranking_and_persist_exact_excerpt
         .map(|mut values| values.push(FixtureSources::source(article_id, "vector-ranked evidence")))
         .unwrap_or_default();
     let relevant = GetRelevantSourcesTool::new(sources.clone())
-        .run(
-            context(Some(article_id)),
-            ToolCallRequest {
-                id: "relevant".to_owned(),
-                name: "get_relevant_sources".to_owned(),
-                input: r#"{"query":"evidence","limit":5}"#.to_owned(),
-            },
-        )
+        .run(context(Some(article_id)), ToolCallRequest {
+            id: "relevant".to_owned(),
+            name: "get_relevant_sources".to_owned(),
+            input: r#"{"query":"evidence","limit":5}"#.to_owned(),
+        })
         .await;
     assert!(relevant.is_ok());
     let Ok(relevant) = relevant else {

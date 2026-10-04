@@ -80,7 +80,7 @@ impl ObjectStore for MemoryObjectStore {
             destination_key.to_owned(),
         ));
         if state.fail_copy_destination.as_deref() == Some(destination_key) {
-            return Err(AppError::External);
+            return Err(AppError::external("no underlying error was recorded"));
         }
         Ok(())
     }
@@ -148,10 +148,10 @@ async fn listing_preserves_go_format_sort_url_and_folder_rules() {
     assert!(result.folders[0].is_hidden);
     assert_eq!(result.folders[0].path, "images/.hidden/");
     assert!(result.folders.iter().all(|folder| folder.file_count == 0));
-    assert_eq!(
-        store.state().operations,
-        vec![Operation::List("images/".to_owned(), Some("/".to_owned()))]
-    );
+    assert_eq!(store.state().operations, vec![Operation::List(
+        "images/".to_owned(),
+        Some("/".to_owned())
+    )]);
 }
 
 #[tokio::test]
@@ -179,16 +179,13 @@ async fn folder_move_is_sequential_and_preserves_partial_failure_boundary() {
         CancellationToken::new(),
     );
     let result = service.update_folder("old/", "new/").await;
-    assert!(matches!(result, Err(AppError::External)));
-    assert_eq!(
-        store.state().operations,
-        vec![
-            Operation::List("old/".to_owned(), None),
-            Operation::Copy("old/a.txt".to_owned(), "new/a.txt".to_owned()),
-            Operation::Delete("old/a.txt".to_owned()),
-            Operation::Copy("old/b.txt".to_owned(), "new/b.txt".to_owned()),
-        ]
-    );
+    assert!(matches!(result, Err(AppError::External(_))));
+    assert_eq!(store.state().operations, vec![
+        Operation::List("old/".to_owned(), None),
+        Operation::Copy("old/a.txt".to_owned(), "new/a.txt".to_owned()),
+        Operation::Delete("old/a.txt".to_owned()),
+        Operation::Copy("old/b.txt".to_owned(), "new/b.txt".to_owned()),
+    ]);
 }
 
 #[tokio::test]
@@ -208,14 +205,11 @@ async fn folder_creation_upload_and_url_prefix_preserve_exact_keys() {
             .is_ok()
     );
     assert_eq!(service.url_prefix(), "https://cdn.example.test/");
-    assert_eq!(
-        store.state().operations,
-        vec![
-            Operation::Put("drafts/".to_owned(), Vec::new()),
-            Operation::Put("published/".to_owned(), Vec::new()),
-            Operation::Put("drafts/post.md".to_owned(), b"post".to_vec()),
-        ]
-    );
+    assert_eq!(store.state().operations, vec![
+        Operation::Put("drafts/".to_owned(), Vec::new()),
+        Operation::Put("published/".to_owned(), Vec::new()),
+        Operation::Put("drafts/post.md".to_owned(), b"post".to_vec()),
+    ]);
 }
 
 #[tokio::test]
@@ -226,7 +220,7 @@ async fn cancellation_stops_object_store_admission() {
     let service = StorageService::new(store.clone(), "", cancellation);
     assert!(matches!(
         service.delete_file("key").await,
-        Err(AppError::Internal)
+        Err(AppError::Internal(_))
     ));
     assert!(store.state().operations.is_empty());
 }

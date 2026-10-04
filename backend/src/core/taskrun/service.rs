@@ -104,7 +104,7 @@ impl TaskRunService {
         };
         tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => return Err(AppError::Internal),
+            () = self.cancellation.cancelled() => return Err(AppError::internal("request cancelled")),
             result = self.repository.create_run(&mut run) => result?,
         }
         self.record_event(RecordEventInput {
@@ -129,7 +129,7 @@ impl TaskRunService {
         run.completed_at = Some(Utc::now());
         tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => return Err(AppError::Internal),
+            () = self.cancellation.cancelled() => return Err(AppError::internal("request cancelled")),
             result = self.repository.update_run(&run) => result?,
         }
 
@@ -184,7 +184,7 @@ impl TaskRunService {
         };
         tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => return Err(AppError::Internal),
+            () = self.cancellation.cancelled() => return Err(AppError::internal("request cancelled")),
             result = self.repository.create_step(&mut step) => result?,
         }
         self.record_event(RecordEventInput {
@@ -210,7 +210,7 @@ impl TaskRunService {
         step.completed_at = Some(Utc::now());
         tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => return Err(AppError::Internal),
+            () = self.cancellation.cancelled() => return Err(AppError::internal("request cancelled")),
             result = self.repository.update_step(&step) => result?,
         }
 
@@ -267,7 +267,7 @@ impl TaskRunService {
         };
         tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => Err(AppError::Internal),
+            () = self.cancellation.cancelled() => Err(AppError::internal("request cancelled")),
             result = self.repository.create_event(&mut event) => result,
         }
     }
@@ -275,7 +275,7 @@ impl TaskRunService {
     pub async fn get_run(&self, id: Uuid) -> Result<TaskRun, AppError> {
         tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => Err(AppError::Internal),
+            () = self.cancellation.cancelled() => Err(AppError::internal("request cancelled")),
             result = self.repository.find_run_by_id(id) => result,
         }
     }
@@ -283,7 +283,7 @@ impl TaskRunService {
     pub async fn list_runs(&self, filter: TaskRunFilter) -> Result<Vec<TaskRun>, AppError> {
         tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => Err(AppError::Internal),
+            () = self.cancellation.cancelled() => Err(AppError::internal("request cancelled")),
             result = self.repository.list_runs(filter) => result,
         }
     }
@@ -291,7 +291,7 @@ impl TaskRunService {
     pub async fn list_steps_by_run_id(&self, run_id: Uuid) -> Result<Vec<TaskRunStep>, AppError> {
         tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => Err(AppError::Internal),
+            () = self.cancellation.cancelled() => Err(AppError::internal("request cancelled")),
             result = self.repository.list_steps_by_run_id(run_id) => result,
         }
     }
@@ -299,7 +299,7 @@ impl TaskRunService {
     pub async fn list_events_by_run_id(&self, run_id: Uuid) -> Result<Vec<TaskRunEvent>, AppError> {
         tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => Err(AppError::Internal),
+            () = self.cancellation.cancelled() => Err(AppError::internal("request cancelled")),
             result = self.repository.list_events_by_run_id(run_id) => result,
         }
     }
@@ -311,7 +311,7 @@ impl TaskRunService {
     ) -> Result<TaskRunStep, AppError> {
         tokio::select! {
             biased;
-            () = self.cancellation.cancelled() => Err(AppError::Internal),
+            () = self.cancellation.cancelled() => Err(AppError::internal("request cancelled")),
             result = self.repository.find_step_by_run_and_key(run_id, step_key) => result,
         }
     }

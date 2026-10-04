@@ -67,7 +67,7 @@ impl DieselArticleRepository {
         diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>,
         AppError,
     > {
-        self.pool.get().await.map_err(|_| AppError::Database)
+        self.pool.get().await.map_err(AppError::database)
     }
 
     fn reserve_version(&self) -> Result<VersionReservation, AppError> {
@@ -473,19 +473,16 @@ impl ArticleRepository for DieselArticleRepository {
             .await
             .map_err(map_diesel_error)?;
 
-        reservation.spawn(
-            self.pool.clone(),
-            VersionInput {
-                article_id,
-                title: version.title,
-                content: version.content,
-                image_url: version.image_url,
-                upload_file_id: version.upload_file_id,
-                embedding: version.embedding,
-                status: VersionStatus::Draft,
-                edited_by: None,
-            },
-        )
+        reservation.spawn(self.pool.clone(), VersionInput {
+            article_id,
+            title: version.title,
+            content: version.content,
+            image_url: version.image_url,
+            upload_file_id: version.upload_file_id,
+            embedding: version.embedding,
+            status: VersionStatus::Draft,
+            edited_by: None,
+        })
     }
 
     async fn create_draft_snapshot(&self, article_id: Uuid) -> Result<Uuid, AppError> {
@@ -500,22 +497,19 @@ impl ArticleRepository for DieselArticleRepository {
                     .first::<ArticleRow>(connection)
                     .await
                     .optional()?
-                    .ok_or(AppError::Database)?;
-                let version_id = insert_version_and_update_pointer(
-                    connection,
-                    VersionInput {
-                        article_id,
-                        title: value.draft_title.unwrap_or_default(),
-                        content: value.draft_content.unwrap_or_default(),
-                        image_url: value.draft_image_url.unwrap_or_default(),
-                        upload_file_id: value.draft_upload_file_id,
-                        embedding: value
-                            .draft_embedding
-                            .map_or_else(Vec::new, |vector| vector.to_vec()),
-                        status: VersionStatus::Draft,
-                        edited_by: Some(value.author_id),
-                    },
-                )
+                    .ok_or(AppError::database("no underlying error was recorded"))?;
+                let version_id = insert_version_and_update_pointer(connection, VersionInput {
+                    article_id,
+                    title: value.draft_title.unwrap_or_default(),
+                    content: value.draft_content.unwrap_or_default(),
+                    image_url: value.draft_image_url.unwrap_or_default(),
+                    upload_file_id: value.draft_upload_file_id,
+                    embedding: value
+                        .draft_embedding
+                        .map_or_else(Vec::new, |vector| vector.to_vec()),
+                    status: VersionStatus::Draft,
+                    edited_by: Some(value.author_id),
+                })
                 .await?;
                 Ok(version_id)
             })
@@ -656,7 +650,7 @@ impl VersionInput {
 }
 
 async fn create_version(pool: PgPool, input: VersionInput) -> Result<(), AppError> {
-    let mut connection = pool.get().await.map_err(|_| AppError::Database)?;
+    let mut connection = pool.get().await.map_err(AppError::database)?;
     connection
         .transaction::<(), RepositoryError, _>(async |connection| {
             lock_article_versions(connection, input.article_id).await?;
@@ -811,11 +805,11 @@ impl BackgroundTasks {
             || admission_window >= u64::try_from(MAX_BACKGROUND_TASKS).unwrap_or(u64::MAX)
         {
             state.rejected_admissions = state.rejected_admissions.saturating_add(1);
-            return Err(AppError::Internal);
+            return Err(AppError::internal("no underlying error was recorded"));
         }
         let Some(task_id) = state.last_admitted.checked_add(1) else {
             state.rejected_admissions = state.rejected_admissions.saturating_add(1);
-            return Err(AppError::Internal);
+            return Err(AppError::internal("no underlying error was recorded"));
         };
         state.last_admitted = task_id;
         state.reservations.insert(task_id);
@@ -835,12 +829,15 @@ impl BackgroundTasks {
     ) -> Result<(), AppError> {
         let mut state = self.state();
         if !state.reservations.remove(&task_id) {
-            return Err(AppError::Internal);
+            return Err(AppError::internal("no underlying error was recorded"));
         }
         if self.cancellation.is_cancelled() {
             drop(state);
-            self.complete(task_id, Err(AppError::Internal));
-            return Err(AppError::Internal);
+            self.complete(
+                task_id,
+                Err(AppError::internal("no underlying error was recorded")),
+            );
+            return Err(AppError::internal("no underlying error was recorded"));
         }
 
         let tasks = self.clone();
@@ -849,12 +846,12 @@ impl BackgroundTasks {
             let result = AssertUnwindSafe(async move {
                 tokio::select! {
                     result = create_version(pool, input) => result,
-                    () = cancellation.cancelled() => Err(AppError::Internal),
+                    () = cancellation.cancelled() => Err(AppError::internal("request cancelled")),
                 }
             })
             .catch_unwind()
             .await
-            .unwrap_or(Err(AppError::Internal));
+            .unwrap_or(Err(AppError::internal("no underlying error was recorded")));
             tasks.complete(task_id, result);
         });
         state.handles.insert(task_id, handle);
@@ -923,7 +920,7 @@ impl BackgroundTasks {
         let mut state = self.state();
         if state.rejected_admissions > 0 {
             state.rejected_admissions -= 1;
-            return Err(AppError::Internal);
+            return Err(AppError::internal("no underlying error was recorded"));
         }
         let Some(position) = state
             .failures
@@ -936,7 +933,7 @@ impl BackgroundTasks {
                 .is_some_and(|overflow| overflow.min_task_id <= target)
             {
                 let Some(overflow) = state.failure_overflow.take() else {
-                    return Err(AppError::Internal);
+                    return Err(AppError::internal("no underlying error was recorded"));
                 };
                 error!(
                     failure_count = overflow.count,
@@ -950,7 +947,7 @@ impl BackgroundTasks {
                         ..overflow
                     });
                 }
-                return Err(AppError::Internal);
+                return Err(AppError::internal("no underlying error was recorded"));
             }
             return Ok(());
         };
@@ -984,7 +981,7 @@ impl BackgroundTasks {
             self.settle_through(target, &mut handles, true),
         )
         .await;
-        Err(AppError::Internal)
+        Err(AppError::internal("no underlying error was recorded"))
     }
 
     async fn settle_through(&self, target: u64, handles: &mut OwnedTaskHandles, abort: bool) {
@@ -1021,7 +1018,10 @@ impl BackgroundTasks {
                 .collect::<Vec<_>>()
         };
         for task_id in reservation_ids {
-            self.complete(task_id, Err(AppError::Internal));
+            self.complete(
+                task_id,
+                Err(AppError::internal("no underlying error was recorded")),
+            );
         }
     }
 
@@ -1033,7 +1033,10 @@ impl BackgroundTasks {
             let join_result = join_handle.await;
             *handle = None;
             if join_result.is_err() {
-                self.complete(*task_id, Err(AppError::Internal));
+                self.complete(
+                    *task_id,
+                    Err(AppError::internal("no underlying error was recorded")),
+                );
             } else {
                 self.complete(*task_id, Ok(()));
             }
@@ -1111,7 +1114,11 @@ fn tag_ids_from_database(tag_ids: Option<Vec<Option<i32>>>) -> Result<Option<Vec
         .map(|tag_ids| {
             tag_ids
                 .into_iter()
-                .map(|tag_id| tag_id.map(i64::from).ok_or(AppError::Database))
+                .map(|tag_id| {
+                    tag_id
+                        .map(i64::from)
+                        .ok_or(AppError::database("no underlying error was recorded"))
+                })
                 .collect()
         })
         .transpose()
@@ -1268,7 +1275,9 @@ impl From<ArticleVersionRow> for ArticleVersion {
 impl DieselArticleRepository {
     async fn hydrate_one(&self, row: ArticleRow) -> Result<Article, AppError> {
         let mut articles = self.hydrate_many(vec![row]).await?;
-        articles.pop().ok_or(AppError::Database)
+        articles
+            .pop()
+            .ok_or(AppError::database("no underlying error was recorded"))
     }
 
     async fn hydrate_many(&self, rows: Vec<ArticleRow>) -> Result<Vec<Article>, AppError> {
@@ -1395,7 +1404,7 @@ fn map_diesel_error(error: DieselError) -> AppError {
         DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => {
             AppError::Conflict("resource already exists".to_owned())
         }
-        _ => AppError::Database,
+        other => AppError::database(other),
     }
 }
 
@@ -1415,7 +1424,7 @@ mod background_task_tests {
         drop(reservations);
         assert!(matches!(
             BackgroundTasks::reserve(&tasks),
-            Err(AppError::Internal)
+            Err(AppError::Internal(_))
         ));
         {
             let state = tasks.state();
@@ -1430,20 +1439,26 @@ mod background_task_tests {
         tasks.wait_for(target).await;
         assert!(matches!(
             tasks.report_failure(target),
-            Err(AppError::Internal)
+            Err(AppError::Internal(_))
         ));
         tasks.report_failure(target)?;
 
         for _ in 0..(MAX_RECORDED_FAILURES + 5) {
             let reservation = BackgroundTasks::reserve(&tasks)?;
             let task_id = reservation.task_id;
-            tasks.complete(task_id, Err(AppError::Internal));
+            tasks.complete(
+                task_id,
+                Err(AppError::internal("no underlying error was recorded")),
+            );
             drop(reservation);
         }
         let (overflow_min, overflow_max) = {
             let mut state = tasks.state();
             assert_eq!(state.failures.len(), MAX_RECORDED_FAILURES);
-            let overflow = state.failure_overflow.as_ref().ok_or(AppError::Internal)?;
+            let overflow = state
+                .failure_overflow
+                .as_ref()
+                .ok_or(AppError::internal("no underlying error was recorded"))?;
             assert_eq!(overflow.count, 5);
             let bounds = (overflow.min_task_id, overflow.max_task_id);
             state.failures.clear();
@@ -1452,18 +1467,21 @@ mod background_task_tests {
         assert!(overflow_min < overflow_max);
         assert!(matches!(
             tasks.report_failure(overflow_max.saturating_sub(1)),
-            Err(AppError::Internal)
+            Err(AppError::Internal(_))
         ));
         {
             let state = tasks.state();
-            let remainder = state.failure_overflow.as_ref().ok_or(AppError::Internal)?;
+            let remainder = state
+                .failure_overflow
+                .as_ref()
+                .ok_or(AppError::internal("no underlying error was recorded"))?;
             assert_eq!(remainder.min_task_id, overflow_max);
             assert_eq!(remainder.max_task_id, overflow_max);
             assert_eq!(remainder.count, 5);
         }
         assert!(matches!(
             tasks.report_failure(overflow_max),
-            Err(AppError::Internal)
+            Err(AppError::Internal(_))
         ));
         tasks.report_failure(overflow_max)?;
         Ok(())
@@ -1490,23 +1508,20 @@ mod background_task_tests {
         let pool = create_pool(&SecretString::from(
             "postgres://invalid:invalid@127.0.0.1:1/invalid",
         ))
-        .map_err(|_| AppError::Internal)?;
-        reservation.spawn(
-            pool,
-            VersionInput {
-                article_id: Uuid::new_v4(),
-                title: "late".to_owned(),
-                content: String::new(),
-                image_url: String::new(),
-                upload_file_id: None,
-                embedding: Vec::new(),
-                status: VersionStatus::Draft,
-                edited_by: None,
-            },
-        )?;
+        .map_err(AppError::internal)?;
+        reservation.spawn(pool, VersionInput {
+            article_id: Uuid::new_v4(),
+            title: "late".to_owned(),
+            content: String::new(),
+            image_url: String::new(),
+            upload_file_id: None,
+            embedding: Vec::new(),
+            status: VersionStatus::Draft,
+            edited_by: None,
+        })?;
 
-        let shutdown_result = shutdown.await.map_err(|_| AppError::Internal)?;
-        assert!(matches!(shutdown_result, Err(AppError::Database)));
+        let shutdown_result = shutdown.await.map_err(AppError::internal)?;
+        assert!(matches!(shutdown_result, Err(AppError::Database(_))));
         let state = tasks.state();
         assert!(state.handles.is_empty());
         assert!(state.reservations.is_empty());

@@ -41,25 +41,22 @@ impl RecommendationService {
     ) -> Result<DataSourceRecommendationsResponse, AppError> {
         require_owner(organization_id, user_id)?;
         if !self.search.is_configured() {
-            return Err(AppError::External);
+            return Err(AppError::external("search is not configured"));
         }
         let limit = normalize_limit(request.limit);
         let existing = self.existing(organization_id, user_id).await?;
         let response = self
             .search
-            .search(
-                &request.query,
-                SearchOptions {
-                    num_results: limit * 3,
-                    use_autoprompt: true,
-                    include_text: true,
-                    include_highlights: true,
-                    include_summary: true,
-                    ..SearchOptions::default()
-                },
-            )
+            .search(&request.query, SearchOptions {
+                num_results: limit * 3,
+                use_autoprompt: true,
+                include_text: true,
+                include_highlights: true,
+                include_summary: true,
+                ..SearchOptions::default()
+            })
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         Ok(DataSourceRecommendationsResponse {
             mode: "query".to_owned(),
             query: request.query.trim().to_owned(),
@@ -76,7 +73,7 @@ impl RecommendationService {
     ) -> Result<DataSourceRecommendationsResponse, AppError> {
         require_owner(organization_id, user_id)?;
         if !self.search.is_configured() {
-            return Err(AppError::External);
+            return Err(AppError::external("search is not configured"));
         }
         let existing = self.existing(organization_id, user_id).await?;
         let seeds: Vec<_> = existing
@@ -99,17 +96,14 @@ impl RecommendationService {
         for seed in &seeds {
             match self
                 .search
-                .find_similar(
-                    &seed.url,
-                    SimilarOptions {
-                        num_results: RESULTS_PER_SEED,
-                        exclude_source_domain: true,
-                        include_text: true,
-                        include_highlights: true,
-                        include_summary: true,
-                        ..SimilarOptions::default()
-                    },
-                )
+                .find_similar(&seed.url, SimilarOptions {
+                    num_results: RESULTS_PER_SEED,
+                    exclude_source_domain: true,
+                    include_text: true,
+                    include_highlights: true,
+                    include_summary: true,
+                    ..SimilarOptions::default()
+                })
                 .await
             {
                 Ok(response) => candidates.extend(
@@ -122,7 +116,7 @@ impl RecommendationService {
             }
         }
         if candidates.is_empty() && failures > 0 {
-            return Err(AppError::External);
+            return Err(AppError::external("similar-source search failed"));
         }
         candidates.sort_by(|left, right| {
             right

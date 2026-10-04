@@ -64,8 +64,10 @@ pub async fn generate_image(
             .service()
             .mark_failed(image.id, "failed to enqueue image generation".to_owned())
             .await
-            .map_err(|_| ImageApiError::from(AppError::Internal))?;
-        return Err(ImageApiError::from(AppError::External));
+            .map_err(|error| ImageApiError::from(AppError::internal(error)))?;
+        return Err(ImageApiError::from(AppError::external(
+            "failed to enqueue image generation",
+        )));
     }
     Ok((
         StatusCode::ACCEPTED,

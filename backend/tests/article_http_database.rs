@@ -46,7 +46,9 @@ impl ArticleGenerationQueue for RejectingGenerationQueue {
         &self,
         _request: GenerationRequest,
     ) -> Result<String, blog_backend::error::AppError> {
-        Err(blog_backend::error::AppError::External)
+        Err(blog_backend::error::AppError::external(
+            "no underlying error was recorded",
+        ))
     }
 }
 

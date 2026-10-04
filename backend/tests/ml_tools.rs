@@ -27,10 +27,10 @@ impl DraftSaver for CapturingDraftSaver {
     ) -> Result<(), AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .push(markdown_content.to_owned());
         if self.fail {
-            Err(AppError::Database)
+            Err(AppError::database("no underlying error was recorded"))
         } else {
             Ok(())
         }
@@ -52,14 +52,11 @@ fn context(markdown: &str) -> ToolContext {
 #[tokio::test]
 async fn read_document_returns_numbered_content_and_sections() {
     let response = ReadDocumentTool
-        .run(
-            context("Intro\n\n## Details\nBody"),
-            ToolCallRequest {
-                id: "read-1".to_owned(),
-                name: "read_document".to_owned(),
-                input: "{}".to_owned(),
-            },
-        )
+        .run(context("Intro\n\n## Details\nBody"), ToolCallRequest {
+            id: "read-1".to_owned(),
+            name: "read_document".to_owned(),
+            input: "{}".to_owned(),
+        })
         .await;
     assert!(response.is_ok());
     let Ok(response) = response else {
@@ -86,20 +83,17 @@ async fn replace_lines_updates_shared_turn_state_and_persists_best_effort() {
     let tool = ReplaceLinesTool::new(Some(saver.clone()));
     let context = context("one\ntwo\nthree");
     let response = tool
-        .run(
-            context.clone(),
-            ToolCallRequest {
-                id: "edit-1".to_owned(),
-                name: "replace_lines".to_owned(),
-                input: serde_json::json!({
-                    "start_line": 2,
-                    "end_line": 2,
-                    "new_content": "TWO\n2.5",
-                    "reason": "clarify"
-                })
-                .to_string(),
-            },
-        )
+        .run(context.clone(), ToolCallRequest {
+            id: "edit-1".to_owned(),
+            name: "replace_lines".to_owned(),
+            input: serde_json::json!({
+                "start_line": 2,
+                "end_line": 2,
+                "new_content": "TWO\n2.5",
+                "reason": "clarify"
+            })
+            .to_string(),
+        })
         .await;
     assert!(response.is_ok());
     let Ok(response) = response else {
@@ -132,15 +126,11 @@ async fn replace_lines_handles_empty_documents_and_invalid_ranges() {
     let tool = ReplaceLinesTool::new(None);
     let empty = context("");
     let invalid = tool
-        .run(
-            empty.clone(),
-            ToolCallRequest {
-                id: "edit-1".to_owned(),
-                name: "replace_lines".to_owned(),
-                input: r#"{"start_line":2,"end_line":2,"new_content":"x","reason":"draft"}"#
-                    .to_owned(),
-            },
-        )
+        .run(empty.clone(), ToolCallRequest {
+            id: "edit-1".to_owned(),
+            name: "replace_lines".to_owned(),
+            input: r#"{"start_line":2,"end_line":2,"new_content":"x","reason":"draft"}"#.to_owned(),
+        })
         .await;
     assert!(invalid.is_ok());
     let Ok(invalid) = invalid else {
@@ -149,16 +139,12 @@ async fn replace_lines_handles_empty_documents_and_invalid_ranges() {
     assert!(invalid.is_error);
 
     let created = tool
-        .run(
-            empty.clone(),
-            ToolCallRequest {
-                id: "edit-2".to_owned(),
-                name: "replace_lines".to_owned(),
-                input:
-                    r#"{"start_line":1,"end_line":1,"new_content":"first draft","reason":"draft"}"#
-                        .to_owned(),
-            },
-        )
+        .run(empty.clone(), ToolCallRequest {
+            id: "edit-2".to_owned(),
+            name: "replace_lines".to_owned(),
+            input: r#"{"start_line":1,"end_line":1,"new_content":"first draft","reason":"draft"}"#
+                .to_owned(),
+        })
         .await;
     assert!(created.is_ok());
     let Ok(created) = created else {
@@ -174,15 +160,12 @@ async fn apply_patch_writes_an_empty_article_and_replaces_unique_text() {
     let tool = ApplyPatchTool::new(Some(saver.clone()));
     let empty = context("");
     let created = tool
-        .run(
-            empty.clone(),
-            ToolCallRequest {
-                id: "patch-1".to_owned(),
-                name: "apply_patch".to_owned(),
-                input: r#"{"patch":"","old_str":"","new_str":"Hello draft","reason":"write"}"#
-                    .to_owned(),
-            },
-        )
+        .run(empty.clone(), ToolCallRequest {
+            id: "patch-1".to_owned(),
+            name: "apply_patch".to_owned(),
+            input: r#"{"patch":"","old_str":"","new_str":"Hello draft","reason":"write"}"#
+                .to_owned(),
+        })
         .await;
     assert!(created.is_ok());
     let Ok(created) = created else {
@@ -222,15 +205,12 @@ async fn apply_patch_writes_an_empty_article_and_replaces_unique_text() {
 
     let ambiguous = context("one one");
     let rejected = tool
-        .run(
-            ambiguous,
-            ToolCallRequest {
-                id: "patch-3".to_owned(),
-                name: "apply_patch".to_owned(),
-                input: r#"{"patch":"","old_str":"one","new_str":"two","reason":"ambiguous"}"#
-                    .to_owned(),
-            },
-        )
+        .run(ambiguous, ToolCallRequest {
+            id: "patch-3".to_owned(),
+            name: "apply_patch".to_owned(),
+            input: r#"{"patch":"","old_str":"one","new_str":"two","reason":"ambiguous"}"#
+                .to_owned(),
+        })
         .await;
     assert!(rejected.is_ok());
     let Ok(rejected) = rejected else {
@@ -254,7 +234,7 @@ impl DraftSaver for RecordingSaver {
     ) -> Result<(), AppError> {
         self.content
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .push(markdown_content.to_owned());
         Ok(())
     }
@@ -262,7 +242,7 @@ impl DraftSaver for RecordingSaver {
     async fn update_draft_title(&self, _article_id: Uuid, title: &str) -> Result<(), AppError> {
         self.titles
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .push(title.to_owned());
         Ok(())
     }
@@ -289,7 +269,7 @@ impl SourceResourcePort for MemorySources {
         Ok(self
             .values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .iter()
             .filter(|source| source.article_id == article_id)
             .cloned()
@@ -320,7 +300,7 @@ impl SourceResourcePort for MemorySources {
         upserts: Vec<blog_backend::core::ml::llm::SourceEdit>,
         remove_ids: Vec<Uuid>,
     ) -> Result<Vec<SourceResource>, AppError> {
-        let mut values = self.values.lock().map_err(|_| AppError::Internal)?;
+        let mut values = self.values.lock().map_err(AppError::internal)?;
         for id in &remove_ids {
             if !values
                 .iter()
@@ -381,20 +361,17 @@ async fn replace_lines_lifts_a_leading_title_out_of_the_body() {
     let document = context("");
     document.set_document_title("Old title").expect("title");
     let response = tool
-        .run(
-            document.clone(),
-            ToolCallRequest {
-                id: "edit-title".to_owned(),
-                name: "replace_lines".to_owned(),
-                input: serde_json::json!({
-                    "start_line": 1,
-                    "end_line": 1,
-                    "new_content": "# RSI Is Also a Systems Problem\n\nThe machinery matters.",
-                    "reason": "draft"
-                })
-                .to_string(),
-            },
-        )
+        .run(document.clone(), ToolCallRequest {
+            id: "edit-title".to_owned(),
+            name: "replace_lines".to_owned(),
+            input: serde_json::json!({
+                "start_line": 1,
+                "end_line": 1,
+                "new_content": "# RSI Is Also a Systems Problem\n\nThe machinery matters.",
+                "reason": "draft"
+            })
+            .to_string(),
+        })
         .await
         .expect("tool result");
     assert!(!response.is_error, "{}", response.content);
@@ -465,14 +442,11 @@ async fn set_title_updates_the_title_field_without_touching_the_body() {
     let tool = SetTitleTool::new(Some(saver.clone()));
     let document = context("Body stays.");
     let response = tool
-        .run(
-            document.clone(),
-            ToolCallRequest {
-                id: "title-1".to_owned(),
-                name: "set_title".to_owned(),
-                input: r#"{"title":"A separate title","reason":"rename"}"#.to_owned(),
-            },
-        )
+        .run(document.clone(), ToolCallRequest {
+            id: "title-1".to_owned(),
+            name: "set_title".to_owned(),
+            input: r#"{"title":"A separate title","reason":"rename"}"#.to_owned(),
+        })
         .await
         .expect("tool result");
     assert!(!response.is_error, "{}", response.content);
@@ -524,14 +498,11 @@ async fn update_sources_edits_the_source_list() {
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].content, "runtime");
     let removed = tool
-        .run(
-            document.clone(),
-            ToolCallRequest {
-                id: "sources-2".to_owned(),
-                name: "update_sources".to_owned(),
-                input: format!(r#"{{"sources":[],"remove_ids":["{}"]}}"#, listed[0].id),
-            },
-        )
+        .run(document.clone(), ToolCallRequest {
+            id: "sources-2".to_owned(),
+            name: "update_sources".to_owned(),
+            input: format!(r#"{{"sources":[],"remove_ids":["{}"]}}"#, listed[0].id),
+        })
         .await
         .expect("remove");
     assert!(!removed.is_error, "{}", removed.content);
@@ -552,14 +523,11 @@ async fn read_document_reports_title_and_sources_separately() {
         }])
         .expect("sources");
     let response = ReadDocumentTool
-        .run(
-            document,
-            ToolCallRequest {
-                id: "read-2".to_owned(),
-                name: "read_document".to_owned(),
-                input: "{}".to_owned(),
-            },
-        )
+        .run(document, ToolCallRequest {
+            id: "read-2".to_owned(),
+            name: "read_document".to_owned(),
+            input: "{}".to_owned(),
+        })
         .await
         .expect("read");
     let value: serde_json::Value =

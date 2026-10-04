@@ -33,7 +33,7 @@ impl DieselChatMessageRepository {
         diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>,
         AppError,
     > {
-        self.pool.get().await.map_err(|_| AppError::Database)
+        self.pool.get().await.map_err(AppError::database)
     }
 }
 
@@ -131,7 +131,7 @@ impl ChatMessageRepository for DieselChatMessageRepository {
             .execute(&mut connection)
             .await
             .map_err(map_diesel_error)?;
-        u64::try_from(rows).map_err(|_| AppError::Internal)
+        u64::try_from(rows).map_err(AppError::internal)
     }
 
     async fn delete_by_article(&self, article_id: Uuid) -> Result<u64, AppError> {
@@ -141,7 +141,7 @@ impl ChatMessageRepository for DieselChatMessageRepository {
                 .execute(&mut connection)
                 .await
                 .map_err(map_diesel_error)?;
-        u64::try_from(rows).map_err(|_| AppError::Internal)
+        u64::try_from(rows).map_err(AppError::internal)
     }
 }
 
@@ -167,6 +167,6 @@ fn map_diesel_error(error: diesel::result::Error) -> AppError {
             | DatabaseErrorKind::CheckViolation,
             _,
         ) => AppError::Conflict("database constraint violation".to_owned()),
-        _ => AppError::Database,
+        other => AppError::database(other),
     }
 }

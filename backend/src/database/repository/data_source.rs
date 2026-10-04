@@ -34,7 +34,7 @@ impl DieselDataSourceRepository {
         diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>,
         AppError,
     > {
-        self.pool.get().await.map_err(|_| AppError::Database)
+        self.pool.get().await.map_err(AppError::database)
     }
 }
 
@@ -337,6 +337,6 @@ fn metadata_value(value: Option<&MetaData>) -> Value {
     )
 }
 
-fn map_error(_: DieselError) -> AppError {
-    AppError::Database
+fn map_error(error: DieselError) -> AppError {
+    AppError::database(error)
 }

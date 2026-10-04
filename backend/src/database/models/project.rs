@@ -40,7 +40,10 @@ impl TryFrom<ProjectRow> for Project {
             .tag_ids
             .unwrap_or_default()
             .into_iter()
-            .map(|id| id.map(i64::from).ok_or(AppError::Database))
+            .map(|id| {
+                id.map(i64::from)
+                    .ok_or(AppError::database("no underlying error was recorded"))
+            })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             id: row.id,

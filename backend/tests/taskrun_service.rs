@@ -103,7 +103,7 @@ impl TaskRunRepository for MemoryTaskRunRepository {
     ) -> Result<TaskRunStep, AppError> {
         let state = self.state();
         if state.fail_step_lookup {
-            return Err(AppError::Database);
+            return Err(AppError::database("no underlying error was recorded"));
         }
         state
             .steps
@@ -128,7 +128,7 @@ impl TaskRunRepository for MemoryTaskRunRepository {
         state.calls.push("create_event");
         if state.fail_next_event {
             state.fail_next_event = false;
-            return Err(AppError::Database);
+            return Err(AppError::database("no underlying error was recorded"));
         }
         event.id = Uuid::new_v4();
         event.created_at = Some(Utc::now());
@@ -175,7 +175,7 @@ async fn start_run_preserves_default_and_non_transactional_event_boundary() {
     let service = service(repository.clone(), CancellationToken::new());
 
     let result = service.start_run(start_input()).await;
-    assert!(matches!(result, Err(AppError::Database)));
+    assert!(matches!(result, Err(AppError::Database(_))));
     let state = repository.state();
     assert_eq!(state.runs.len(), 1);
     assert!(state.events.is_empty());
@@ -310,6 +310,6 @@ async fn cancellation_prevents_repository_admission() {
     cancellation.cancel();
     let service = service(repository.clone(), cancellation);
     let result = service.start_run(start_input()).await;
-    assert!(matches!(result, Err(AppError::Internal)));
+    assert!(matches!(result, Err(AppError::Internal(_))));
     assert!(repository.state().calls.is_empty());
 }

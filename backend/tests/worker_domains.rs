@@ -97,9 +97,9 @@ impl DataSourceRepository for Sources {
 
     async fn list(&self, offset: i64, limit: i64) -> Result<(Vec<DataSource>, i64), AppError> {
         let state = self.state();
-        let total = i64::try_from(state.sources.len()).map_err(|_| AppError::Internal)?;
-        let offset = usize::try_from(offset).map_err(|_| AppError::Internal)?;
-        let limit = usize::try_from(limit).map_err(|_| AppError::Internal)?;
+        let total = i64::try_from(state.sources.len()).map_err(AppError::internal)?;
+        let offset = usize::try_from(offset).map_err(AppError::internal)?;
+        let limit = usize::try_from(limit).map_err(AppError::internal)?;
         Ok((
             state
                 .sources

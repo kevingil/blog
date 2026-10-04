@@ -19,13 +19,13 @@ impl McpConnectorRepository for InMemoryMcpConnectorRepository {
         self.connectors
             .lock()
             .map(|connectors| connectors.clone())
-            .map_err(|_| AppError::Internal)
+            .map_err(AppError::internal)
     }
 
     async fn find(&self, id: Uuid) -> Result<McpConnector, AppError> {
         self.connectors
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .iter()
             .find(|connector| connector.id == id)
             .cloned()
@@ -39,13 +39,13 @@ impl McpConnectorRepository for InMemoryMcpConnectorRepository {
         saved.updated_at = Some(now);
         self.connectors
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .push(saved.clone());
         Ok(saved)
     }
 
     async fn update(&self, connector: &McpConnector) -> Result<McpConnector, AppError> {
-        let mut connectors = self.connectors.lock().map_err(|_| AppError::Internal)?;
+        let mut connectors = self.connectors.lock().map_err(AppError::internal)?;
         let Some(existing) = connectors.iter_mut().find(|item| item.id == connector.id) else {
             return Err(AppError::NotFound);
         };
@@ -57,7 +57,7 @@ impl McpConnectorRepository for InMemoryMcpConnectorRepository {
     }
 
     async fn delete(&self, id: Uuid) -> Result<(), AppError> {
-        let mut connectors = self.connectors.lock().map_err(|_| AppError::Internal)?;
+        let mut connectors = self.connectors.lock().map_err(AppError::internal)?;
         let before = connectors.len();
         connectors.retain(|connector| connector.id != id);
         if connectors.len() == before {

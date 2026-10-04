@@ -29,10 +29,7 @@ struct ScriptedConnection {
 #[async_trait]
 impl LiveConnection for ScriptedConnection {
     async fn send_event(&mut self, event: Value) -> Result<(), AppError> {
-        self.outbound
-            .send(event)
-            .await
-            .map_err(|_| AppError::External)
+        self.outbound.send(event).await.map_err(AppError::external)
     }
 
     async fn recv_event(&mut self) -> Result<Option<Value>, AppError> {
@@ -53,7 +50,7 @@ impl LiveHarness for RecordingHarness {
         sender
             .send(json!({"type": "text", "content": "Intro tightened."}))
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         Ok(LiveTurnHandle {
             request_id: "req-live".to_owned(),
             events,
@@ -217,10 +214,9 @@ async fn typed_link_is_included_in_the_same_live_turn() {
         "check this\n\nhttps://example.com/notes"
     );
     let messages = harness.messages.lock().await.clone();
-    assert_eq!(
-        messages,
-        vec!["check this\n\nhttps://example.com/notes".to_owned()]
-    );
+    assert_eq!(messages, vec![
+        "check this\n\nhttps://example.com/notes".to_owned()
+    ]);
 }
 
 struct ScriptedHarness {
@@ -235,7 +231,7 @@ impl LiveHarness for ScriptedHarness {
             sender
                 .send(event.clone())
                 .await
-                .map_err(|_| AppError::External)?;
+                .map_err(AppError::external)?;
         }
         Ok(LiveTurnHandle {
             request_id: "req-scripted".to_owned(),

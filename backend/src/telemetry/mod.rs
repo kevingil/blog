@@ -3,7 +3,11 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 pub fn init() -> anyhow::Result<()> {
     tracing_subscriber::registry()
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
-        .with(tracing_subscriber::fmt::layer().json())
+        .with(
+            tracing_subscriber::fmt::layer()
+                .json()
+                .with_current_span(true),
+        )
         .try_init()
         .map_err(|error| anyhow::anyhow!("failed to initialize tracing: {error}"))
 }

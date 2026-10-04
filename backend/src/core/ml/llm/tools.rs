@@ -139,11 +139,11 @@ impl ToolContext {
         self.document
             .read()
             .map(|state| state.title.clone())
-            .map_err(|_| AppError::Internal)
+            .map_err(AppError::internal)
     }
 
     pub fn set_document_title(&self, title: impl Into<String>) -> Result<(), AppError> {
-        self.document.write().map_err(|_| AppError::Internal)?.title = title.into();
+        self.document.write().map_err(AppError::internal)?.title = title.into();
         Ok(())
     }
 
@@ -151,14 +151,11 @@ impl ToolContext {
         self.document
             .read()
             .map(|state| state.sources.clone())
-            .map_err(|_| AppError::Internal)
+            .map_err(AppError::internal)
     }
 
     pub fn set_document_sources(&self, sources: Vec<ArticleSourceView>) -> Result<(), AppError> {
-        self.document
-            .write()
-            .map_err(|_| AppError::Internal)?
-            .sources = sources;
+        self.document.write().map_err(AppError::internal)?.sources = sources;
         Ok(())
     }
 
@@ -166,14 +163,14 @@ impl ToolContext {
         self.document
             .read()
             .map(|state| state.markdown.clone())
-            .map_err(|_| AppError::Internal)
+            .map_err(AppError::internal)
     }
 
     pub fn document_html(&self) -> Result<String, AppError> {
         self.document
             .read()
             .map(|state| state.html.clone())
-            .map_err(|_| AppError::Internal)
+            .map_err(AppError::internal)
     }
 
     pub fn with_message_id(&self, message_id: impl Into<String>) -> Self {
@@ -183,10 +180,7 @@ impl ToolContext {
     }
 
     fn update_markdown(&self, markdown: String) -> Result<(), AppError> {
-        self.document
-            .write()
-            .map_err(|_| AppError::Internal)?
-            .markdown = markdown;
+        self.document.write().map_err(AppError::internal)?.markdown = markdown;
         Ok(())
     }
 }
@@ -609,7 +603,7 @@ impl Tool for ReadDocumentTool {
             "tool_name": "read_document",
         });
         Ok(ToolResponse::text(
-            serde_json::to_string(&result).map_err(|_| AppError::Internal)?,
+            serde_json::to_string(&result).map_err(AppError::internal)?,
         ))
     }
 }
@@ -755,9 +749,9 @@ impl Tool for ReplaceLinesTool {
         let result = result_value
             .as_object()
             .cloned()
-            .ok_or(AppError::Internal)?;
+            .ok_or(AppError::internal("no underlying error was recorded"))?;
         Ok(ToolResponse::structured(
-            serde_json::to_string(&result_value).map_err(|_| AppError::Internal)?,
+            serde_json::to_string(&result_value).map_err(AppError::internal)?,
             result,
             Some(ArtifactHint {
                 artifact_type: "diff".to_owned(),
@@ -768,7 +762,7 @@ impl Tool for ReplaceLinesTool {
                 })
                 .as_object()
                 .cloned()
-                .ok_or(AppError::Internal)?,
+                .ok_or(AppError::internal("no underlying error was recorded"))?,
             }),
         ))
     }
@@ -805,7 +799,7 @@ impl Tool for GenerateImagePromptTool {
             .cancellation
             .run_until_cancelled(async {})
             .await
-            .ok_or(AppError::Internal)?;
+            .ok_or(AppError::internal("no underlying error was recorded"))?;
         let input: Value = match serde_json::from_str(&call.input) {
             Ok(input) => input,
             Err(_) => return Ok(ToolResponse::error("Invalid input format")),
@@ -822,11 +816,11 @@ impl Tool for GenerateImagePromptTool {
             "tool_name": "generate_image_prompt",
         });
         Ok(ToolResponse::structured(
-            serde_json::to_string(&result_value).map_err(|_| AppError::Internal)?,
+            serde_json::to_string(&result_value).map_err(AppError::internal)?,
             result_value
                 .as_object()
                 .cloned()
-                .ok_or(AppError::Internal)?,
+                .ok_or(AppError::internal("no underlying error was recorded"))?,
             Some(ArtifactHint {
                 artifact_type: "image_prompt".to_owned(),
                 data: json!({
@@ -835,7 +829,7 @@ impl Tool for GenerateImagePromptTool {
                 })
                 .as_object()
                 .cloned()
-                .ok_or(AppError::Internal)?,
+                .ok_or(AppError::internal("no underlying error was recorded"))?,
             }),
         ))
     }
@@ -879,7 +873,7 @@ impl Tool for AskQuestionTool {
             .filter(|question| !question.is_empty())
             .ok_or_else(|| AppError::InvalidInput("question is required".to_owned()))?;
         if !self.research.is_configured() {
-            return Err(AppError::External);
+            return Err(AppError::external("no underlying error was recorded"));
         }
         let answer = self.research.answer(question).await?;
         let citations = answer
@@ -978,7 +972,7 @@ impl Tool for SearchWebSourcesTool {
             .and_then(Value::as_str)
             .filter(|domain| !domain.is_empty());
         if !self.research.is_configured() {
-            return Err(AppError::External);
+            return Err(AppError::external("no underlying error was recorded"));
         }
         let mut create_sources = input
             .get("create_sources")
@@ -996,7 +990,9 @@ impl Tool for SearchWebSourcesTool {
         let mut sources_created = Vec::new();
         let mut attempted = 0;
         if create_sources {
-            let article_id = context.article_id.ok_or(AppError::Internal)?;
+            let article_id = context
+                .article_id
+                .ok_or(AppError::internal("no underlying error was recorded"))?;
             for result in &response.results {
                 if result.text.is_empty() {
                     continue;
@@ -1669,9 +1665,9 @@ impl Tool for ApplyPatchTool {
         let result = result_value
             .as_object()
             .cloned()
-            .ok_or(AppError::Internal)?;
+            .ok_or(AppError::internal("no underlying error was recorded"))?;
         Ok(ToolResponse::structured(
-            serde_json::to_string(&result_value).map_err(|_| AppError::Internal)?,
+            serde_json::to_string(&result_value).map_err(AppError::internal)?,
             result,
             Some(ArtifactHint {
                 artifact_type: "diff".to_owned(),
@@ -1682,7 +1678,7 @@ impl Tool for ApplyPatchTool {
                 })
                 .as_object()
                 .cloned()
-                .ok_or(AppError::Internal)?,
+                .ok_or(AppError::internal("no underlying error was recorded"))?,
             }),
         ))
     }
@@ -1872,9 +1868,12 @@ fn apply_hunk(document: &str, hunk: &[&str]) -> Result<(String, String, String),
 }
 
 fn structured_result(result: Value) -> Result<ToolResponse, AppError> {
-    let object = result.as_object().cloned().ok_or(AppError::Internal)?;
+    let object = result
+        .as_object()
+        .cloned()
+        .ok_or(AppError::internal("no underlying error was recorded"))?;
     Ok(ToolResponse::structured(
-        serde_json::to_string(&result).map_err(|_| AppError::Internal)?,
+        serde_json::to_string(&result).map_err(AppError::internal)?,
         object,
         None,
     ))
@@ -1885,13 +1884,16 @@ fn structured_artifact(
     artifact_type: &str,
     artifact_data: Value,
 ) -> Result<ToolResponse, AppError> {
-    let object = result.as_object().cloned().ok_or(AppError::Internal)?;
+    let object = result
+        .as_object()
+        .cloned()
+        .ok_or(AppError::internal("no underlying error was recorded"))?;
     let artifact_data = artifact_data
         .as_object()
         .cloned()
-        .ok_or(AppError::Internal)?;
+        .ok_or(AppError::internal("no underlying error was recorded"))?;
     Ok(ToolResponse::structured(
-        serde_json::to_string(&result).map_err(|_| AppError::Internal)?,
+        serde_json::to_string(&result).map_err(AppError::internal)?,
         object,
         Some(ArtifactHint {
             artifact_type: artifact_type.to_owned(),

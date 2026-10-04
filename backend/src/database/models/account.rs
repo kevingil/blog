@@ -64,7 +64,11 @@ impl TryFrom<AccountRow> for Account {
     fn try_from(row: AccountRow) -> Result<Self, Self::Error> {
         let social_links = match row.social_links {
             Some(Value::Object(object)) => Some(object.into_iter().collect()),
-            Some(_) => return Err(crate::error::AppError::Database),
+            Some(_) => {
+                return Err(crate::error::AppError::database(
+                    "social links were not a JSON object",
+                ));
+            }
             None => None,
         };
         Ok(Self {

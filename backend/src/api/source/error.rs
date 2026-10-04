@@ -32,6 +32,7 @@ impl SourceApiError {
 impl IntoResponse for SourceApiError {
     fn into_response(self) -> Response {
         let validation = self.validation;
+        let cause = self.error.to_string();
         let (status, code, message) = match self.error {
             AppError::InvalidInput(message) if validation => {
                 (StatusCode::BAD_REQUEST, "VALIDATION_ERROR", message)
@@ -53,22 +54,23 @@ impl IntoResponse for SourceApiError {
                 "resource not found".to_owned(),
             ),
             AppError::Conflict(message) => (StatusCode::CONFLICT, "ALREADY_EXISTS", message),
-            AppError::Database => (
+            AppError::Database(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "DATABASE_ERROR",
                 "Database error".to_owned(),
             ),
-            AppError::External => (
+            AppError::External(_) => (
                 StatusCode::BAD_GATEWAY,
                 "EXTERNAL_SERVICE_ERROR",
                 "external service operation failed".to_owned(),
             ),
-            AppError::Internal => (
+            AppError::Internal(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "INTERNAL_ERROR",
                 "Internal server error".to_owned(),
             ),
         };
+        crate::error::log_error_response(status, code, &cause);
         (
             status,
             Json(ErrorEnvelope {

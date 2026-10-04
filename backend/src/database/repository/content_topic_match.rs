@@ -29,7 +29,7 @@ impl DieselContentTopicMatchRepository {
         diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>,
         AppError,
     > {
-        self.pool.get().await.map_err(|_| AppError::Database)
+        self.pool.get().await.map_err(AppError::database)
     }
 
     pub async fn find_by_content_id(
@@ -44,7 +44,7 @@ impl DieselContentTopicMatchRepository {
             .load(&mut connection)
             .await
             .map(|rows: Vec<ContentTopicMatchRow>| rows.into_iter().map(Into::into).collect())
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 
     pub async fn find_by_topic_id(
@@ -69,7 +69,7 @@ impl DieselContentTopicMatchRepository {
         .execute(&mut connection)
         .await
         .map(|_| ())
-        .map_err(|_| AppError::Database)
+        .map_err(AppError::database)
     }
 
     pub async fn delete_by_topic_id(&self, topic_id: Uuid) -> Result<(), AppError> {
@@ -80,7 +80,7 @@ impl DieselContentTopicMatchRepository {
         .execute(&mut connection)
         .await
         .map(|_| ())
-        .map_err(|_| AppError::Database)
+        .map_err(AppError::database)
     }
 
     pub async fn delete(&self, id: Uuid) -> Result<(), AppError> {
@@ -88,7 +88,7 @@ impl DieselContentTopicMatchRepository {
         match diesel::delete(content_topic_match::table.find(id))
             .execute(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?
+            .map_err(AppError::database)?
         {
             0 => Err(AppError::NotFound),
             _ => Ok(()),
@@ -111,7 +111,7 @@ impl DieselContentTopicMatchRepository {
         .execute(&mut connection)
         .await
         .map(|_| ())
-        .map_err(|_| AppError::Database)
+        .map_err(AppError::database)
     }
 
     pub async fn clear_primary_for_content(&self, content_id: Uuid) -> Result<(), AppError> {
@@ -123,7 +123,7 @@ impl DieselContentTopicMatchRepository {
         .execute(&mut connection)
         .await
         .map(|_| ())
-        .map_err(|_| AppError::Database)
+        .map_err(AppError::database)
     }
 
     async fn find_by_topic_id_with_primary(
@@ -144,7 +144,7 @@ impl DieselContentTopicMatchRepository {
             .select(count_star())
             .first(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
 
         let mut query = content_topic_match::table
             .filter(content_topic_match::topic_id.eq(topic_id))
@@ -161,7 +161,7 @@ impl DieselContentTopicMatchRepository {
             .select(ContentTopicMatchRow::as_select())
             .load(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         Ok((rows.into_iter().map(Into::into).collect(), total))
     }
 }
@@ -207,7 +207,7 @@ impl ContentTopicMatchRepository for DieselContentTopicMatchRepository {
             .execute(&mut connection)
             .await
             .map(|_| ())
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 
     async fn count_by_topic_id(&self, topic_id: Uuid) -> Result<i64, AppError> {
@@ -217,7 +217,7 @@ impl ContentTopicMatchRepository for DieselContentTopicMatchRepository {
             .select(count_star())
             .first(&mut connection)
             .await
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 
     async fn find_primary_by_topic_id(

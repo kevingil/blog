@@ -70,7 +70,7 @@ impl SourceService {
             .embeddings
             .generate_embedding(&request.content)
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         let source_type = if request.source_type.is_empty() {
             if request.url.is_empty() {
                 "manual".to_owned()
@@ -104,7 +104,7 @@ impl SourceService {
             .fetch_extract
             .fetch_extract(target_url)
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         self.create(CreateSourceRequest {
             article_id,
             title: scraped.title,
@@ -131,7 +131,7 @@ impl SourceService {
                 self.embeddings
                     .generate_embedding(&source.content)
                     .await
-                    .map_err(|_| AppError::External)?,
+                    .map_err(AppError::external)?,
             );
         }
         if let Some(url) = request.url {
@@ -161,7 +161,7 @@ impl SourceService {
             .embeddings
             .generate_embedding(query)
             .await
-            .map_err(|_| AppError::External)?;
+            .map_err(AppError::external)?;
         self.sources
             .search_similar(article_id, &embedding, limit)
             .await

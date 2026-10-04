@@ -78,7 +78,7 @@ impl AccountRepository for MockAccountRepository {
     async fn find_by_email(&self, email: &str) -> Result<Option<Account>, AppError> {
         let state = self.state();
         if state.fail_find_by_email {
-            return Err(AppError::Database);
+            return Err(AppError::database("no underlying error was recorded"));
         }
         Ok(state
             .accounts
@@ -526,13 +526,10 @@ async fn identity_update_is_scoped_and_handles_email_conflicts() -> TestResult {
     let repository = Arc::new(MockAccountRepository::with_accounts(vec![account]));
     let auth = service(repository.clone())?;
 
-    auth.update_account(
-        account_id,
-        AccountUpdate {
-            name: "New Name".to_owned(),
-            email: "new@example.com".to_owned(),
-        },
-    )
+    auth.update_account(account_id, AccountUpdate {
+        name: "New Name".to_owned(),
+        email: "new@example.com".to_owned(),
+    })
     .await?;
     let updated = repository
         .state()
@@ -551,13 +548,10 @@ async fn identity_update_is_scoped_and_handles_email_conflicts() -> TestResult {
     let taken_account = test_account("taken@example.com", "password123").await?;
     repository.state().accounts.push(taken_account);
     assert!(matches!(
-        auth.update_account(
-            account_id,
-            AccountUpdate {
-                name: "New Name".to_owned(),
-                email: "taken@example.com".to_owned(),
-            }
-        )
+        auth.update_account(account_id, AccountUpdate {
+            name: "New Name".to_owned(),
+            email: "taken@example.com".to_owned(),
+        })
         .await,
         Err(AppError::Conflict(_))
     ));
@@ -573,24 +567,18 @@ async fn conditional_password_update_and_delete_fail_closed_on_races() -> TestRe
 
     repository.state().conditional_password_update_fails = true;
     assert!(matches!(
-        auth.update_password(
-            account_id,
-            PasswordUpdate {
-                current_password: "oldpassword".to_owned(),
-                new_password: "newpassword".to_owned(),
-            }
-        )
+        auth.update_password(account_id, PasswordUpdate {
+            current_password: "oldpassword".to_owned(),
+            new_password: "newpassword".to_owned(),
+        })
         .await,
         Err(AppError::Unauthorized)
     ));
     repository.state().conditional_password_update_fails = false;
-    auth.update_password(
-        account_id,
-        PasswordUpdate {
-            current_password: "oldpassword".to_owned(),
-            new_password: "newpassword".to_owned(),
-        },
-    )
+    auth.update_password(account_id, PasswordUpdate {
+        current_password: "oldpassword".to_owned(),
+        new_password: "newpassword".to_owned(),
+    })
     .await?;
 
     repository.state().conditional_delete_fails = true;

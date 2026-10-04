@@ -85,7 +85,7 @@ impl InsightTopicRepository for Store {
 
     async fn find_all(&self) -> Result<Vec<InsightTopic>, AppError> {
         if *lock(&self.fail_topics) {
-            return Err(AppError::Database);
+            return Err(AppError::database("no underlying error was recorded"));
         }
         Ok(lock(&self.topics).clone())
     }
@@ -129,7 +129,7 @@ impl InsightTopicRepository for Store {
         timestamp: DateTime<Utc>,
     ) -> Result<(), AppError> {
         if *lock(&self.fail_update) {
-            return Err(AppError::Database);
+            return Err(AppError::database("no underlying error was recorded"));
         }
         lock(&self.updated_topics).push((id, timestamp));
         Ok(())
@@ -153,7 +153,7 @@ impl ContentTopicMatchRepository for Store {
                 .filter(|value| value.topic_id == topic_id)
                 .count(),
         )
-        .map_err(|_| AppError::Internal)
+        .map_err(AppError::internal)
     }
 
     async fn find_primary_by_topic_id(
@@ -163,7 +163,7 @@ impl ContentTopicMatchRepository for Store {
         limit: i64,
     ) -> Result<(Vec<ContentTopicMatch>, i64), AppError> {
         if *lock(&self.fail_matches) {
-            return Err(AppError::Database);
+            return Err(AppError::database("no underlying error was recorded"));
         }
         assert_eq!(offset, 0);
         assert_eq!(limit, 10);
@@ -182,7 +182,7 @@ impl ContentTopicMatchRepository for Store {
 impl InsightContentRepository for Store {
     async fn save(&self, content: &mut CrawledContent) -> Result<(), AppError> {
         if *lock(&self.fail_contents) {
-            return Err(AppError::Database);
+            return Err(AppError::database("no underlying error was recorded"));
         }
         if content.id.is_nil() {
             content.id = Uuid::new_v4();
@@ -193,7 +193,7 @@ impl InsightContentRepository for Store {
 
     async fn find_by_ids(&self, ids: &[Uuid]) -> Result<Vec<CrawledContent>, AppError> {
         if *lock(&self.fail_contents) {
-            return Err(AppError::Database);
+            return Err(AppError::database("no underlying error was recorded"));
         }
         let values = lock(&self.contents);
         Ok(ids
@@ -267,9 +267,11 @@ impl InsightTextGenerator for Text {
     ) -> Result<GeneratedInsight, AppError> {
         lock(&self.requests).push(request);
         if *lock(&self.fail) {
-            return Err(AppError::External);
+            return Err(AppError::external("no underlying error was recorded"));
         }
-        lock(&self.response).clone().ok_or(AppError::External)
+        lock(&self.response)
+            .clone()
+            .ok_or(AppError::external("no underlying error was recorded"))
     }
 }
 
@@ -283,7 +285,7 @@ struct Writer {
 impl InsightWriter for Writer {
     async fn create(&self, insight: NewInsight) -> Result<(), AppError> {
         if *lock(&self.fail) {
-            return Err(AppError::Database);
+            return Err(AppError::database("no underlying error was recorded"));
         }
         lock(&self.values).push(insight);
         Ok(())
@@ -340,7 +342,7 @@ impl ResearchPort for Research {
     }
 
     async fn answer(&self, _question: &str) -> Result<AnswerResponse, AppError> {
-        Err(AppError::External)
+        Err(AppError::external("no underlying error was recorded"))
     }
 
     async fn deep_search(
@@ -349,7 +351,7 @@ impl ResearchPort for Research {
         _domain: Option<&str>,
     ) -> Result<WebSearchResponse, AppError> {
         if *lock(&self.fail) {
-            return Err(AppError::External);
+            return Err(AppError::external("no underlying error was recorded"));
         }
         let results = lock(&self.pages).clone().unwrap_or_else(|| {
             vec![WebSearchResult {
@@ -597,10 +599,10 @@ async fn successful_generation_preserves_prompt_ids_unicode_and_published_period
     assert_eq!(values[0].organization_id, topic.organization_id);
     assert_eq!(values[0].topic_id, Some(topic.id));
     drop(values);
-    assert_eq!(
-        lock(&fixture.store.updated_topics).as_slice(),
-        &[(topic.id, now())]
-    );
+    assert_eq!(lock(&fixture.store.updated_topics).as_slice(), &[(
+        topic.id,
+        now()
+    )]);
     Ok(())
 }
 
@@ -742,7 +744,7 @@ fn insight_adapter_requires_strict_validated_json_and_typed_input() -> TestResul
 
     assert!(matches!(
         decode_generated_insight("TITLE: heuristic output"),
-        Err(AppError::External)
+        Err(AppError::External(_))
     ));
     assert!(matches!(
         decode_generated_insight(

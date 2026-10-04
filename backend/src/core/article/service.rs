@@ -335,7 +335,8 @@ impl ArticleService {
                     .published_image_url
                     .filter(|url| !url.is_empty())
                     .or_else(|| {
-                        (!article.draft_image_url.is_empty()).then(|| article.draft_image_url.clone())
+                        (!article.draft_image_url.is_empty())
+                            .then(|| article.draft_image_url.clone())
                     }),
                 published_at: article.published_at,
                 created_at: article.created_at,
@@ -601,7 +602,10 @@ impl ArticleService {
 
     pub async fn update_with_context(&self, article_id: Uuid) -> Result<Article, AppError> {
         let mut article = self.articles.find_by_id(article_id).await?;
-        let writer = self.context_writer.as_ref().ok_or(AppError::External)?;
+        let writer = self
+            .context_writer
+            .as_ref()
+            .ok_or(AppError::external("no underlying error was recorded"))?;
         let updated = writer.update_with_context(&article).await?;
         if updated != article.draft_content {
             self.articles.create_draft_snapshot(article_id).await?;
@@ -851,10 +855,7 @@ impl ArticleService {
         let Some(uploads) = &self.uploads else {
             return Ok(None);
         };
-        Ok(uploads
-            .find_by_public_url(url)
-            .await?
-            .map(|file| file.id))
+        Ok(uploads.find_by_public_url(url).await?.map(|file| file.id))
     }
 }
 

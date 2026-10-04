@@ -39,7 +39,7 @@ pub(super) async fn transcode_heif_to_jpeg(bytes: &[u8]) -> Result<Vec<u8>, AppE
     let output = TempFile::new(format!("blog-heif-{id}.jpg"));
     fs::write(input.path(), bytes).await.map_err(|error| {
         tracing::error!(%error, "failed to write HEIC upload for conversion");
-        AppError::Internal
+        AppError::internal(error)
     })?;
     let mut child = Command::new("heif-convert")
         .arg(input.path())
@@ -51,10 +51,11 @@ pub(super) async fn transcode_heif_to_jpeg(bytes: &[u8]) -> Result<Vec<u8>, AppE
         .map_err(|error| {
             if error.kind() == ErrorKind::NotFound {
                 tracing::error!("heif-convert is not installed");
+                AppError::internal("heif-convert is not installed")
             } else {
                 tracing::error!(%error, "failed to start heif-convert");
+                AppError::internal(error)
             }
-            AppError::Internal
         })?;
     let status = timeout(Duration::from_secs(20), child.wait())
         .await

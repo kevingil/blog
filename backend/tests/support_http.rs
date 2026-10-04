@@ -195,7 +195,7 @@ impl ChatMessageRepository for ChatRepository {
             .cloned()
             .collect::<Vec<_>>();
         messages.sort_by(|left, right| right.created_at.cmp(&left.created_at));
-        messages.truncate(usize::try_from(limit).map_err(|_| AppError::Internal)?);
+        messages.truncate(usize::try_from(limit).map_err(AppError::internal)?);
         Ok(messages)
     }
 
@@ -232,7 +232,7 @@ impl ChatMessageRepository for ChatRepository {
         let mut state = self.state();
         let before = state.len();
         state.retain(|message| message.article_id != article_id);
-        u64::try_from(before - state.len()).map_err(|_| AppError::Internal)
+        u64::try_from(before - state.len()).map_err(AppError::internal)
     }
 }
 
@@ -334,11 +334,11 @@ fn lock<T>(value: &Mutex<T>) -> MutexGuard<'_, T> {
 #[async_trait]
 impl TaskRunRepository for Runs {
     async fn create_run(&self, _run: &mut TaskRun) -> Result<(), AppError> {
-        Err(AppError::Internal)
+        Err(AppError::internal("no underlying error was recorded"))
     }
 
     async fn update_run(&self, _run: &TaskRun) -> Result<(), AppError> {
-        Err(AppError::Internal)
+        Err(AppError::internal("no underlying error was recorded"))
     }
 
     async fn find_run_by_id(&self, id: Uuid) -> Result<TaskRun, AppError> {
@@ -363,11 +363,11 @@ impl TaskRunRepository for Runs {
     }
 
     async fn create_step(&self, _step: &mut TaskRunStep) -> Result<(), AppError> {
-        Err(AppError::Internal)
+        Err(AppError::internal("no underlying error was recorded"))
     }
 
     async fn update_step(&self, _step: &TaskRunStep) -> Result<(), AppError> {
-        Err(AppError::Internal)
+        Err(AppError::internal("no underlying error was recorded"))
     }
 
     async fn find_step_by_run_and_key(
@@ -391,7 +391,7 @@ impl TaskRunRepository for Runs {
     }
 
     async fn create_event(&self, _event: &mut TaskRunEvent) -> Result<(), AppError> {
-        Err(AppError::Internal)
+        Err(AppError::internal("no underlying error was recorded"))
     }
 
     async fn list_events_by_run_id(&self, run_id: Uuid) -> Result<Vec<TaskRunEvent>, AppError> {
@@ -959,16 +959,13 @@ async fn storage_routes_preserve_multipart_keys_urls_and_folder_methods() -> Tes
         assert_eq!(status, StatusCode::OK, "{response}");
         assert_eq!(response["data"]["success"], true);
     }
-    assert_eq!(
-        fixture.store.state().as_slice(),
-        [
-            StorageOperation::List("images/".to_owned(), Some("/".to_owned())),
-            StorageOperation::Put("images/post.txt".to_owned(), b"hello".to_vec()),
-            StorageOperation::Put("drafts/".to_owned(), Vec::new()),
-            StorageOperation::List("drafts/".to_owned(), None),
-            StorageOperation::Delete("post.txt".to_owned()),
-        ]
-    );
+    assert_eq!(fixture.store.state().as_slice(), [
+        StorageOperation::List("images/".to_owned(), Some("/".to_owned())),
+        StorageOperation::Put("images/post.txt".to_owned(), b"hello".to_vec()),
+        StorageOperation::Put("drafts/".to_owned(), Vec::new()),
+        StorageOperation::List("drafts/".to_owned(), None),
+        StorageOperation::Delete("post.txt".to_owned()),
+    ]);
     Ok(())
 }
 

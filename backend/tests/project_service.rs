@@ -27,18 +27,18 @@ impl ProjectRepository for MemoryProjects {
     async fn find_by_id(&self, id: Uuid) -> Result<Project, AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .get(&id)
             .cloned()
             .ok_or(AppError::NotFound)
     }
 
     async fn list(&self, options: ProjectListOptions) -> Result<(Vec<Project>, i64), AppError> {
-        *self.last_list.lock().map_err(|_| AppError::Internal)? = Some(options);
+        *self.last_list.lock().map_err(AppError::internal)? = Some(options);
         let values: Vec<_> = self
             .values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .values()
             .cloned()
             .collect();
@@ -48,13 +48,13 @@ impl ProjectRepository for MemoryProjects {
     async fn save(&self, project: &mut Project) -> Result<(), AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .insert(project.id, project.clone());
         Ok(())
     }
 
     async fn update(&self, project: &Project) -> Result<(), AppError> {
-        let mut values = self.values.lock().map_err(|_| AppError::Internal)?;
+        let mut values = self.values.lock().map_err(AppError::internal)?;
         if !values.contains_key(&project.id) {
             return Err(AppError::NotFound);
         }
@@ -65,7 +65,7 @@ impl ProjectRepository for MemoryProjects {
     async fn delete(&self, id: Uuid) -> Result<(), AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .remove(&id)
             .map(|_| ())
             .ok_or(AppError::NotFound)
@@ -83,7 +83,7 @@ impl TagRepository for MemoryTags {
     async fn find_by_id(&self, id: i32) -> Result<Tag, AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .get(&id)
             .cloned()
             .ok_or(AppError::NotFound)
@@ -92,7 +92,7 @@ impl TagRepository for MemoryTags {
     async fn find_by_name(&self, name: &str) -> Result<Tag, AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .values()
             .find(|tag| tag.name.eq_ignore_ascii_case(name))
             .cloned()
@@ -100,10 +100,10 @@ impl TagRepository for MemoryTags {
     }
 
     async fn find_by_ids(&self, ids: &[i64]) -> Result<Vec<Tag>, AppError> {
-        if *self.fail_find.lock().map_err(|_| AppError::Internal)? {
-            return Err(AppError::Database);
+        if *self.fail_find.lock().map_err(AppError::internal)? {
+            return Err(AppError::database("no underlying error was recorded"));
         }
-        let values = self.values.lock().map_err(|_| AppError::Internal)?;
+        let values = self.values.lock().map_err(AppError::internal)?;
         Ok(ids
             .iter()
             .filter_map(|id| i32::try_from(*id).ok())
@@ -112,7 +112,7 @@ impl TagRepository for MemoryTags {
     }
 
     async fn ensure_exists(&self, names: &[String]) -> Result<Vec<i64>, AppError> {
-        let mut values = self.values.lock().map_err(|_| AppError::Internal)?;
+        let mut values = self.values.lock().map_err(AppError::internal)?;
         let mut result = Vec::with_capacity(names.len());
         for name in names {
             if let Some(tag) = values
@@ -122,15 +122,12 @@ impl TagRepository for MemoryTags {
                 result.push(i64::from(tag.id));
                 continue;
             }
-            let id = i32::try_from(values.len() + 1).map_err(|_| AppError::Internal)?;
-            values.insert(
+            let id = i32::try_from(values.len() + 1).map_err(AppError::internal)?;
+            values.insert(id, Tag {
                 id,
-                Tag {
-                    id,
-                    name: name.clone(),
-                    created_at: None,
-                },
-            );
+                name: name.clone(),
+                created_at: None,
+            });
             result.push(i64::from(id));
         }
         Ok(result)
@@ -140,16 +137,16 @@ impl TagRepository for MemoryTags {
         Ok(self
             .values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .values()
             .cloned()
             .collect())
     }
 
     async fn save(&self, tag: &mut Tag) -> Result<(), AppError> {
-        let mut values = self.values.lock().map_err(|_| AppError::Internal)?;
+        let mut values = self.values.lock().map_err(AppError::internal)?;
         if tag.id == 0 {
-            tag.id = i32::try_from(values.len() + 1).map_err(|_| AppError::Internal)?;
+            tag.id = i32::try_from(values.len() + 1).map_err(AppError::internal)?;
         }
         values.insert(tag.id, tag.clone());
         Ok(())
@@ -158,7 +155,7 @@ impl TagRepository for MemoryTags {
     async fn delete(&self, id: i32) -> Result<(), AppError> {
         self.values
             .lock()
-            .map_err(|_| AppError::Internal)?
+            .map_err(AppError::internal)?
             .remove(&id)
             .map(|_| ())
             .ok_or(AppError::NotFound)
@@ -204,22 +201,16 @@ async fn project_get_and_detail_preserve_tag_resolution_and_errors() {
             .values
             .lock()
             .unwrap_or_else(|error| error.into_inner());
-        values.insert(
-            1,
-            Tag {
-                id: 1,
-                name: "golang".to_owned(),
-                created_at: None,
-            },
-        );
-        values.insert(
-            2,
-            Tag {
-                id: 2,
-                name: "testing".to_owned(),
-                created_at: None,
-            },
-        );
+        values.insert(1, Tag {
+            id: 1,
+            name: "golang".to_owned(),
+            created_at: None,
+        });
+        values.insert(2, Tag {
+            id: 2,
+            name: "testing".to_owned(),
+            created_at: None,
+        });
     }
     let service = service(projects, tags.clone());
     assert!(
@@ -349,30 +340,24 @@ async fn project_update_changes_only_provided_fields_and_preserves_not_found() {
         .insert(value.id, value.clone());
     let service = service(projects, tags);
     let updated = service
-        .update(
-            value.id,
-            ProjectUpdateRequest {
-                title: Some("Updated Title".to_owned()),
-                description: Some("Updated description".to_owned()),
-                content: Some("Updated content".to_owned()),
-                tags: Some(vec!["newtag".to_owned()]),
-                image_url: Some("https://example.com/new-image.png".to_owned()),
-                url: Some("https://example.com/new-url".to_owned()),
-                image_upload_id: None,
-            },
-        )
+        .update(value.id, ProjectUpdateRequest {
+            title: Some("Updated Title".to_owned()),
+            description: Some("Updated description".to_owned()),
+            content: Some("Updated content".to_owned()),
+            tags: Some(vec!["newtag".to_owned()]),
+            image_url: Some("https://example.com/new-image.png".to_owned()),
+            url: Some("https://example.com/new-url".to_owned()),
+            image_upload_id: None,
+        })
         .await;
     assert!(
         matches!(updated, Ok(ref project) if project.title == "Updated Title" && project.tag_ids == [1] && project.url.ends_with("new-url"))
     );
     let partial = service
-        .update(
-            value.id,
-            ProjectUpdateRequest {
-                title: Some("Updated Title Only".to_owned()),
-                ..ProjectUpdateRequest::default()
-            },
-        )
+        .update(value.id, ProjectUpdateRequest {
+            title: Some("Updated Title Only".to_owned()),
+            ..ProjectUpdateRequest::default()
+        })
         .await;
     assert!(
         matches!(partial, Ok(ref project) if project.title == "Updated Title Only" && project.description == "Updated description")

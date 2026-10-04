@@ -40,7 +40,7 @@ impl DieselUploadRepository {
         diesel_async::pooled_connection::deadpool::Object<diesel_async::AsyncPgConnection>,
         AppError,
     > {
-        self.pool.get().await.map_err(|_| AppError::Database)
+        self.pool.get().await.map_err(AppError::database)
     }
 }
 
@@ -78,7 +78,7 @@ impl UploadRepository for DieselUploadRepository {
             .returning(UploadFileRow::as_returning())
             .get_result::<UploadFileRow>(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         Ok(row.into())
     }
 
@@ -90,7 +90,7 @@ impl UploadRepository for DieselUploadRepository {
             .first::<UploadFileRow>(&mut connection)
             .await
             .optional()
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
             .map(|row| row.map(Into::into))
     }
 
@@ -104,7 +104,7 @@ impl UploadRepository for DieselUploadRepository {
             .select(UploadFileRow::as_select())
             .load::<UploadFileRow>(&mut connection)
             .await
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
             .map(|rows| rows.into_iter().map(Into::into).collect())
     }
 
@@ -118,7 +118,7 @@ impl UploadRepository for DieselUploadRepository {
             .select(UploadFileRow::as_select())
             .load::<UploadFileRow>(&mut connection)
             .await
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
             .map(|rows| rows.into_iter().map(Into::into).collect())
     }
 
@@ -130,7 +130,7 @@ impl UploadRepository for DieselUploadRepository {
             .first::<UploadFileRow>(&mut connection)
             .await
             .optional()
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
             .map(|row| row.map(Into::into))
     }
 
@@ -144,7 +144,7 @@ impl UploadRepository for DieselUploadRepository {
             .select(UploadFileRow::as_select())
             .load::<UploadFileRow>(&mut connection)
             .await
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
             .map(|rows| rows.into_iter().map(Into::into).collect())
     }
 
@@ -154,7 +154,7 @@ impl UploadRepository for DieselUploadRepository {
             .execute(&mut connection)
             .await
             .map(|_| ())
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
     }
 
     async fn is_referenced(&self, id: Uuid) -> Result<bool, AppError> {
@@ -169,7 +169,7 @@ impl UploadRepository for DieselUploadRepository {
             .first::<Uuid>(&mut connection)
             .await
             .optional()
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         if article_hit.is_some() {
             return Ok(true);
         }
@@ -179,7 +179,7 @@ impl UploadRepository for DieselUploadRepository {
             .first::<Uuid>(&mut connection)
             .await
             .optional()
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         if version_hit.is_some() {
             return Ok(true);
         }
@@ -189,7 +189,7 @@ impl UploadRepository for DieselUploadRepository {
             .first::<Uuid>(&mut connection)
             .await
             .optional()
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         if page_hit.is_some() {
             return Ok(true);
         }
@@ -199,7 +199,7 @@ impl UploadRepository for DieselUploadRepository {
             .first::<Uuid>(&mut connection)
             .await
             .optional()
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         if project_hit.is_some() {
             return Ok(true);
         }
@@ -209,7 +209,7 @@ impl UploadRepository for DieselUploadRepository {
             .first::<Uuid>(&mut connection)
             .await
             .optional()
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         if account_hit.is_some() {
             return Ok(true);
         }
@@ -219,7 +219,7 @@ impl UploadRepository for DieselUploadRepository {
             .first::<Uuid>(&mut connection)
             .await
             .optional()
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         if organization_hit.is_some() {
             return Ok(true);
         }
@@ -229,7 +229,7 @@ impl UploadRepository for DieselUploadRepository {
             .first::<Uuid>(&mut connection)
             .await
             .optional()
-            .map_err(|_| AppError::Database)
+            .map_err(AppError::database)
             .map(|row| row.is_some())
     }
 
@@ -245,7 +245,7 @@ impl UploadRepository for DieselUploadRepository {
             .select(UploadFileRow::as_select())
             .load::<UploadFileRow>(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         for row in rows {
             if row.s3_key.ends_with('/') {
                 continue;
@@ -273,7 +273,7 @@ impl UploadRepository for DieselUploadRepository {
                 ))
                 .execute(&mut connection)
                 .await
-                .map_err(|_| AppError::Database)?;
+                .map_err(AppError::database)?;
             rewrite_stored_url(&mut connection, &row.public_url, &new_url).await?;
         }
         Ok(())
@@ -295,7 +295,7 @@ impl UploadRepository for DieselUploadRepository {
         )
         .execute(&mut connection)
         .await
-        .map_err(|_| AppError::Database)?;
+        .map_err(AppError::database)?;
         for upload_id in upload_ids {
             diesel::insert_into(upload_file_refs::table)
                 .values((
@@ -305,7 +305,7 @@ impl UploadRepository for DieselUploadRepository {
                 ))
                 .execute(&mut connection)
                 .await
-                .map_err(|_| AppError::Database)?;
+                .map_err(AppError::database)?;
         }
         Ok(())
     }
@@ -337,7 +337,7 @@ impl UploadRepository for DieselUploadRepository {
             .set(article::draft_upload_file_id.eq(file.id))
             .execute(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         }
         let published_ids = matching_image_ids(
             &mut connection,
@@ -363,7 +363,7 @@ impl UploadRepository for DieselUploadRepository {
             .set(article::published_upload_file_id.eq(file.id))
             .execute(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         }
         let version_ids = matching_image_ids(
             &mut connection,
@@ -387,7 +387,7 @@ impl UploadRepository for DieselUploadRepository {
             .set(article_version::upload_file_id.eq(file.id))
             .execute(&mut connection)
             .await
-            .map_err(|_| AppError::Database)?;
+            .map_err(AppError::database)?;
         }
         Ok(())
     }
@@ -413,7 +413,7 @@ async fn matching_image_ids(
         .bind::<diesel::sql_types::Text, _>(&patterns[1])
         .get_results::<UnlinkedImageRow>(connection)
         .await
-        .map_err(|_| AppError::Database)?;
+        .map_err(AppError::database)?;
     Ok(rows
         .into_iter()
         .filter(|row| urls_match_upload(&row.image_url, file))
@@ -480,13 +480,13 @@ async fn rewrite_stored_url(
         .bind::<diesel::sql_types::Text, _>(new_url)
         .execute(connection)
         .await
-        .map_err(|_| AppError::Database)?;
+        .map_err(AppError::database)?;
     diesel::sql_query("UPDATE article SET published_image_url = $2 WHERE published_image_url = $1")
         .bind::<diesel::sql_types::Text, _>(old_url)
         .bind::<diesel::sql_types::Text, _>(new_url)
         .execute(connection)
         .await
-        .map_err(|_| AppError::Database)?;
+        .map_err(AppError::database)?;
     diesel::sql_query(
         "UPDATE article SET draft_content = replace(draft_content, $1, $2) WHERE strpos(draft_content, $1) > 0",
     )
@@ -494,7 +494,7 @@ async fn rewrite_stored_url(
     .bind::<diesel::sql_types::Text, _>(new_url)
     .execute(connection)
     .await
-    .map_err(|_| AppError::Database)?;
+    .map_err(AppError::database)?;
     diesel::sql_query(
         "UPDATE article SET published_content = replace(published_content, $1, $2) WHERE strpos(published_content, $1) > 0",
     )
@@ -502,13 +502,13 @@ async fn rewrite_stored_url(
     .bind::<diesel::sql_types::Text, _>(new_url)
     .execute(connection)
     .await
-    .map_err(|_| AppError::Database)?;
+    .map_err(AppError::database)?;
     diesel::sql_query("UPDATE article_version SET image_url = $2 WHERE image_url = $1")
         .bind::<diesel::sql_types::Text, _>(old_url)
         .bind::<diesel::sql_types::Text, _>(new_url)
         .execute(connection)
         .await
-        .map_err(|_| AppError::Database)?;
+        .map_err(AppError::database)?;
     diesel::sql_query(
         "UPDATE article_version SET content = replace(content, $1, $2) WHERE strpos(content, $1) > 0",
     )
@@ -516,13 +516,13 @@ async fn rewrite_stored_url(
     .bind::<diesel::sql_types::Text, _>(new_url)
     .execute(connection)
     .await
-    .map_err(|_| AppError::Database)?;
+    .map_err(AppError::database)?;
     diesel::sql_query("UPDATE page SET image_url = $2 WHERE image_url = $1")
         .bind::<diesel::sql_types::Text, _>(old_url)
         .bind::<diesel::sql_types::Text, _>(new_url)
         .execute(connection)
         .await
-        .map_err(|_| AppError::Database)?;
+        .map_err(AppError::database)?;
     diesel::sql_query(
         "UPDATE page SET content = replace(content, $1, $2) WHERE strpos(content, $1) > 0",
     )
@@ -530,24 +530,24 @@ async fn rewrite_stored_url(
     .bind::<diesel::sql_types::Text, _>(new_url)
     .execute(connection)
     .await
-    .map_err(|_| AppError::Database)?;
+    .map_err(AppError::database)?;
     diesel::sql_query("UPDATE project SET image_url = $2 WHERE image_url = $1")
         .bind::<diesel::sql_types::Text, _>(old_url)
         .bind::<diesel::sql_types::Text, _>(new_url)
         .execute(connection)
         .await
-        .map_err(|_| AppError::Database)?;
+        .map_err(AppError::database)?;
     diesel::sql_query("UPDATE account SET profile_image = $2 WHERE profile_image = $1")
         .bind::<diesel::sql_types::Text, _>(old_url)
         .bind::<diesel::sql_types::Text, _>(new_url)
         .execute(connection)
         .await
-        .map_err(|_| AppError::Database)?;
+        .map_err(AppError::database)?;
     diesel::sql_query("UPDATE organization SET logo_url = $2 WHERE logo_url = $1")
         .bind::<diesel::sql_types::Text, _>(old_url)
         .bind::<diesel::sql_types::Text, _>(new_url)
         .execute(connection)
         .await
-        .map_err(|_| AppError::Database)?;
+        .map_err(AppError::database)?;
     Ok(())
 }
