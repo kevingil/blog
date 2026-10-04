@@ -403,3 +403,63 @@ async fn generate_blurhash_saves_the_hash_on_the_upload() {
         Some("LTPJVz|_fQ|_|_sofQsofQfQfQfQ")
     );
 }
+
+#[tokio::test]
+async fn heic_upload_is_stored_as_jpeg() {
+    let store = Arc::new(MemoryObjectStore::default());
+    let service = StorageService::new(
+        store.clone(),
+        "https://cdn.example.test",
+        CancellationToken::new(),
+    );
+    let png = solid_red_png();
+    let kept = service
+        .put_recorded("images/red.png", "image/png", png, None)
+        .await
+        .unwrap();
+    assert_eq!(kept.key, "images/red.png");
+    assert_eq!(kept.content_type, "image/png");
+    assert_eq!(kept.width, Some(8));
+
+    let heic = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/solid-red.heic"
+    ))
+    .unwrap();
+    let recorded = service
+        .put_recorded(
+            "articles/1791098747690-IMG_8021.HEIC",
+            "image/heic",
+            heic,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(recorded.key, "articles/1791098747690-IMG_8021.jpg");
+    assert_eq!(recorded.content_type, "image/jpeg");
+    assert_eq!(recorded.width, Some(8));
+    assert_eq!(recorded.height, Some(8));
+    assert!(recorded.blurhash.is_some());
+    assert!(
+        recorded
+            .url
+            .ends_with("/articles/1791098747690-IMG_8021.jpg")
+    );
+    let stored = store
+        .state()
+        .objects
+        .get("articles/1791098747690-IMG_8021.jpg")
+        .cloned()
+        .unwrap();
+    assert!(stored.starts_with(&[0xFF, 0xD8, 0xFF]));
+
+    let rejected = service
+        .put_recorded(
+            "articles/bad.heic",
+            "image/heic",
+            b"not a heic image".to_vec(),
+            None,
+        )
+        .await;
+    assert!(matches!(rejected, Err(AppError::InvalidInput(_))));
+}

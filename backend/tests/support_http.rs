@@ -1005,6 +1005,35 @@ async fn storage_blurhash_route_encodes_a_stored_image() -> TestResult {
 }
 
 #[tokio::test]
+async fn storage_upload_accepts_files_larger_than_the_default_multipart_limit() -> TestResult {
+    let fixture = fixture()?;
+    let payload = vec![b'a'; 2_500_000];
+    let boundary = "support-http-large";
+    let mut body = format!(
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"key\"\r\n\r\nimages/large.bin\r\n\
+         --{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"large.bin\"\r\n\
+         Content-Type: application/octet-stream\r\n\r\n"
+    )
+    .into_bytes();
+    body.extend(payload);
+    body.extend(format!("\r\n--{boundary}--\r\n").into_bytes());
+    let (status, uploaded) = call(
+        fixture.router.clone(),
+        Method::POST,
+        "/storage/upload",
+        Some(&format!("multipart/form-data; boundary={boundary}")),
+        body,
+        Some(&fixture.bearer),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{uploaded}");
+    assert_eq!(uploaded["data"]["key"], "images/large.bin");
+    assert_eq!(uploaded["data"]["byte_size"], 2_500_000);
+    assert_eq!(uploaded["data"]["content_type"], "application/octet-stream");
+    Ok(())
+}
+
+#[tokio::test]
 async fn taskrun_routes_scope_by_organization_and_preserve_detail_event_json() -> TestResult {
     let fixture = fixture()?;
     let (status, listed) = call(
