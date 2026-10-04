@@ -369,14 +369,14 @@ fn fixture_response(request: &Value) -> FixtureDecision {
     let input = response_input_text(request);
     let user_text = latest_user_text(request);
     let request_text = chat_request_text(&user_text);
-    let calls = if input_has_tool_results(request) {
+    let calls = if tools_already_ran(request) {
         Vec::new()
     } else {
         plan_editor_tools(request_text)
     };
     let text = if !calls.is_empty() {
         String::new()
-    } else if input_has_tool_results(request) && editor_edit_requested(request_text) {
+    } else if tools_already_ran(request) && editor_edit_requested(request_text) {
         "Updated the article. The title and sources stay in their own fields, outside the body."
             .to_owned()
     } else {
@@ -419,15 +419,19 @@ fn chat_request_text(user_text: &str) -> &str {
         .trim()
 }
 
-fn input_has_tool_results(request: &Value) -> bool {
-    request
-        .get("input")
-        .and_then(Value::as_array)
-        .is_some_and(|items| {
-            items.iter().any(|item| {
-                item.get("type").and_then(Value::as_str) == Some("function_call_output")
-            })
-        })
+fn tools_already_ran(request: &Value) -> bool {
+    let Some(items) = request.get("input").and_then(Value::as_array) else {
+        return false;
+    };
+    let Some(last_user) = items
+        .iter()
+        .rposition(|item| item.get("role").and_then(Value::as_str) == Some("user"))
+    else {
+        return false;
+    };
+    items[last_user + 1..]
+        .iter()
+        .any(|item| item.get("type").and_then(Value::as_str) == Some("function_call_output"))
 }
 
 fn editor_edit_requested(text: &str) -> bool {
@@ -677,5 +681,28 @@ mod tests {
         let decision = fixture_response(&request);
         assert!(decision.calls.is_empty());
         assert!(decision.text.contains("outside the body"));
+    }
+
+    #[test]
+    fn a_later_request_still_edits_after_an_earlier_tool_turn() {
+        let request = json!({
+            "input": [
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Set the title to \"First\"\n\n--- Document Context ---\nTitle: Old"}]
+                },
+                {"type": "function_call_output", "call_id": "call_title", "output": "{}"},
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Set the title to \"Second Title\" and add a source \"OpenJDK\" https://openjdk.org\n\n--- Document Context ---\nTitle: First"}]
+                }
+            ]
+        });
+        let decision = fixture_response(&request);
+        assert_eq!(decision.calls.len(), 2);
+        assert!(decision.calls[0].arguments.contains("Second Title"));
+        assert!(decision.calls[1].arguments.contains("https://openjdk.org"));
     }
 }
