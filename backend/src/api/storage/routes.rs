@@ -1,7 +1,7 @@
-use axum::extract::FromRef;
+use axum::extract::{DefaultBodyLimit, FromRef};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-use crate::api::auth::AuthState;
+use crate::{api::auth::AuthState, constants::MAX_REQUEST_BODY_BYTES};
 
 use super::{
     handlers::{
@@ -24,4 +24,7 @@ where
         .routes(routes!(generate_blurhash))
         .routes(routes!(create_folder, update_folder))
         .routes(routes!(delete_file))
+        // Multipart ignores RequestBodyLimitLayer and keeps a 2MB default.
+        // iPhone HEIC photos are usually larger than that.
+        .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
 }
