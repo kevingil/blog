@@ -10,12 +10,12 @@ use crate::{
     core::{
         datasource::CrawledContentResponse as CoreCrawledContentResponse,
         insight::{
-            InsightResponse as CoreInsightResponse,
+            CreateTracker, InsightResponse as CoreInsightResponse,
             InsightTopicCreateRequest as CoreTopicCreateRequest,
             InsightTopicResponse as CoreTopicResponse,
             InsightTopicUpdateRequest as CoreTopicUpdateRequest,
             InsightWithSources as CoreInsightWithSources,
-            InsightWithUserStatus as CoreInsightWithUserStatus,
+            InsightWithUserStatus as CoreInsightWithUserStatus, Tracker, UpdateTracker,
             UserInsightStatusResponse as CoreUserStatusResponse,
         },
     },
@@ -256,7 +256,10 @@ impl From<CoreInsightResponse> for InsightWithUserStatus {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct CrawledContentResponse {
     pub id: Uuid,
-    pub data_source_id: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data_source_id: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topic_id: Option<Uuid>,
     pub url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
@@ -282,6 +285,7 @@ impl From<CoreCrawledContentResponse> for CrawledContentResponse {
         Self {
             id: value.id,
             data_source_id: value.data_source_id,
+            topic_id: value.topic_id,
             url: value.url,
             title: value.title,
             content: value.content,
@@ -363,6 +367,79 @@ fn timestamp(value: Option<DateTime<Utc>>) -> String {
         || "0001-01-01T00:00:00Z".to_owned(),
         |value| value.to_rfc3339_opts(SecondsFormat::AutoSi, true),
     )
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct TrackerCreateRequest {
+    #[schema(min_length = 1)]
+    pub target: String,
+    pub frequency: String,
+}
+
+impl TrackerCreateRequest {
+    pub fn validate(self) -> Result<CreateTracker, AppError> {
+        if self.target.trim().is_empty() {
+            return Err(AppError::InvalidInput("target is required".to_owned()));
+        }
+        Ok(CreateTracker {
+            target: self.target,
+            frequency: self.frequency,
+        })
+    }
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct TrackerUpdateRequest {
+    pub frequency: Option<String>,
+    pub enabled: Option<bool>,
+}
+
+impl From<TrackerUpdateRequest> for UpdateTracker {
+    fn from(value: TrackerUpdateRequest) -> Self {
+        Self {
+            frequency: value.frequency,
+            enabled: value.enabled,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct TrackerResponse {
+    pub id: Uuid,
+    pub kind: String,
+    pub name: String,
+    pub target: String,
+    pub frequency: String,
+    pub enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_checked_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_check_at: Option<String>,
+}
+
+impl From<Tracker> for TrackerResponse {
+    fn from(value: Tracker) -> Self {
+        Self {
+            id: value.id,
+            kind: value.kind.as_str().to_owned(),
+            name: value.name,
+            target: value.target,
+            frequency: value.frequency,
+            enabled: value.enabled,
+            last_checked_at: value
+                .last_checked_at
+                .map(|value| value.to_rfc3339_opts(SecondsFormat::Secs, true)),
+            next_check_at: value
+                .next_check_at
+                .map(|value| value.to_rfc3339_opts(SecondsFormat::Secs, true)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct TrackerCheckResponse {
+    pub tracker: TrackerResponse,
+    pub started: bool,
 }
 
 fn optional_i64<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
