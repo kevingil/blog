@@ -5,7 +5,6 @@ import {
   IconFileDescription,
   IconFileWord,
   IconFolder,
-  IconInnerShadowTop,
   IconBook,
   IconLink,
   IconPlug,
@@ -96,11 +95,6 @@ const navigationData = {
           url: "/dashboard/insights",
         },
       ],
-    },
-    {
-      title: "Tasks",
-      url: "/dashboard/tasks",
-      icon: IconInnerShadowTop,
     },
     {
       title: "Sources",
