@@ -33,6 +33,7 @@ impl ResearchPort for FixtureResearch {
                 highlights: vec!["Evidence".to_owned()],
                 score: 0.9,
                 favicon: String::new(),
+                image: String::new(),
             }],
             request_id: "exa-request".to_owned(),
             resolved_search_type: "auto".to_owned(),

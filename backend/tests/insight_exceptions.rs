@@ -52,6 +52,7 @@ fn insight(id: Uuid, organization_id: Uuid) -> Insight {
         is_used_in_article: false,
         meta_data: None,
         data_source_id: None,
+        image_url: None,
     }
 }
 
@@ -535,6 +536,7 @@ async fn test_service_create_insight() -> TestResult {
             None,
             None,
             None,
+            Some("https://cdn.example.com/cover.png".to_owned()),
         )
         .await?;
     assert_eq!(value.organization_id, Some(organization_id));
@@ -547,6 +549,10 @@ async fn test_service_create_insight() -> TestResult {
         Some(vec!["point1".to_owned(), "point2".to_owned()])
     );
     assert_eq!(value.source_content_ids, vec![source_id]);
+    assert_eq!(
+        value.image_url.as_deref(),
+        Some("https://cdn.example.com/cover.png")
+    );
     assert!(value.generated_at.is_some());
     assert!(!value.is_read);
     assert!(!value.is_pinned);
@@ -569,9 +575,11 @@ async fn test_service_create_insight() -> TestResult {
             None,
             None,
             None,
+            Some("javascript:alert(1)".to_owned()),
         )
         .await?;
     assert_eq!(without_topic.topic_id, None);
+    assert_eq!(without_topic.image_url, None);
     assert_eq!(without_topic.key_points, None);
     assert!(without_topic.source_content_ids.is_empty());
     assert_eq!(

@@ -111,6 +111,7 @@ async fn exa_adapter_preserves_request_defaults_headers_paths_and_results() -> T
     assert_eq!(research.request_id, "exa-request");
     assert_eq!(research.resolved_search_type, "neural");
     assert_eq!(research.results[0].title, "Rust result");
+    assert_eq!(research.results[0].image, "https://example.com/image.png");
     assert_eq!(answer.answer, "Axum is a Rust web framework.");
     assert_eq!(answer.citations[0].author, "Example Author");
 
@@ -165,4 +166,79 @@ async fn exa_adapter_rejects_invalid_input_and_unconfigured_calls() -> TestResul
         Err(AppError::InvalidInput(_))
     ));
     Ok(())
+}
+
+#[tokio::test]
+async fn deep_search_keeps_the_first_http_image_and_requests_extracted_links() -> TestResult {
+    let received = Received::default();
+    let app = Router::new()
+        .route("/search", post(capture_deep))
+        .with_state(received.clone());
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let address = listener.local_addr()?;
+    let server = tokio::spawn(async move { axum::serve(listener, app).await });
+    let client = ExaClient::with_base_url("test-key", format!("http://{address}"))?;
+
+    let response = client
+        .deep_search("frontier models", Some("example.com"))
+        .await?;
+    assert_eq!(
+        response.results[0].image,
+        "https://cdn.example.com/extracted.png"
+    );
+    assert_eq!(response.results[1].image, "https://cdn.example.com/og.png");
+    assert!(response.results[2].image.is_empty());
+
+    let requests = received.requests.lock().await;
+    assert_eq!(requests[0].2["type"], "deep");
+    assert_eq!(requests[0].2["numResults"], 8);
+    assert_eq!(requests[0].2["includeDomains"], json!(["example.com"]));
+    assert_eq!(requests[0].2["contents"]["highlights"], true);
+    assert_eq!(requests[0].2["contents"]["text"]["maxCharacters"], 4_000);
+    assert_eq!(requests[0].2["contents"]["extras"]["imageLinks"], 1);
+    drop(requests);
+
+    server.abort();
+    let _ = server.await;
+    Ok(())
+}
+
+async fn capture_deep(
+    State(received): State<Received>,
+    headers: HeaderMap,
+    uri: axum::http::Uri,
+    Json(body): Json<Value>,
+) -> Json<Value> {
+    received
+        .requests
+        .lock()
+        .await
+        .push((uri.path().to_owned(), headers, body));
+    Json(json!({
+        "requestId": "deep-request",
+        "resolvedSearchType": "deep",
+        "results": [
+            {
+                "title": "Extracted",
+                "url": "https://example.com/a",
+                "text": "a",
+                "image": "javascript:alert(1)",
+                "extras": {"imageLinks": ["https://cdn.example.com/extracted.png"]}
+            },
+            {
+                "title": "Open graph",
+                "url": "https://example.com/b",
+                "text": "b",
+                "image": "https://cdn.example.com/og.png",
+                "extras": {"imageLinks": ["https://cdn.example.com/other.png"]}
+            },
+            {
+                "title": "No picture",
+                "url": "https://example.com/c",
+                "text": "c",
+                "image": "data:image/png;base64,aaaa",
+                "extras": {"imageLinks": ["ftp://files.example.com/pic.png"]}
+            }
+        ]
+    }))
 }

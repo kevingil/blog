@@ -323,6 +323,7 @@ impl Research {
                     highlights: Vec::new(),
                     score: 1.0,
                     favicon: String::new(),
+                    image: content.image_url.clone().unwrap_or_default(),
                 })
                 .collect(),
         );
@@ -363,6 +364,7 @@ impl ResearchPort for Research {
                 highlights: Vec::new(),
                 score: 1.0,
                 favicon: String::new(),
+                image: "https://example.test/cover.png".to_owned(),
             }]
         });
         Ok(WebSearchResponse {
@@ -491,6 +493,7 @@ fn content(index: usize, published_at: Option<DateTime<Utc>>, body: String) -> C
         embedding: None,
         meta_data: None,
         created_at: None,
+        image_url: None,
     }
 }
 
@@ -600,6 +603,39 @@ async fn successful_generation_preserves_prompt_ids_unicode_and_published_period
     assert_eq!(
         lock(&fixture.store.updated_topics).as_slice(),
         &[(topic.id, now())]
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn briefing_cover_is_the_first_http_page_image() -> TestResult {
+    let fixture = fixture(now());
+    let topic = topic(None);
+    let mut pages = (1..=3)
+        .map(|index| content(index, None, format!("body {index}")))
+        .collect::<Vec<_>>();
+    pages[0].image_url = Some("javascript:alert(1)".to_owned());
+    pages[1].image_url = Some("https://cdn.example.test/story.png".to_owned());
+    pages[2].image_url = Some("https://cdn.example.test/later.png".to_owned());
+    seed(&fixture, &topic, pages, 3);
+
+    assert_eq!(
+        fixture
+            .generator
+            .generate_for_topic(&topic, &CancellationToken::new())
+            .await?,
+        InsightTopicResult::Created
+    );
+    let saved = lock(&fixture.store.contents);
+    assert_eq!(saved[0].image_url, None);
+    assert_eq!(
+        saved[1].image_url.as_deref(),
+        Some("https://cdn.example.test/story.png")
+    );
+    drop(saved);
+    assert_eq!(
+        lock(&fixture.writer.values)[0].image_url.as_deref(),
+        Some("https://cdn.example.test/story.png")
     );
     Ok(())
 }

@@ -211,9 +211,15 @@ async fn postgres_data_content_image_insight_and_source_repositories_preserve_co
         embedding: Some(embedding.clone()),
         meta_data: None,
         created_at: None,
+        image_url: Some("https://cdn.example.com/post.png".to_owned()),
     };
     contents.save(&mut crawled).await?;
-    assert!(contents.find_by_id(content_id).await?.title.is_none());
+    let loaded_content = contents.find_by_id(content_id).await?;
+    assert!(loaded_content.title.is_none());
+    assert_eq!(
+        loaded_content.image_url.as_deref(),
+        Some("https://cdn.example.com/post.png")
+    );
     let conflicting_caller_id = Uuid::new_v4();
     let mut duplicate_url = CrawledContent {
         id: conflicting_caller_id,
@@ -327,11 +333,16 @@ async fn postgres_data_content_image_insight_and_source_repositories_preserve_co
         is_used_in_article: false,
         meta_data: None,
         data_source_id: None,
+        image_url: Some("https://cdn.example.com/briefing.png".to_owned()),
     };
     insights.save(&mut insight_value).await?;
     let loaded_insight = insights.find_by_id(insight_id).await?;
     assert!(loaded_insight.key_points == Some(Vec::new()) || loaded_insight.key_points.is_none());
     assert_eq!(loaded_insight.source_content_ids, vec![content_id]);
+    assert_eq!(
+        loaded_insight.image_url.as_deref(),
+        Some("https://cdn.example.com/briefing.png")
+    );
     assert_eq!(insights.search_similar(&embedding, 5).await?.len(), 1);
     assert_eq!(
         insights
