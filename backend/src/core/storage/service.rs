@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use super::{
     FileData, FolderData, ObjectListing, UploadFile, UploadRepository, blurhash_from_bytes,
+    heif::{is_heif_upload, transcode_heif_to_jpeg, with_jpeg_extension},
 };
 
 #[async_trait]
@@ -151,9 +152,21 @@ impl StorageService {
         data: Vec<u8>,
         created_by: Option<Uuid>,
     ) -> Result<RecordedUpload, AppError> {
+        let mut data = data;
+        let mut key = key.to_owned();
+        let mut content_type = content_type_for(&key, content_type);
+        if is_heif_upload(&key, &content_type, &data) {
+            let converted = tokio::select! {
+                biased;
+                () = self.cancellation.cancelled() => return Err(AppError::Internal),
+                result = transcode_heif_to_jpeg(&data) => result?,
+            };
+            data = converted;
+            key = with_jpeg_extension(&key);
+            content_type = "image/jpeg".to_owned();
+        }
         let byte_size = i64::try_from(data.len()).unwrap_or(i64::MAX);
-        let content_type = content_type_for(key, content_type);
-        let (blurhash, width, height) = if is_raster_image(key, &content_type) {
+        let (blurhash, width, height) = if is_raster_image(&key, &content_type) {
             blurhash_from_bytes(&data)
                 .map(|(hash, width, height)| (Some(hash), Some(width), Some(height)))
                 .unwrap_or((None, None, None))
@@ -163,20 +176,20 @@ impl StorageService {
         tokio::select! {
             biased;
             () = self.cancellation.cancelled() => return Err(AppError::Internal),
-            result = self.store.put_with_content_type(key, data, &content_type) => result?,
+            result = self.store.put_with_content_type(&key, data, &content_type) => result?,
         }
-        let url = public_url(&self.url_prefix, key);
+        let url = public_url(&self.url_prefix, &key);
         let id = if key.is_empty() || key.ends_with('/') {
             None
         } else if let Some(uploads) = &self.uploads {
-            let filename = filename_from_key(key);
+            let filename = filename_from_key(&key);
             let saved = uploads
                 .upsert(UploadFile {
                     id: Uuid::new_v4(),
-                    s3_key: key.to_owned(),
+                    s3_key: key.clone(),
                     public_url: url.clone(),
                     filename,
-                    directory_path: directory_path(key),
+                    directory_path: directory_path(&key),
                     content_type: content_type.clone(),
                     byte_size,
                     width,
@@ -191,7 +204,7 @@ impl StorageService {
         };
         Ok(RecordedUpload {
             id,
-            key: key.to_owned(),
+            key,
             url,
             content_type,
             byte_size,

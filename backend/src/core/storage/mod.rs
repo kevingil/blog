@@ -1,4 +1,5 @@
 mod blurhash;
+mod heif;
 mod image_match;
 mod repository;
 mod service;
