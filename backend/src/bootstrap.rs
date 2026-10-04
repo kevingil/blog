@@ -53,7 +53,7 @@ use crate::{
         },
         organization::OrganizationService,
         page::PageService,
-        profile::ProfileService,
+        profile::{ProfileService, SiteSettingsRepository},
         project::ProjectService,
         skill::SkillService,
         source::SourceService,
@@ -231,6 +231,7 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         DieselPageRepository::new(pool.clone()),
     ))));
     let site_settings = Arc::new(DieselSiteSettingsRepository::new(pool.clone()));
+    let schedule_settings = site_settings.clone();
     let profile = ProfileState::new(Arc::new(
         ProfileService::new(
             site_settings.clone(),
@@ -405,6 +406,7 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
             schedule_manager,
             schedule_topics,
             schedule_sources,
+            schedule_settings,
         )
         .await;
         Ok(())
@@ -554,6 +556,7 @@ async fn schedule_insight_checks(
     manager: Arc<WorkerManager>,
     topics: Arc<DieselInsightTopicRepository>,
     sources: Arc<DieselDataSourceRepository>,
+    settings: Arc<DieselSiteSettingsRepository>,
 ) {
     let mut interval = tokio::time::interval(Duration::from_secs(60));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -586,10 +589,19 @@ async fn schedule_insight_checks(
         if topics_due.is_empty() && sources_due.is_empty() {
             continue;
         }
+        let (user_id, organization_id) = match settings.get().await {
+            Ok(settings) => (settings.public_user_id, settings.public_organization_id),
+            Err(error) => {
+                tracing::warn!(%error, "scheduled insight check could not load the public author");
+                (None, None)
+            }
+        };
         if let Err(error) = manager
             .run_now(
                 "insight",
                 RunMetadata {
+                    user_id,
+                    organization_id,
                     trigger_source: "schedule".to_owned(),
                     ..RunMetadata::default()
                 },
