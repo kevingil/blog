@@ -12,7 +12,7 @@ import {
   markInsightAsRead, 
   toggleInsightPinned,
 } from '@/services/insights';
-import { ResearchImage } from './research-image';
+import { ResearchImage } from '@/components/research-image';
 
 export const Route = createFileRoute('/dashboard/insights/$insightId')({
   component: InsightDetailPage,

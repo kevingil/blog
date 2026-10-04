@@ -33,7 +33,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { useToast } from "@/hooks/use-toast";
-import { ResearchImage } from "./research-image";
+import { ResearchImage } from "@/components/research-image";
 import { useAdminDashboard } from "@/services/dashboard/dashboard";
 import {
   checkTracker,
