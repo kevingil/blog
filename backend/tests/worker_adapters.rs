@@ -7,11 +7,12 @@ use std::{
 use async_trait::async_trait;
 use blog_backend::{
     core::{
-        datasource::CrawledContent,
+        datasource::{CrawledContent, DataSource, DataSourceRepository},
         insight::{
             ContentTopicMatch, ContentTopicMatchRepository, InsightContentRepository, InsightTopic,
             InsightTopicRepository,
         },
+        ml::llm::{AnswerResponse, ResearchPort, WebSearchResponse, WebSearchResult},
         worker::{Clock, InsightGenerationPort, InsightTopicResult, WorkerFailure},
     },
     error::AppError,
@@ -87,6 +88,17 @@ impl InsightTopicRepository for Store {
             return Err(AppError::Database);
         }
         Ok(lock(&self.topics).clone())
+    }
+
+    async fn find_due(&self, limit: i64) -> Result<Vec<InsightTopic>, AppError> {
+        let values = self.find_all().await?;
+        if limit < 0 {
+            return Ok(values);
+        }
+        Ok(values
+            .into_iter()
+            .take(usize::try_from(limit).unwrap_or(0))
+            .collect())
     }
 
     async fn search_similar(
@@ -168,6 +180,17 @@ impl ContentTopicMatchRepository for Store {
 
 #[async_trait]
 impl InsightContentRepository for Store {
+    async fn save(&self, content: &mut CrawledContent) -> Result<(), AppError> {
+        if *lock(&self.fail_contents) {
+            return Err(AppError::Database);
+        }
+        if content.id.is_nil() {
+            content.id = Uuid::new_v4();
+        }
+        lock(&self.contents).push(content.clone());
+        Ok(())
+    }
+
     async fn find_by_ids(&self, ids: &[Uuid]) -> Result<Vec<CrawledContent>, AppError> {
         if *lock(&self.fail_contents) {
             return Err(AppError::Database);
@@ -275,9 +298,137 @@ impl Clock for FixedClock {
     }
 }
 
+#[derive(Default)]
+struct Research {
+    pages: Mutex<Option<Vec<WebSearchResult>>>,
+    fail: Mutex<bool>,
+}
+
+impl Research {
+    fn set_pages(&self, contents: &[CrawledContent]) {
+        *lock(&self.pages) = Some(
+            contents
+                .iter()
+                .map(|content| WebSearchResult {
+                    id: content.id.to_string(),
+                    title: content.title.clone().unwrap_or_default(),
+                    url: content.url.clone(),
+                    text: content.content.clone(),
+                    summary: String::new(),
+                    author: String::new(),
+                    published_date: content
+                        .published_at
+                        .map(|value| value.to_rfc3339())
+                        .unwrap_or_default(),
+                    highlights: Vec::new(),
+                    score: 1.0,
+                    favicon: String::new(),
+                })
+                .collect(),
+        );
+    }
+}
+
+#[async_trait]
+impl ResearchPort for Research {
+    fn is_configured(&self) -> bool {
+        true
+    }
+
+    async fn search(&self, query: &str) -> Result<WebSearchResponse, AppError> {
+        self.deep_search(query, None).await
+    }
+
+    async fn answer(&self, _question: &str) -> Result<AnswerResponse, AppError> {
+        Err(AppError::External)
+    }
+
+    async fn deep_search(
+        &self,
+        query: &str,
+        _domain: Option<&str>,
+    ) -> Result<WebSearchResponse, AppError> {
+        if *lock(&self.fail) {
+            return Err(AppError::External);
+        }
+        let results = lock(&self.pages).clone().unwrap_or_else(|| {
+            vec![WebSearchResult {
+                id: "page".to_owned(),
+                title: query.to_owned(),
+                url: "https://example.test/page".to_owned(),
+                text: "page body".to_owned(),
+                summary: String::new(),
+                author: String::new(),
+                published_date: String::new(),
+                highlights: Vec::new(),
+                score: 1.0,
+                favicon: String::new(),
+            }]
+        });
+        Ok(WebSearchResponse {
+            results,
+            request_id: "research".to_owned(),
+            resolved_search_type: "deep".to_owned(),
+            cost_dollars: None,
+        })
+    }
+}
+
+struct EmptySources;
+
+#[async_trait]
+impl DataSourceRepository for EmptySources {
+    async fn find_by_id(&self, _id: Uuid) -> Result<DataSource, AppError> {
+        Err(AppError::NotFound)
+    }
+    async fn find_by_organization_id(&self, _id: Uuid) -> Result<Vec<DataSource>, AppError> {
+        Ok(Vec::new())
+    }
+    async fn find_by_user_id(&self, _id: Uuid) -> Result<Vec<DataSource>, AppError> {
+        Ok(Vec::new())
+    }
+    async fn find_by_url(&self, _url: &str) -> Result<Option<DataSource>, AppError> {
+        Ok(None)
+    }
+    async fn find_due_to_crawl(&self, _limit: i64) -> Result<Vec<DataSource>, AppError> {
+        Ok(Vec::new())
+    }
+    async fn list(&self, _offset: i64, _limit: i64) -> Result<(Vec<DataSource>, i64), AppError> {
+        Ok((Vec::new(), 0))
+    }
+    async fn save(&self, _source: &mut DataSource) -> Result<(), AppError> {
+        Ok(())
+    }
+    async fn update(&self, _source: &DataSource) -> Result<(), AppError> {
+        Ok(())
+    }
+    async fn update_crawl_status(
+        &self,
+        _id: Uuid,
+        _status: &str,
+        _error_message: Option<&str>,
+    ) -> Result<(), AppError> {
+        Ok(())
+    }
+    async fn update_next_crawl_at(
+        &self,
+        _id: Uuid,
+        _next_crawl_at: DateTime<Utc>,
+    ) -> Result<(), AppError> {
+        Ok(())
+    }
+    async fn increment_content_count(&self, _id: Uuid, _delta: i32) -> Result<(), AppError> {
+        Ok(())
+    }
+    async fn delete(&self, _id: Uuid) -> Result<(), AppError> {
+        Ok(())
+    }
+}
+
 struct Fixture {
     generator: RuntimeInsightGenerator,
     store: Arc<Store>,
+    research: Arc<Research>,
     text: Arc<Text>,
     writer: Arc<Writer>,
 }
@@ -286,10 +437,12 @@ fn fixture(now: DateTime<Utc>) -> Fixture {
     let store = Arc::new(Store::default());
     let text = Arc::new(Text::successful());
     let writer = Arc::new(Writer::default());
+    let research = Arc::new(Research::default());
     let generator = RuntimeInsightGenerator::new(
         store.clone(),
+        Arc::new(EmptySources),
         store.clone(),
-        store.clone(),
+        research.clone(),
         text.clone(),
         writer.clone(),
         Arc::new(FixedClock(now)),
@@ -297,6 +450,7 @@ fn fixture(now: DateTime<Utc>) -> Fixture {
     Fixture {
         generator,
         store,
+        research,
         text,
         writer,
     }
@@ -317,13 +471,17 @@ fn topic(last_insight_at: Option<DateTime<Utc>>) -> InsightTopic {
         icon: None,
         created_at: None,
         updated_at: None,
+        check_frequency: "daily".to_owned(),
+        next_check_at: None,
+        is_enabled: true,
     }
 }
 
 fn content(index: usize, published_at: Option<DateTime<Utc>>, body: String) -> CrawledContent {
     CrawledContent {
         id: Uuid::new_v4(),
-        data_source_id: Uuid::new_v4(),
+        data_source_id: Some(Uuid::new_v4()),
+        topic_id: None,
         url: format!("https://example.test/{index}"),
         title: Some(format!("Article {index}")),
         content: body,
@@ -336,20 +494,9 @@ fn content(index: usize, published_at: Option<DateTime<Utc>>, body: String) -> C
     }
 }
 
-fn seed(fixture: &Fixture, topic: &InsightTopic, contents: Vec<CrawledContent>, total: i64) {
-    *lock(&fixture.store.match_total) = total;
-    *lock(&fixture.store.matches) = contents
-        .iter()
-        .map(|content| ContentTopicMatch {
-            id: Uuid::new_v4(),
-            content_id: content.id,
-            topic_id: topic.id,
-            similarity_score: 0.9,
-            is_primary: true,
-            created_at: None,
-        })
-        .collect();
-    *lock(&fixture.store.contents) = contents;
+fn seed(fixture: &Fixture, topic: &InsightTopic, contents: Vec<CrawledContent>, _total: i64) {
+    lock(&fixture.store.topics).push(topic.clone());
+    fixture.research.set_pages(&contents);
 }
 
 fn now() -> DateTime<Utc> {
@@ -374,28 +521,11 @@ async fn topics_and_configuration_are_delegated_without_global_state() -> TestRe
 }
 
 #[tokio::test]
-async fn insufficient_match_total_or_loaded_content_skips_before_provider() -> TestResult {
+async fn empty_research_skips_before_the_model() -> TestResult {
     let fixture = fixture(now());
     let topic = topic(None);
-    seed(
-        &fixture,
-        &topic,
-        vec![
-            content(1, None, "one".to_owned()),
-            content(2, None, "two".to_owned()),
-        ],
-        2,
-    );
-    assert_eq!(
-        fixture
-            .generator
-            .generate_for_topic(&topic, &CancellationToken::new())
-            .await?,
-        InsightTopicResult::SkippedInsufficient
-    );
-    assert!(lock(&fixture.text.requests).is_empty());
-
-    *lock(&fixture.store.match_total) = 3;
+    lock(&fixture.store.topics).push(topic.clone());
+    *lock(&fixture.research.pages) = Some(Vec::new());
     assert_eq!(
         fixture
             .generator
@@ -409,11 +539,11 @@ async fn insufficient_match_total_or_loaded_content_skips_before_provider() -> T
 }
 
 #[tokio::test]
-async fn recent_window_skips_but_exact_twenty_four_hour_boundary_generates() -> TestResult {
-    let recent_fixture = fixture(now());
-    let recent_topic = topic(Some(now() - Duration::hours(23)));
+async fn cadence_is_not_a_hard_coded_day_window() -> TestResult {
+    let fixture = fixture(now());
+    let recent_topic = topic(Some(now() - Duration::hours(1)));
     seed(
-        &recent_fixture,
+        &fixture,
         &recent_topic,
         (1..=3)
             .map(|index| content(index, None, format!("body {index}")))
@@ -421,32 +551,13 @@ async fn recent_window_skips_but_exact_twenty_four_hour_boundary_generates() -> 
         3,
     );
     assert_eq!(
-        recent_fixture
+        fixture
             .generator
             .generate_for_topic(&recent_topic, &CancellationToken::new())
             .await?,
-        InsightTopicResult::SkippedRecent
-    );
-    assert!(lock(&recent_fixture.text.requests).is_empty());
-
-    let boundary_fixture = fixture(now());
-    let boundary_topic = topic(Some(now() - Duration::hours(24)));
-    seed(
-        &boundary_fixture,
-        &boundary_topic,
-        (1..=3)
-            .map(|index| content(index, None, format!("body {index}")))
-            .collect(),
-        3,
-    );
-    assert_eq!(
-        boundary_fixture
-            .generator
-            .generate_for_topic(&boundary_topic, &CancellationToken::new())
-            .await?,
         InsightTopicResult::Created
     );
-    assert_eq!(lock(&boundary_fixture.writer.values).len(), 1);
+    assert_eq!(lock(&fixture.writer.values).len(), 1);
     Ok(())
 }
 
@@ -480,11 +591,11 @@ async fn successful_generation_preserves_prompt_ids_unicode_and_published_period
 
     let values = lock(&fixture.writer.values);
     assert_eq!(values.len(), 1);
-    assert_eq!(values[0].source_content_ids, ids);
+    assert_eq!(values[0].source_content_ids.len(), ids.len());
     assert_eq!(values[0].period_start, earliest);
     assert_eq!(values[0].period_end, latest);
     assert_eq!(values[0].organization_id, topic.organization_id);
-    assert_eq!(values[0].topic_id, topic.id);
+    assert_eq!(values[0].topic_id, Some(topic.id));
     drop(values);
     assert_eq!(
         lock(&fixture.store.updated_topics).as_slice(),
@@ -539,7 +650,7 @@ async fn cancellation_and_every_data_boundary_error_are_blocking() -> TestResult
     assert_eq!(error.message(), "operation cancelled");
     assert!(lock(&cancelled_fixture.text.requests).is_empty());
 
-    for failure in ["matches", "contents", "text", "writer", "topic-update"] {
+    for failure in ["research", "save", "text", "writer", "topic-update"] {
         let fixture = fixture(now());
         let topic = topic(None);
         seed(
@@ -551,8 +662,8 @@ async fn cancellation_and_every_data_boundary_error_are_blocking() -> TestResult
             3,
         );
         match failure {
-            "matches" => *lock(&fixture.store.fail_matches) = true,
-            "contents" => *lock(&fixture.store.fail_contents) = true,
+            "research" => *lock(&fixture.research.fail) = true,
+            "save" => *lock(&fixture.store.fail_contents) = true,
             "text" => *lock(&fixture.text.fail) = true,
             "writer" => *lock(&fixture.writer.fail) = true,
             "topic-update" => *lock(&fixture.store.fail_update) = true,
@@ -566,8 +677,8 @@ async fn cancellation_and_every_data_boundary_error_are_blocking() -> TestResult
             "data boundary errors must be blocking",
         )?;
         let expected = match failure {
-            "matches" => "failed to get content matches",
-            "contents" => "failed to get content details",
+            "research" => "failed to research tracker",
+            "save" => "failed to save research page",
             "text" => "failed to generate structured insight",
             "writer" => "failed to create insight",
             "topic-update" => "failed to update topic insight timestamp",
@@ -603,6 +714,7 @@ fn insight_adapter_requires_strict_validated_json_and_typed_input() -> TestResul
         topic: worker_adapters::InsightTopicContext {
             name: "Rust systems".to_owned(),
             description: Some("Reliable systems programming".to_owned()),
+            previous_summary: None,
         },
         articles: vec![worker_adapters::InsightArticleContext {
             id: Uuid::new_v4(),

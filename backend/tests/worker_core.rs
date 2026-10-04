@@ -169,7 +169,7 @@ async fn manager_claims_atomically_cancels_and_joins_owned_tasks() -> TestResult
 }
 
 #[tokio::test]
-async fn pipeline_runs_crawl_then_insight_and_propagates_completion() -> TestResult {
+async fn pipeline_runs_insight_and_propagates_completion() -> TestResult {
     let status = status();
     let manager = WorkerManager::new(
         status.clone(),
@@ -202,7 +202,7 @@ async fn pipeline_runs_crawl_then_insight_and_propagates_completion() -> TestRes
         }
     })
     .await??;
-    assert_eq!(lock(&order).as_slice(), ["crawl", "insight"]);
+    assert_eq!(lock(&order).as_slice(), ["insight"]);
     manager.shutdown().await?;
     Ok(())
 }
@@ -219,6 +219,20 @@ impl InsightGenerationPort for InvalidInsightProvider {
         &self,
     ) -> Result<Vec<blog_backend::core::insight::InsightTopic>, WorkerFailure> {
         Ok(Vec::new())
+    }
+
+    async fn sources(
+        &self,
+    ) -> Result<Vec<blog_backend::core::datasource::DataSource>, WorkerFailure> {
+        Ok(Vec::new())
+    }
+
+    async fn generate_for_source(
+        &self,
+        _source: &blog_backend::core::datasource::DataSource,
+        _cancellation: &CancellationToken,
+    ) -> Result<blog_backend::core::worker::InsightTopicResult, WorkerFailure> {
+        Err(WorkerFailure::new("not configured"))
     }
 
     async fn generate_for_topic(

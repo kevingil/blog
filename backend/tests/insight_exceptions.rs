@@ -51,6 +51,7 @@ fn insight(id: Uuid, organization_id: Uuid) -> Insight {
         is_pinned: false,
         is_used_in_article: false,
         meta_data: None,
+        data_source_id: None,
     }
 }
 
@@ -69,6 +70,9 @@ fn topic(id: Uuid, organization_id: Uuid, name: &str) -> InsightTopic {
         icon: None,
         created_at: Some(Utc::now()),
         updated_at: Some(Utc::now()),
+        check_frequency: "daily".to_owned(),
+        next_check_at: None,
+        is_enabled: true,
     }
 }
 
@@ -202,6 +206,25 @@ impl InsightRepository for Store {
         }
     }
 
+    async fn find_latest_by_topic_id(&self, topic_id: Uuid) -> Result<Option<Insight>, AppError> {
+        Ok(lock(&self.insights)?
+            .iter()
+            .filter(|value| value.topic_id == Some(topic_id))
+            .max_by_key(|value| value.generated_at)
+            .cloned())
+    }
+
+    async fn find_latest_by_data_source_id(
+        &self,
+        data_source_id: Uuid,
+    ) -> Result<Option<Insight>, AppError> {
+        Ok(lock(&self.insights)?
+            .iter()
+            .filter(|value| value.data_source_id == Some(data_source_id))
+            .max_by_key(|value| value.generated_at)
+            .cloned())
+    }
+
     async fn count_unread(&self, organization_id: Uuid) -> Result<i64, AppError> {
         Ok(lock(&self.insights)?
             .iter()
@@ -240,6 +263,17 @@ impl InsightTopicRepository for Store {
 
     async fn find_all(&self) -> Result<Vec<InsightTopic>, AppError> {
         Ok(lock(&self.topics)?.clone())
+    }
+
+    async fn find_due(&self, limit: i64) -> Result<Vec<InsightTopic>, AppError> {
+        let values = lock(&self.topics)?.clone();
+        if limit < 0 {
+            return Ok(values);
+        }
+        Ok(values
+            .into_iter()
+            .take(usize::try_from(limit).unwrap_or(0))
+            .collect())
     }
 
     async fn search_similar(
@@ -344,6 +378,10 @@ impl UserInsightStatusRepository for Store {
 
 #[async_trait]
 impl InsightContentRepository for Store {
+    async fn save(&self, _content: &mut CrawledContent) -> Result<(), AppError> {
+        Ok(())
+    }
+
     async fn find_by_ids(&self, _ids: &[Uuid]) -> Result<Vec<CrawledContent>, AppError> {
         Ok(Vec::new())
     }
@@ -496,6 +534,7 @@ async fn test_service_create_insight() -> TestResult {
             Some(vec![source_id]),
             None,
             None,
+            None,
         )
         .await?;
     assert_eq!(value.organization_id, Some(organization_id));
@@ -525,6 +564,7 @@ async fn test_service_create_insight() -> TestResult {
             "Second Insight".to_owned(),
             "Second summary".to_owned(),
             "Second content".to_owned(),
+            None,
             None,
             None,
             None,

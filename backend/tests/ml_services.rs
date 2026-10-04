@@ -103,7 +103,8 @@ fn copilot_prompt_only_advertises_registered_tools() {
     assert!(prompt.contains("read_document"));
     assert!(prompt.contains("replace_lines"));
     assert!(!prompt.contains("ask_question"));
-    assert!(!prompt.contains("web_search"));
+    assert!(prompt.contains("use web_search"));
+    assert!(prompt.contains("deep_research"));
     assert!(!prompt.contains("sandbox"));
     assert!(!prompt.contains("Present a plan of proposed changes before editing"));
 }
