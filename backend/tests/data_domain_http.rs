@@ -320,6 +320,34 @@ async fn uuid_path_rejections_preserve_domain_specific_messages() -> TestResult 
 }
 
 #[tokio::test]
+async fn tracker_paths_are_not_parsed_as_insight_ids() -> TestResult {
+    let fixture = fixture()?;
+    for (method, path) in [
+        (Method::GET, "/insights/trackers"),
+        (Method::POST, "/insights/trackers"),
+        (Method::GET, "/insights/topics"),
+        (Method::GET, "/insights/search?q=test"),
+        (Method::GET, "/insights/unread-count"),
+        (Method::GET, "/insights/content/recent"),
+    ] {
+        let (status, response) = call(
+            fixture.router.clone(),
+            method.clone(),
+            path,
+            json!({"target": "frontier ML", "frequency": "daily"}),
+            Some(&fixture.bearer),
+        )
+        .await?;
+        assert_ne!(
+            response["error"].as_str(),
+            Some("Invalid insight ID"),
+            "{method} {path} was captured by the insight id route: {status} {response}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn data_source_requests_preserve_body_and_validation_errors() -> TestResult {
     let fixture = fixture()?;
     let (status, response) = call(
@@ -475,6 +503,7 @@ fn generated_openapi_contains_every_data_domain_operation() -> TestResult {
         "createSource",
         "scrapeAndCreateSource",
         "getArticleSources",
+        "listPublicArticleSources",
         "searchSimilarSources",
         "getSource",
         "updateSource",
@@ -485,7 +514,7 @@ fn generated_openapi_contains_every_data_domain_operation() -> TestResult {
             "missing OpenAPI operation {operation_id}"
         );
     }
-    assert_eq!(operation_ids.len(), 36);
+    assert_eq!(operation_ids.len(), 37);
     assert_eq!(
         document["components"]["schemas"]["DataSourceCreateRequest"]["properties"]["name"]["minLength"],
         1
