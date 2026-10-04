@@ -42,7 +42,7 @@ impl TryFrom<ProjectRow> for Project {
             .into_iter()
             .map(|id| {
                 id.map(i64::from)
-                    .ok_or(AppError::database("no underlying error was recorded"))
+                    .ok_or(AppError::database("project id was missing"))
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {

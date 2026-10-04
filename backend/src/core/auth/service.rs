@@ -287,7 +287,7 @@ impl AuthService {
         let lifetime = i64::try_from(TOKEN_LIFETIME.as_secs()).map_err(AppError::internal)?;
         let expires_at = now
             .checked_add(lifetime)
-            .ok_or(AppError::internal("no underlying error was recorded"))?;
+            .ok_or(AppError::internal("token expiry overflowed"))?;
         let exp = usize::try_from(expires_at).map_err(AppError::internal)?;
         let claims = Claims {
             sub: id.0.to_string(),

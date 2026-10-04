@@ -749,7 +749,7 @@ impl Tool for ReplaceLinesTool {
         let result = result_value
             .as_object()
             .cloned()
-            .ok_or(AppError::internal("no underlying error was recorded"))?;
+            .ok_or(AppError::internal("tool payload was not an object"))?;
         Ok(ToolResponse::structured(
             serde_json::to_string(&result_value).map_err(AppError::internal)?,
             result,
@@ -762,7 +762,7 @@ impl Tool for ReplaceLinesTool {
                 })
                 .as_object()
                 .cloned()
-                .ok_or(AppError::internal("no underlying error was recorded"))?,
+                .ok_or(AppError::internal("tool payload was not an object"))?,
             }),
         ))
     }
@@ -799,7 +799,7 @@ impl Tool for GenerateImagePromptTool {
             .cancellation
             .run_until_cancelled(async {})
             .await
-            .ok_or(AppError::internal("no underlying error was recorded"))?;
+            .ok_or(AppError::internal("request cancelled"))?;
         let input: Value = match serde_json::from_str(&call.input) {
             Ok(input) => input,
             Err(_) => return Ok(ToolResponse::error("Invalid input format")),
@@ -820,7 +820,7 @@ impl Tool for GenerateImagePromptTool {
             result_value
                 .as_object()
                 .cloned()
-                .ok_or(AppError::internal("no underlying error was recorded"))?,
+                .ok_or(AppError::internal("tool payload was not an object"))?,
             Some(ArtifactHint {
                 artifact_type: "image_prompt".to_owned(),
                 data: json!({
@@ -829,7 +829,7 @@ impl Tool for GenerateImagePromptTool {
                 })
                 .as_object()
                 .cloned()
-                .ok_or(AppError::internal("no underlying error was recorded"))?,
+                .ok_or(AppError::internal("tool payload was not an object"))?,
             }),
         ))
     }
@@ -873,7 +873,7 @@ impl Tool for AskQuestionTool {
             .filter(|question| !question.is_empty())
             .ok_or_else(|| AppError::InvalidInput("question is required".to_owned()))?;
         if !self.research.is_configured() {
-            return Err(AppError::external("no underlying error was recorded"));
+            return Err(AppError::external("research search is not configured"));
         }
         let answer = self.research.answer(question).await?;
         let citations = answer
@@ -972,7 +972,7 @@ impl Tool for SearchWebSourcesTool {
             .and_then(Value::as_str)
             .filter(|domain| !domain.is_empty());
         if !self.research.is_configured() {
-            return Err(AppError::external("no underlying error was recorded"));
+            return Err(AppError::external("research search is not configured"));
         }
         let mut create_sources = input
             .get("create_sources")
@@ -992,7 +992,7 @@ impl Tool for SearchWebSourcesTool {
         if create_sources {
             let article_id = context
                 .article_id
-                .ok_or(AppError::internal("no underlying error was recorded"))?;
+                .ok_or(AppError::internal("copilot turn has no article"))?;
             for result in &response.results {
                 if result.text.is_empty() {
                     continue;
@@ -1665,7 +1665,7 @@ impl Tool for ApplyPatchTool {
         let result = result_value
             .as_object()
             .cloned()
-            .ok_or(AppError::internal("no underlying error was recorded"))?;
+            .ok_or(AppError::internal("tool payload was not an object"))?;
         Ok(ToolResponse::structured(
             serde_json::to_string(&result_value).map_err(AppError::internal)?,
             result,
@@ -1678,7 +1678,7 @@ impl Tool for ApplyPatchTool {
                 })
                 .as_object()
                 .cloned()
-                .ok_or(AppError::internal("no underlying error was recorded"))?,
+                .ok_or(AppError::internal("tool payload was not an object"))?,
             }),
         ))
     }
@@ -1871,7 +1871,7 @@ fn structured_result(result: Value) -> Result<ToolResponse, AppError> {
     let object = result
         .as_object()
         .cloned()
-        .ok_or(AppError::internal("no underlying error was recorded"))?;
+        .ok_or(AppError::internal("tool payload was not an object"))?;
     Ok(ToolResponse::structured(
         serde_json::to_string(&result).map_err(AppError::internal)?,
         object,
@@ -1887,11 +1887,11 @@ fn structured_artifact(
     let object = result
         .as_object()
         .cloned()
-        .ok_or(AppError::internal("no underlying error was recorded"))?;
+        .ok_or(AppError::internal("tool payload was not an object"))?;
     let artifact_data = artifact_data
         .as_object()
         .cloned()
-        .ok_or(AppError::internal("no underlying error was recorded"))?;
+        .ok_or(AppError::internal("tool payload was not an object"))?;
     Ok(ToolResponse::structured(
         serde_json::to_string(&result).map_err(AppError::internal)?,
         object,

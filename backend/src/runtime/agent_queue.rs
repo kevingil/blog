@@ -215,7 +215,7 @@ async fn send_event(events: &mpsc::Sender<AgentStreamEvent>, value: Value) -> Re
     let fields: Map<String, Value> = value
         .as_object()
         .cloned()
-        .ok_or(AppError::internal("no underlying error was recorded"))?;
+        .ok_or(AppError::internal("agent event payload was not an object"))?;
     events
         .send(AgentStreamEvent::new(fields))
         .await

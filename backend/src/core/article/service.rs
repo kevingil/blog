@@ -602,10 +602,9 @@ impl ArticleService {
 
     pub async fn update_with_context(&self, article_id: Uuid) -> Result<Article, AppError> {
         let mut article = self.articles.find_by_id(article_id).await?;
-        let writer = self
-            .context_writer
-            .as_ref()
-            .ok_or(AppError::external("no underlying error was recorded"))?;
+        let writer = self.context_writer.as_ref().ok_or(AppError::external(
+            "article context writer is not configured",
+        ))?;
         let updated = writer.update_with_context(&article).await?;
         if updated != article.draft_content {
             self.articles.create_draft_snapshot(article_id).await?;

@@ -194,7 +194,10 @@ impl McpTransport for HttpMcpTransport {
         );
         let response = builder.send().await.map_err(AppError::external)?;
         if !response.status().is_success() {
-            return Err(AppError::external("no underlying error was recorded"));
+            return Err(AppError::external(format!(
+                "MCP server returned {}",
+                response.status()
+            )));
         }
         let content_type = response
             .headers()
@@ -226,7 +229,10 @@ impl McpTransport for HttpMcpTransport {
         if response.status().is_success() || response.status().as_u16() == 202 {
             Ok(())
         } else {
-            Err(AppError::external("no underlying error was recorded"))
+            Err(AppError::external(format!(
+                "MCP server returned {}",
+                response.status()
+            )))
         }
     }
 }
@@ -276,7 +282,7 @@ impl McpTransport for StdioMcpTransport {
         let stdin = child
             .stdin
             .as_mut()
-            .ok_or(AppError::external("no underlying error was recorded"))?;
+            .ok_or(AppError::external("MCP process is missing stdin"))?;
         let header = format!("Content-Length: {}\r\n\r\n", encoded.len());
         stdin
             .write_all(header.as_bytes())
@@ -290,7 +296,7 @@ impl McpTransport for StdioMcpTransport {
         let stdout = child
             .stdout
             .as_mut()
-            .ok_or(AppError::external("no underlying error was recorded"))?;
+            .ok_or(AppError::external("MCP process is missing stdout"))?;
         let body = timeout(REQUEST_TIMEOUT, read_stdio_message(stdout))
             .await
             .map_err(AppError::external)?
@@ -309,7 +315,7 @@ impl McpTransport for StdioMcpTransport {
         let stdin = child
             .stdin
             .as_mut()
-            .ok_or(AppError::external("no underlying error was recorded"))?;
+            .ok_or(AppError::external("MCP process is missing stdin"))?;
         let header = format!("Content-Length: {}\r\n\r\n", encoded.len());
         stdin
             .write_all(header.as_bytes())
@@ -325,8 +331,8 @@ impl McpTransport for StdioMcpTransport {
 }
 
 fn parse_json_rpc_result(body: &Value) -> Result<Value, AppError> {
-    if body.get("error").is_some() {
-        return Err(AppError::external("no underlying error was recorded"));
+    if let Some(error) = body.get("error") {
+        return Err(AppError::external(format!("MCP tool returned {error}")));
     }
     Ok(body.get("result").cloned().unwrap_or(Value::Null))
 }
