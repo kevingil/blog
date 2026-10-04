@@ -40,7 +40,7 @@ function TaskRunDetailPage() {
     <section className="flex-1 overflow-auto p-6 space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
-          <Link to="/dashboard/tasks">
+          <Link to="/dashboard/insights" search={{ tab: "tasks" }}>
             <Button variant="ghost" size="sm" className="px-0">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Tasks
