@@ -28,5 +28,5 @@ pub use tools::{
     ReplaceLinesTool, ResearchPort, SearchWebSourcesTool, SelectSourcesForEditTool, SetTitleTool,
     SourceEdit, SourceResource, SourceResourcePort, SourceSelection, Tool, ToolCallRequest,
     ToolContext, ToolInfo, ToolResponse, ToolResponseType, UpdateSourcesTool, WebSearchResponse,
-    WebSearchResult,
+    WebSearchResult, page_image,
 };

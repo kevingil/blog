@@ -245,6 +245,25 @@ pub struct WebSearchResult {
     pub highlights: Vec<String>,
     pub score: f64,
     pub favicon: String,
+    pub image: String,
+}
+
+/// First http(s) picture among the candidates. Data URLs and other schemes are skipped.
+pub fn page_image<'a>(candidates: impl IntoIterator<Item = &'a str>) -> Option<String> {
+    candidates.into_iter().find_map(http_image_url)
+}
+
+fn http_image_url(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    let scheme = trimmed.split_once(':')?.0;
+    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
+        return None;
+    }
+    let rest = trimmed.get(scheme.len() + 1..)?;
+    if !rest.starts_with("//") || trimmed.chars().any(char::is_whitespace) {
+        return None;
+    }
+    Some(trimmed.to_owned())
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

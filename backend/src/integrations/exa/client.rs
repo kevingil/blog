@@ -11,6 +11,7 @@ use crate::{
     },
     core::ml::llm::{
         AnswerCitation, AnswerResponse, ResearchPort, WebSearchResponse, WebSearchResult,
+        page_image,
     },
     error::AppError,
 };
@@ -185,6 +186,13 @@ struct ExaDeepSearchRequest<'a> {
 struct ExaDeepContents {
     highlights: bool,
     text: ExaDeepText,
+    extras: ExaImageExtras,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExaImageExtras {
+    image_links: i32,
 }
 
 #[derive(Debug, Serialize)]
@@ -371,6 +379,7 @@ impl ResearchPort for ExaClient {
                     highlights: result.highlights,
                     score: result.score,
                     favicon: result.favicon,
+                    image: result_image(&result.image, &result.extras),
                 })
                 .collect(),
             request_id: response.request_id,
@@ -406,6 +415,7 @@ impl ResearchPort for ExaClient {
                         text: ExaDeepText {
                             max_characters: 4_000,
                         },
+                        extras: ExaImageExtras { image_links: 1 },
                     },
                 },
             )
@@ -429,6 +439,7 @@ impl ResearchPort for ExaClient {
                     highlights: result.highlights,
                     score: result.score,
                     favicon: result.favicon,
+                    image: result_image(&result.image, &result.extras),
                 })
                 .collect(),
             request_id: response.request_id,
@@ -469,4 +480,18 @@ impl ResearchPort for ExaClient {
             cost_dollars: response.cost_dollars,
         })
     }
+}
+
+fn result_image(image: &str, extras: &serde_json::Map<String, serde_json::Value>) -> String {
+    let links = extras
+        .get("imageLinks")
+        .and_then(serde_json::Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    page_image(std::iter::once(image).chain(links)).unwrap_or_default()
 }
