@@ -37,18 +37,17 @@ use crate::{
         chat::ChatMessageService,
         conversation::ConversationService,
         copilot::{ArticleDraftAdapter, CopilotConfig, CopilotManager},
-        datasource::{DataSourceService, RecommendationService},
+        datasource::{DataSourceRepository, DataSourceService, RecommendationService},
         image::ImageService,
-        insight::InsightService,
+        insight::{InsightService, InsightTopicRepository, TrackerCatalog},
         live::LivePorts,
         mcp::McpConnectorService,
         ml::{
             TextGenerationService,
             llm::{
-                Agent, ApplyPatchTool, AskQuestionTool, GenerateImagePromptTool,
-                GetRelevantSourcesTool, InMemorySessionStore, Model, ModelProvider,
-                ReadDocumentTool, ReplaceLinesTool, SearchWebSourcesTool, SelectSourcesForEditTool,
-                SessionStore, Tool, ToolRegistry,
+                Agent, ApplyPatchTool, GenerateImagePromptTool, GetRelevantSourcesTool,
+                InMemorySessionStore, Model, ReadDocumentTool, ReplaceLinesTool,
+                SearchWebSourcesTool, SelectSourcesForEditTool, SessionStore, Tool, ToolRegistry,
             },
         },
         organization::OrganizationService,
@@ -62,7 +61,7 @@ use crate::{
         taskrun::TaskRunService,
         worker::{
             ContentCrawler, CrawlWorker, DiscoveryWorker, InsightWorker, ManagerConfig,
-            PipelineWorker, StatusService, SystemClock, WorkerManager,
+            PipelineWorker, RunMetadata, StatusService, SystemClock, WorkerManager,
         },
     },
     database::pool::create_pool,
@@ -83,7 +82,6 @@ use crate::{
         exa::ExaClient,
         fetch::{HttpExternalPages, HttpFetchExtract},
         github::GithubClient,
-        llm::GroqClient,
         openai::OpenAiClient,
         s3::S3ObjectStore,
     },
@@ -131,19 +129,10 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         config.openai_api_key.expose_secret(),
         config.openai_base_url.clone(),
     )?);
-    let groq = Arc::new(GroqClient::with_base_url(
-        config.groq_api_key.expose_secret(),
-        config.groq_base_url.clone(),
-        Model::new(
-            "openai/gpt-oss-120b",
-            ModelProvider::GROQ,
-            "openai/gpt-oss-120b",
-            2_000,
-            true,
-            true,
-        ),
+    let insight_text = Arc::new(openai.as_ref().clone().with_provider_model(
+        Model::openai("gpt-6-luna", "gpt-6-luna", 2_000, false),
         INSIGHT_INSTRUCTIONS,
-        Some("medium".to_owned()),
+        None,
     )?);
     let exa = Arc::new(ExaClient::with_base_url(
         config.exa_api_key.expose_secret(),
@@ -224,7 +213,14 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         topic_matches.clone(),
         openai.clone(),
     ));
-    let insight = InsightState::new(insight_service.clone(), accounts.clone());
+    let trackers = Arc::new(TrackerCatalog::new(
+        topics.clone(),
+        data_sources_repository.clone(),
+        insight_service.clone(),
+        data_sources.clone(),
+    ));
+    let insight =
+        InsightState::new(insight_service.clone(), accounts.clone()).with_trackers(trackers);
     let organizations = Arc::new(DieselOrganizationRepository::new(pool.clone()));
     let organization = OrganizationState::new(Arc::new(OrganizationService::new(
         organizations.clone(),
@@ -273,8 +269,8 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         Some(Arc::new(ContentCrawler::new(
             exa.clone(),
             fetch,
-            data_sources_repository,
-            crawled_content,
+            data_sources_repository.clone(),
+            crawled_content.clone(),
             openai.clone(),
             insight_service.clone(),
         ))),
@@ -284,12 +280,13 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         data_sources,
         Some(exa.clone()),
     )));
-    let insight_generator = groq.is_configured().then(|| {
+    let insight_generator = insight_text.is_configured().then(|| {
         Arc::new(RuntimeInsightGenerator::new(
-            topics,
-            topic_matches,
-            Arc::new(DieselCrawledContentRepository::new(pool.clone())),
-            groq,
+            topics.clone(),
+            data_sources_repository.clone(),
+            crawled_content.clone(),
+            exa.clone(),
+            insight_text,
             insight_service.clone(),
             clock,
         )) as Arc<dyn crate::core::worker::InsightGenerationPort>
@@ -305,6 +302,7 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
     worker_manager
         .start()
         .map_err(|error| anyhow::anyhow!("failed to start worker manager: {error}"))?;
+    let insight = insight.with_workers(worker_manager.clone());
     let worker = WorkerState::new(worker_manager.clone(), worker_status.clone());
 
     let drafts = Arc::new(ArticleDraftAdapter::new(articles.clone()));
@@ -315,7 +313,6 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         Arc::new(ApplyPatchTool::new(Some(drafts.clone()))),
         Arc::new(ReplaceLinesTool::new(Some(drafts.clone()))),
         Arc::new(GenerateImagePromptTool::new(text_generation)),
-        Arc::new(AskQuestionTool::new(exa.clone())),
         Arc::new(SearchWebSourcesTool::new(
             exa.clone(),
             source_service.clone(),
@@ -394,11 +391,27 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         },
     );
 
+    let mut tasks = JoinSet::new();
+    let schedule_cancellation = cancellation.child_token();
+    let schedule_manager = worker_manager.clone();
+    let schedule_topics = topics.clone();
+    let schedule_sources = data_sources_repository.clone();
+    tasks.spawn(async move {
+        schedule_insight_checks(
+            schedule_cancellation,
+            schedule_manager,
+            schedule_topics,
+            schedule_sources,
+        )
+        .await;
+        Ok(())
+    });
+
     Ok(Application {
         address: SocketAddr::new(config.host, config.port),
         router: app::router(state, &config.cors_origins)?,
         cancellation,
-        tasks: JoinSet::new(),
+        tasks,
         articles,
         agent_worker: Some(agent_worker),
         image_worker: Some(image_worker),
@@ -529,6 +542,58 @@ async fn drain_application_tasks(
                 errors.push("application tasks did not stop after cancellation".to_owned());
             }
             errors
+        }
+    }
+}
+
+async fn schedule_insight_checks(
+    cancellation: CancellationToken,
+    manager: Arc<WorkerManager>,
+    topics: Arc<DieselInsightTopicRepository>,
+    sources: Arc<DieselDataSourceRepository>,
+) {
+    let mut interval = tokio::time::interval(Duration::from_secs(60));
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        tokio::select! {
+            biased;
+            () = cancellation.cancelled() => return,
+            _ = interval.tick() => {}
+        }
+        if cancellation.is_cancelled() {
+            return;
+        }
+        if manager.is_worker_running("insight") || manager.is_worker_running("pipeline") {
+            continue;
+        }
+        let topics_due = match topics.find_due(1).await {
+            Ok(topics) => topics,
+            Err(error) => {
+                tracing::warn!(%error, "scheduled insight check could not list topics");
+                continue;
+            }
+        };
+        let sources_due = match sources.find_due_to_crawl(1).await {
+            Ok(sources) => sources,
+            Err(error) => {
+                tracing::warn!(%error, "scheduled insight check could not list sources");
+                continue;
+            }
+        };
+        if topics_due.is_empty() && sources_due.is_empty() {
+            continue;
+        }
+        if let Err(error) = manager
+            .run_now(
+                "insight",
+                RunMetadata {
+                    trigger_source: "schedule".to_owned(),
+                    ..RunMetadata::default()
+                },
+            )
+            .await
+        {
+            tracing::warn!(%error, "scheduled insight check did not start");
         }
     }
 }

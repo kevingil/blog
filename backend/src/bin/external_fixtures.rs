@@ -76,8 +76,8 @@ async fn responses(
 ) -> Response<Body> {
     record(&state, "/v1/responses", &request).await;
     let input = response_input_text(&request);
-    let output_text = if request.get("model").and_then(Value::as_str) == Some("openai/gpt-oss-120b")
-    {
+    let model = request.get("model").and_then(Value::as_str);
+    let output_text = if matches!(model, Some("openai/gpt-oss-120b") | Some("gpt-6-luna")) {
         json!({
             "title": "Fixture insight",
             "summary": "A deterministic fixture summary.",
