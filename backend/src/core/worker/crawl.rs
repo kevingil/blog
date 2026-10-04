@@ -139,7 +139,8 @@ impl ContentCrawler {
         };
         let mut content = CrawledContent {
             id: Uuid::new_v4(),
-            data_source_id: source.id,
+            data_source_id: Some(source.id),
+            topic_id: None,
             url: item.url,
             title: Some(item.title),
             content: item.content,
