@@ -135,7 +135,7 @@ diesel::table! {
 
     crawled_content (id) {
         id -> Uuid,
-        data_source_id -> Uuid,
+        data_source_id -> Nullable<Uuid>,
         url -> Text,
         #[max_length = 500]
         title -> Nullable<Varchar>,
@@ -147,6 +147,7 @@ diesel::table! {
         embedding -> Nullable<Vector>,
         meta_data -> Nullable<Jsonb>,
         created_at -> Nullable<Timestamptz>,
+        topic_id -> Nullable<Uuid>,
     }
 }
 
@@ -287,6 +288,7 @@ diesel::table! {
         is_pinned -> Nullable<Bool>,
         is_used_in_article -> Nullable<Bool>,
         meta_data -> Nullable<Jsonb>,
+        data_source_id -> Nullable<Uuid>,
     }
 }
 
@@ -311,6 +313,10 @@ diesel::table! {
         icon -> Nullable<Varchar>,
         created_at -> Nullable<Timestamptz>,
         updated_at -> Nullable<Timestamptz>,
+        #[max_length = 50]
+        check_frequency -> Varchar,
+        next_check_at -> Nullable<Timestamptz>,
+        is_enabled -> Bool,
     }
 }
 
@@ -531,6 +537,8 @@ diesel::joinable!(chat_message -> article (article_id));
 diesel::joinable!(content_topic_match -> crawled_content (content_id));
 diesel::joinable!(content_topic_match -> insight_topic (topic_id));
 diesel::joinable!(crawled_content -> data_source (data_source_id));
+diesel::joinable!(crawled_content -> insight_topic (topic_id));
+diesel::joinable!(insight -> data_source (data_source_id));
 diesel::joinable!(data_source -> account (user_id));
 diesel::joinable!(data_source -> organization (organization_id));
 diesel::joinable!(imagen_request -> file_index (file_index_id));
