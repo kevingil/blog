@@ -180,10 +180,9 @@ export function TipTapEditor({
     }
   }, [editor, content, highlightKey]);
 
-  return (
-    <div className="article-editor relative flex h-full min-h-0 flex-col bg-background">
-      <div className="flex shrink-0 items-center gap-0 border-b border-border/50 px-0.5 py-0.5 md:px-1 md:py-1">
-        <div className="flex min-w-0 flex-1 items-center gap-0 overflow-x-auto [scrollbar-width:none] md:gap-0.5 [&::-webkit-scrollbar]:hidden [&_button]:shrink-0 [&_button]:max-md:h-7 [&_button]:max-md:min-w-7 [&_button]:max-md:px-1">
+  const formatToolbar = (
+    <div className="flex shrink-0 items-center gap-0 border-t border-border/50 px-0.5 py-0.5 md:px-1 md:py-1" aria-label="Text formatting">
+      <div className="flex min-w-0 flex-1 items-center gap-0 overflow-x-auto [scrollbar-width:none] md:gap-0.5 [&::-webkit-scrollbar]:hidden [&_button]:shrink-0 [&_button]:max-md:h-7 [&_button]:max-md:min-w-7 [&_button]:max-md:px-1">
         <Toggle size="sm" type="button" pressed={!!editor?.isActive('bold')} onPressedChange={() => editor?.chain().focus().toggleBold().run()} aria-label="Bold" title="Bold">
           <Bold className="h-3.5 w-3.5" />
         </Toggle>
@@ -244,6 +243,10 @@ export function TipTapEditor({
           </div>
         ) : null}
       </div>
+  );
+
+  return (
+    <div className="article-editor relative flex h-full min-h-0 flex-col bg-background">
       {sideControls}
       <div className="min-h-0 flex-1 overflow-auto">
         <article className="article-editor-document">
@@ -371,6 +374,7 @@ export function TipTapEditor({
           )}
         </article>
       </div>
+      {formatToolbar}
     </div>
   );
 }
