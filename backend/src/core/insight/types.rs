@@ -24,6 +24,9 @@ pub struct InsightTopic {
     pub icon: Option<String>,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
+    pub check_frequency: String,
+    pub next_check_at: Option<DateTime<Utc>>,
+    pub is_enabled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -41,6 +44,7 @@ pub struct Insight {
     pub id: Uuid,
     pub organization_id: Option<Uuid>,
     pub topic_id: Option<Uuid>,
+    pub data_source_id: Option<Uuid>,
     pub title: String,
     pub summary: String,
     pub content: Option<String>,

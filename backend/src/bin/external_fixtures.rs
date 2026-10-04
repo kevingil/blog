@@ -350,7 +350,10 @@ struct FixtureCall {
 }
 
 fn fixture_response(request: &Value) -> FixtureDecision {
-    if request.get("model").and_then(Value::as_str) == Some("openai/gpt-oss-120b") {
+    if matches!(
+        request.get("model").and_then(Value::as_str),
+        Some("openai/gpt-oss-120b") | Some("gpt-6-luna")
+    ) {
         return FixtureDecision {
             text: json!({
                 "title": "Fixture insight",
@@ -704,5 +707,15 @@ mod tests {
         assert_eq!(decision.calls.len(), 2);
         assert!(decision.calls[0].arguments.contains("Second Title"));
         assert!(decision.calls[1].arguments.contains("https://openjdk.org"));
+    }
+
+    #[test]
+    fn insight_models_return_a_briefing() {
+        for model in ["openai/gpt-oss-120b", "gpt-6-luna"] {
+            let decision = fixture_response(&json!({"model": model, "input": "brief the tracker"}));
+            assert!(decision.calls.is_empty(), "{model}");
+            assert!(decision.text.contains("Fixture insight"), "{model}");
+            assert!(decision.text.contains("First fixture takeaway"), "{model}");
+        }
     }
 }

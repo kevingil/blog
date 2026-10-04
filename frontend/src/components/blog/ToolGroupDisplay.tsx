@@ -50,7 +50,7 @@ const ARTIFACT_TOOLS = new Set(['replace_lines', 'rewrite_document', 'apply_patc
 /**
  * Tools that can be expanded to show content (but still use subtle styling)
  */
-const EXPANDABLE_TOOLS = new Set(['read_document', 'search_web_sources', 'web_search', 'ask_question', 'replace_lines', 'sandbox']);
+const EXPANDABLE_TOOLS = new Set(['read_document', 'search_web_sources', 'deep_research', 'web_search', 'ask_question', 'replace_lines', 'sandbox']);
 
 /**
  * Check if a tool should use the full card UI
@@ -90,6 +90,7 @@ function mapStatus(status: ToolCallStatus): 'pending' | 'running' | 'completed' 
 function getToolIcon(toolName: string) {
   switch (toolName) {
     case 'search_web_sources':
+    case 'deep_research':
     case 'web_search':
       return <Search className="h-4 w-4" />;
     case 'ask_question':
@@ -155,6 +156,7 @@ function ToolResultContent({ call }: { call: ToolCallRecord }) {
   // Handle different tool types
   switch (name) {
     case 'search_web_sources':
+    case 'deep_research':
     case 'web_search':
     case 'get_relevant_sources':
       return <SearchResultsContent result={result} />;
@@ -376,6 +378,7 @@ function getExpandableContent(call: ToolCallRecord): React.ReactNode | null {
       );
     }
     case 'search_web_sources':
+    case 'deep_research':
     case 'web_search':
     case 'get_relevant_sources': {
       const searchResults = (call.result.search_results || call.result.relevant_sources || []) as SearchResult[];

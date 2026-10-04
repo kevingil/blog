@@ -287,7 +287,10 @@ impl From<CoreRecommendationsResponse> for DataSourceRecommendationsResponse {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct CrawledContentResponse {
     pub id: Uuid,
-    pub data_source_id: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data_source_id: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topic_id: Option<Uuid>,
     pub url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
@@ -313,6 +316,7 @@ impl From<CoreCrawledContentResponse> for CrawledContentResponse {
         Self {
             id: value.id,
             data_source_id: value.data_source_id,
+            topic_id: value.topic_id,
             url: value.url,
             title: value.title,
             content: value.content,

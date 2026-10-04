@@ -170,6 +170,30 @@ struct ExaSearchResult {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExaDeepSearchRequest<'a> {
+    query: &'a str,
+    #[serde(rename = "type")]
+    search_type: &'static str,
+    num_results: i32,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    include_domains: Vec<String>,
+    contents: ExaDeepContents,
+}
+
+#[derive(Debug, Serialize)]
+struct ExaDeepContents {
+    highlights: bool,
+    text: ExaDeepText,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExaDeepText {
+    max_characters: i32,
+}
+
+#[derive(Debug, Serialize)]
 struct ExaAnswerRequest<'a> {
     query: &'a str,
     text: bool,
@@ -341,6 +365,64 @@ impl ResearchPort for ExaClient {
                     title: result.title,
                     url: result.url,
                     text: result.text,
+                    summary: result.summary,
+                    author: result.author,
+                    published_date: result.published_date,
+                    highlights: result.highlights,
+                    score: result.score,
+                    favicon: result.favicon,
+                })
+                .collect(),
+            request_id: response.request_id,
+            resolved_search_type: response.resolved_search_type,
+            cost_dollars: response.cost_dollars,
+        })
+    }
+
+    async fn deep_search(
+        &self,
+        query: &str,
+        domain: Option<&str>,
+    ) -> Result<WebSearchResponse, AppError> {
+        if query.is_empty() {
+            return Err(AppError::InvalidInput(
+                "search query cannot be empty".to_owned(),
+            ));
+        }
+        let include_domains = domain
+            .filter(|value| !value.is_empty())
+            .map(|value| vec![value.to_owned()])
+            .unwrap_or_default();
+        let response: ExaSearchResponse = self
+            .post(
+                "/search",
+                &ExaDeepSearchRequest {
+                    query,
+                    search_type: "deep",
+                    num_results: 8,
+                    include_domains,
+                    contents: ExaDeepContents {
+                        highlights: true,
+                        text: ExaDeepText {
+                            max_characters: 4_000,
+                        },
+                    },
+                },
+            )
+            .await?;
+        Ok(WebSearchResponse {
+            results: response
+                .results
+                .into_iter()
+                .map(|result| WebSearchResult {
+                    id: result.id,
+                    title: result.title,
+                    url: result.url,
+                    text: if result.text.is_empty() {
+                        result.highlights.join("\n")
+                    } else {
+                        result.text
+                    },
                     summary: result.summary,
                     author: result.author,
                     published_date: result.published_date,

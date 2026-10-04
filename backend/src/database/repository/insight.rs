@@ -211,6 +211,35 @@ impl InsightRepository for DieselInsightRepository {
         }
     }
 
+    async fn find_latest_by_topic_id(&self, topic_id: Uuid) -> Result<Option<Insight>, AppError> {
+        let mut connection = self.connection().await?;
+        insight::table
+            .filter(insight::topic_id.eq(topic_id))
+            .order(insight::generated_at.desc())
+            .select(InsightRow::as_select())
+            .first(&mut connection)
+            .await
+            .optional()
+            .map(|row| row.map(Into::into))
+            .map_err(|_| AppError::Database)
+    }
+
+    async fn find_latest_by_data_source_id(
+        &self,
+        data_source_id: Uuid,
+    ) -> Result<Option<Insight>, AppError> {
+        let mut connection = self.connection().await?;
+        insight::table
+            .filter(insight::data_source_id.eq(data_source_id))
+            .order(insight::generated_at.desc())
+            .select(InsightRow::as_select())
+            .first(&mut connection)
+            .await
+            .optional()
+            .map(|row| row.map(Into::into))
+            .map_err(|_| AppError::Database)
+    }
+
     async fn count_unread(&self, organization_id: Uuid) -> Result<i64, AppError> {
         let mut connection = self.connection().await?;
         insight::table
@@ -282,6 +311,7 @@ impl From<InsightRow> for Insight {
             is_pinned: row.is_pinned.unwrap_or_default(),
             is_used_in_article: row.is_used_in_article.unwrap_or_default(),
             meta_data: row.meta_data.and_then(metadata),
+            data_source_id: row.data_source_id,
         }
     }
 }
@@ -305,6 +335,7 @@ fn new_row(value: &Insight) -> NewInsightRow {
         is_pinned: value.is_pinned,
         is_used_in_article: value.is_used_in_article,
         meta_data: metadata_value(value.meta_data.as_ref()),
+        data_source_id: value.data_source_id,
     }
 }
 

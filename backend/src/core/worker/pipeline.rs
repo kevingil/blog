@@ -126,12 +126,8 @@ impl Worker for PipelineWorker {
     }
 
     async fn run(&self, context: WorkerContext) -> Result<WorkerResult, WorkerFailure> {
-        let crawl = self
-            .run_step(&context, "crawl", "Crawling sources", 0, 50)
-            .await
-            .map_err(|error| WorkerFailure::new(format!("crawl step failed: {error}")))?;
         let insight = self
-            .run_step(&context, "insight", "Generating insights", 50, 50)
+            .run_step(&context, "insight", "Generating insights", 0, 100)
             .await
             .map_err(|error| WorkerFailure::new(format!("insight step failed: {error}")))?;
         self.status.update_status(
@@ -141,28 +137,14 @@ impl Worker for PipelineWorker {
             "Pipeline complete",
         );
 
-        let warning =
-            crawl == WorkerResultStatus::Warning || insight == WorkerResultStatus::Warning;
-        let mut result = if warning {
+        let mut result = if insight == WorkerResultStatus::Warning {
             WorkerResult::warning(
                 "Pipeline completed with warnings",
-                [
-                    (crawl == WorkerResultStatus::Warning)
-                        .then_some("Crawl completed with warnings".to_owned()),
-                    (insight == WorkerResultStatus::Warning)
-                        .then_some("Insight generation completed with warnings".to_owned()),
-                ]
-                .into_iter()
-                .flatten()
-                .collect(),
+                vec!["Insight generation completed with warnings".to_owned()],
             )
         } else {
             WorkerResult::completed("Pipeline completed successfully")
         };
-        result.metrics.insert(
-            "crawl_status".to_owned(),
-            Value::String(crawl.as_str().to_owned()),
-        );
         result.metrics.insert(
             "insight_status".to_owned(),
             Value::String(insight.as_str().to_owned()),

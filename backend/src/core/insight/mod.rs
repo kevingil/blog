@@ -1,5 +1,6 @@
 mod ports;
 mod service;
+mod tracker;
 mod types;
 
 pub use ports::{
@@ -7,6 +8,7 @@ pub use ports::{
     InsightTopicRepository, UserInsightStatusRepository,
 };
 pub use service::InsightService;
+pub use tracker::{CreateTracker, Tracker, TrackerCatalog, TrackerKind, UpdateTracker};
 pub use types::{
     ContentTopicMatch, Insight, InsightResponse, InsightSearchRequest, InsightTopic,
     InsightTopicCreateRequest, InsightTopicResponse, InsightTopicUpdateRequest, InsightWithSources,

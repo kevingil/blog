@@ -197,6 +197,37 @@ impl CrawledContentRepository for DieselCrawledContentRepository {
         if content.id.is_nil() {
             content.id = Uuid::new_v4();
         }
+        if content.data_source_id.is_none() {
+            let Some(topic_id) = content.topic_id else {
+                return Err(AppError::InvalidInput(
+                    "crawled content needs a source or a topic".to_owned(),
+                ));
+            };
+            let mut connection = self.connection().await?;
+            let existing = crawled_content::table
+                .filter(crawled_content::topic_id.eq(topic_id))
+                .filter(crawled_content::url.eq(&content.url))
+                .select(CrawledContentRow::as_select())
+                .first(&mut connection)
+                .await
+                .optional()
+                .map_err(map_error)?;
+            if let Some(existing) = existing {
+                content.id = existing.id;
+                drop(connection);
+                return CrawledContentRepository::update(self, content).await;
+            }
+            let row = new_row(content, chrono::Utc::now());
+            return diesel::insert_into(crawled_content::table)
+                .values(row)
+                .returning(crawled_content::id)
+                .get_result::<Uuid>(&mut connection)
+                .await
+                .map(|persisted_id| {
+                    content.id = persisted_id;
+                })
+                .map_err(map_error);
+        }
         let now = chrono::Utc::now();
         let row = new_row(content, now);
         let changes = changeset(content);
@@ -266,6 +297,10 @@ impl CrawledContentRepository for DieselCrawledContentRepository {
 
 #[async_trait]
 impl InsightContentRepository for DieselCrawledContentRepository {
+    async fn save(&self, content: &mut CrawledContent) -> Result<(), AppError> {
+        CrawledContentRepository::save(self, content).await
+    }
+
     async fn find_by_ids(&self, ids: &[Uuid]) -> Result<Vec<CrawledContent>, AppError> {
         self.find_ids(ids).await
     }
@@ -301,6 +336,7 @@ impl From<CrawledContentRow> for CrawledContent {
         Self {
             id: row.id,
             data_source_id: row.data_source_id,
+            topic_id: row.topic_id,
             url: row.url,
             title: row.title,
             content: row.content,
@@ -327,12 +363,14 @@ fn new_row(content: &CrawledContent, now: chrono::DateTime<chrono::Utc>) -> NewC
         embedding: content.embedding.clone().map(Vector::from),
         meta_data: metadata_value(content.meta_data.as_ref()),
         created_at: content.created_at.unwrap_or(now),
+        topic_id: content.topic_id,
     }
 }
 
 fn changeset(content: &CrawledContent) -> CrawledContentChangeset {
     CrawledContentChangeset {
         data_source_id: content.data_source_id,
+        topic_id: content.topic_id,
         url: content.url.clone(),
         title: content.title.clone(),
         content: content.content.clone(),

@@ -411,6 +411,18 @@ impl InsightGenerationPort for Generator {
         Ok(self.topics.clone())
     }
 
+    async fn sources(&self) -> Result<Vec<DataSource>, WorkerFailure> {
+        Ok(Vec::new())
+    }
+
+    async fn generate_for_source(
+        &self,
+        _source: &DataSource,
+        _cancellation: &CancellationToken,
+    ) -> Result<InsightTopicResult, WorkerFailure> {
+        Err(WorkerFailure::new("missing insight fixture"))
+    }
+
     async fn generate_for_topic(
         &self,
         _topic: &InsightTopic,
@@ -439,6 +451,9 @@ fn topic(name: &str) -> InsightTopic {
         icon: None,
         created_at: None,
         updated_at: None,
+        check_frequency: "daily".to_owned(),
+        next_check_at: None,
+        is_enabled: true,
     }
 }
 

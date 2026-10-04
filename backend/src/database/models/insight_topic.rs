@@ -23,6 +23,9 @@ pub struct InsightTopicRow {
     pub icon: Option<String>,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
+    pub check_frequency: String,
+    pub next_check_at: Option<DateTime<Utc>>,
+    pub is_enabled: bool,
 }
 
 #[derive(Debug, Clone, Insertable)]
@@ -41,6 +44,9 @@ pub struct NewInsightTopicRow {
     pub icon: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub check_frequency: String,
+    pub next_check_at: Option<DateTime<Utc>>,
+    pub is_enabled: bool,
 }
 
 #[derive(Debug, Clone, AsChangeset)]
@@ -58,4 +64,7 @@ pub struct InsightTopicChangeset {
     pub color: Option<String>,
     pub icon: Option<String>,
     pub updated_at: Option<DateTime<Utc>>,
+    pub check_frequency: String,
+    pub next_check_at: Option<DateTime<Utc>>,
+    pub is_enabled: bool,
 }

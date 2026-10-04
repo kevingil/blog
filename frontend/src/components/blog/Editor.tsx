@@ -146,9 +146,9 @@ function mapConversationMessages(messages: any[]): ChatMessage[] {
         }],
       };
 
-      if (toolName === 'search_web_sources') {
+      if (toolName === 'search_web_sources' || toolName === 'deep_research') {
         chatMsg.tool_context = {
-          tool_name: 'search_web_sources',
+          tool_name: toolName,
           tool_id: toolExec.tool_id || '',
           status: 'completed',
           search_query: output?.query || '',

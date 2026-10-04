@@ -212,7 +212,7 @@ impl OpenAiClient {
         }
     }
 
-    pub(crate) async fn generate_provider_text(&self, input: &str) -> Result<String, AppError> {
+    pub async fn generate_provider_text(&self, input: &str) -> Result<String, AppError> {
         if !self.is_configured() {
             return Err(AppError::External);
         }
@@ -610,12 +610,11 @@ impl Provider for OpenAiClient {
             .iter()
             .map(|tool| tool.info().name)
             .collect::<Vec<_>>();
-        if hosted {
-            for name in ["web_search", "sandbox"] {
-                if !tool_names.iter().any(|existing| existing == name) {
-                    tool_names.push((*name).to_owned());
-                }
-            }
+        if !tool_names.iter().any(|existing| existing == "web_search") {
+            tool_names.push("web_search".to_owned());
+        }
+        if hosted && !tool_names.iter().any(|existing| existing == "sandbox") {
+            tool_names.push("sandbox".to_owned());
         }
         let instructions = self
             .system_message
@@ -670,9 +669,9 @@ fn hosted_tools_enabled(base_url: &str) -> bool {
 
 fn response_tools(tools: &[Arc<dyn Tool>], hosted: bool) -> Vec<serde_json::Value> {
     let mut items = Vec::new();
+    // Ordinary lookup uses OpenAI web search. Code interpreter stays on the hosted OpenAI API.
+    items.push(serde_json::json!({"type": "web_search"}));
     if hosted {
-        // OpenAI runs these inside the Responses request. They are not functions.
-        items.push(serde_json::json!({"type": "web_search"}));
         items.push(serde_json::json!({
             "type": "code_interpreter",
             "container": {"type": "auto"}

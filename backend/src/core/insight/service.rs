@@ -166,6 +166,7 @@ impl InsightService {
         source_content_ids: Option<Vec<Uuid>>,
         period_start: Option<DateTime<Utc>>,
         period_end: Option<DateTime<Utc>>,
+        data_source_id: Option<Uuid>,
     ) -> Result<InsightResponse, AppError> {
         let embedding = self
             .embeddings
@@ -176,6 +177,7 @@ impl InsightService {
             id: Uuid::new_v4(),
             organization_id,
             topic_id,
+            data_source_id,
             title,
             summary,
             content: Some(content),
@@ -198,6 +200,23 @@ impl InsightService {
                 .await;
         }
         Ok(insight.into())
+    }
+
+    pub async fn latest_briefing_summary(
+        &self,
+        topic_id: Option<Uuid>,
+        data_source_id: Option<Uuid>,
+    ) -> Result<Option<String>, AppError> {
+        let insight = if let Some(topic_id) = topic_id {
+            self.insights.find_latest_by_topic_id(topic_id).await?
+        } else if let Some(data_source_id) = data_source_id {
+            self.insights
+                .find_latest_by_data_source_id(data_source_id)
+                .await?
+        } else {
+            None
+        };
+        Ok(insight.map(|insight| insight.summary))
     }
 
     pub async fn mark_insight_as_read(&self, id: Uuid) -> Result<(), AppError> {
@@ -356,6 +375,9 @@ impl InsightService {
             icon: request.icon,
             created_at: None,
             updated_at: None,
+            check_frequency: "daily".to_owned(),
+            next_check_at: Some(Utc::now()),
+            is_enabled: true,
         };
         self.topics.save(&mut topic).await?;
         Ok(topic.into())

@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use serde_json::{Map, json};
 use tokio_util::sync::CancellationToken;
 
-use crate::core::insight::InsightTopic;
+use crate::core::{datasource::DataSource, insight::InsightTopic};
 
 use super::{StatusService, Worker, WorkerContext, WorkerFailure, WorkerResult, WorkerState};
 
@@ -22,6 +22,14 @@ pub trait InsightGenerationPort: Send + Sync {
     fn is_configured(&self) -> bool;
 
     async fn topics(&self) -> Result<Vec<InsightTopic>, WorkerFailure>;
+
+    async fn sources(&self) -> Result<Vec<DataSource>, WorkerFailure>;
+
+    async fn generate_for_source(
+        &self,
+        source: &DataSource,
+        cancellation: &CancellationToken,
+    ) -> Result<InsightTopicResult, WorkerFailure>;
 
     async fn generate_for_topic(
         &self,
@@ -72,38 +80,85 @@ impl Worker for InsightWorker {
             ));
         };
         self.status
-            .update_status(self.name(), WorkerState::Running, 0, "Fetching topics...");
+            .update_status(self.name(), WorkerState::Running, 0, "Fetching trackers...");
+        let sources = tokio::select! {
+            biased;
+            () = context.cancelled() => return Err(WorkerFailure::new("operation cancelled")),
+            result = generator.sources() => result
+                .map_err(|error| WorkerFailure::new(format!("failed to get sources: {error}")))?,
+        };
         let topics = tokio::select! {
             biased;
             () = context.cancelled() => return Err(WorkerFailure::new("operation cancelled")),
             result = generator.topics() => result
                 .map_err(|error| WorkerFailure::new(format!("failed to get topics: {error}")))?,
         };
-        if topics.is_empty() {
+        if sources.is_empty() && topics.is_empty() {
             self.status
-                .update_status(self.name(), WorkerState::Running, 100, "No topics found");
+                .update_status(self.name(), WorkerState::Running, 100, "No trackers due");
             return Ok(WorkerResult::warning(
-                "No topics found for insight generation",
-                vec!["No topics were configured".to_owned()],
+                "No trackers due for insight generation",
+                vec!["No trackers were due".to_owned()],
             ));
         }
-        let total =
-            i32::try_from(topics.len()).map_err(|_| WorkerFailure::new("too many topics"))?;
+        let total = i32::try_from(sources.len() + topics.len())
+            .map_err(|_| WorkerFailure::new("too many topics"))?;
         self.status.set_progress(
             self.name(),
             0,
             total,
-            format!("Found {total} topics to process"),
+            format!("Found {total} trackers to check"),
         );
         let mut skipped_insufficient = 0_i32;
         let mut skipped_recent = 0_i32;
         let mut failed = 0_i32;
         let mut created = 0_i32;
-        for (index, topic) in topics.into_iter().enumerate() {
+        let mut index = 0_usize;
+        for source in sources {
             if context.cancellation().is_cancelled() {
                 return Err(WorkerFailure::new("operation cancelled"));
             }
             let done = i32::try_from(index).map_err(|_| WorkerFailure::new("too many topics"))?;
+            index += 1;
+            self.status.set_progress(
+                self.name(),
+                done,
+                total,
+                format!("Checking domain: {}", source.name),
+            );
+            let generated = tokio::select! {
+                biased;
+                () = context.cancelled() => return Err(WorkerFailure::new("operation cancelled")),
+                result = generator.generate_for_source(&source, context.cancellation()) => result,
+            };
+            match generated {
+                Ok(InsightTopicResult::Created) => created += 1,
+                Ok(InsightTopicResult::SkippedInsufficient) => skipped_insufficient += 1,
+                Ok(InsightTopicResult::SkippedRecent) => skipped_recent += 1,
+                Err(error) => {
+                    failed += 1;
+                    let mut meta_data = Map::new();
+                    meta_data.insert("data_source_id".to_owned(), json!(source.id));
+                    meta_data.insert("error".to_owned(), json!(error.to_string()));
+                    let _ = context
+                        .task_run()
+                        .record_event(
+                            None,
+                            "topic_failed",
+                            "warning",
+                            format!("Domain {} failed", source.name),
+                            meta_data,
+                        )
+                        .await;
+                }
+            }
+        }
+        for topic in topics {
+            if context.cancellation().is_cancelled() {
+                return Err(WorkerFailure::new("operation cancelled"));
+            }
+            let done = i32::try_from(index).map_err(|_| WorkerFailure::new("too many topics"))?;
+            index += 1;
             self.status.set_progress(
                 self.name(),
                 done,
