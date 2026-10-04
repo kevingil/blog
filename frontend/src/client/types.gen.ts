@@ -225,7 +225,8 @@ export type CrawlTriggeredResponse = {
 
 export type CrawledContentResponse = {
     id: string;
-    data_source_id: string;
+    data_source_id?: string | null;
+    topic_id?: string | null;
     url: string;
     title?: string | null;
     content: string;
@@ -1474,6 +1475,26 @@ export type SuccessResponseTaskRunListResponse = {
     };
 };
 
+export type SuccessResponseTrackerCheckResponse = {
+    data: {
+        tracker: TrackerResponse;
+        started: boolean;
+    };
+};
+
+export type SuccessResponseTrackerResponse = {
+    data: {
+        id: string;
+        kind: string;
+        name: string;
+        target: string;
+        frequency: string;
+        enabled: boolean;
+        last_checked_at?: string | null;
+        next_check_at?: string | null;
+    };
+};
+
 export type SuccessResponseUploadFileResponse = {
     data: {
         success: boolean;
@@ -1507,7 +1528,8 @@ export type SuccessResponseUserProfileResponse = {
 export type SuccessResponseVecCrawledContentResponse = {
     data: Array<{
         id: string;
-        data_source_id: string;
+        data_source_id?: string | null;
+        topic_id?: string | null;
         url: string;
         title?: string | null;
         content: string;
@@ -1608,6 +1630,19 @@ export type SuccessResponseVecOrganizationResponse = {
     }>;
 };
 
+export type SuccessResponseVecTrackerResponse = {
+    data: Array<{
+        id: string;
+        kind: string;
+        name: string;
+        target: string;
+        frequency: string;
+        enabled: boolean;
+        last_checked_at?: string | null;
+        next_check_at?: string | null;
+    }>;
+};
+
 export type SuccessResponseWorkerStatusResponse = {
     data: {
         name: string;
@@ -1687,6 +1722,32 @@ export type TaskRunStepResponse = {
     metrics?: {
         [key: string]: unknown;
     };
+};
+
+export type TrackerCheckResponse = {
+    tracker: TrackerResponse;
+    started: boolean;
+};
+
+export type TrackerCreateRequest = {
+    target: string;
+    frequency: string;
+};
+
+export type TrackerResponse = {
+    id: string;
+    kind: string;
+    name: string;
+    target: string;
+    frequency: string;
+    enabled: boolean;
+    last_checked_at?: string | null;
+    next_check_at?: string | null;
+};
+
+export type TrackerUpdateRequest = {
+    frequency?: string | null;
+    enabled?: boolean | null;
 };
 
 export type UpdateAccountRequest = {
@@ -3357,6 +3418,124 @@ export type UpdateInsightTopicResponses = {
 };
 
 export type UpdateInsightTopicResponse = UpdateInsightTopicResponses[keyof UpdateInsightTopicResponses];
+
+export type ListTrackersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/insights/trackers';
+};
+
+export type ListTrackersErrors = {
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type ListTrackersError = ListTrackersErrors[keyof ListTrackersErrors];
+
+export type ListTrackersResponses = {
+    200: SuccessResponseVecTrackerResponse;
+};
+
+export type ListTrackersResponse = ListTrackersResponses[keyof ListTrackersResponses];
+
+export type CreateTrackerData = {
+    body: TrackerCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/insights/trackers';
+};
+
+export type CreateTrackerErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    409: ErrorEnvelope;
+    500: ErrorEnvelope;
+    502: ErrorEnvelope;
+};
+
+export type CreateTrackerError = CreateTrackerErrors[keyof CreateTrackerErrors];
+
+export type CreateTrackerResponses = {
+    201: SuccessResponseTrackerResponse;
+};
+
+export type CreateTrackerResponse = CreateTrackerResponses[keyof CreateTrackerResponses];
+
+export type DeleteTrackerData = {
+    body?: never;
+    path: {
+        kind: string;
+        id: string;
+    };
+    query?: never;
+    url: '/insights/trackers/{kind}/{id}';
+};
+
+export type DeleteTrackerErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type DeleteTrackerError = DeleteTrackerErrors[keyof DeleteTrackerErrors];
+
+export type DeleteTrackerResponses = {
+    200: SuccessResponseSuccessFlag;
+};
+
+export type DeleteTrackerResponse = DeleteTrackerResponses[keyof DeleteTrackerResponses];
+
+export type UpdateTrackerData = {
+    body: TrackerUpdateRequest;
+    path: {
+        kind: string;
+        id: string;
+    };
+    query?: never;
+    url: '/insights/trackers/{kind}/{id}';
+};
+
+export type UpdateTrackerErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type UpdateTrackerError = UpdateTrackerErrors[keyof UpdateTrackerErrors];
+
+export type UpdateTrackerResponses = {
+    200: SuccessResponseTrackerResponse;
+};
+
+export type UpdateTrackerResponse = UpdateTrackerResponses[keyof UpdateTrackerResponses];
+
+export type CheckTrackerData = {
+    body?: never;
+    path: {
+        kind: string;
+        id: string;
+    };
+    query?: never;
+    url: '/insights/trackers/{kind}/{id}/check';
+};
+
+export type CheckTrackerErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type CheckTrackerError = CheckTrackerErrors[keyof CheckTrackerErrors];
+
+export type CheckTrackerResponses = {
+    200: SuccessResponseTrackerCheckResponse;
+};
+
+export type CheckTrackerResponse = CheckTrackerResponses[keyof CheckTrackerResponses];
 
 export type GetUnreadInsightCountData = {
     body?: never;
