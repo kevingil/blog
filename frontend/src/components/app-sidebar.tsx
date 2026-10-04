@@ -95,14 +95,6 @@ const navigationData = {
           title: "All Insights",
           url: "/dashboard/insights",
         },
-        {
-          title: "Topics",
-          url: "/dashboard/insights/topics",
-        },
-        {
-          title: "Sources",
-          url: "/dashboard/insights/sources",
-        },
       ],
     },
     {

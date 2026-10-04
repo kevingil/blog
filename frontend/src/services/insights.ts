@@ -38,9 +38,36 @@ export interface Insight {
   topic_icon?: string;
 }
 
+export interface Tracker {
+  id: string;
+  kind: "domain" | "subject";
+  name: string;
+  target: string;
+  frequency: string;
+  enabled: boolean;
+  last_checked_at?: string;
+  next_check_at?: string;
+}
+
+export interface CreateTrackerRequest {
+  target: string;
+  frequency: string;
+}
+
+export interface UpdateTrackerRequest {
+  frequency?: string;
+  enabled?: boolean;
+}
+
+export interface TrackerCheckResponse {
+  tracker: Tracker;
+  started: boolean;
+}
+
 export interface CrawledContent {
   id: string;
-  data_source_id: string;
+  data_source_id?: string;
+  topic_id?: string;
   url: string;
   title?: string;
   content: string;
@@ -155,5 +182,38 @@ export async function searchCrawledContent(query: string, limit: number = 10): P
 export async function getRecentCrawledContent(limit: number = 20): Promise<CrawledContent[]> {
   return generatedData<CrawledContent[]>(
     Insights.getRecentInsightContent({ query: { limit } }),
+  );
+}
+
+export async function listTrackers(): Promise<Tracker[]> {
+  return generatedData<Tracker[]>(Insights.listTrackers());
+}
+
+export async function createTracker(request: CreateTrackerRequest): Promise<Tracker> {
+  return generatedData<Tracker>(Insights.createTracker({ body: request }));
+}
+
+export async function updateTracker(
+  kind: Tracker["kind"],
+  id: string,
+  request: UpdateTrackerRequest,
+): Promise<Tracker> {
+  return generatedData<Tracker>(
+    Insights.updateTracker({ path: { kind, id }, body: request }),
+  );
+}
+
+export async function deleteTracker(kind: Tracker["kind"], id: string): Promise<void> {
+  await generatedData<{ success: boolean }>(
+    Insights.deleteTracker({ path: { kind, id } }),
+  );
+}
+
+export async function checkTracker(
+  kind: Tracker["kind"],
+  id: string,
+): Promise<TrackerCheckResponse> {
+  return generatedData<TrackerCheckResponse>(
+    Insights.checkTracker({ path: { kind, id } }),
   );
 }

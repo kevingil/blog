@@ -1,36 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowRight,
   Lightbulb,
   Tag,
   Calendar,
   Pin,
   Check,
-  Clock3,
   Loader2,
   Play,
-  RefreshCw,
   Search,
-  Sparkles,
-  Square,
-  WandSparkles,
-  XCircle,
+  Trash2,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -49,127 +35,91 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAdminDashboard } from "@/services/dashboard/dashboard";
 import {
-  getTaskRunStatusLabel,
-  listTaskRuns,
-  type TaskRun,
-} from "@/services/taskRuns";
-import {
+  checkTracker,
+  createTracker,
+  deleteTracker,
   listInsights,
   listTopics,
+  listTrackers,
   markInsightAsRead,
-  toggleInsightPinned,
   searchInsights,
+  toggleInsightPinned,
+  updateTracker,
   type Insight,
+  type Tracker,
 } from "@/services/insights";
 import { useWorkerStatuses } from "@/hooks/use-worker-statuses";
-import {
-  PIPELINE_WORKER_NAME,
-  getWorkerDescription,
-  getWorkerDisplayName,
-  runWorker,
-  stopWorker,
-  type WorkerState,
-  type WorkerStatus,
-} from "@/services/workers";
+import { getWorkerDisplayName, type WorkerStatus } from "@/services/workers";
 
 export const Route = createFileRoute("/dashboard/insights/")({
   component: InsightsPage,
 });
 
+const FREQUENCIES = [
+  { value: "hourly", label: "Hourly" },
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+];
+
 function InsightsPage() {
   const [page, setPage] = useState(1);
   const [selectedTopicId, setSelectedTopicId] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [isWorkflowDialogOpen, setIsWorkflowDialogOpen] = useState(false);
-  const [workflowAction, setWorkflowAction] = useState<string | null>(null);
   const { toast } = useToast();
   const { setPageTitle } = useAdminDashboard();
   const queryClient = useQueryClient();
   const workerStatuses = useWorkerStatuses();
-  const previousStatusesRef = useRef<Record<string, WorkerStatus>>({});
+  const previousInsightStatus = useRef<WorkerStatus | undefined>(undefined);
 
   useEffect(() => {
     setPageTitle("Insights");
   }, [setPageTitle]);
 
   useEffect(() => {
-    const watchedWorkers = [PIPELINE_WORKER_NAME, "crawl", "insight"];
+    const nextStatus = workerStatuses.insight;
+    const previousStatus = previousInsightStatus.current;
+    previousInsightStatus.current = nextStatus;
+    if (!nextStatus || previousStatus?.state === nextStatus.state) {
+      return;
+    }
+    if (nextStatus.state === "completed") {
+      toast({
+        title: `${getWorkerDisplayName("insight")} completed`,
+        description: nextStatus.message || "The research check finished.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["insights"] });
+      queryClient.invalidateQueries({ queryKey: ["insight-trackers"] });
+    }
+    if (nextStatus.state === "failed") {
+      toast({
+        title: `${getWorkerDisplayName("insight")} failed`,
+        description: nextStatus.error || nextStatus.message || "The research check failed.",
+        variant: "destructive",
+      });
+    }
+  }, [queryClient, toast, workerStatuses.insight]);
 
-    watchedWorkers.forEach((workerName) => {
-      const previousStatus = previousStatusesRef.current[workerName];
-      const nextStatus = workerStatuses[workerName];
-
-      if (!nextStatus || previousStatus?.state === nextStatus.state) {
-        return;
-      }
-
-      if (nextStatus.state === "completed") {
-        toast({
-          title: `${getWorkerDisplayName(workerName)} completed`,
-          description:
-            nextStatus.message || "Workflow step completed successfully.",
-        });
-        queryClient.invalidateQueries({ queryKey: ["insights"] });
-        queryClient.invalidateQueries({ queryKey: ["task-runs"] });
-      }
-
-      if (nextStatus.state === "failed") {
-        toast({
-          title: `${getWorkerDisplayName(workerName)} failed`,
-          description:
-            nextStatus.error || nextStatus.message || "Workflow step failed.",
-          variant: "destructive",
-        });
-        queryClient.invalidateQueries({ queryKey: ["task-runs"] });
-      }
-    });
-
-    previousStatusesRef.current = workerStatuses;
-  }, [queryClient, toast, workerStatuses]);
-
-  // Load topics
   const { data: topics = [] } = useQuery({
     queryKey: ["insight-topics"],
     queryFn: listTopics,
   });
 
-  // Load insights
   const { data: insightsData, isLoading } = useQuery({
     queryKey: ["insights", page, selectedTopicId],
     queryFn: () =>
-      listInsights(
-        page,
-        12,
-        selectedTopicId === "all" ? undefined : selectedTopicId,
-      ),
+      listInsights(page, 12, selectedTopicId === "all" ? undefined : selectedTopicId),
   });
 
-  // Search insights
   const { data: searchResults, isLoading: isSearchLoading } = useQuery({
     queryKey: ["insights-search", searchQuery],
     queryFn: () => searchInsights(searchQuery, 20),
     enabled: searchQuery.length > 2,
   });
 
-  const insights =
-    searchQuery.length > 2 ? searchResults || [] : insightsData?.insights || [];
+  const insights = searchQuery.length > 2 ? searchResults || [] : insightsData?.insights || [];
   const total = insightsData?.total || 0;
   const totalPages = Math.ceil(total / 12);
-  const workflowStatuses = useMemo(
-    () => ({
-      pipeline: workerStatuses[PIPELINE_WORKER_NAME],
-      crawl: workerStatuses["crawl"],
-      insight: workerStatuses["insight"],
-    }),
-    [workerStatuses],
-  );
-  const { data: latestPipelineRuns } = useQuery({
-    queryKey: ["task-runs", "latest-pipeline"],
-    queryFn: () => listTaskRuns({ taskName: "pipeline", limit: 1 }),
-  });
-  const latestPipelineRun = latestPipelineRuns?.runs?.[0];
 
-  // Mutations
   const markReadMutation = useMutation({
     mutationFn: markInsightAsRead,
     onSuccess: () => {
@@ -185,51 +135,6 @@ function InsightsPage() {
     },
   });
 
-  const handleMarkAsRead = async (insightId: string) => {
-    markReadMutation.mutate(insightId);
-  };
-
-  const handleTogglePin = async (e: React.MouseEvent, insightId: string) => {
-    e.stopPropagation();
-    togglePinMutation.mutate(insightId);
-  };
-
-  const handleWorkerAction = async (
-    workerName: string,
-    action: "run" | "stop",
-  ) => {
-    setWorkflowAction(`${action}:${workerName}`);
-    try {
-      if (action === "run") {
-        await runWorker(workerName);
-        toast({
-          title: `${getWorkerDisplayName(workerName)} started`,
-          description:
-            workerName === PIPELINE_WORKER_NAME
-              ? "The full insights pipeline is now running."
-              : `${getWorkerDisplayName(workerName)} is now running.`,
-        });
-      } else {
-        await stopWorker(workerName);
-        toast({
-          title: `${getWorkerDisplayName(workerName)} stopped`,
-          description: `${getWorkerDisplayName(workerName)} has been stopped.`,
-        });
-      }
-    } catch (error) {
-      toast({
-        title:
-          action === "run"
-            ? "Failed to start workflow"
-            : "Failed to stop workflow",
-        description: error instanceof Error ? error.message : "Unknown error.",
-        variant: "destructive",
-      });
-    } finally {
-      setWorkflowAction(null);
-    }
-  };
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       month: "short",
@@ -239,9 +144,10 @@ function InsightsPage() {
   };
 
   return (
-    <section className="flex-1 p-0 md:p-4 overflow-auto">
-      {/* Header with filters */}
-      <div className="flex flex-col md:flex-row gap-4 mb-6">
+    <section className="flex-1 p-0 md:p-4 overflow-auto space-y-6">
+      <TrackerPanel insightRunning={workerStatuses.insight?.state === "running"} />
+
+      <div className="flex flex-col md:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -270,25 +176,9 @@ function InsightsPage() {
             ))}
           </SelectContent>
         </Select>
-        <Link to="/dashboard/insights/topics">
-          <Button variant="outline">
-            <Tag className="w-4 h-4 mr-2" />
-            Manage Topics
-          </Button>
-        </Link>
         <Link to="/dashboard/tasks">
           <Button variant="outline">Tasks</Button>
         </Link>
-        <Link to="/dashboard/insights/sources">
-          <Button variant="outline">
-            <Search className="w-4 h-4 mr-2" />
-            Sources
-          </Button>
-        </Link>
-        <Button onClick={() => setIsWorkflowDialogOpen(true)}>
-          <WandSparkles className="w-4 h-4 mr-2" />
-          Generate Insights
-        </Button>
       </div>
 
       {isLoading || isSearchLoading ? (
@@ -299,39 +189,28 @@ function InsightsPage() {
       ) : insights.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Lightbulb className="w-12 h-12 mx-auto mb-4 opacity-50" />
-          <p className="text-lg font-medium mb-2">No insights yet</p>
+          <p className="text-lg font-medium mb-2">No briefings yet</p>
           <p className="text-sm">
-            Add sources and run the pipeline to start generating insights.
+            Add a subject or a site above. The next check writes what people are saying and what is worth writing.
           </p>
-          <div className="mt-4 flex items-center justify-center gap-2">
-            <Button onClick={() => setIsWorkflowDialogOpen(true)}>
-              <WandSparkles className="w-4 h-4 mr-2" />
-              Generate Insights
-            </Button>
-            <Link to="/dashboard/insights/sources">
-              <Button variant="outline">
-                <Search className="w-4 h-4 mr-2" />
-                Manage Sources
-              </Button>
-            </Link>
-          </div>
         </div>
       ) : (
         <>
-          {/* Insights Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {insights.map((insight) => (
               <InsightCard
                 key={insight.id}
                 insight={insight}
-                onMarkAsRead={handleMarkAsRead}
-                onTogglePin={handleTogglePin}
+                onMarkAsRead={(id) => markReadMutation.mutate(id)}
+                onTogglePin={(event, id) => {
+                  event.stopPropagation();
+                  togglePinMutation.mutate(id);
+                }}
                 formatDate={formatDate}
               />
             ))}
           </div>
 
-          {/* Pagination */}
           {totalPages > 1 && searchQuery.length <= 2 && (
             <div className="mt-6 flex justify-center">
               <Pagination>
@@ -340,9 +219,7 @@ function InsightsPage() {
                     <PaginationPrevious
                       onClick={() => setPage(Math.max(1, page - 1))}
                       className={
-                        page === 1
-                          ? "pointer-events-none opacity-50"
-                          : "cursor-pointer"
+                        page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"
                       }
                     />
                   </PaginationItem>
@@ -376,376 +253,206 @@ function InsightsPage() {
           )}
         </>
       )}
-
-      <InsightsWorkflowDialog
-        open={isWorkflowDialogOpen}
-        onOpenChange={setIsWorkflowDialogOpen}
-        workerStatuses={workflowStatuses}
-        latestPipelineRun={latestPipelineRun}
-        activeAction={workflowAction}
-        onRun={(workerName) => handleWorkerAction(workerName, "run")}
-        onStop={(workerName) => handleWorkerAction(workerName, "stop")}
-      />
     </section>
   );
 }
 
-function InsightsWorkflowDialog({
-  open,
-  onOpenChange,
-  workerStatuses,
-  latestPipelineRun,
-  activeAction,
-  onRun,
-  onStop,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  workerStatuses: {
-    pipeline?: WorkerStatus;
-    crawl?: WorkerStatus;
-    insight?: WorkerStatus;
-  };
-  latestPipelineRun?: TaskRun;
-  activeAction: string | null;
-  onRun: (workerName: string) => void;
-  onStop: (workerName: string) => void;
-}) {
-  const pipelineStatus = workerStatuses.pipeline;
-  const crawlStatus = workerStatuses.crawl;
-  const insightStatus = workerStatuses.insight;
-  const pipelineRunning = pipelineStatus?.state === "running";
-  const crawlRunning = crawlStatus?.state === "running";
-  const insightRunning = insightStatus?.state === "running";
-  const workflowBusy =
-    pipelineRunning ||
-    crawlRunning ||
-    insightRunning;
+function TrackerPanel({ insightRunning }: { insightRunning: boolean }) {
+  const [target, setTarget] = useState("");
+  const [frequency, setFrequency] = useState("daily");
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: trackers = [], isLoading } = useQuery({
+    queryKey: ["insight-trackers"],
+    queryFn: listTrackers,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () => createTracker({ target: target.trim(), frequency }),
+    onSuccess: (tracker) => {
+      setTarget("");
+      queryClient.invalidateQueries({ queryKey: ["insight-trackers"] });
+      toast({
+        title: "Tracker added",
+        description: `${tracker.name} will be checked ${tracker.frequency}.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not add tracker",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    },
+  });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[min(94vw,72rem)] max-w-[calc(100%-2rem)] gap-3 p-5 sm:max-w-[72rem]">
-        <DialogHeader>
-          <DialogTitle>Generate Insights</DialogTitle>
-          <DialogDescription>
-            Run the full insights workflow from here. Site Discovery stays in
-            Sources because it expands what you crawl, not how insights are
-            generated.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 py-1">
-          <div className="rounded-xl border border-border bg-muted/40 p-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">Primary workflow</Badge>
-                  {pipelineRunning ? (
-                    <WorkflowStatusBadge status={pipelineStatus} fallbackLabel="Running" />
-                  ) : latestPipelineRun ? (
-                    <TaskRunStatusBadge status={latestPipelineRun.status} />
-                  ) : (
-                    <Badge variant="outline">Idle</Badge>
-                  )}
-                </div>
-                <div>
-                  <h3 className="text-base font-semibold">Run Full Pipeline</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Crawl your tracked sources first, then generate insights
-                    from the newly crawled content.
-                  </p>
-                </div>
-                {pipelineStatus && (
-                  <div className="space-y-1.5">
-                    {pipelineStatus.state === "running" && (
-                      <Progress
-                        value={pipelineStatus.progress}
-                        className="h-2 max-w-xl"
-                      />
-                    )}
-                    <p className="text-sm text-muted-foreground">
-                      {getWorkflowMessage(pipelineStatus)}
-                    </p>
-                  </div>
-                )}
-                {!pipelineRunning && latestPipelineRun ? (
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">
-                      {latestPipelineRun.summary ||
-                        latestPipelineRun.error_summary ||
-                        "Latest pipeline run recorded."}
-                    </p>
-                    <Link
-                      to="/dashboard/tasks/$taskRunId"
-                      params={{ taskRunId: latestPipelineRun.id }}
-                    >
-                      <Button variant="ghost" size="sm" className="px-0">
-                        View latest run
-                        <ArrowRight className="w-4 h-4 ml-2" />
-                      </Button>
-                    </Link>
-                  </div>
-                ) : null}
-              </div>
-              <div className="flex items-center gap-2">
-                {pipelineRunning ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onStop(PIPELINE_WORKER_NAME)}
-                    disabled={activeAction === `stop:${PIPELINE_WORKER_NAME}`}
-                  >
-                    {activeAction === `stop:${PIPELINE_WORKER_NAME}` ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <>
-                        <Square className="w-4 h-4 mr-2" />
-                        Stop Pipeline
-                      </>
-                    )}
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    onClick={() => onRun(PIPELINE_WORKER_NAME)}
-                    disabled={
-                      workflowBusy ||
-                      activeAction === `run:${PIPELINE_WORKER_NAME}`
-                    }
-                  >
-                    {activeAction === `run:${PIPELINE_WORKER_NAME}` ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Starting
-                      </>
-                    ) : (
-                      <>
-                        <WandSparkles className="w-4 h-4 mr-2" />
-                        Run Full Pipeline
-                      </>
-                    )}
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-2">
-            <WorkflowStepCard
-              workerName="crawl"
-              status={crawlRunning ? crawlStatus : undefined}
-              activeAction={activeAction}
-              workflowBusy={workflowBusy}
-              onRun={onRun}
-              onStop={onStop}
-            />
-            <WorkflowStepCard
-              workerName="insight"
-              status={insightRunning ? insightStatus : undefined}
-              activeAction={activeAction}
-              workflowBusy={workflowBusy}
-              onRun={onRun}
-              onStop={onStop}
-            />
-          </div>
-
-          <div className="rounded-xl border border-dashed border-border p-3 text-sm text-muted-foreground">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="font-medium text-foreground">
-                  Source management and Site Discovery
-                </p>
-                <p className="mt-1">
-                  Manage your tracked inputs and discover related sites from the
-                  Sources page.
-                </p>
-              </div>
-              <Link to="/dashboard/insights/sources">
-                <Button variant="outline" size="sm">
-                  Open Sources
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Link to="/dashboard/tasks">
-            <Button variant="outline" size="sm">
-              View Task History
-            </Button>
-          </Link>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function WorkflowStepCard({
-  workerName,
-  status,
-  activeAction,
-  workflowBusy,
-  onRun,
-  onStop,
-}: {
-  workerName: string;
-  status?: WorkerStatus;
-  activeAction: string | null;
-  workflowBusy: boolean | undefined;
-  onRun: (workerName: string) => void;
-  onStop: (workerName: string) => void;
-}) {
-  const isRunning = status?.state === "running";
-  const runActionKey = `run:${workerName}`;
-  const stopActionKey = `stop:${workerName}`;
-
-  return (
-    <Card className="gap-4 py-4">
-      <CardHeader className="space-y-2 px-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <CardTitle className="text-base">
-                {getWorkerDisplayName(workerName)}
-              </CardTitle>
-              <WorkflowStatusBadge status={status} fallbackLabel="Ready" />
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {getWorkerDescription(workerName)}
-            </p>
-          </div>
-          {isRunning ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onStop(workerName)}
-              disabled={activeAction === stopActionKey}
-            >
-              {activeAction === stopActionKey ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <Square className="w-4 h-4 mr-2" />
-                  Stop
-                </>
-              )}
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onRun(workerName)}
-              disabled={Boolean(workflowBusy) || activeAction === runActionKey}
-            >
-              {activeAction === runActionKey ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <Play className="w-4 h-4 mr-2" />
-                  Run
-                </>
-              )}
-            </Button>
-          )}
-        </div>
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">What to watch</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2 px-4">
-        {isRunning && <Progress value={status.progress} className="h-2" />}
-        <p className="text-sm text-muted-foreground">
-          {getWorkflowMessage(status)}
-        </p>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Clock3 className="w-3.5 h-3.5" />
-          <span>
-            {status?.completed_at
-              ? `Last completed ${new Date(status.completed_at).toLocaleString()}`
-              : "No completed run yet"}
-          </span>
-        </div>
+      <CardContent className="space-y-4">
+        <form
+          className="flex flex-col gap-3 md:flex-row md:items-end"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (target.trim()) {
+              createMutation.mutate();
+            }
+          }}
+        >
+          <div className="flex-1 space-y-1.5">
+            <Label htmlFor="tracker-target">Subject or site</Label>
+            <Input
+              id="tracker-target"
+              value={target}
+              onChange={(event) => setTarget(event.target.value)}
+              placeholder="pgvector or https://blog.rust-lang.org"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>How often</Label>
+            <Select value={frequency} onValueChange={setFrequency}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {FREQUENCIES.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button type="submit" disabled={!target.trim() || createMutation.isPending}>
+            {createMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              "Track"
+            )}
+          </Button>
+        </form>
+
+        {isLoading ? (
+          <div className="flex items-center text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            Loading trackers...
+          </div>
+        ) : trackers.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nothing is being watched yet. A subject tracks the conversation. A full http(s) URL tracks that site.
+          </p>
+        ) : (
+          <ul className="divide-y rounded-md border">
+            {trackers.map((tracker) => (
+              <TrackerRow key={`${tracker.kind}-${tracker.id}`} tracker={tracker} busy={insightRunning} />
+            ))}
+          </ul>
+        )}
       </CardContent>
     </Card>
   );
 }
 
-function WorkflowStatusBadge({
-  status,
-  fallbackLabel,
-}: {
-  status?: WorkerStatus;
-  fallbackLabel: string;
-}) {
-  const state = status?.state ?? "idle";
-  const label = status ? getWorkerStateLabel(status.state) : fallbackLabel;
+function TrackerRow({ tracker, busy }: { tracker: Tracker; busy: boolean }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["insight-trackers"] });
+  };
+  const updateMutation = useMutation({
+    mutationFn: (frequency: string) => updateTracker(tracker.kind, tracker.id, { frequency }),
+    onSuccess: refresh,
+    onError: (error) => {
+      toast({
+        title: "Could not update tracker",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    },
+  });
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteTracker(tracker.kind, tracker.id),
+    onSuccess: refresh,
+    onError: (error) => {
+      toast({
+        title: "Could not remove tracker",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    },
+  });
+  const checkMutation = useMutation({
+    mutationFn: () => checkTracker(tracker.kind, tracker.id),
+    onSuccess: (result) => {
+      refresh();
+      toast({
+        title: result.started ? "Check started" : "Check queued",
+        description: result.started
+          ? `${tracker.name} is being researched now.`
+          : `${tracker.name} is due and will run when the current check finishes.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not start check",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    },
+  });
 
   return (
-    <Badge variant={getWorkerBadgeVariant(state)} className="capitalize">
-      {label}
-    </Badge>
+    <li className="flex flex-col gap-3 p-3 md:flex-row md:items-center">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="font-medium truncate">{tracker.name}</span>
+          <Badge variant="outline">{tracker.kind === "domain" ? "Site" : "Subject"}</Badge>
+          {!tracker.enabled && <Badge variant="secondary">Paused</Badge>}
+        </div>
+        <p className="text-xs text-muted-foreground truncate">{tracker.target}</p>
+      </div>
+      <Select
+        value={tracker.frequency}
+        onValueChange={(value) => updateMutation.mutate(value)}
+        disabled={updateMutation.isPending}
+      >
+        <SelectTrigger className="w-[140px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {FREQUENCIES.map((item) => (
+            <SelectItem key={item.value} value={item.value}>
+              {item.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => checkMutation.mutate()}
+        disabled={checkMutation.isPending}
+      >
+        {checkMutation.isPending || busy ? (
+          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+        ) : (
+          <Play className="w-4 h-4 mr-2" />
+        )}
+        Check now
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => deleteMutation.mutate()}
+        disabled={deleteMutation.isPending}
+        aria-label={`Remove ${tracker.name}`}
+      >
+        <Trash2 className="w-4 h-4" />
+      </Button>
+    </li>
   );
-}
-
-function TaskRunStatusBadge({ status }: { status: TaskRun["status"] }) {
-  const variant =
-    status === "failed"
-      ? "destructive"
-      : status === "warning"
-        ? "secondary"
-        : status === "running"
-          ? "default"
-          : "outline";
-
-  return <Badge variant={variant}>{getTaskRunStatusLabel(status)}</Badge>;
-}
-
-function getWorkerBadgeVariant(state: WorkerState | "idle") {
-  switch (state) {
-    case "completed":
-      return "default" as const;
-    case "failed":
-      return "destructive" as const;
-    case "running":
-      return "secondary" as const;
-    default:
-      return "outline" as const;
-  }
-}
-
-function getWorkerStateLabel(state: WorkerState) {
-  switch (state) {
-    case "running":
-      return "Running";
-    case "completed":
-      return "Completed";
-    case "failed":
-      return "Failed";
-    default:
-      return "Idle";
-  }
-}
-
-function getWorkflowMessage(status?: WorkerStatus) {
-  if (!status) {
-    return "Ready to run.";
-  }
-
-  if (status.state === "failed") {
-    return status.error || status.message || "This run failed.";
-  }
-
-  if (status.state === "completed") {
-    return status.message || "Completed successfully.";
-  }
-
-  if (status.state === "running") {
-    return status.message || "Processing...";
-  }
-
-  return "Ready to run.";
 }
 
 interface InsightCardProps {
@@ -755,15 +462,11 @@ interface InsightCardProps {
   formatDate: (date: string) => string;
 }
 
-function InsightCard({
-  insight,
-  onMarkAsRead,
-  onTogglePin,
-  formatDate,
-}: InsightCardProps) {
+function InsightCard({ insight, onMarkAsRead, onTogglePin, formatDate }: InsightCardProps) {
   return (
     <Link
-      to={`/dashboard/insights/${insight.id}`}
+      to="/dashboard/insights/$insightId"
+      params={{ insightId: insight.id }}
       onClick={() => !insight.is_read && onMarkAsRead(insight.id)}
     >
       <Card
@@ -771,22 +474,16 @@ function InsightCard({
       >
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between gap-2">
-            <CardTitle className="text-sm font-medium line-clamp-2 flex-1">
-              {insight.title}
-            </CardTitle>
+            <CardTitle className="text-sm font-medium line-clamp-2 flex-1">{insight.title}</CardTitle>
             <div className="flex items-center gap-1">
-              {insight.is_pinned && (
-                <Pin className="w-3 h-3 text-primary fill-primary" />
-              )}
+              {insight.is_pinned && <Pin className="w-3 h-3 text-primary fill-primary" />}
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6"
                 onClick={(e) => onTogglePin(e, insight.id)}
               >
-                <Pin
-                  className={`w-3 h-3 ${insight.is_pinned ? "fill-current" : ""}`}
-                />
+                <Pin className={`w-3 h-3 ${insight.is_pinned ? "fill-current" : ""}`} />
               </Button>
             </div>
           </div>
@@ -805,17 +502,11 @@ function InsightCard({
           </div>
         </CardHeader>
         <CardContent className="pt-0">
-          <p className="text-sm text-muted-foreground line-clamp-3 mb-3">
-            {insight.summary}
-          </p>
-
+          <p className="text-sm text-muted-foreground line-clamp-3 mb-3">{insight.summary}</p>
           {insight.key_points && insight.key_points.length > 0 && (
             <div className="space-y-1 mb-3">
               {insight.key_points.slice(0, 2).map((point, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-2 text-xs text-muted-foreground"
-                >
+                <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
                   <Check className="w-3 h-3 mt-0.5 flex-shrink-0 text-green-500" />
                   <span className="line-clamp-1">{point}</span>
                 </div>
@@ -827,17 +518,15 @@ function InsightCard({
               )}
             </div>
           )}
-
           <div className="flex items-center gap-2 text-xs text-muted-foreground border-t pt-2">
             <Calendar className="w-3 h-3" />
             <span>{formatDate(insight.generated_at)}</span>
-            {insight.source_content_ids &&
-              insight.source_content_ids.length > 0 && (
-                <>
-                  <span>•</span>
-                  <span>{insight.source_content_ids.length} sources</span>
-                </>
-              )}
+            {insight.source_content_ids && insight.source_content_ids.length > 0 && (
+              <>
+                <span>•</span>
+                <span>{insight.source_content_ids.length} sources</span>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>
