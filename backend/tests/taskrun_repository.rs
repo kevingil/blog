@@ -122,6 +122,7 @@ async fn postgres_taskrun_repository_preserves_filters_json_order_and_constraint
             status: " running ".to_owned(),
             kind: " worker ".to_owned(),
             limit: 50,
+            include_unscoped: false,
         })
         .await?;
     assert_eq!(
@@ -140,10 +141,38 @@ async fn postgres_taskrun_repository_preserves_filters_json_order_and_constraint
             status: String::new(),
             kind: String::new(),
             limit: 1,
+            include_unscoped: false,
         })
         .await?;
     assert_eq!(newest.len(), 1);
     assert_eq!(newest[0].id, second.id);
+
+    let mut system = run_fixture("insight", None, None);
+    repository.create_run(&mut system).await?;
+    let hidden = repository
+        .list_runs(TaskRunFilter {
+            organization_id: None,
+            user_id: Some(user_id),
+            task_name: "insight".to_owned(),
+            status: String::new(),
+            kind: String::new(),
+            limit: 50,
+            include_unscoped: false,
+        })
+        .await?;
+    assert!(!hidden.iter().any(|run| run.id == system.id));
+    let visible = repository
+        .list_runs(TaskRunFilter {
+            organization_id: None,
+            user_id: Some(user_id),
+            task_name: "insight".to_owned(),
+            status: String::new(),
+            kind: String::new(),
+            limit: 50,
+            include_unscoped: true,
+        })
+        .await?;
+    assert!(visible.iter().any(|run| run.id == system.id));
 
     let mut connection = pool.get().await?;
     diesel::update(task_run::table.find(first.id))

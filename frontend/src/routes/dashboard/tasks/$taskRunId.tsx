@@ -23,15 +23,15 @@ function TaskRunDetailPage() {
   });
 
   useEffect(() => {
-    setPageTitle("Task Details");
+    setPageTitle("Run");
   }, [setPageTitle]);
 
   if (isLoading) {
-    return <section className="flex-1 overflow-auto p-6 text-sm text-muted-foreground">Loading task details...</section>;
+    return <section className="flex-1 overflow-auto p-6 text-sm text-muted-foreground">Loading run...</section>;
   }
 
   if (!data) {
-    return <section className="flex-1 overflow-auto p-6 text-sm text-muted-foreground">Task run not found.</section>;
+    return <section className="flex-1 overflow-auto p-6 text-sm text-muted-foreground">Run not found.</section>;
   }
 
   const { run, steps, events } = data;
@@ -40,10 +40,10 @@ function TaskRunDetailPage() {
     <section className="flex-1 overflow-auto p-6 space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
-          <Link to="/dashboard/tasks">
+          <Link to="/dashboard/insights" search={{ tab: "runs" }}>
             <Button variant="ghost" size="sm" className="px-0">
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Tasks
+              Back to Runs
             </Button>
           </Link>
           <div>
@@ -65,7 +65,7 @@ function TaskRunDetailPage() {
           </CardHeader>
           <CardContent className="px-5 space-y-3 text-sm">
             <div className="grid gap-3 md:grid-cols-2">
-              <DetailItem label="Task" value={run.task_name} />
+              <DetailItem label="Run" value={run.task_name} />
               <DetailItem label="Kind" value={run.kind} />
               <DetailItem label="Trigger" value={run.trigger_source} />
               <DetailItem label="Started" value={run.started_at ? new Date(run.started_at).toLocaleString() : "Not started"} />

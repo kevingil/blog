@@ -33,6 +33,8 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { useToast } from "@/hooks/use-toast";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TaskRunList } from "@/components/task-run-list";
 import { useAdminDashboard } from "@/services/dashboard/dashboard";
 import {
   checkTracker,
@@ -51,7 +53,22 @@ import {
 import { useWorkerStatuses } from "@/hooks/use-worker-statuses";
 import { getWorkerDisplayName, type WorkerStatus } from "@/services/workers";
 
+type InsightsTab = "briefings" | "watch" | "runs";
+
+function insightsTab(value: unknown): InsightsTab {
+  if (value === "watch") {
+    return "watch";
+  }
+  if (value === "runs" || value === "tasks") {
+    return "runs";
+  }
+  return "briefings";
+}
+
 export const Route = createFileRoute("/dashboard/insights/")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: insightsTab(search.tab),
+  }),
   component: InsightsPage,
 });
 
@@ -70,6 +87,8 @@ function InsightsPage() {
   const queryClient = useQueryClient();
   const workerStatuses = useWorkerStatuses();
   const previousInsightStatus = useRef<WorkerStatus | undefined>(undefined);
+  const { tab } = Route.useSearch();
+  const navigate = Route.useNavigate();
 
   useEffect(() => {
     setPageTitle("Insights");
@@ -145,8 +164,19 @@ function InsightsPage() {
 
   return (
     <section className="flex-1 p-0 md:p-4 overflow-auto space-y-6">
-      <TrackerPanel insightRunning={workerStatuses.insight?.state === "running"} />
+      <Tabs
+        value={tab}
+        onValueChange={(value) => {
+          navigate({ search: { tab: insightsTab(value) } });
+        }}
+      >
+        <TabsList>
+          <TabsTrigger value="briefings">Briefings</TabsTrigger>
+          <TabsTrigger value="watch">What to watch</TabsTrigger>
+          <TabsTrigger value="runs">Runs</TabsTrigger>
+        </TabsList>
 
+        <TabsContent value="briefings" className="space-y-6">
       <div className="flex flex-col md:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -176,9 +206,6 @@ function InsightsPage() {
             ))}
           </SelectContent>
         </Select>
-        <Link to="/dashboard/tasks">
-          <Button variant="outline">Tasks</Button>
-        </Link>
       </div>
 
       {isLoading || isSearchLoading ? (
@@ -191,8 +218,15 @@ function InsightsPage() {
           <Lightbulb className="w-12 h-12 mx-auto mb-4 opacity-50" />
           <p className="text-lg font-medium mb-2">No briefings yet</p>
           <p className="text-sm">
-            Add a subject or a site above. The next check writes what people are saying and what is worth writing.
+            Open What to watch and add a subject or a site. The next check writes what people are saying and what is worth writing.
           </p>
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => navigate({ search: { tab: "watch" } })}
+          >
+            What to watch
+          </Button>
         </div>
       ) : (
         <>
@@ -253,6 +287,16 @@ function InsightsPage() {
           )}
         </>
       )}
+        </TabsContent>
+
+        <TabsContent value="watch">
+          <TrackerPanel insightRunning={workerStatuses.insight?.state === "running"} />
+        </TabsContent>
+
+        <TabsContent value="runs">
+          <TaskRunList />
+        </TabsContent>
+      </Tabs>
     </section>
   );
 }
@@ -287,71 +331,74 @@ function TrackerPanel({ insightRunning }: { insightRunning: boolean }) {
   });
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">What to watch</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <form
-          className="flex flex-col gap-3 md:flex-row md:items-end"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (target.trim()) {
-              createMutation.mutate();
-            }
-          }}
-        >
-          <div className="flex-1 space-y-1.5">
-            <Label htmlFor="tracker-target">Subject or site</Label>
-            <Input
-              id="tracker-target"
-              value={target}
-              onChange={(event) => setTarget(event.target.value)}
-              placeholder="pgvector or https://blog.rust-lang.org"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>How often</Label>
-            <Select value={frequency} onValueChange={setFrequency}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {FREQUENCIES.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button type="submit" disabled={!target.trim() || createMutation.isPending}>
-            {createMutation.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              "Track"
-            )}
-          </Button>
-        </form>
-
-        {isLoading ? (
-          <div className="flex items-center text-sm text-muted-foreground">
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            Loading trackers...
-          </div>
-        ) : trackers.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nothing is being watched yet. A subject tracks the conversation. A full http(s) URL tracks that site.
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Add something to watch</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form
+            className="flex flex-col gap-3 md:flex-row md:items-end"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (target.trim()) {
+                createMutation.mutate();
+              }
+            }}
+          >
+            <div className="flex-1 space-y-1.5">
+              <Label htmlFor="tracker-target">Subject or site</Label>
+              <Input
+                id="tracker-target"
+                value={target}
+                onChange={(event) => setTarget(event.target.value)}
+                placeholder="pgvector or https://blog.rust-lang.org"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>How often</Label>
+              <Select value={frequency} onValueChange={setFrequency}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {FREQUENCIES.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button type="submit" disabled={!target.trim() || createMutation.isPending}>
+              {createMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                "Track"
+              )}
+            </Button>
+          </form>
+          <p className="mt-3 text-sm text-muted-foreground">
+            A subject tracks the conversation. A full http(s) URL tracks that site.
           </p>
-        ) : (
-          <ul className="divide-y rounded-md border">
-            {trackers.map((tracker) => (
-              <TrackerRow key={`${tracker.kind}-${tracker.id}`} tracker={tracker} busy={insightRunning} />
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+
+      {isLoading ? (
+        <div className="flex items-center text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          Loading trackers...
+        </div>
+      ) : trackers.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nothing is being watched yet.</p>
+      ) : (
+        <ul className="grid gap-3">
+          {trackers.map((tracker) => (
+            <TrackerRow key={`${tracker.kind}-${tracker.id}`} tracker={tracker} busy={insightRunning} />
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -388,10 +435,10 @@ function TrackerRow({ tracker, busy }: { tracker: Tracker; busy: boolean }) {
     onSuccess: (result) => {
       refresh();
       toast({
-        title: result.started ? "Check started" : "Check queued",
+        title: result.started ? "Check started" : "Check already running",
         description: result.started
           ? `${tracker.name} is being researched now.`
-          : `${tracker.name} is due and will run when the current check finishes.`,
+          : "The insight check that is already running will finish first.",
       });
     },
     onError: (error) => {
@@ -404,15 +451,21 @@ function TrackerRow({ tracker, busy }: { tracker: Tracker; busy: boolean }) {
   });
 
   return (
-    <li className="flex flex-col gap-3 p-3 md:flex-row md:items-center">
-      <div className="min-w-0 flex-1">
+    <li className="rounded-xl border bg-card p-4">
+      <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium truncate">{tracker.name}</span>
           <Badge variant="outline">{tracker.kind === "domain" ? "Site" : "Subject"}</Badge>
           {!tracker.enabled && <Badge variant="secondary">Paused</Badge>}
         </div>
-        <p className="text-xs text-muted-foreground truncate">{tracker.target}</p>
+        <p className="mt-1 text-sm text-muted-foreground break-all">{tracker.target}</p>
+        {tracker.next_check_at && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Next check {new Date(tracker.next_check_at).toLocaleString()}
+          </p>
+        )}
       </div>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
       <Select
         value={tracker.frequency}
         onValueChange={(value) => updateMutation.mutate(value)}
@@ -451,6 +504,7 @@ function TrackerRow({ tracker, busy }: { tracker: Tracker; busy: boolean }) {
       >
         <Trash2 className="w-4 h-4" />
       </Button>
+      </div>
     </li>
   );
 }

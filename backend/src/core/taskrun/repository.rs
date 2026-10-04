@@ -13,6 +13,8 @@ pub struct TaskRunFilter {
     pub status: String,
     pub kind: String,
     pub limit: i64,
+    /// Also return checks the scheduler saved with no user and no organization.
+    pub include_unscoped: bool,
 }
 
 #[async_trait]

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from '@tanstack/react-router';
 import { format } from 'date-fns';
 import { Card, CardContent } from "@/components/ui/card";
-import { Image as ImageIcon, X, Search } from "lucide-react";
+import { Image as ImageIcon, Loader2, X, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -119,11 +119,14 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
       }
       return getArticles(page, searchTag, 'published'); // Only show published articles in public view
     },
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
   });
 
   const articles: ArticleListItem[] = (articlesData as GetArticlesResponse | undefined)?.articles ?? [];
   const totalPages: number = (articlesData as GetArticlesResponse | undefined)?.total_pages ?? 0;
-  const loading = isLoading || isFetching;
+  const showSkeleton = !articlesData && (isLoading || isFetching);
+  const refreshing = Boolean(articlesData) && isFetching;
 
   // Debounce (delay) search
   const debouncedSearch = useCallback(
@@ -267,7 +270,18 @@ export default function ArticlesList({ pagination }: ArticleListProps) {
 
       {!pagination && null}
 
-      {loading ? (
+      {refreshing && (
+        <div
+          className="mb-3 flex items-center gap-2 text-sm text-muted-foreground"
+          role="status"
+          data-testid="articles-refreshing"
+        >
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Refreshing
+        </div>
+      )}
+
+      {showSkeleton ? (
         <ArticlesSkeleton />
       ) : articles.length === 0 ? (
         <div className="text-center py-8 text-muted-foreground">

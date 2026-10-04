@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 use chrono::Utc;
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
+use diesel::{
+    BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper,
+};
 use diesel_async::RunQueryDsl;
 use serde_json::Value;
 use uuid::Uuid;
@@ -123,9 +125,27 @@ impl TaskRunRepository for DieselTaskRunRepository {
     async fn list_runs(&self, filter: TaskRunFilter) -> Result<Vec<TaskRun>, AppError> {
         let mut query = task_run::table.into_boxed();
         if let Some(organization_id) = filter.organization_id {
-            query = query.filter(task_run::organization_id.eq(organization_id));
+            query = if filter.include_unscoped {
+                query.filter(
+                    task_run::organization_id
+                        .eq(organization_id)
+                        .or(task_run::organization_id
+                            .is_null()
+                            .and(task_run::user_id.is_null())),
+                )
+            } else {
+                query.filter(task_run::organization_id.eq(organization_id))
+            };
         } else if let Some(user_id) = filter.user_id {
-            query = query.filter(task_run::user_id.eq(user_id));
+            query = if filter.include_unscoped {
+                query.filter(
+                    task_run::user_id.eq(user_id).or(task_run::user_id
+                        .is_null()
+                        .and(task_run::organization_id.is_null())),
+                )
+            } else {
+                query.filter(task_run::user_id.eq(user_id))
+            };
         }
         let task_name = filter.task_name.trim();
         if !task_name.is_empty() {
