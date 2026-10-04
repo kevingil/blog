@@ -102,6 +102,7 @@ pub async fn submit_conversation_turn(
             message: turn.message,
             document_content: request.document_content,
             document_markdown: request.document_markdown,
+            document_title: request.document_title,
             article_id: request.article_id,
             channel: turn.channel.clone(),
         })

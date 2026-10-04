@@ -23,9 +23,10 @@ pub use provider::{
 pub use registry::{RegisteredTool, ToolRegistry};
 pub use session::{InMemorySessionStore, Session, SessionStore};
 pub use tools::{
-    AnswerCitation, AnswerResponse, ApplyPatchTool, ArtifactHint, AskQuestionTool, DraftSaver,
-    GenerateImagePromptTool, GetRelevantSourcesTool, ReadDocumentTool, ReplaceLinesTool,
-    ResearchPort, SearchWebSourcesTool, SelectSourcesForEditTool, SourceResource,
-    SourceResourcePort, SourceSelection, Tool, ToolCallRequest, ToolContext, ToolInfo,
-    ToolResponse, ToolResponseType, WebSearchResponse, WebSearchResult,
+    AnswerCitation, AnswerResponse, ApplyPatchTool, ArticleSourceView, ArtifactHint,
+    AskQuestionTool, DraftSaver, GenerateImagePromptTool, GetRelevantSourcesTool, ReadDocumentTool,
+    ReplaceLinesTool, ResearchPort, SearchWebSourcesTool, SelectSourcesForEditTool, SetTitleTool,
+    SourceEdit, SourceResource, SourceResourcePort, SourceSelection, Tool, ToolCallRequest,
+    ToolContext, ToolInfo, ToolResponse, ToolResponseType, UpdateSourcesTool, WebSearchResponse,
+    WebSearchResult,
 };

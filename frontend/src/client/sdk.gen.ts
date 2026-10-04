@@ -2,7 +2,7 @@
 
 import { type Client, formDataBodySerializer, type Options as Options2, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { AcceptArtifactData, AcceptArtifactErrors, AcceptArtifactResponses, AuthDeleteAccountData, AuthDeleteAccountErrors, AuthDeleteAccountResponses, AuthLoginData, AuthLoginErrors, AuthLoginResponses, AuthLogoutData, AuthLogoutResponses, AuthRegisterData, AuthRegisterErrors, AuthRegisterResponses, AuthUpdateAccountData, AuthUpdateAccountErrors, AuthUpdateAccountResponses, AuthUpdatePasswordData, AuthUpdatePasswordErrors, AuthUpdatePasswordResponses, CheckTrackerData, CheckTrackerErrors, CheckTrackerResponses, ClearConversationHistoryData, ClearConversationHistoryErrors, ClearConversationHistoryResponses, CompleteOauthConnectorData, CompleteOauthConnectorErrors, ConnectConnectorPresetData, ConnectConnectorPresetErrors, ConnectConnectorPresetResponses, ConnectLiveSessionData, ConnectLiveSessionErrors, ConnectOauthMcpData, ConnectOauthMcpErrors, ConnectOauthMcpResponses, ConnectWebSocketData, ConnectWebSocketErrors, CreateAgentSkillData, CreateAgentSkillErrors, CreateAgentSkillResponses, CreateArticleData, CreateArticleErrors, CreateArticleResponses, CreateDataSourceData, CreateDataSourceErrors, CreateDataSourceResponses, CreateExternalArticleData, CreateExternalArticleErrors, CreateExternalArticleResponses, CreateInsightTopicData, CreateInsightTopicErrors, CreateInsightTopicResponses, CreateMcpConnectorData, CreateMcpConnectorErrors, CreateMcpConnectorResponses, CreateOrganizationData, CreateOrganizationErrors, CreateOrganizationResponses, CreatePageData, CreatePageErrors, CreatePageResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateSourceData, CreateSourceErrors, CreateSourceResponses, CreateStorageFolderData, CreateStorageFolderErrors, CreateStorageFolderResponses, CreateTrackerData, CreateTrackerErrors, CreateTrackerResponses, DeleteAgentSkillData, DeleteAgentSkillErrors, DeleteAgentSkillResponses, DeleteArticleData, DeleteArticleErrors, DeleteArticleResponses, DeleteDataSourceData, DeleteDataSourceErrors, DeleteDataSourceResponses, DeleteInsightData, DeleteInsightErrors, DeleteInsightResponses, DeleteInsightTopicData, DeleteInsightTopicErrors, DeleteInsightTopicResponses, DeleteMcpConnectorData, DeleteMcpConnectorErrors, DeleteMcpConnectorResponses, DeleteOrganizationData, DeleteOrganizationErrors, DeleteOrganizationResponses, DeletePageData, DeletePageErrors, DeletePageResponses, DeleteProjectData, DeleteProjectErrors, DeleteProjectResponses, DeleteSourceData, DeleteSourceErrors, DeleteSourceResponses, DeleteStorageFileData, DeleteStorageFileErrors, DeleteStorageFileResponses, DeleteTrackerData, DeleteTrackerErrors, DeleteTrackerResponses, DiscoverDataSourcesData, DiscoverDataSourcesErrors, DiscoverDataSourcesResponses, GenerateArticleData, GenerateArticleErrors, GenerateArticleResponses, GenerateImageData, GenerateImageErrors, GenerateImageResponses, GenerateStorageBlurhashData, GenerateStorageBlurhashErrors, GenerateStorageBlurhashResponses, GetAllWorkerStatusData, GetAllWorkerStatusErrors, GetAllWorkerStatusResponses, GetArticleDataData, GetArticleDataErrors, GetArticleDataResponses, GetArticlesData, GetArticleSourcesData, GetArticleSourcesErrors, GetArticleSourcesResponses, GetArticlesResponses, GetArticleVersionData, GetArticleVersionResponses, GetConversationHistoryData, GetConversationHistoryErrors, GetConversationHistoryResponses, GetDataSourceContentData, GetDataSourceContentErrors, GetDataSourceContentResponses, GetDataSourceData, GetDataSourceErrors, GetDataSourceResponses, GetImageGenerationData, GetImageGenerationErrors, GetImageGenerationResponses, GetImageGenerationStatusData, GetImageGenerationStatusErrors, GetImageGenerationStatusResponses, GetInsightData, GetInsightErrors, GetInsightResponses, GetInsightTopicData, GetInsightTopicErrors, GetInsightTopicResponses, GetMyProfileData, GetMyProfileErrors, GetMyProfileResponses, GetOrganizationData, GetOrganizationErrors, GetOrganizationResponses, GetPageByIdData, GetPageByIdErrors, GetPageByIdResponses, GetPageBySlugData, GetPageBySlugErrors, GetPageBySlugResponses, GetPendingArtifactsData, GetPendingArtifactsErrors, GetPendingArtifactsResponses, GetPopularTagsData, GetPopularTagsResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetPublicProfileData, GetPublicProfileErrors, GetPublicProfileResponses, GetRecentInsightContentData, GetRecentInsightContentErrors, GetRecentInsightContentResponses, GetRecommendedArticlesData, GetRecommendedArticlesResponses, GetRunningWorkersData, GetRunningWorkersErrors, GetRunningWorkersResponses, GetSiteSettingsData, GetSiteSettingsErrors, GetSiteSettingsResponses, GetSourceData, GetSourceErrors, GetSourceResponses, GetTaskRunData, GetTaskRunErrors, GetTaskRunResponses, GetUnreadInsightCountData, GetUnreadInsightCountErrors, GetUnreadInsightCountResponses, GetWorkerStatusData, GetWorkerStatusErrors, GetWorkerStatusResponses, HealthCheckData, HealthCheckResponses, ImportGithubProjectData, ImportGithubProjectErrors, ImportGithubProjectResponses, JoinOrganizationData, JoinOrganizationErrors, JoinOrganizationResponses, LeaveOrganizationData, LeaveOrganizationErrors, LeaveOrganizationResponses, ListAgentSkillsData, ListAgentSkillsErrors, ListAgentSkillsResponses, ListAgentToolsData, ListAgentToolsErrors, ListAgentToolsResponses, ListAllSourcesData, ListAllSourcesErrors, ListAllSourcesResponses, ListArticleVersionsData, ListArticleVersionsResponses, ListConnectorPresetsData, ListConnectorPresetsErrors, ListConnectorPresetsResponses, ListDataSourcesData, ListDataSourcesErrors, ListDataSourcesResponses, ListInsightsData, ListInsightsErrors, ListInsightsResponses, ListInsightTopicsData, ListInsightTopicsErrors, ListInsightTopicsResponses, ListMcpConnectorsData, ListMcpConnectorsErrors, ListMcpConnectorsResponses, ListOrganizationsData, ListOrganizationsErrors, ListOrganizationsResponses, ListPagesData, ListPagesErrors, ListPagesResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListStorageFilesData, ListStorageFilesErrors, ListStorageFilesResponses, ListTaskRunEventsData, ListTaskRunEventsErrors, ListTaskRunEventsResponses, ListTaskRunsData, ListTaskRunsErrors, ListTaskRunsResponses, ListTrackersData, ListTrackersErrors, ListTrackersResponses, MarkInsightReadData, MarkInsightReadErrors, MarkInsightReadResponses, PublishArticleData, PublishArticleResponses, RecommendDataSourcesData, RecommendDataSourcesErrors, RecommendDataSourcesResponses, RefreshMcpConnectorData, RefreshMcpConnectorErrors, RefreshMcpConnectorResponses, RejectArtifactData, RejectArtifactErrors, RejectArtifactResponses, RevertArticleToVersionData, RevertArticleToVersionResponses, RootStatusData, RootStatusResponses, RunWorkerData, RunWorkerErrors, RunWorkerResponses, ScrapeAndCreateSourceData, ScrapeAndCreateSourceErrors, ScrapeAndCreateSourceResponses, SearchArticlesData, SearchArticlesErrors, SearchArticlesResponses, SearchInsightContentData, SearchInsightContentErrors, SearchInsightContentResponses, SearchInsightsData, SearchInsightsErrors, SearchInsightsResponses, SearchSimilarSourcesData, SearchSimilarSourcesErrors, SearchSimilarSourcesResponses, StopWorkerData, StopWorkerErrors, StopWorkerResponses, SubmitAgentRequestData, SubmitAgentRequestErrors, SubmitAgentRequestResponses, SubmitConversationTurnData, SubmitConversationTurnErrors, SubmitConversationTurnResponses, ToggleInsightPinnedData, ToggleInsightPinnedErrors, ToggleInsightPinnedResponses, TriggerDataSourceCrawlData, TriggerDataSourceCrawlErrors, TriggerDataSourceCrawlResponses, UnpublishArticleData, UnpublishArticleResponses, UpdateAgentSkillData, UpdateAgentSkillErrors, UpdateAgentSkillResponses, UpdateArticleData, UpdateArticleErrors, UpdateArticleResponses, UpdateArticleWithContextData, UpdateArticleWithContextErrors, UpdateArticleWithContextResponses, UpdateDataSourceData, UpdateDataSourceErrors, UpdateDataSourceResponses, UpdateInsightTopicData, UpdateInsightTopicErrors, UpdateInsightTopicResponses, UpdateMcpConnectorData, UpdateMcpConnectorErrors, UpdateMcpConnectorResponses, UpdateOrganizationData, UpdateOrganizationErrors, UpdateOrganizationResponses, UpdatePageData, UpdatePageErrors, UpdatePageResponses, UpdateProfileData, UpdateProfileErrors, UpdateProfileResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateSiteSettingsData, UpdateSiteSettingsErrors, UpdateSiteSettingsResponses, UpdateSourceData, UpdateSourceErrors, UpdateSourceResponses, UpdateStorageFolderData, UpdateStorageFolderErrors, UpdateStorageFolderResponses, UpdateTrackerData, UpdateTrackerErrors, UpdateTrackerResponses, UploadStorageFileData, UploadStorageFileErrors, UploadStorageFileResponses } from './types.gen';
+import type { AcceptArtifactData, AcceptArtifactErrors, AcceptArtifactResponses, AuthDeleteAccountData, AuthDeleteAccountErrors, AuthDeleteAccountResponses, AuthLoginData, AuthLoginErrors, AuthLoginResponses, AuthLogoutData, AuthLogoutResponses, AuthRegisterData, AuthRegisterErrors, AuthRegisterResponses, AuthUpdateAccountData, AuthUpdateAccountErrors, AuthUpdateAccountResponses, AuthUpdatePasswordData, AuthUpdatePasswordErrors, AuthUpdatePasswordResponses, CheckTrackerData, CheckTrackerErrors, CheckTrackerResponses, ClearConversationHistoryData, ClearConversationHistoryErrors, ClearConversationHistoryResponses, CompleteOauthConnectorData, CompleteOauthConnectorErrors, ConnectConnectorPresetData, ConnectConnectorPresetErrors, ConnectConnectorPresetResponses, ConnectLiveSessionData, ConnectLiveSessionErrors, ConnectOauthMcpData, ConnectOauthMcpErrors, ConnectOauthMcpResponses, ConnectWebSocketData, ConnectWebSocketErrors, CreateAgentSkillData, CreateAgentSkillErrors, CreateAgentSkillResponses, CreateArticleData, CreateArticleErrors, CreateArticleResponses, CreateDataSourceData, CreateDataSourceErrors, CreateDataSourceResponses, CreateExternalArticleData, CreateExternalArticleErrors, CreateExternalArticleResponses, CreateInsightTopicData, CreateInsightTopicErrors, CreateInsightTopicResponses, CreateMcpConnectorData, CreateMcpConnectorErrors, CreateMcpConnectorResponses, CreateOrganizationData, CreateOrganizationErrors, CreateOrganizationResponses, CreatePageData, CreatePageErrors, CreatePageResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateSourceData, CreateSourceErrors, CreateSourceResponses, CreateStorageFolderData, CreateStorageFolderErrors, CreateStorageFolderResponses, CreateTrackerData, CreateTrackerErrors, CreateTrackerResponses, DeleteAgentSkillData, DeleteAgentSkillErrors, DeleteAgentSkillResponses, DeleteArticleData, DeleteArticleErrors, DeleteArticleResponses, DeleteDataSourceData, DeleteDataSourceErrors, DeleteDataSourceResponses, DeleteInsightData, DeleteInsightErrors, DeleteInsightResponses, DeleteInsightTopicData, DeleteInsightTopicErrors, DeleteInsightTopicResponses, DeleteMcpConnectorData, DeleteMcpConnectorErrors, DeleteMcpConnectorResponses, DeleteOrganizationData, DeleteOrganizationErrors, DeleteOrganizationResponses, DeletePageData, DeletePageErrors, DeletePageResponses, DeleteProjectData, DeleteProjectErrors, DeleteProjectResponses, DeleteSourceData, DeleteSourceErrors, DeleteSourceResponses, DeleteStorageFileData, DeleteStorageFileErrors, DeleteStorageFileResponses, DeleteTrackerData, DeleteTrackerErrors, DeleteTrackerResponses, DiscoverDataSourcesData, DiscoverDataSourcesErrors, DiscoverDataSourcesResponses, GenerateArticleData, GenerateArticleErrors, GenerateArticleResponses, GenerateImageData, GenerateImageErrors, GenerateImageResponses, GenerateStorageBlurhashData, GenerateStorageBlurhashErrors, GenerateStorageBlurhashResponses, GetAllWorkerStatusData, GetAllWorkerStatusErrors, GetAllWorkerStatusResponses, GetArticleDataData, GetArticleDataErrors, GetArticleDataResponses, GetArticlesData, GetArticleSourcesData, GetArticleSourcesErrors, GetArticleSourcesResponses, GetArticlesResponses, GetArticleVersionData, GetArticleVersionResponses, GetConversationHistoryData, GetConversationHistoryErrors, GetConversationHistoryResponses, GetDataSourceContentData, GetDataSourceContentErrors, GetDataSourceContentResponses, GetDataSourceData, GetDataSourceErrors, GetDataSourceResponses, GetImageGenerationData, GetImageGenerationErrors, GetImageGenerationResponses, GetImageGenerationStatusData, GetImageGenerationStatusErrors, GetImageGenerationStatusResponses, GetInsightData, GetInsightErrors, GetInsightResponses, GetInsightTopicData, GetInsightTopicErrors, GetInsightTopicResponses, GetMyProfileData, GetMyProfileErrors, GetMyProfileResponses, GetOrganizationData, GetOrganizationErrors, GetOrganizationResponses, GetPageByIdData, GetPageByIdErrors, GetPageByIdResponses, GetPageBySlugData, GetPageBySlugErrors, GetPageBySlugResponses, GetPendingArtifactsData, GetPendingArtifactsErrors, GetPendingArtifactsResponses, GetPopularTagsData, GetPopularTagsResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetPublicProfileData, GetPublicProfileErrors, GetPublicProfileResponses, GetRecentInsightContentData, GetRecentInsightContentErrors, GetRecentInsightContentResponses, GetRecommendedArticlesData, GetRecommendedArticlesResponses, GetRunningWorkersData, GetRunningWorkersErrors, GetRunningWorkersResponses, GetSiteSettingsData, GetSiteSettingsErrors, GetSiteSettingsResponses, GetSourceData, GetSourceErrors, GetSourceResponses, GetTaskRunData, GetTaskRunErrors, GetTaskRunResponses, GetUnreadInsightCountData, GetUnreadInsightCountErrors, GetUnreadInsightCountResponses, GetWorkerStatusData, GetWorkerStatusErrors, GetWorkerStatusResponses, HealthCheckData, HealthCheckResponses, ImportGithubProjectData, ImportGithubProjectErrors, ImportGithubProjectResponses, JoinOrganizationData, JoinOrganizationErrors, JoinOrganizationResponses, LeaveOrganizationData, LeaveOrganizationErrors, LeaveOrganizationResponses, ListAgentSkillsData, ListAgentSkillsErrors, ListAgentSkillsResponses, ListAgentToolsData, ListAgentToolsErrors, ListAgentToolsResponses, ListAllSourcesData, ListAllSourcesErrors, ListAllSourcesResponses, ListArticleVersionsData, ListArticleVersionsResponses, ListConnectorPresetsData, ListConnectorPresetsErrors, ListConnectorPresetsResponses, ListDataSourcesData, ListDataSourcesErrors, ListDataSourcesResponses, ListInsightsData, ListInsightsErrors, ListInsightsResponses, ListInsightTopicsData, ListInsightTopicsErrors, ListInsightTopicsResponses, ListMcpConnectorsData, ListMcpConnectorsErrors, ListMcpConnectorsResponses, ListOrganizationsData, ListOrganizationsErrors, ListOrganizationsResponses, ListPagesData, ListPagesErrors, ListPagesResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListPublicArticleSourcesData, ListPublicArticleSourcesErrors, ListPublicArticleSourcesResponses, ListStorageFilesData, ListStorageFilesErrors, ListStorageFilesResponses, ListTaskRunEventsData, ListTaskRunEventsErrors, ListTaskRunEventsResponses, ListTaskRunsData, ListTaskRunsErrors, ListTaskRunsResponses, ListTrackersData, ListTrackersErrors, ListTrackersResponses, MarkInsightReadData, MarkInsightReadErrors, MarkInsightReadResponses, PublishArticleData, PublishArticleResponses, RecommendDataSourcesData, RecommendDataSourcesErrors, RecommendDataSourcesResponses, RefreshMcpConnectorData, RefreshMcpConnectorErrors, RefreshMcpConnectorResponses, RejectArtifactData, RejectArtifactErrors, RejectArtifactResponses, RevertArticleToVersionData, RevertArticleToVersionResponses, RootStatusData, RootStatusResponses, RunWorkerData, RunWorkerErrors, RunWorkerResponses, ScrapeAndCreateSourceData, ScrapeAndCreateSourceErrors, ScrapeAndCreateSourceResponses, SearchArticlesData, SearchArticlesErrors, SearchArticlesResponses, SearchInsightContentData, SearchInsightContentErrors, SearchInsightContentResponses, SearchInsightsData, SearchInsightsErrors, SearchInsightsResponses, SearchSimilarSourcesData, SearchSimilarSourcesErrors, SearchSimilarSourcesResponses, StopWorkerData, StopWorkerErrors, StopWorkerResponses, SubmitAgentRequestData, SubmitAgentRequestErrors, SubmitAgentRequestResponses, SubmitConversationTurnData, SubmitConversationTurnErrors, SubmitConversationTurnResponses, ToggleInsightPinnedData, ToggleInsightPinnedErrors, ToggleInsightPinnedResponses, TriggerDataSourceCrawlData, TriggerDataSourceCrawlErrors, TriggerDataSourceCrawlResponses, UnpublishArticleData, UnpublishArticleResponses, UpdateAgentSkillData, UpdateAgentSkillErrors, UpdateAgentSkillResponses, UpdateArticleData, UpdateArticleErrors, UpdateArticleResponses, UpdateArticleWithContextData, UpdateArticleWithContextErrors, UpdateArticleWithContextResponses, UpdateDataSourceData, UpdateDataSourceErrors, UpdateDataSourceResponses, UpdateInsightTopicData, UpdateInsightTopicErrors, UpdateInsightTopicResponses, UpdateMcpConnectorData, UpdateMcpConnectorErrors, UpdateMcpConnectorResponses, UpdateOrganizationData, UpdateOrganizationErrors, UpdateOrganizationResponses, UpdatePageData, UpdatePageErrors, UpdatePageResponses, UpdateProfileData, UpdateProfileErrors, UpdateProfileResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateSiteSettingsData, UpdateSiteSettingsErrors, UpdateSiteSettingsResponses, UpdateSourceData, UpdateSourceErrors, UpdateSourceResponses, UpdateStorageFolderData, UpdateStorageFolderErrors, UpdateStorageFolderResponses, UpdateTrackerData, UpdateTrackerErrors, UpdateTrackerResponses, UploadStorageFileData, UploadStorageFileErrors, UploadStorageFileResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean> = Options2<TData, ThrowOnError> & {
     /**
@@ -432,61 +432,11 @@ export class Articles {
     }
 }
 
-export class Pages {
-    public static listPages<ThrowOnError extends boolean = false>(options?: Options<ListPagesData, ThrowOnError>) {
-        return (options?.client ?? client).get<ListPagesResponses, ListPagesErrors, ThrowOnError>({
-            security: [{ scheme: 'bearer', type: 'http' }],
-            url: '/dashboard/pages',
-            ...options
-        });
-    }
-
-    public static createPage<ThrowOnError extends boolean = false>(options: Options<CreatePageData, ThrowOnError>) {
-        return (options.client ?? client).post<CreatePageResponses, CreatePageErrors, ThrowOnError>({
-            security: [{ scheme: 'bearer', type: 'http' }],
-            url: '/dashboard/pages',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    public static deletePage<ThrowOnError extends boolean = false>(options: Options<DeletePageData, ThrowOnError>) {
-        return (options.client ?? client).delete<DeletePageResponses, DeletePageErrors, ThrowOnError>({
-            security: [{ scheme: 'bearer', type: 'http' }],
-            url: '/dashboard/pages/{id}',
-            ...options
-        });
-    }
-
-    public static getPageById<ThrowOnError extends boolean = false>(options: Options<GetPageByIdData, ThrowOnError>) {
-        return (options.client ?? client).get<GetPageByIdResponses, GetPageByIdErrors, ThrowOnError>({
-            security: [{ scheme: 'bearer', type: 'http' }],
-            url: '/dashboard/pages/{id}',
-            ...options
-        });
-    }
-
-    public static updatePage<ThrowOnError extends boolean = false>(options: Options<UpdatePageData, ThrowOnError>) {
-        return (options.client ?? client).put<UpdatePageResponses, UpdatePageErrors, ThrowOnError>({
-            security: [{ scheme: 'bearer', type: 'http' }],
-            url: '/dashboard/pages/{id}',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    public static getPageBySlug<ThrowOnError extends boolean = false>(options: Options<GetPageBySlugData, ThrowOnError>) {
-        return (options.client ?? client).get<GetPageBySlugResponses, GetPageBySlugErrors, ThrowOnError>({ url: '/pages/{slug}', ...options });
-    }
-}
-
 export class Sources {
+    public static listPublicArticleSources<ThrowOnError extends boolean = false>(options: Options<ListPublicArticleSourcesData, ThrowOnError>) {
+        return (options.client ?? client).get<ListPublicArticleSourcesResponses, ListPublicArticleSourcesErrors, ThrowOnError>({ url: '/blog/articles/{articleId}/sources', ...options });
+    }
+
     public static listAllSources<ThrowOnError extends boolean = false>(options?: Options<ListAllSourcesData, ThrowOnError>) {
         return (options?.client ?? client).get<ListAllSourcesResponses, ListAllSourcesErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
@@ -561,6 +511,60 @@ export class Sources {
                 ...options.headers
             }
         });
+    }
+}
+
+export class Pages {
+    public static listPages<ThrowOnError extends boolean = false>(options?: Options<ListPagesData, ThrowOnError>) {
+        return (options?.client ?? client).get<ListPagesResponses, ListPagesErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/dashboard/pages',
+            ...options
+        });
+    }
+
+    public static createPage<ThrowOnError extends boolean = false>(options: Options<CreatePageData, ThrowOnError>) {
+        return (options.client ?? client).post<CreatePageResponses, CreatePageErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/dashboard/pages',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    public static deletePage<ThrowOnError extends boolean = false>(options: Options<DeletePageData, ThrowOnError>) {
+        return (options.client ?? client).delete<DeletePageResponses, DeletePageErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/dashboard/pages/{id}',
+            ...options
+        });
+    }
+
+    public static getPageById<ThrowOnError extends boolean = false>(options: Options<GetPageByIdData, ThrowOnError>) {
+        return (options.client ?? client).get<GetPageByIdResponses, GetPageByIdErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/dashboard/pages/{id}',
+            ...options
+        });
+    }
+
+    public static updatePage<ThrowOnError extends boolean = false>(options: Options<UpdatePageData, ThrowOnError>) {
+        return (options.client ?? client).put<UpdatePageResponses, UpdatePageErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/dashboard/pages/{id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    public static getPageBySlug<ThrowOnError extends boolean = false>(options: Options<GetPageBySlugData, ThrowOnError>) {
+        return (options.client ?? client).get<GetPageBySlugResponses, GetPageBySlugErrors, ThrowOnError>({ url: '/pages/{slug}', ...options });
     }
 }
 

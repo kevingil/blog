@@ -110,6 +110,7 @@ export type ChatRequest = {
     message: string;
     documentContent?: string;
     documentMarkdown?: string;
+    documentTitle?: string;
     articleId: string;
     channel?: string;
 };
@@ -202,6 +203,7 @@ export type ConversationTurnRequest = {
     articleId: string;
     documentContent?: string;
     documentMarkdown?: string;
+    documentTitle?: string;
     message?: string;
     audioBase64?: string;
     mimeType?: string;
@@ -751,6 +753,16 @@ export type PublicProfileResponse = {
     meta_description: string;
     website_url?: string | null;
     image?: null | ImageAsset;
+};
+
+export type PublicSourceResponse = {
+    id: string;
+    title: string;
+    url: string;
+};
+
+export type PublicSourcesResponse = {
+    sources: Array<PublicSourceResponse>;
 };
 
 export type PublishArticleRequest = {
@@ -1356,6 +1368,12 @@ export type SuccessResponsePublicProfileResponse = {
         meta_description: string;
         website_url?: string | null;
         image?: null | ImageAsset;
+    };
+};
+
+export type SuccessResponsePublicSourcesResponse = {
+    data: {
+        sources: Array<PublicSourceResponse>;
     };
 };
 
@@ -2572,6 +2590,28 @@ export type GetArticleVersionResponses = {
 };
 
 export type GetArticleVersionResponse = GetArticleVersionResponses[keyof GetArticleVersionResponses];
+
+export type ListPublicArticleSourcesData = {
+    body?: never;
+    path: {
+        articleId: string;
+    };
+    query?: never;
+    url: '/blog/articles/{articleId}/sources';
+};
+
+export type ListPublicArticleSourcesErrors = {
+    400: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type ListPublicArticleSourcesError = ListPublicArticleSourcesErrors[keyof ListPublicArticleSourcesErrors];
+
+export type ListPublicArticleSourcesResponses = {
+    200: SuccessResponsePublicSourcesResponse;
+};
+
+export type ListPublicArticleSourcesResponse = ListPublicArticleSourcesResponses[keyof ListPublicArticleSourcesResponses];
 
 export type GetRecommendedArticlesData = {
     body?: never;

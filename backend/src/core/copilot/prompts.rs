@@ -24,8 +24,8 @@ Structure:
 
 FORMATTING:
 - Code snippets in markdown fences
-- References as markdown links at the end
 - Unordered lists with -
+- Do not include a Sources, References, or Bibliography section. Sources are stored separately.
 
 STYLE:
 - Concise, clear, engaging

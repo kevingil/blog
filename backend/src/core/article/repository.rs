@@ -45,6 +45,10 @@ pub trait ArticleRepository: Send + Sync {
         html_content: &str,
     ) -> Result<(), AppError>;
 
+    async fn update_draft_title(&self, _article_id: Uuid, _title: &str) -> Result<(), AppError> {
+        Ok(())
+    }
+
     /// Wait for owned fire-and-forget version writes during graceful shutdown or tests.
     async fn drain_background_tasks(&self) -> Result<(), AppError>;
 

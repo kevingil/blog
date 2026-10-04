@@ -12,7 +12,9 @@ import { VITE_API_BASE_URL, VITE_PUBLIC_S3_URL_PREFIX } from "@/services/constan
 import { isAuthError } from '@/services/authenticatedFetch';
 import { submitAgentRequest } from '@/services/agent';
 import { generateArticle } from '@/services/llm/articles';
-import { scrapeAndCreateSource } from '@/services/sources';
+import { getArticleSources, scrapeAndCreateSource } from '@/services/sources';
+import { uploadFile } from '@/services/storage';
+import type { ArticleCitation } from './ArticleSources';
 import { addedTextRanges, type TextRange } from '@/lib/added-text';
 import { useConversation } from '@/hooks/use-conversation';
 
@@ -440,6 +442,8 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
   const [generatingRewrite, setGeneratingRewrite] = useState(false);
   const [publishDrawerOpen, setPublishDrawerOpen] = useState(false);
   const [resourcesOpen, setResourcesOpen] = useState(false);
+  const [articleSources, setArticleSources] = useState<ArticleCitation[]>([]);
+  const [sourcesReloadToken, setSourcesReloadToken] = useState(0);
   const [tagsOpen, setTagsOpen] = useState(false);
   const [externalOpen, setExternalOpen] = useState(false);
   const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -458,6 +462,41 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
   const currentHeader = currentVersionIndex >= 0 ? imageVersions[currentVersionIndex] : undefined;
 
   // Image versioning functions
+  const uploadDroppedImage = async (file: File) => {
+    const safeName = file.name.replace(/[^\w.\-]+/g, '-').replace(/^-+/, '') || 'image';
+    const uploaded = await uploadFile(`articles/${Date.now()}-${safeName}`, file);
+    return {
+      url: uploaded.url,
+      alt: file.name.replace(/\.[^.]+$/, '') || 'Image',
+      uploadId: uploaded.id ?? undefined,
+      blurhash: uploaded.blurhash,
+    };
+  };
+
+  const dropCoverImage = async (file: File) => {
+    try {
+      const uploaded = await uploadDroppedImage(file);
+      addImageVersion(uploaded.url, undefined, {
+        uploadId: uploaded.uploadId,
+        blurhash: uploaded.blurhash,
+      });
+    } catch (error) {
+      const description = error instanceof Error ? error.message : 'Could not upload that image.';
+      toast({ title: 'Upload failed', description, variant: 'destructive' });
+    }
+  };
+
+  const uploadBodyImage = async (file: File) => {
+    try {
+      const uploaded = await uploadDroppedImage(file);
+      return { url: uploaded.url, alt: uploaded.alt };
+    } catch (error) {
+      const description = error instanceof Error ? error.message : 'Could not upload that image.';
+      toast({ title: 'Upload failed', description, variant: 'destructive' });
+      throw error;
+    }
+  };
+
   const addImageVersion = (url: string, prompt?: string, asset?: { uploadId?: string; blurhash?: string | null }) => {
     const newVersion = { url, prompt, timestamp: Date.now(), uploadId: asset?.uploadId, blurhash: asset?.blurhash };
     setImageVersions(prev => [...prev, newVersion]);
@@ -909,6 +948,30 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
   const onContentChange = (md: string) => {
     setValue('content', md);
   };
+
+  useEffect(() => {
+    const articleId = article?.article.id;
+    if (!articleId) {
+      setArticleSources([]);
+      return;
+    }
+    let cancelled = false;
+    getArticleSources(articleId)
+      .then((sources) => {
+        if (cancelled) return;
+        setArticleSources(sources.map((source) => ({
+          id: source.id,
+          title: source.title,
+          url: source.url,
+        })));
+      })
+      .catch(() => {
+        if (!cancelled) setArticleSources([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [article?.article.id, sourcesReloadToken]);
 
   const applyAgentMarkdown = (next: string) => {
     const previous = getValues('content') || '';
@@ -1378,6 +1441,7 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
             message: messageText,
             documentContent: documentContent,
             documentMarkdown: documentMarkdown || '',
+            documentTitle: getValues('title') || '',
             articleId: article.article.id,
             channel: 'text',
           });
@@ -1653,10 +1717,27 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
                 break;
                 
               case 'document_update':
-                if (typeof msg.content === 'string' && msg.content.length > 0) {
+                if (typeof msg.content === 'string') {
                   applyAgentMarkdown(msg.content);
                 }
                 break;
+
+              case 'title_update':
+                if (typeof msg.content === 'string') {
+                  setValue('title', msg.content, { shouldDirty: true, shouldValidate: true });
+                }
+                break;
+
+              case 'sources_update': {
+                const next = Array.isArray(msg.data?.sources) ? msg.data.sources : [];
+                setArticleSources(next.map((source: { id?: string; title?: string; url?: string }) => ({
+                  id: String(source.id || source.url || source.title || Math.random()),
+                  title: source.title || source.url || 'Source',
+                  url: source.url || '',
+                })));
+                setSourcesReloadToken((token) => token + 1);
+                break;
+              }
 
               case 'tool_result':
                 setIsThinking(false);
@@ -2264,6 +2345,7 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
                 articleId={article.article.id}
                 isOpen={resourcesOpen}
                 onOpenChange={setResourcesOpen}
+                reloadToken={sourcesReloadToken}
               />
             )}
             <Drawer direction="right" open={tagsOpen} onOpenChange={setTagsOpen}>
@@ -2350,6 +2432,9 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
                   imageUrl={previewImageUrl}
                   imageBlurhash={currentHeader?.blurhash ?? article?.article.draft_image?.blurhash}
                   onEditImage={() => setImageModalOpen(true)}
+                  onDropCover={dropCoverImage}
+                  onUploadBodyImage={uploadBodyImage}
+                  sources={articleSources}
                   tags={watchedTags}
                   meta={(
                     <div className="article-editor-meta">

@@ -12,6 +12,12 @@ pub trait ArticleDraftService: Send + Sync {
     async fn load_draft_content(&self, _article_id: Uuid) -> Result<Option<String>, AppError> {
         Ok(None)
     }
+    async fn update_draft_title(&self, _article_id: Uuid, _title: &str) -> Result<(), AppError> {
+        Ok(())
+    }
+    async fn load_draft_title(&self, _article_id: Uuid) -> Result<Option<String>, AppError> {
+        Ok(None)
+    }
 }
 
 pub struct ArticleDraftAdapter {
@@ -43,6 +49,15 @@ impl ArticleDraftService for ArticleDraftAdapter {
         let article = self.repository.find_by_id(article_id).await?;
         Ok(Some(article.draft_content))
     }
+
+    async fn update_draft_title(&self, article_id: Uuid, title: &str) -> Result<(), AppError> {
+        self.repository.update_draft_title(article_id, title).await
+    }
+
+    async fn load_draft_title(&self, article_id: Uuid) -> Result<Option<String>, AppError> {
+        let article = self.repository.find_by_id(article_id).await?;
+        Ok(Some(article.draft_title))
+    }
 }
 
 #[async_trait]
@@ -56,5 +71,9 @@ where
         markdown_content: &str,
     ) -> Result<(), AppError> {
         ArticleDraftService::update_draft_content(self, article_id, markdown_content).await
+    }
+
+    async fn update_draft_title(&self, article_id: Uuid, title: &str) -> Result<(), AppError> {
+        ArticleDraftService::update_draft_title(self, article_id, title).await
     }
 }

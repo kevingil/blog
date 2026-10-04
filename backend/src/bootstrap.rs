@@ -47,7 +47,8 @@ use crate::{
             llm::{
                 Agent, ApplyPatchTool, GenerateImagePromptTool, GetRelevantSourcesTool,
                 InMemorySessionStore, Model, ReadDocumentTool, ReplaceLinesTool,
-                SearchWebSourcesTool, SelectSourcesForEditTool, SessionStore, Tool, ToolRegistry,
+                SearchWebSourcesTool, SelectSourcesForEditTool, SessionStore, SetTitleTool, Tool,
+                ToolRegistry, UpdateSourcesTool,
             },
         },
         organization::OrganizationService,
@@ -310,8 +311,10 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
     let text_generation = Arc::new(TextGenerationService::new(openai.clone()));
     let tools: Vec<Arc<dyn Tool>> = vec![
         Arc::new(ReadDocumentTool),
-        Arc::new(ApplyPatchTool::new(Some(drafts.clone()))),
-        Arc::new(ReplaceLinesTool::new(Some(drafts.clone()))),
+        Arc::new(SetTitleTool::new(Some(drafts.clone()))),
+        Arc::new(UpdateSourcesTool::new(source_service.clone())),
+        Arc::new(ApplyPatchTool::new(Some(drafts.clone())).with_sources(source_service.clone())),
+        Arc::new(ReplaceLinesTool::new(Some(drafts.clone())).with_sources(source_service.clone())),
         Arc::new(GenerateImagePromptTool::new(text_generation)),
         Arc::new(SearchWebSourcesTool::new(
             exa.clone(),

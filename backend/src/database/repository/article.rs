@@ -540,6 +540,19 @@ impl ArticleRepository for DieselArticleRepository {
             .map_err(map_diesel_error)
     }
 
+    async fn update_draft_title(&self, article_id: Uuid, title: &str) -> Result<(), AppError> {
+        let mut connection = self.connection().await?;
+        diesel::update(article::table.filter(article::id.eq(article_id)))
+            .set((
+                article::draft_title.eq(title),
+                article::updated_at.eq(Utc::now()),
+            ))
+            .execute(&mut connection)
+            .await
+            .map(|_| ())
+            .map_err(map_diesel_error)
+    }
+
     async fn drain_background_tasks(&self) -> Result<(), AppError> {
         let target = self.background_tasks.snapshot();
         self.background_tasks.wait_for(target).await;

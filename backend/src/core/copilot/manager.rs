@@ -205,6 +205,13 @@ impl CopilotManager {
             .await;
 
         let cancellation = self.root_cancellation.child_token();
+        let mut document_title = request.document_title.trim().to_owned();
+        if document_title.is_empty()
+            && let Some(drafts) = &self.drafts
+            && let Ok(Some(stored)) = drafts.load_draft_title(article_id).await
+        {
+            document_title = stored;
+        }
         let tool_context = ToolContext::new(
             session.id.clone(),
             "",
@@ -214,7 +221,28 @@ impl CopilotManager {
             request.document_markdown.clone(),
             cancellation.clone(),
         );
-        let prompt = self.build_prompt(article_id, &request).await;
+        if let Err(error) = tool_context.set_document_title(document_title.clone()) {
+            tracing::warn!(%error, "failed to attach the article title to the copilot turn");
+        }
+        if let Some(sources) = &self.sources
+            && let Ok(sources) = sources.list_for_article(article_id).await
+        {
+            let views = sources
+                .into_iter()
+                .map(|source| crate::core::ml::llm::ArticleSourceView {
+                    id: source.id,
+                    title: source.title,
+                    url: source.url,
+                    content: source.content,
+                })
+                .collect();
+            if let Err(error) = tool_context.set_document_sources(views) {
+                tracing::warn!(%error, "failed to attach article sources to the copilot turn");
+            }
+        }
+        let prompt = self
+            .build_prompt(article_id, &request, &document_title)
+            .await;
         let run = self
             .agent
             .start(
@@ -358,7 +386,12 @@ impl CopilotManager {
         }
     }
 
-    async fn build_prompt(&self, article_id: Uuid, request: &ChatRequest) -> String {
+    async fn build_prompt(
+        &self,
+        article_id: Uuid,
+        request: &ChatRequest,
+        document_title: &str,
+    ) -> String {
         let document = if request.document_markdown.is_empty() {
             &request.document_content
         } else {
@@ -367,7 +400,7 @@ impl CopilotManager {
         let mut prompt = format!(
             "{}\n\n{}",
             request.message,
-            generate_document_context(document)
+            generate_document_context(document_title, document)
         );
         if let Some(sources) = &self.sources
             && let Ok(sources) = sources.list_for_article(article_id).await
@@ -798,16 +831,36 @@ async fn stream_tool_results(
             .and_then(Value::as_str)
             .unwrap_or_default();
         if !result.is_error
-            && let Some(markdown) = parsed
-                .get("new_markdown")
-                .and_then(Value::as_str)
-                .filter(|markdown| !markdown.is_empty())
+            && let Some(markdown) = parsed.get("new_markdown").and_then(Value::as_str)
         {
             let mut update = StreamResponse::new(request_id, "document_update");
             update.iteration = iteration;
             update.tool_id = result.tool_call_id.clone();
             update.tool_name = name.to_owned();
             update.content = markdown.to_owned();
+            send_stream(sender, cancellation, update).await?;
+        }
+        if !result.is_error && parsed.get("title_updated").and_then(Value::as_bool) == Some(true) {
+            let mut update = StreamResponse::new(request_id, "title_update");
+            update.iteration = iteration;
+            update.tool_id = result.tool_call_id.clone();
+            update.tool_name = name.to_owned();
+            update.content = parsed
+                .get("new_title")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned();
+            send_stream(sender, cancellation, update).await?;
+        }
+        if !result.is_error && parsed.get("sources_updated").and_then(Value::as_bool) == Some(true)
+        {
+            let mut update = StreamResponse::new(request_id, "sources_update");
+            update.iteration = iteration;
+            update.tool_id = result.tool_call_id.clone();
+            update.tool_name = name.to_owned();
+            update.data = Some(json!({
+                "sources": parsed.get("sources").cloned().unwrap_or_else(|| json!([])),
+            }));
             send_stream(sender, cancellation, update).await?;
         }
         let mut stream = StreamResponse::new(request_id, "tool_result");
@@ -944,6 +997,14 @@ async fn persist_tool_result(
                 .map(Vec::len)
                 .unwrap_or(0)
         ),
+        "set_title" => format!(
+            "Updated the title to {}",
+            parsed
+                .get("new_title")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+        ),
+        "update_sources" => "Updated the article sources".to_owned(),
         "select_sources_for_edit" => format!(
             "🧠 Selected {} sources for edit context",
             parsed
@@ -1096,9 +1157,21 @@ fn convert_step(step: &TurnStep) -> ChainOfThoughtStep {
     }
 }
 
-fn generate_document_context(markdown: &str) -> String {
+fn generate_document_context(title: &str, markdown: &str) -> String {
+    let title_line = if title.trim().is_empty() {
+        "Title: (empty). Set it with set_title. Do not put the title in the body."
+    } else {
+        "Title is a separate field. Edit it with set_title. Do not write it into the body."
+    };
+    let shown_title = if title.trim().is_empty() {
+        "(empty)".to_owned()
+    } else {
+        title.trim().to_owned()
+    };
     if markdown.trim().is_empty() {
-        return "--- Document Context ---\nTotal: 0 lines, 0 chars, 0 paragraphs\n(empty document — write it with apply_patch: old_str empty, new_str the full markdown)\n---".to_owned();
+        return format!(
+            "--- Document Context ---\nTitle: {shown_title}\n{title_line}\nTotal: 0 lines, 0 chars, 0 paragraphs\n(empty body — write it with apply_patch: old_str empty, new_str the body markdown, without the title or a sources section)\n---"
+        );
     }
     let lines = markdown.lines().collect::<Vec<_>>();
     let paragraphs = lines
@@ -1126,7 +1199,7 @@ fn generate_document_context(markdown: &str) -> String {
         .collect::<Vec<_>>();
     if sections.is_empty() {
         return format!(
-            "--- Document Context ---\nTotal: {} lines, {} chars, {} paragraphs\n(no headings found)\n---",
+            "--- Document Context ---\nTitle: {shown_title}\n{title_line}\nTotal: {} lines, {} chars, {} paragraphs\n(no headings found)\n---",
             lines.len(),
             markdown.len(),
             paragraphs
@@ -1147,7 +1220,7 @@ fn generate_document_context(markdown: &str) -> String {
         ));
     }
     format!(
-        "--- Document Context ---\nTotal: {} lines, {} chars, {} paragraphs\nSections:\n{}---",
+        "--- Document Context ---\nTitle: {shown_title}\n{title_line}\nTotal: {} lines, {} chars, {} paragraphs\nSections:\n{}---",
         lines.len(),
         markdown.len(),
         paragraphs,
@@ -1157,7 +1230,14 @@ fn generate_document_context(markdown: &str) -> String {
 
 fn format_source_context(mut sources: Vec<Source>) -> String {
     sources.sort_by(|left, right| right.created_at.cmp(&left.created_at));
-    let mut output = String::from("Available Sources:\n");
+    let mut output = String::from(
+        "Article sources are separate objects, not body text. Edit them with update_sources. Do not copy them into the article.\n",
+    );
+    if sources.is_empty() {
+        output.push_str("Article sources: none.\n");
+        return output.trim().to_owned();
+    }
+    output.push_str("Article sources:\n");
     for source in sources {
         output.push_str(&format!("- [{}] {}", source.id, source.title));
         if !source.url.is_empty() {

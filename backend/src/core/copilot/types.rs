@@ -12,6 +12,8 @@ pub struct ChatRequest {
     pub document_content: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub document_markdown: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub document_title: String,
     pub article_id: String,
     #[serde(default = "default_channel", skip_serializing_if = "String::is_empty")]
     pub channel: String,

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import {
@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { BlurhashImage } from '@/components/media/BlurhashImage';
 import type { TextRange } from '@/lib/added-text';
 import { htmlToMarkdown, looksLikeMarkdown, markdownToHtml } from './markdown';
+import { ArticleSources, type ArticleCitation } from '../ArticleSources';
 import {
   AddedHighlight,
   ArticleCodeBlock,
@@ -57,6 +58,20 @@ interface TipTapEditorProps {
   meta?: ReactNode;
   sideControls?: ReactNode;
   mobileControls?: ReactNode;
+  onDropCover?: (file: File) => Promise<void> | void;
+  onUploadBodyImage?: (file: File) => Promise<{ url: string; alt: string }>;
+  sources?: ArticleCitation[];
+}
+
+function imageFiles(list: FileList | null | undefined): File[] {
+  if (!list || list.length === 0) return [];
+  return Array.from(list).filter((file) => (
+    file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(file.name)
+  ));
+}
+
+function dragHasFiles(event: { dataTransfer: DataTransfer | null }): boolean {
+  return Array.from(event.dataTransfer?.types ?? []).includes('Files');
 }
 
 export function TipTapEditor({
@@ -74,6 +89,9 @@ export function TipTapEditor({
   meta,
   sideControls,
   mobileControls,
+  onDropCover,
+  onUploadBodyImage,
+  sources = [],
 }: TipTapEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -85,6 +103,9 @@ export function TipTapEditor({
   const highlightKey = JSON.stringify(highlights);
   const lastHighlightKey = useRef(highlightKey);
   const editorRef = useRef<ReturnType<typeof useEditor>>(null);
+  const [coverDrag, setCoverDrag] = useState(false);
+  const [bodyDrag, setBodyDrag] = useState(false);
+  const bodyDragDepth = useRef(0);
 
   const editor = useEditor({
     immediatelyRender: true,
@@ -95,6 +116,11 @@ export function TipTapEditor({
       attributes: {
         class: 'article-tiptap blog-post prose max-w-none dark:prose-invert min-h-[50vh] focus:outline-none',
         spellcheck: 'true',
+      },
+      handleDrop(_view, event) {
+        if (imageFiles(event.dataTransfer?.files).length === 0) return false;
+        event.preventDefault();
+        return true;
       },
       handlePaste(_view, event) {
         const current = editorRef.current;
@@ -154,10 +180,9 @@ export function TipTapEditor({
     }
   }, [editor, content, highlightKey]);
 
-  return (
-    <div className="article-editor relative flex h-full min-h-0 flex-col bg-background">
-      <div className="flex shrink-0 items-center gap-0 border-b border-border/50 px-0.5 py-0.5 md:px-1 md:py-1">
-        <div className="flex min-w-0 flex-1 items-center gap-0 overflow-x-auto [scrollbar-width:none] md:gap-0.5 [&::-webkit-scrollbar]:hidden [&_button]:shrink-0 [&_button]:max-md:h-7 [&_button]:max-md:min-w-7 [&_button]:max-md:px-1">
+  const formatToolbar = (
+    <div className="flex shrink-0 items-center gap-0 border-t border-border/50 px-0.5 py-0.5 md:px-1 md:py-1" aria-label="Text formatting">
+      <div className="flex min-w-0 flex-1 items-center gap-0 overflow-x-auto [scrollbar-width:none] md:gap-0.5 [&::-webkit-scrollbar]:hidden [&_button]:shrink-0 [&_button]:max-md:h-7 [&_button]:max-md:min-w-7 [&_button]:max-md:px-1">
         <Toggle size="sm" type="button" pressed={!!editor?.isActive('bold')} onPressedChange={() => editor?.chain().focus().toggleBold().run()} aria-label="Bold" title="Bold">
           <Bold className="h-3.5 w-3.5" />
         </Toggle>
@@ -218,6 +243,10 @@ export function TipTapEditor({
           </div>
         ) : null}
       </div>
+  );
+
+  return (
+    <div className="article-editor relative flex h-full min-h-0 flex-col bg-background">
       {sideControls}
       <div className="min-h-0 flex-1 overflow-auto">
         <article className="article-editor-document">
@@ -237,10 +266,38 @@ export function TipTapEditor({
             <button
               type="button"
               onClick={onEditImage}
-              className={imageUrl ? 'article-cover-preview' : 'article-cover-preview article-cover-preview-empty'}
+              onDragEnter={(event) => {
+                if (!dragHasFiles(event)) return;
+                event.preventDefault();
+                event.stopPropagation();
+                setCoverDrag(true);
+              }}
+              onDragOver={(event) => {
+                if (!dragHasFiles(event)) return;
+                event.preventDefault();
+                event.stopPropagation();
+                setCoverDrag(true);
+              }}
+              onDragLeave={(event) => {
+                event.stopPropagation();
+                setCoverDrag(false);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setCoverDrag(false);
+                bodyDragDepth.current = 0;
+                setBodyDrag(false);
+                const file = imageFiles(event.dataTransfer.files)[0];
+                if (file && onDropCover) void onDropCover(file);
+              }}
+              className={[
+                imageUrl ? 'article-cover-preview' : 'article-cover-preview article-cover-preview-empty',
+                coverDrag ? 'article-cover-preview-dropping' : '',
+              ].filter(Boolean).join(' ')}
               aria-label="Edit header image"
             >
-              {imageUrl ? (
+              {imageUrl && !coverDrag ? (
                 <BlurhashImage
                   src={imageUrl}
                   alt={title || 'Article image'}
@@ -249,7 +306,10 @@ export function TipTapEditor({
                   imgClassName="h-full w-full object-cover"
                 />
               ) : (
-                <ImageIcon className="relative z-[1] h-5 w-5 text-muted-foreground" />
+                <span className="relative z-[1] flex flex-col items-center gap-2 text-sm text-muted-foreground">
+                  <ImageIcon className="h-5 w-5" />
+                  {coverDrag ? 'Drop image to upload' : 'Drop an image, or click to choose one'}
+                </span>
               )}
             </button>
           ) : null}
@@ -258,7 +318,51 @@ export function TipTapEditor({
               <p className="font-semibold">{authorName}</p>
             </div>
           )}
-          <EditorContent editor={editor} />
+          <div
+            className="article-body-drop"
+            onDragEnter={(event) => {
+              if (!dragHasFiles(event)) return;
+              event.preventDefault();
+              bodyDragDepth.current += 1;
+              setBodyDrag(true);
+            }}
+            onDragOver={(event) => {
+              if (!dragHasFiles(event)) return;
+              event.preventDefault();
+            }}
+            onDragLeave={() => {
+              bodyDragDepth.current = Math.max(0, bodyDragDepth.current - 1);
+              if (bodyDragDepth.current === 0) setBodyDrag(false);
+            }}
+            onDrop={(event) => {
+              bodyDragDepth.current = 0;
+              setBodyDrag(false);
+              const files = imageFiles(event.dataTransfer.files);
+              if (files.length === 0 || !onUploadBodyImage || !editor) return;
+              event.preventDefault();
+              const coords = editor.view.posAtCoords({ left: event.clientX, top: event.clientY });
+              const position = coords?.pos ?? editor.state.selection.from;
+              const upload = onUploadBodyImage;
+              void (async () => {
+                try {
+                  const uploaded = [];
+                  for (const file of files) {
+                    uploaded.push(await upload(file));
+                  }
+                  const html = markdownToHtml(uploaded.map((file) => `![${file.alt}](${file.url})`).join('\n\n'));
+                  editor.chain().focus().insertContentAt(position, html).run();
+                } catch {
+                  // The upload callback reports the failure.
+                }
+              })();
+            }}
+          >
+            {bodyDrag && !coverDrag ? (
+              <div className="article-body-drop-overlay">Drop image to insert</div>
+            ) : null}
+            <EditorContent editor={editor} />
+          </div>
+          <ArticleSources sources={sources} />
           {tags && tags.length > 0 && (
             <div className="mb-8 mt-8 flex flex-wrap gap-2">
               {tags.map((tag) => (
@@ -270,6 +374,7 @@ export function TipTapEditor({
           )}
         </article>
       </div>
+      {formatToolbar}
     </div>
   );
 }

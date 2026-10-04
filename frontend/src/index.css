@@ -482,18 +482,72 @@
     background: color-mix(in oklab, var(--muted) 45%, transparent);
   }
 
+  .article-cover-preview-dropping {
+    outline: 2px dashed var(--primary);
+    outline-offset: -6px;
+    background: color-mix(in oklab, var(--primary) 12%, transparent);
+  }
+
+  .article-body-drop {
+    position: relative;
+  }
+
+  .article-body-drop-overlay {
+    position: absolute;
+    inset: 0.75rem;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed var(--primary);
+    border-radius: 0.75rem;
+    background: color-mix(in oklab, var(--background) 82%, transparent);
+    color: var(--primary);
+    font-size: 0.95rem;
+    font-weight: 600;
+    pointer-events: none;
+  }
+
+  .article-sources {
+    margin-top: 2.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .article-sources h2 {
+    margin: 0 0 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
+  .article-sources ol {
+    margin: 0;
+    padding-left: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .article-sources a {
+    color: inherit;
+    text-underline-offset: 3px;
+  }
+
   .article-cover-preview:hover {
     background: color-mix(in oklab, var(--muted) 70%, transparent);
   }
 
   .article-editor-rail {
     position: absolute;
-    top: 3.15rem;
+    top: 0.65rem;
     z-index: 20;
     display: none;
     flex-direction: column;
     gap: 0.1rem;
-    max-height: calc(100% - 3.6rem);
+    max-height: calc(100% - 4.2rem);
     overflow: auto;
   }
 
