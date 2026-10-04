@@ -19,13 +19,39 @@ type GeneratedResult = {
 };
 
 function errorEnvelope(error: unknown): ApiErrorResponse {
-  if (error && typeof error === "object" && "error" in error) {
-    return error as ApiErrorResponse;
+  if (typeof error === "string") {
+    const trimmed = error.trim();
+    if (trimmed.startsWith("{")) {
+      try {
+        return errorEnvelope(JSON.parse(trimmed));
+      } catch {
+        return { error: trimmed };
+      }
+    }
+    return { error: trimmed || "An error occurred" };
   }
 
-  return {
-    error: typeof error === "string" && error ? error : "An error occurred",
-  };
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const message =
+      typeof record.error === "string"
+        ? record.error
+        : typeof record.message === "string"
+          ? record.message
+          : "";
+    if (message) {
+      return {
+        error: message,
+        code: typeof record.code === "string" ? record.code : undefined,
+        details:
+          record.details && typeof record.details === "object"
+            ? (record.details as ApiErrorResponse["details"])
+            : undefined,
+      };
+    }
+  }
+
+  return { error: "An error occurred" };
 }
 
 /**

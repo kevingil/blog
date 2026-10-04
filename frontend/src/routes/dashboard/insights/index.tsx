@@ -83,12 +83,23 @@ function InsightsPage() {
       return;
     }
     if (nextStatus.state === "completed") {
-      toast({
-        title: `${getWorkerDisplayName("insight")} completed`,
-        description: nextStatus.message || "The research check finished.",
-      });
       queryClient.invalidateQueries({ queryKey: ["insights"] });
       queryClient.invalidateQueries({ queryKey: ["insight-trackers"] });
+      void listInsights(1, 1)
+        .then((latest) => {
+          const briefing = latest.insights[0];
+          toast({
+            title: briefing?.title || `${getWorkerDisplayName("insight")} completed`,
+            description:
+              briefing?.summary || nextStatus.message || "The research check finished.",
+          });
+        })
+        .catch(() => {
+          toast({
+            title: `${getWorkerDisplayName("insight")} completed`,
+            description: nextStatus.message || "The research check finished.",
+          });
+        });
     }
     if (nextStatus.state === "failed") {
       toast({
@@ -176,9 +187,6 @@ function InsightsPage() {
             ))}
           </SelectContent>
         </Select>
-        <Link to="/dashboard/tasks">
-          <Button variant="outline">Tasks</Button>
-        </Link>
       </div>
 
       {isLoading || isSearchLoading ? (
@@ -388,9 +396,9 @@ function TrackerRow({ tracker, busy }: { tracker: Tracker; busy: boolean }) {
     onSuccess: (result) => {
       refresh();
       toast({
-        title: result.started ? "Check started" : "Check queued",
+        title: result.started ? "Research started" : "Research queued",
         description: result.started
-          ? `${tracker.name} is being researched now.`
+          ? `${tracker.name} is being researched now. The briefing shows up here when it finishes.`
           : `${tracker.name} is due and will run when the current check finishes.`,
       });
     },
@@ -440,7 +448,7 @@ function TrackerRow({ tracker, busy }: { tracker: Tracker; busy: boolean }) {
         ) : (
           <Play className="w-4 h-4 mr-2" />
         )}
-        Check now
+        Run research
       </Button>
       <Button
         variant="ghost"
