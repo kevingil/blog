@@ -275,6 +275,12 @@ impl RuntimeInsightGenerator {
                 _ => name.to_owned(),
             }
         };
+        tracing::info!(
+            tracker = name,
+            domain = domain.unwrap_or(""),
+            %query,
+            "insight research started"
+        );
         let searched = tokio::select! {
             biased;
             () = cancellation.cancelled() => return Err(cancelled()),
@@ -288,6 +294,11 @@ impl RuntimeInsightGenerator {
             .filter(|result| !result.text.is_empty() || !result.highlights.is_empty())
             .take(MAX_PAGES)
             .collect::<Vec<_>>();
+        tracing::info!(
+            tracker = name,
+            pages = pages.len(),
+            "insight research returned pages"
+        );
         if pages.is_empty() {
             self.advance_topic(topic_id).await?;
             self.advance_source(data_source_id).await?;
@@ -375,6 +386,8 @@ impl RuntimeInsightGenerator {
             period_end,
             data_source_id,
         };
+        let title = insight.title.clone();
+        let page_count = contents.len();
         tokio::select! {
             biased;
             () = cancellation.cancelled() => return Err(cancelled()),
@@ -382,6 +395,7 @@ impl RuntimeInsightGenerator {
                 result.map_err(|error| failure("failed to create insight", error))?
             }
         }
+        tracing::info!(tracker = name, %title, pages = page_count, "insight briefing saved");
         if let Some(topic_id) = topic_id {
             tokio::select! {
                 biased;

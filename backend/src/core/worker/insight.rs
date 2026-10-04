@@ -93,7 +93,13 @@ impl Worker for InsightWorker {
             result = generator.topics() => result
                 .map_err(|error| WorkerFailure::new(format!("failed to get topics: {error}")))?,
         };
+        tracing::info!(
+            domains = sources.len(),
+            subjects = topics.len(),
+            "insight check loaded due trackers"
+        );
         if sources.is_empty() && topics.is_empty() {
+            tracing::info!("insight check found nothing due");
             self.status
                 .update_status(self.name(), WorkerState::Running, 100, "No trackers due");
             return Ok(WorkerResult::warning(
@@ -132,11 +138,18 @@ impl Worker for InsightWorker {
                 result = generator.generate_for_source(&source, context.cancellation()) => result,
             };
             match generated {
-                Ok(InsightTopicResult::Created) => created += 1,
-                Ok(InsightTopicResult::SkippedInsufficient) => skipped_insufficient += 1,
+                Ok(InsightTopicResult::Created) => {
+                    created += 1;
+                    tracing::info!(domain = %source.name, "insight briefing written");
+                }
+                Ok(InsightTopicResult::SkippedInsufficient) => {
+                    skipped_insufficient += 1;
+                    tracing::info!(domain = %source.name, "insight check skipped with no pages");
+                }
                 Ok(InsightTopicResult::SkippedRecent) => skipped_recent += 1,
                 Err(error) => {
                     failed += 1;
+                    tracing::error!(domain = %source.name, %error, "insight check failed");
                     let mut meta_data = Map::new();
                     meta_data.insert("data_source_id".to_owned(), json!(source.id));
                     meta_data.insert("error".to_owned(), json!(error.to_string()));
@@ -171,11 +184,18 @@ impl Worker for InsightWorker {
                 result = generator.generate_for_topic(&topic, context.cancellation()) => result,
             };
             match generated {
-                Ok(InsightTopicResult::Created) => created += 1,
-                Ok(InsightTopicResult::SkippedInsufficient) => skipped_insufficient += 1,
+                Ok(InsightTopicResult::Created) => {
+                    created += 1;
+                    tracing::info!(subject = %topic.name, "insight briefing written");
+                }
+                Ok(InsightTopicResult::SkippedInsufficient) => {
+                    skipped_insufficient += 1;
+                    tracing::info!(subject = %topic.name, "insight check skipped with no pages");
+                }
                 Ok(InsightTopicResult::SkippedRecent) => skipped_recent += 1,
                 Err(error) => {
                     failed += 1;
+                    tracing::error!(subject = %topic.name, %error, "insight check failed");
                     let mut meta_data = Map::new();
                     meta_data.insert("topic_id".to_owned(), json!(topic.id));
                     meta_data.insert("error".to_owned(), json!(error.to_string()));

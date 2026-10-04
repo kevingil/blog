@@ -393,6 +393,7 @@ pub async fn get_insight(
     Path(id): Path<String>,
 ) -> ApiResult<InsightWithSources> {
     let id = parse_insight_id(&id)?;
+    tracing::info!(%id, "loading insight");
     Ok(Json(SuccessResponse::new(
         state.service().get_insight_with_sources(id).await?.into(),
     )))
@@ -498,6 +499,7 @@ pub async fn list_trackers(
     authenticated: AuthenticatedAccount,
     State(state): State<InsightState>,
 ) -> ApiResult<Vec<TrackerResponse>> {
+    tracing::info!("listing insight trackers");
     let account_id = authenticated.into_inner();
     let organization_id = state.organization_id(account_id).await;
     let values = state
@@ -531,6 +533,11 @@ pub async fn create_tracker(
     body: Result<Json<TrackerCreateRequest>, JsonRejection>,
 ) -> Result<(StatusCode, Json<SuccessResponse<TrackerResponse>>), InsightApiError> {
     let Json(request) = body.map_err(invalid_request_body)?;
+    tracing::info!(
+        target = %request.target,
+        frequency = %request.frequency,
+        "creating insight tracker"
+    );
     let account_id = authenticated.into_inner();
     let organization_id = state.organization_id(account_id).await;
     let user_id = organization_id.is_none().then(|| account_id.into_inner());
