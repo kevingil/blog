@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use diesel::{
-    ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper, result::Error as DieselError,
+    BoolExpressionMethods, ExpressionMethods, OptionalExtension, PgSortExpressionMethods, QueryDsl,
+    SelectableHelper, result::Error as DieselError,
 };
 use diesel_async::RunQueryDsl;
 use pgvector::{Vector, VectorExpressionMethods};
@@ -72,6 +73,28 @@ impl InsightTopicRepository for DieselInsightTopicRepository {
         let mut connection = self.connection().await?;
         insight_topic::table
             .order(insight_topic::name.asc())
+            .select(InsightTopicRow::as_select())
+            .load(&mut connection)
+            .await
+            .map(rows_into_domain)
+            .map_err(map_error)
+    }
+
+    async fn find_due(&self, limit: i64) -> Result<Vec<InsightTopic>, AppError> {
+        let mut connection = self.connection().await?;
+        let mut query = insight_topic::table
+            .filter(insight_topic::is_enabled.eq(true))
+            .filter(
+                insight_topic::next_check_at
+                    .is_null()
+                    .or(insight_topic::next_check_at.le(Utc::now())),
+            )
+            .order(insight_topic::next_check_at.asc().nulls_first())
+            .into_boxed();
+        if limit >= 0 {
+            query = query.limit(limit);
+        }
+        query
             .select(InsightTopicRow::as_select())
             .load(&mut connection)
             .await
@@ -198,6 +221,9 @@ impl From<InsightTopicRow> for InsightTopic {
             icon: row.icon,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            check_frequency: row.check_frequency,
+            next_check_at: row.next_check_at,
+            is_enabled: row.is_enabled,
         }
     }
 }
@@ -219,6 +245,13 @@ fn new_row(topic: &InsightTopic) -> NewInsightTopicRow {
         icon: topic.icon.clone(),
         created_at: topic.created_at.unwrap_or(now),
         updated_at: topic.updated_at.unwrap_or(now),
+        check_frequency: if topic.check_frequency.is_empty() {
+            "daily".to_owned()
+        } else {
+            topic.check_frequency.clone()
+        },
+        next_check_at: topic.next_check_at,
+        is_enabled: topic.is_enabled,
     }
 }
 
@@ -238,6 +271,13 @@ fn changeset(topic: &InsightTopic) -> InsightTopicChangeset {
         color: topic.color.clone(),
         icon: topic.icon.clone(),
         updated_at: Some(Utc::now()),
+        check_frequency: if topic.check_frequency.is_empty() {
+            "daily".to_owned()
+        } else {
+            topic.check_frequency.clone()
+        },
+        next_check_at: topic.next_check_at,
+        is_enabled: topic.is_enabled,
     }
 }
 
