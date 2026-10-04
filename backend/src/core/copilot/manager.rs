@@ -818,7 +818,10 @@ async fn stream_tool_results(
             "content": result.content,
             "metadata": result.metadata,
             "is_error": result.is_error,
-            "is_search": name == "search_web_sources" || name == "ask_question" || name == "web_search",
+            "is_search": name == "search_web_sources"
+                || name == "deep_research"
+                || name == "ask_question"
+                || name == "web_search",
             "tool_name": name,
         }));
         send_stream(sender, cancellation, stream).await?;
@@ -915,7 +918,7 @@ async fn persist_tool_result(
                 "🧪 Hosted sandbox finished".to_owned()
             }
         }
-        "search_web_sources" => format!(
+        "deep_research" | "search_web_sources" => format!(
             "🔍 Web search completed: Found {} results, created {} sources",
             parsed
                 .get("total_found")

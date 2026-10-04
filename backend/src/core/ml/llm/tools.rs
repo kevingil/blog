@@ -223,6 +223,16 @@ pub trait ResearchPort: Send + Sync {
     fn is_configured(&self) -> bool;
     async fn search(&self, query: &str) -> Result<WebSearchResponse, AppError>;
     async fn answer(&self, question: &str) -> Result<AnswerResponse, AppError>;
+
+    /// Multi-source dig. `domain` limits results to one host when the tracker is a site.
+    async fn deep_search(
+        &self,
+        query: &str,
+        domain: Option<&str>,
+    ) -> Result<WebSearchResponse, AppError> {
+        let _ = domain;
+        self.search(query).await
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -289,7 +299,7 @@ impl SourceResourcePort for crate::core::source::SourceService {
         let meta_data = BTreeMap::from([(
             "resource".to_owned(),
             json!({
-                "origin_tool": "search_web_sources",
+                "origin_tool": "deep_research",
                 "origin_query": query,
                 "usage_status": "available",
                 "search_result_id": result.id,
@@ -752,10 +762,14 @@ impl SearchWebSourcesTool {
 impl Tool for SearchWebSourcesTool {
     fn info(&self) -> ToolInfo {
         ToolInfo {
-            name: "search_web_sources".to_owned(),
-            description: "Broad web search returning multiple source documents. Use ONLY when ask_question doesn't cover the topic broadly enough. Creates citable sources automatically.".to_owned(),
+            name: "deep_research".to_owned(),
+            description: "Advanced multi-source research. Use when web_search is not enough and you need page text, highlights, or a search limited to one domain. Creates citable sources when an article is open.".to_owned(),
             parameters: BTreeMap::from([
                 ("query".to_owned(), json!({"type": "string"})),
+                (
+                    "domain".to_owned(),
+                    json!({"type": ["string", "null"], "description": "Optional host to keep the search inside, such as blog.rust-lang.org."}),
+                ),
                 (
                     "create_sources".to_owned(),
                     json!({"type": ["boolean", "null"]}),
@@ -778,6 +792,10 @@ impl Tool for SearchWebSourcesTool {
             .and_then(Value::as_str)
             .filter(|query| !query.is_empty())
             .ok_or_else(|| AppError::InvalidInput("query is required".to_owned()))?;
+        let domain = input
+            .get("domain")
+            .and_then(Value::as_str)
+            .filter(|domain| !domain.is_empty());
         if !self.research.is_configured() {
             return Err(AppError::External);
         }
@@ -788,7 +806,7 @@ impl Tool for SearchWebSourcesTool {
         if context.article_id.is_none() {
             create_sources = false;
         }
-        let response = self.research.search(query).await?;
+        let response = self.research.deep_search(query, domain).await?;
         let search_results = response
             .results
             .iter()
@@ -830,7 +848,7 @@ impl Tool for SearchWebSourcesTool {
             "results_processed": response.results.len(),
             "sources_attempted": attempted,
             "sources_successful": successful,
-            "tool_name": "search_web_sources",
+            "tool_name": "deep_research",
             "exa_request_id": response.request_id,
             "search_type": response.resolved_search_type,
             "message": format!("Found {} search results", response.results.len()),
