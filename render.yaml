@@ -7,8 +7,8 @@ services:
   - type: web
     name: blog-backend
     runtime: rust
-    # HEIC conversion uses heif-convert when it is installed. This runtime does
-    # not include it; the API uses the image's vips and ImageMagick instead.
+    # HEIC conversion needs libheif >= 1.18. This image has neither heif-convert
+    # nor a HEIF-capable ImageMagick, so the build vendors one into backend/opt/heif.
     plan: starter
     # Oregon is Render's closest region to the existing Fly SJC deployment.
     # Confirm the Supabase region before the first Blueprint sync because this
@@ -17,7 +17,8 @@ services:
     repo: https://github.com/kevingil/blog
     branch: main
     buildCommand: >-
-      cargo build --manifest-path backend/Cargo.toml --locked --release
+      bash scripts/vendor-heif.sh
+      && cargo build --manifest-path backend/Cargo.toml --locked --release
       --target-dir backend/target
       --bin blog-backend --bin migrate --bin stamp-diesel-migrations
       --bin schema-fingerprint
@@ -31,6 +32,8 @@ services:
       paths:
         - backend/**
         - scripts/pre-deploy.sh
+        - scripts/install-heif.sh
+        - scripts/vendor-heif.sh
         - render.yaml
     envVars:
       - key: RUSTUP_TOOLCHAIN

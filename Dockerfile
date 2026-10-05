@@ -13,11 +13,13 @@ RUN cargo build --locked --release --bin blog-backend --bin migrate --bin seed -
 
 FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
 
-# heif-convert turns HEIC uploads into JPEG. Render's native runtime uses vips.
+# libheif >= 1.18 reads iPhone HEIC from iOS 18. Bookworm's default is 1.15.1.
+COPY scripts/install-heif.sh /tmp/install-heif.sh
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl libheif-examples libpq5 \
+    && apt-get install -y --no-install-recommends ca-certificates curl libpq5 \
+    && bash /tmp/install-heif.sh \
     && useradd --system --uid 10001 --create-home blog \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* /tmp/install-heif.sh
 
 COPY --from=builder /app/backend/target/release/blog-backend /usr/local/bin/blog-backend
 COPY --from=builder /app/backend/target/release/migrate /usr/local/bin/migrate

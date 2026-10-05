@@ -46,3 +46,5 @@ main
 
 # Rust build output
 backend/target/
+# libheif copied by scripts/vendor-heif.sh during the Render build
+backend/opt/
