@@ -108,7 +108,10 @@ diagnostic into `backend/target/release`. Pre-deploy runs
 Compose and migration diagnostics, but Render no longer builds or pushes its
 image/cache layers. A cold native build still compiles the Rust dependencies.
 Builds require PostgreSQL's `libpq` development library; runtime requires libpq
-and trusted CA certificates.
+and trusted CA certificates. HEIC uploads are converted to JPEG before storage.
+Docker images install `heif-convert` (`libheif-examples`). Render's native
+runtime does not, so the API falls back to `vips` and then ImageMagick, which
+that image already provides.
 
 For an existing Blueprint-managed Docker service, merge this change and sync
 the Blueprint to switch its runtime to Rust and apply the build, pre-deploy,
