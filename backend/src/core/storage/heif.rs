@@ -38,50 +38,189 @@ pub(super) fn with_jpeg_extension(key: &str) -> String {
     }
 }
 
-const CONVERT_TIMEOUT: Duration = Duration::from_secs(20);
+const CONVERT_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// Render's native image does not include `heif-convert`. It does include
-/// libvips and ImageMagick, both built with HEIF support on Debian 12.
-const CONVERTERS: &[Converter] = &[
-    Converter::HeifConvert,
-    Converter::Vips,
-    Converter::ImageMagick("convert"),
-    Converter::ImageMagick("magick"),
-];
+/// iOS 18 HEIC (iPhone 16 and later) needs libheif >= 1.18. Debian 12 ships
+/// 1.15.1, which rejects those files, and Render's ImageMagick and libvips
+/// are built without a HEIF decoder. `scripts/vendor-heif.sh` copies a newer
+/// `heif-convert` into `backend/opt/heif` during the native build.
+fn converters() -> Vec<Converter> {
+    let mut converters = Vec::new();
+    if let Some(vendored) = vendored_heif() {
+        converters.push(Converter::Heif {
+            program: vendored.program,
+            library_path: Some(vendored.library_path),
+            plugin_path: Some(vendored.plugin_path),
+        });
+    }
+    converters.push(Converter::Heif {
+        program: PathBuf::from("heif-convert"),
+        library_path: None,
+        plugin_path: None,
+    });
+    converters.push(Converter::Vips);
+    converters.push(Converter::ImageMagick("convert"));
+    converters.push(Converter::ImageMagick("magick"));
+    converters
+}
 
-#[derive(Clone, Copy)]
+struct VendoredHeif {
+    program: PathBuf,
+    library_path: PathBuf,
+    plugin_path: PathBuf,
+}
+
+fn vendored_heif() -> Option<VendoredHeif> {
+    vendored_heif_in(vendored_roots())
+}
+
+fn vendored_heif_in(roots: impl IntoIterator<Item = PathBuf>) -> Option<VendoredHeif> {
+    roots.into_iter().find_map(|root| {
+        let program = root.join("bin/heif-convert");
+        let library_path = root.join("lib");
+        let plugin_path = root.join("plugins");
+        if program.is_file() && library_path.is_dir() && plugin_path.is_dir() {
+            Some(VendoredHeif {
+                program,
+                library_path,
+                plugin_path,
+            })
+        } else {
+            None
+        }
+    })
+}
+
+fn vendored_roots() -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    if let Ok(exe) = std::env::current_exe() {
+        let mut dir = exe.parent().map(Path::to_path_buf);
+        for _ in 0..6 {
+            let Some(current) = dir else {
+                break;
+            };
+            roots.push(current.join("opt/heif"));
+            roots.push(current.join("backend/opt/heif"));
+            dir = current.parent().map(Path::to_path_buf);
+        }
+    }
+    roots.push(PathBuf::from("backend/opt/heif"));
+    roots.push(PathBuf::from("opt/heif"));
+    roots
+}
+
 enum Converter {
-    HeifConvert,
+    Heif {
+        program: PathBuf,
+        library_path: Option<PathBuf>,
+        plugin_path: Option<PathBuf>,
+    },
     Vips,
     ImageMagick(&'static str),
 }
 
 impl Converter {
-    fn name(self) -> &'static str {
+    fn label(&self) -> &'static str {
         match self {
-            Self::HeifConvert => "heif-convert",
+            Self::Heif {
+                plugin_path: Some(_),
+                ..
+            } => "vendored-heif-convert",
+            Self::Heif { .. } => "heif-convert",
             Self::Vips => "vips",
-            Self::ImageMagick(program) => program,
+            Self::ImageMagick("magick") => "magick",
+            Self::ImageMagick(_) => "convert",
         }
     }
 
-    fn command(self, input: &Path, output: &Path) -> Command {
-        let mut command = Command::new(self.name());
+    fn command(&self, input: &Path, output: &Path) -> Command {
         match self {
-            Self::HeifConvert | Self::ImageMagick(_) => {
+            Self::Heif {
+                program,
+                library_path,
+                plugin_path,
+            } => {
+                let mut command =
+                    heif_process(program, library_path.as_deref(), plugin_path.as_deref());
                 command.arg(input).arg(output);
+                command
             }
             Self::Vips => {
+                let mut command = Command::new("vips");
                 command
                     .arg("jpegsave")
                     .arg(input)
                     .arg(output)
                     .arg("--Q")
                     .arg("90");
+                command
+            }
+            Self::ImageMagick(program) => {
+                let mut command = Command::new(program);
+                command.arg(input).arg(output);
+                command
             }
         }
-        command
     }
+
+    fn probe(&self) -> Command {
+        match self {
+            Self::Heif {
+                program,
+                library_path,
+                plugin_path,
+            } => {
+                let mut command =
+                    heif_process(program, library_path.as_deref(), plugin_path.as_deref());
+                command.arg("-v");
+                command
+            }
+            Self::Vips => {
+                let mut command = Command::new("vips");
+                command.arg("--help");
+                command
+            }
+            Self::ImageMagick(program) => {
+                let mut command = Command::new(program);
+                command.arg("--help");
+                command
+            }
+        }
+    }
+}
+
+fn heif_process(
+    program: &Path,
+    library_path: Option<&Path>,
+    plugin_path: Option<&Path>,
+) -> Command {
+    let mut command = Command::new(program);
+    if let Some(library_path) = library_path {
+        command.env("LD_LIBRARY_PATH", library_path);
+    }
+    if let Some(plugin_path) = plugin_path {
+        command.env("LIBHEIF_PLUGIN_PATH", plugin_path);
+    }
+    command
+}
+
+/// ImageMagick and libheif 1.15 fail on valid iPhone photos. Those messages
+/// mean the tool cannot decode HEIC, so another converter should be tried.
+fn converter_lacks_heif(detail: &str) -> bool {
+    let detail = detail.to_ascii_lowercase();
+    [
+        "too many auxiliary",
+        "unable to read file",
+        "no images defined",
+        "moov atom not found",
+        "invalid data found when processing",
+        "no decoding plugin",
+        "decoding plugin",
+        "unsupported codec",
+        "error while loading shared libraries",
+    ]
+    .iter()
+    .any(|needle| detail.contains(needle))
 }
 
 enum ConversionError {
@@ -100,30 +239,36 @@ pub(super) async fn transcode_heif_to_jpeg(bytes: &[u8]) -> Result<Vec<u8>, AppE
         AppError::internal(error)
     })?;
 
+    let converters = converters();
     let mut rejected = false;
+    let mut limited = false;
     let mut unavailable = None;
-    for converter in CONVERTERS {
-        match run_converter(*converter, input.path(), output.path()).await {
+    for converter in &converters {
+        match run_converter(converter, input.path(), output.path()).await {
             Ok(jpeg) => return Ok(jpeg),
             Err(ConversionError::Missing) => {}
             Err(ConversionError::TimedOut) => {
-                tracing::error!(tool = converter.name(), "HEIC converter timed out");
+                tracing::error!(tool = converter.label(), "HEIC converter timed out");
                 return Err(AppError::InvalidInput(
                     "Could not read this image".to_owned(),
                 ));
             }
             Err(ConversionError::Rejected(detail)) => {
-                rejected = true;
+                if converter_lacks_heif(&detail) {
+                    limited = true;
+                } else {
+                    rejected = true;
+                }
                 tracing::warn!(
-                    tool = converter.name(),
+                    tool = converter.label(),
                     %detail,
                     "HEIC converter could not read the upload"
                 );
             }
             Err(ConversionError::Unavailable(detail)) => {
-                unavailable = Some(format!("{}: {detail}", converter.name()));
+                unavailable = Some(format!("{}: {detail}", converter.label()));
                 tracing::error!(
-                    tool = converter.name(),
+                    tool = converter.label(),
                     %detail,
                     "failed to start HEIC converter"
                 );
@@ -135,12 +280,18 @@ pub(super) async fn transcode_heif_to_jpeg(bytes: &[u8]) -> Result<Vec<u8>, AppE
             "Could not read this image".to_owned(),
         ));
     }
+    if limited {
+        tracing::error!("installed HEIC tools cannot decode this photo");
+        return Err(AppError::internal(
+            "HEIC decoder cannot read this photo; libheif >= 1.18 is required",
+        ));
+    }
     if let Some(detail) = unavailable {
         return Err(AppError::internal(detail));
     }
-    let tried = CONVERTERS
+    let tried = converters
         .iter()
-        .map(|converter| converter.name())
+        .map(Converter::label)
         .collect::<Vec<_>>()
         .join(", ");
     tracing::error!(tried = %tried, "no HEIC converter is installed");
@@ -150,7 +301,7 @@ pub(super) async fn transcode_heif_to_jpeg(bytes: &[u8]) -> Result<Vec<u8>, AppE
 }
 
 async fn run_converter(
-    converter: Converter,
+    converter: &Converter,
     input: &Path,
     output: &Path,
 ) -> Result<Vec<u8>, ConversionError> {
@@ -300,11 +451,12 @@ impl Drop for TempFile {
 #[cfg(test)]
 mod tests {
     use super::{
-        CONVERTERS, ConversionError, is_heif_payload, is_heif_upload, is_jpeg, with_jpeg_extension,
+        ConversionError, converter_lacks_heif, is_heif_payload, is_heif_upload, is_jpeg,
+        vendored_heif_in, with_jpeg_extension,
     };
     use std::process::Stdio;
 
-    use tokio::{fs, process::Command};
+    use tokio::fs;
 
     #[test]
     fn heic_container_and_declared_type_are_uploads_to_convert() {
@@ -352,8 +504,8 @@ mod tests {
         let bytes = fs::read(path).await.unwrap_or_default();
         assert!(!bytes.is_empty(), "solid-red.heic fixture is missing");
         let mut converted = 0_u32;
-        for converter in CONVERTERS {
-            if !converter_installed(*converter).await {
+        for converter in super::converters() {
+            if !converter_installed(&converter).await {
                 continue;
             }
             let id = uuid::Uuid::new_v4();
@@ -361,7 +513,7 @@ mod tests {
             let output = super::TempFile::new(format!("blog-heif-test-{id}.jpg"));
             let written = fs::write(input.path(), &bytes).await;
             assert!(written.is_ok(), "write HEIC fixture copy");
-            let result = super::run_converter(*converter, input.path(), output.path()).await;
+            let result = super::run_converter(&converter, input.path(), output.path()).await;
             let detail = match &result {
                 Ok(_) => String::new(),
                 Err(error) => failure_text(error),
@@ -369,16 +521,46 @@ mod tests {
             assert!(
                 result.as_ref().is_ok_and(|jpeg| is_jpeg(jpeg)),
                 "{} failed: {detail}",
-                converter.name()
+                converter.label()
             );
             converted += 1;
         }
         assert!(converted > 0, "no HEIC converter is installed");
     }
 
-    async fn converter_installed(converter: super::Converter) -> bool {
-        Command::new(converter.name())
-            .arg("--help")
+    #[test]
+    fn vendored_converter_is_used_when_its_layout_is_present() {
+        let root = std::env::temp_dir().join(format!("blog-heif-layout-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(root.join("bin")).unwrap();
+        std::fs::create_dir_all(root.join("lib")).unwrap();
+        std::fs::create_dir_all(root.join("plugins")).unwrap();
+        std::fs::write(root.join("bin/heif-convert"), b"#!/bin/sh\n").unwrap();
+        let found = vendored_heif_in([root.clone()]);
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(
+            found.is_some(),
+            "vendored heif-convert layout was not found"
+        );
+        assert!(vendored_heif_in([root]).is_none());
+    }
+
+    #[test]
+    fn old_decoders_are_not_treated_as_a_bad_upload() {
+        assert!(converter_lacks_heif(
+            "exit 1: Could not read HEIF/AVIF file: Invalid input: Unspecified: Too many auxiliary image references"
+        ));
+        assert!(converter_lacks_heif(
+            "exit 1: magick2vips: libMagick error: magick2vips: unable to read file \"/tmp/photo.heic\""
+        ));
+        assert!(converter_lacks_heif(
+            "exit 1: convert-im6.q16: no images defined `/tmp/photo.jpg'"
+        ));
+        assert!(!converter_lacks_heif("exit 1: output was not a jpeg"));
+    }
+
+    async fn converter_installed(converter: &super::Converter) -> bool {
+        converter
+            .probe()
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status()
