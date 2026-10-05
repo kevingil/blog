@@ -7,6 +7,8 @@ services:
   - type: web
     name: blog-backend
     runtime: rust
+    # HEIC conversion uses heif-convert when it is installed. This runtime does
+    # not include it; the API uses the image's vips and ImageMagick instead.
     plan: starter
     # Oregon is Render's closest region to the existing Fly SJC deployment.
     # Confirm the Supabase region before the first Blueprint sync because this
