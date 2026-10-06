@@ -111,9 +111,10 @@ Builds require PostgreSQL's `libpq` development library; runtime requires libpq
 and trusted CA certificates. HEIC uploads are converted to JPEG before storage.
 iPhone photos from iOS 18 need libheif 1.18 or newer; Debian 12's default
 1.15.1 rejects them. Docker images install that newer `heif-convert` from
-bookworm-backports. Render's native image has no HEIF decoder, so
-`scripts/vendor-heif.sh` copies one into `backend/opt/heif` during the build
-and the API runs that copy.
+bookworm-backports. Render's native image has no HEIF decoder, and its root
+filesystem is read-only, so `apt-get install` cannot run there.
+`scripts/vendor-heif.sh` downloads the bookworm-backports packages and copies
+`heif-convert` into `backend/opt/heif` during the build. The API runs that copy.
 
 For an existing Blueprint-managed Docker service, merge this change and sync
 the Blueprint to switch its runtime to Rust and apply the build, pre-deploy,

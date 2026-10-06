@@ -8,7 +8,8 @@ services:
     name: blog-backend
     runtime: rust
     # HEIC conversion needs libheif >= 1.18. This image has neither heif-convert
-    # nor a HEIF-capable ImageMagick, so the build vendors one into backend/opt/heif.
+    # nor a HEIF-capable ImageMagick, and its root filesystem is read-only.
+    # The build downloads bookworm-backports packages into backend/opt/heif.
     plan: starter
     # Oregon is Render's closest region to the existing Fly SJC deployment.
     # Confirm the Supabase region before the first Blueprint sync because this

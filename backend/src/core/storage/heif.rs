@@ -42,8 +42,9 @@ const CONVERT_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// iOS 18 HEIC (iPhone 16 and later) needs libheif >= 1.18. Debian 12 ships
 /// 1.15.1, which rejects those files, and Render's ImageMagick and libvips
-/// are built without a HEIF decoder. `scripts/vendor-heif.sh` copies a newer
-/// `heif-convert` into `backend/opt/heif` during the native build.
+/// are built without a HEIF decoder. The native root filesystem is read-only,
+/// so `scripts/vendor-heif.sh` downloads a newer `heif-convert` into
+/// `backend/opt/heif` during the build.
 fn converters() -> Vec<Converter> {
     let mut converters = Vec::new();
     if let Some(vendored) = vendored_heif() {
