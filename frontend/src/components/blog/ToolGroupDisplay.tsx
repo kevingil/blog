@@ -310,17 +310,36 @@ function toolActivity(call: ToolCallRecord): string {
   return getToolDisplayName(call.name);
 }
 
+function insightFilters(input: Record<string, unknown>): string {
+  const parts: string[] = [];
+  const topic = stringField(input, 'topic');
+  if (topic) parts.push(topic);
+  if (input.unread === true) parts.push('unread');
+  if (input.pinned === true) parts.push('pinned');
+  if (input.unused === true) parts.push('unused');
+  return parts.join(', ');
+}
+
 function toolDetail(call: ToolCallRecord): string {
   const input = call.input || {};
   const result = call.result || {};
   switch (call.name) {
-    case 'list_insights': {
+    case 'list_insights':
+    case 'search_insights': {
       const insights = Array.isArray(result.insights) ? result.insights : null;
-      if (!insights) return '';
-      if (insights.length === 0) return 'none yet';
-      return insights.length === 1 ? '1 briefing' : `${insights.length} briefings`;
+      const count = insights == null
+        ? ''
+        : insights.length === 0
+          ? 'none yet'
+          : insights.length === 1
+            ? '1 briefing'
+            : `${insights.length} briefings`;
+      const filters = insightFilters(input);
+      const query = call.name === 'search_insights'
+        ? (stringField(result, 'query') || stringField(input, 'query'))
+        : '';
+      return [query, filters, count].filter(Boolean).join(' · ');
     }
-    case 'search_insights':
     case 'web_search':
     case 'search_web_sources':
     case 'deep_research':
