@@ -384,8 +384,11 @@ fn fixture_response(request: &Value) -> FixtureDecision {
     } else if tools_already_ran(request) && editor_edit_requested(request_text) {
         "Updated the article. The title and sources stay in their own fields, outside the body."
             .to_owned()
-    } else if tools_already_ran(request) && request_text.to_ascii_lowercase().contains("insight") {
-        "I read your insights. I can turn one of these briefings into a draft.".to_owned()
+    } else if tools_already_ran(request)
+        && (request_text.to_ascii_lowercase().contains("insight") || asks_what_to_write(&request_text))
+    {
+        "I read your insights. I can turn the key points from one of these briefings into a draft."
+            .to_owned()
     } else {
         format!("Fixture response: {input}")
     };
@@ -445,9 +448,26 @@ fn editor_edit_requested(text: &str) -> bool {
     requested_title(text).is_some() || !requested_sources(text).is_empty()
 }
 
+fn asks_what_to_write(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    [
+        "what should i write",
+        "what should we write",
+        "what to write",
+        "what can i write",
+        "what can we write",
+        "writing ideas",
+        "content ideas",
+        "content calendar",
+        "ghostwrite",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker))
+}
+
 fn plan_insight_tools(text: &str) -> Vec<FixtureCall> {
     let lower = text.to_ascii_lowercase();
-    if !lower.contains("insight") {
+    if !lower.contains("insight") && !asks_what_to_write(text) {
         return Vec::new();
     }
     let searching = [
@@ -465,14 +485,52 @@ fn plan_insight_tools(text: &str) -> Vec<FixtureCall> {
         return vec![FixtureCall {
             id: "call_search_insights",
             name: "search_insights",
-            arguments: json!({"query": query, "limit": 8}).to_string(),
+            arguments: insight_arguments(Some(&query), text),
         }];
     }
     vec![FixtureCall {
         id: "call_list_insights",
         name: "list_insights",
-        arguments: json!({"limit": 8}).to_string(),
+        arguments: insight_arguments(None, text),
     }]
+}
+
+fn insight_arguments(query: Option<&str>, text: &str) -> String {
+    let mut args = serde_json::Map::new();
+    args.insert("limit".to_owned(), json!(8));
+    if let Some(query) = query {
+        args.insert("query".to_owned(), json!(query));
+    }
+    let lower = text.to_ascii_lowercase();
+    if lower.contains("unread") {
+        args.insert("unread".to_owned(), json!(true));
+    }
+    if lower.contains("pinned") {
+        args.insert("pinned".to_owned(), json!(true));
+    }
+    if lower.contains("unused") || lower.contains("not used") {
+        args.insert("unused".to_owned(), json!(true));
+    }
+    if let Some(topic) = topic_phrase(text) {
+        args.insert("topic".to_owned(), json!(topic));
+    }
+    Value::Object(args).to_string()
+}
+
+fn topic_phrase(text: &str) -> Option<String> {
+    let lower = text.to_ascii_lowercase();
+    let markers = ["filter topic ", "in topic ", "topic "];
+    let rest = markers.iter().find_map(|marker| {
+        lower
+            .find(marker)
+            .map(|index| text[index + marker.len()..].trim())
+    })?;
+    let topic = rest
+        .split(|character: char| matches!(character, '.' | '?' | ',' | '\n'))
+        .next()?
+        .trim()
+        .trim_matches(|character: char| matches!(character, '"' | '\''));
+    (!topic.is_empty()).then(|| topic.to_owned())
 }
 
 fn insight_query(text: &str) -> Option<String> {
@@ -792,6 +850,20 @@ mod tests {
         }));
         assert!(followed.calls.is_empty());
         assert!(followed.text.contains("I read your insights"));
+
+        let ideas = fixture_response(&json!({
+            "input": "What should we write this month?"
+        }));
+        assert_eq!(ideas.calls.len(), 1);
+        assert_eq!(ideas.calls[0].name, "list_insights");
+
+        let filtered = fixture_response(&json!({
+            "input": "Search unread insights for systems design in topic Health"
+        }));
+        assert_eq!(filtered.calls[0].name, "search_insights");
+        assert!(filtered.calls[0].arguments.contains("systems design"));
+        assert!(filtered.calls[0].arguments.contains("\"unread\":true"));
+        assert!(filtered.calls[0].arguments.contains("Health"));
     }
 
     #[test]
