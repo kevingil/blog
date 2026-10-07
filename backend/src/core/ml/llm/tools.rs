@@ -357,12 +357,39 @@ pub struct InsightBrief {
     pub key_points: Vec<String>,
     pub topic: String,
     pub content: String,
+    pub is_read: bool,
+    pub is_pinned: bool,
+    pub is_used_in_article: bool,
+}
+
+/// Filters for listing or searching the author's insight briefings.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InsightQuery {
+    pub topic: Option<String>,
+    pub unread: Option<bool>,
+    pub pinned: Option<bool>,
+    pub unused: Option<bool>,
+}
+
+impl InsightQuery {
+    fn has_status_filter(&self) -> bool {
+        self.unread.is_some() || self.pinned.is_some() || self.unused.is_some()
+    }
 }
 
 #[async_trait]
 pub trait InsightReader: Send + Sync {
-    async fn list_recent(&self, limit: i64) -> Result<Vec<InsightBrief>, AppError>;
-    async fn search(&self, query: &str, limit: i64) -> Result<Vec<InsightBrief>, AppError>;
+    async fn list_recent(
+        &self,
+        limit: i64,
+        query: &InsightQuery,
+    ) -> Result<Vec<InsightBrief>, AppError>;
+    async fn search(
+        &self,
+        query: &str,
+        limit: i64,
+        filter: &InsightQuery,
+    ) -> Result<Vec<InsightBrief>, AppError>;
 }
 
 fn insight_limit(limit: i64) -> i64 {
@@ -390,34 +417,154 @@ fn truncate_chars(text: &str, max: usize) -> String {
     excerpt
 }
 
-fn brief_from_response(insight: crate::core::insight::InsightResponse) -> InsightBrief {
+fn brief_from_response(
+    insight: crate::core::insight::InsightResponse,
+    topics: &[(Uuid, String)],
+) -> InsightBrief {
+    let topic = insight
+        .topic_id
+        .and_then(|id| {
+            topics
+                .iter()
+                .find(|(topic_id, _)| *topic_id == id)
+                .map(|(_, name)| name.clone())
+        })
+        .or(insight.topic_name)
+        .unwrap_or_default();
     InsightBrief {
         id: insight.id,
         title: insight.title,
         summary: insight.summary,
         key_points: insight.key_points.unwrap_or_default(),
-        topic: insight.topic_name.unwrap_or_default(),
+        topic,
         content: truncate_chars(insight.content.as_deref().unwrap_or(""), 700),
+        is_read: insight.is_read,
+        is_pinned: insight.is_pinned,
+        is_used_in_article: insight.is_used_in_article,
     }
+}
+
+fn topic_matches(topic: &str, filter: Option<&str>) -> bool {
+    let Some(filter) = filter.map(str::trim).filter(|value| !value.is_empty()) else {
+        return true;
+    };
+    topic.to_ascii_lowercase().contains(&filter.to_ascii_lowercase())
+}
+
+fn status_matches(brief: &InsightBrief, query: &InsightQuery) -> bool {
+    if let Some(unread) = query.unread {
+        if brief.is_read == unread {
+            return false;
+        }
+    }
+    if let Some(pinned) = query.pinned && brief.is_pinned != pinned {
+        return false;
+    }
+    if let Some(unused) = query.unused && brief.is_used_in_article == unused {
+        return false;
+    }
+    topic_matches(&brief.topic, query.topic.as_deref())
+}
+
+fn resolve_topic_id(topics: &[(Uuid, String)], name: Option<&str>) -> Option<Uuid> {
+    let name = name.map(str::trim).filter(|value| !value.is_empty())?;
+    let lower = name.to_ascii_lowercase();
+    topics
+        .iter()
+        .find(|(_, topic)| topic.eq_ignore_ascii_case(name))
+        .or_else(|| {
+            topics
+                .iter()
+                .find(|(_, topic)| topic.to_ascii_lowercase().contains(&lower))
+        })
+        .map(|(id, _)| *id)
+}
+
+fn filtered_briefs(
+    insights: Vec<crate::core::insight::InsightResponse>,
+    topics: &[(Uuid, String)],
+    query: &InsightQuery,
+    limit: i64,
+) -> Vec<InsightBrief> {
+    let limit = usize::try_from(insight_limit(limit)).unwrap_or(8);
+    insights
+        .into_iter()
+        .map(|insight| brief_from_response(insight, topics))
+        .filter(|brief| status_matches(brief, query))
+        .take(limit)
+        .collect()
 }
 
 #[async_trait]
 impl InsightReader for crate::core::insight::InsightService {
-    async fn list_recent(&self, limit: i64) -> Result<Vec<InsightBrief>, AppError> {
-        let (insights, _) = self.list_all_insights(1, insight_limit(limit)).await?;
-        Ok(insights.into_iter().map(brief_from_response).collect())
+    async fn list_recent(
+        &self,
+        limit: i64,
+        query: &InsightQuery,
+    ) -> Result<Vec<InsightBrief>, AppError> {
+        let topics = self
+            .list_all_topics()
+            .await?
+            .into_iter()
+            .map(|topic| (topic.id, topic.name))
+            .collect::<Vec<_>>();
+        if query
+            .topic
+            .as_deref()
+            .is_some_and(|topic| !topic.trim().is_empty())
+            && resolve_topic_id(&topics, query.topic.as_deref()).is_none()
+        {
+            return Ok(Vec::new());
+        }
+        let limit = insight_limit(limit);
+        let fetch = if query.has_status_filter() {
+            (limit.saturating_mul(5)).min(100)
+        } else {
+            limit
+        };
+        let insights = if let Some(topic_id) = resolve_topic_id(&topics, query.topic.as_deref()) {
+            self.list_insights_by_topic(topic_id, 1, fetch).await?.0
+        } else {
+            self.list_all_insights(1, fetch).await?.0
+        };
+        Ok(filtered_briefs(insights, &topics, query, limit))
     }
 
-    async fn search(&self, query: &str, limit: i64) -> Result<Vec<InsightBrief>, AppError> {
+    async fn search(
+        &self,
+        query: &str,
+        limit: i64,
+        filter: &InsightQuery,
+    ) -> Result<Vec<InsightBrief>, AppError> {
+        let topics = self
+            .list_all_topics()
+            .await?
+            .into_iter()
+            .map(|topic| (topic.id, topic.name))
+            .collect::<Vec<_>>();
+        if filter
+            .topic
+            .as_deref()
+            .is_some_and(|topic| !topic.trim().is_empty())
+            && resolve_topic_id(&topics, filter.topic.as_deref()).is_none()
+        {
+            return Ok(Vec::new());
+        }
+        let limit = insight_limit(limit);
+        let fetch = if filter.has_status_filter() || filter.topic.is_some() {
+            (limit.saturating_mul(5)).min(50)
+        } else {
+            limit
+        };
         let insights = self
             .search_insights(crate::core::insight::InsightSearchRequest {
                 query: query.to_owned(),
-                topic_id: None,
-                limit: insight_limit(limit),
-                is_unread: None,
+                topic_id: resolve_topic_id(&topics, filter.topic.as_deref()),
+                limit: fetch,
+                is_unread: filter.unread,
             })
             .await?;
-        Ok(insights.into_iter().map(brief_from_response).collect())
+        Ok(filtered_briefs(insights, &topics, filter, limit))
     }
 }
 
@@ -429,7 +576,27 @@ fn insight_json(brief: &InsightBrief) -> Value {
         "key_points": brief.key_points,
         "topic": brief.topic,
         "content": brief.content,
+        "is_read": brief.is_read,
+        "is_pinned": brief.is_pinned,
+        "is_used_in_article": brief.is_used_in_article,
     })
+}
+
+fn applied_filters(query: &InsightQuery) -> Value {
+    let mut filters = serde_json::Map::new();
+    if let Some(topic) = query.topic.as_deref().map(str::trim).filter(|topic| !topic.is_empty()) {
+        filters.insert("topic".to_owned(), json!(topic));
+    }
+    if let Some(unread) = query.unread {
+        filters.insert("unread".to_owned(), json!(unread));
+    }
+    if let Some(pinned) = query.pinned {
+        filters.insert("pinned".to_owned(), json!(pinned));
+    }
+    if let Some(unused) = query.unused {
+        filters.insert("unused".to_owned(), json!(unused));
+    }
+    Value::Object(filters)
 }
 
 #[async_trait]
@@ -1522,6 +1689,25 @@ impl ListInsightsTool {
 struct ListInsightsInput {
     #[serde(default = "default_insight_limit")]
     limit: i64,
+    #[serde(default)]
+    topic: Option<String>,
+    #[serde(default)]
+    unread: Option<bool>,
+    #[serde(default)]
+    pinned: Option<bool>,
+    #[serde(default)]
+    unused: Option<bool>,
+}
+
+impl From<ListInsightsInput> for InsightQuery {
+    fn from(input: ListInsightsInput) -> Self {
+        Self {
+            topic: input.topic,
+            unread: input.unread,
+            pinned: input.pinned,
+            unused: input.unused,
+        }
+    }
 }
 
 fn default_insight_limit() -> i64 {
@@ -1533,11 +1719,29 @@ impl Tool for ListInsightsTool {
     fn info(&self) -> ToolInfo {
         ToolInfo {
             name: "list_insights".to_owned(),
-            description: "Read the author's latest research insights. Each insight is a briefing with a title, summary, key points, and an excerpt. Use this when they ask what to write, what is new, or to read their latest insights.".to_owned(),
-            parameters: BTreeMap::from([(
-                "limit".to_owned(),
-                json!({"type": "integer", "description": "How many recent insights to return. Defaults to 8, maximum 20."}),
-            )]),
+            description: "Read the author's saved research insights. Filter with topic, unread, pinned, or unused.".to_owned(),
+            parameters: BTreeMap::from([
+                (
+                    "limit".to_owned(),
+                    json!({"type": "integer", "description": "How many recent insights to return. Defaults to 8, maximum 20."}),
+                ),
+                (
+                    "topic".to_owned(),
+                    json!({"type": "string", "description": "Only insights in this topic. Matches the topic name."}),
+                ),
+                (
+                    "unread".to_owned(),
+                    json!({"type": "boolean", "description": "When true, only unread insights. When false, only ones already read."}),
+                ),
+                (
+                    "pinned".to_owned(),
+                    json!({"type": "boolean", "description": "When true, only pinned insights."}),
+                ),
+                (
+                    "unused".to_owned(),
+                    json!({"type": "boolean", "description": "When true, only insights not yet used in an article."}),
+                ),
+            ]),
             required: Vec::new(),
             parallel_safe: true,
         }
@@ -1550,12 +1754,19 @@ impl Tool for ListInsightsTool {
     ) -> Result<ToolResponse, AppError> {
         let input: ListInsightsInput = serde_json::from_str(&call.input).unwrap_or(ListInsightsInput {
             limit: default_insight_limit(),
+            topic: None,
+            unread: None,
+            pinned: None,
+            unused: None,
         });
-        let insights = self.insights.list_recent(input.limit).await?;
+        let limit = input.limit;
+        let filter = InsightQuery::from(input);
+        let insights = self.insights.list_recent(limit, &filter).await?;
         let count = insights.len();
         structured_result(json!({
             "insights": insights.iter().map(insight_json).collect::<Vec<_>>(),
             "total": count,
+            "filters": applied_filters(&filter),
             "tool_name": "list_insights",
         }))
     }
@@ -1576,6 +1787,14 @@ struct SearchInsightsInput {
     query: String,
     #[serde(default = "default_insight_limit")]
     limit: i64,
+    #[serde(default)]
+    topic: Option<String>,
+    #[serde(default)]
+    unread: Option<bool>,
+    #[serde(default)]
+    pinned: Option<bool>,
+    #[serde(default)]
+    unused: Option<bool>,
 }
 
 #[async_trait]
@@ -1583,7 +1802,7 @@ impl Tool for SearchInsightsTool {
     fn info(&self) -> ToolInfo {
         ToolInfo {
             name: "search_insights".to_owned(),
-            description: "Query the author's research insights by subject. Returns matching briefings with title, summary, key points, and an excerpt. Use this to find what they have already researched before suggesting or drafting an article.".to_owned(),
+            description: "Search the author's research insights by subject. Filter matches with topic, unread, pinned, or unused.".to_owned(),
             parameters: BTreeMap::from([
                 (
                     "query".to_owned(),
@@ -1592,6 +1811,22 @@ impl Tool for SearchInsightsTool {
                 (
                     "limit".to_owned(),
                     json!({"type": "integer", "description": "Maximum matches. Defaults to 8, maximum 20."}),
+                ),
+                (
+                    "topic".to_owned(),
+                    json!({"type": "string", "description": "Only matches in this topic. Matches the topic name."}),
+                ),
+                (
+                    "unread".to_owned(),
+                    json!({"type": "boolean", "description": "When true, only unread insights. When false, only ones already read."}),
+                ),
+                (
+                    "pinned".to_owned(),
+                    json!({"type": "boolean", "description": "When true, only pinned insights."}),
+                ),
+                (
+                    "unused".to_owned(),
+                    json!({"type": "boolean", "description": "When true, only insights not yet used in an article."}),
                 ),
             ]),
             required: vec!["query".to_owned()],
@@ -1612,11 +1847,18 @@ impl Tool for SearchInsightsTool {
         if query.is_empty() {
             return Ok(ToolResponse::error("query is required"));
         }
-        let insights = self.insights.search(query, input.limit).await?;
+        let filter = InsightQuery {
+            topic: input.topic,
+            unread: input.unread,
+            pinned: input.pinned,
+            unused: input.unused,
+        };
+        let insights = self.insights.search(query, input.limit, &filter).await?;
         structured_result(json!({
             "query": query,
             "insights": insights.iter().map(insight_json).collect::<Vec<_>>(),
             "total": insights.len(),
+            "filters": applied_filters(&filter),
             "tool_name": "search_insights",
         }))
     }

@@ -25,7 +25,7 @@ pub use session::{InMemorySessionStore, Session, SessionStore};
 pub use tools::{
     AnswerCitation, AnswerResponse, ApplyPatchTool, ArticleSourceView, ArtifactHint,
     AskQuestionTool, DraftSaver, GenerateImagePromptTool, GetRelevantSourcesTool, InsightBrief,
-    InsightReader, ListInsightsTool, ReadDocumentTool, ReplaceLinesTool, ResearchPort,
+    InsightQuery, InsightReader, ListInsightsTool, ReadDocumentTool, ReplaceLinesTool, ResearchPort,
     SearchInsightsTool, SearchWebSourcesTool, SelectSourcesForEditTool, SetTitleTool,
     SourceEdit, SourceResource, SourceResourcePort, SourceSelection, Tool, ToolCallRequest,
     ToolContext, ToolInfo, ToolResponse, ToolResponseType, UpdateSourcesTool, WebSearchResponse,
