@@ -492,20 +492,46 @@
     position: relative;
   }
 
+  /* The author row used to leave this gap as margin, which the drop outline
+     could not cover. Padding keeps the same resting space and lets the
+     outline start on the writing column, just under the name. */
+  .article-body-drop-after-author {
+    padding-top: 1.5rem;
+  }
+
   .article-body-drop-overlay {
     position: absolute;
-    inset: 0.75rem;
+    inset: 0 -1rem;
     z-index: 5;
     display: flex;
     align-items: center;
     justify-content: center;
     border: 2px dashed var(--primary);
-    border-radius: 0.75rem;
+    border-radius: 0;
     background: color-mix(in oklab, var(--background) 82%, transparent);
     color: var(--primary);
     font-size: 0.95rem;
     font-weight: 600;
     pointer-events: none;
+  }
+
+  .scrollbar-subtle {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--foreground) 28%, transparent) transparent;
+  }
+
+  .scrollbar-subtle::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-subtle::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-subtle::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--foreground) 28%, transparent);
+    border-radius: 999px;
   }
 
   .article-sources {
@@ -607,6 +633,12 @@
 
   .article-editor .ProseMirror {
     outline: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .article-editor .ProseMirror > :first-child {
+    margin-top: 0;
   }
 
   .article-editor .ProseMirror mark[data-added='true'] {
