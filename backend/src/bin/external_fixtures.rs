@@ -375,13 +375,17 @@ fn fixture_response(request: &Value) -> FixtureDecision {
     let calls = if tools_already_ran(request) {
         Vec::new()
     } else {
-        plan_editor_tools(request_text)
+        let mut calls = plan_editor_tools(request_text);
+        calls.extend(plan_insight_tools(request_text));
+        calls
     };
     let text = if !calls.is_empty() {
         String::new()
     } else if tools_already_ran(request) && editor_edit_requested(request_text) {
         "Updated the article. The title and sources stay in their own fields, outside the body."
             .to_owned()
+    } else if tools_already_ran(request) && request_text.to_ascii_lowercase().contains("insight") {
+        "I read your insights. I can turn one of these briefings into a draft.".to_owned()
     } else {
         format!("Fixture response: {input}")
     };
@@ -439,6 +443,58 @@ fn tools_already_ran(request: &Value) -> bool {
 
 fn editor_edit_requested(text: &str) -> bool {
     requested_title(text).is_some() || !requested_sources(text).is_empty()
+}
+
+fn plan_insight_tools(text: &str) -> Vec<FixtureCall> {
+    let lower = text.to_ascii_lowercase();
+    if !lower.contains("insight") {
+        return Vec::new();
+    }
+    let searching = [
+        "search",
+        "query",
+        "find insight",
+        "insights about",
+        "insights on",
+        "insights for",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker));
+    if searching {
+        let query = insight_query(text).unwrap_or_else(|| "latest".to_owned());
+        return vec![FixtureCall {
+            id: "call_search_insights",
+            name: "search_insights",
+            arguments: json!({"query": query, "limit": 8}).to_string(),
+        }];
+    }
+    vec![FixtureCall {
+        id: "call_list_insights",
+        name: "list_insights",
+        arguments: json!({"limit": 8}).to_string(),
+    }]
+}
+
+fn insight_query(text: &str) -> Option<String> {
+    let lower = text.to_ascii_lowercase();
+    let markers = [
+        "insights about ",
+        "insights on ",
+        "insights for ",
+        "insight about ",
+        "search insights for ",
+        "query insights for ",
+        "query insights about ",
+    ];
+    let rest = markers.iter().find_map(|marker| {
+        lower
+            .find(marker)
+            .map(|index| text[index + marker.len()..].trim())
+    })?;
+    let query = rest
+        .trim_matches(|character: char| matches!(character, '"' | '\'' | '.' | '?'))
+        .trim();
+    (!query.is_empty()).then(|| query.to_owned())
 }
 
 fn plan_editor_tools(text: &str) -> Vec<FixtureCall> {
@@ -707,6 +763,35 @@ mod tests {
         assert_eq!(decision.calls.len(), 2);
         assert!(decision.calls[0].arguments.contains("Second Title"));
         assert!(decision.calls[1].arguments.contains("https://openjdk.org"));
+    }
+
+    #[test]
+    fn reads_latest_insights_and_queries_them() {
+        let latest = fixture_response(&json!({
+            "input": "Can you read our latest insights?"
+        }));
+        assert_eq!(latest.calls.len(), 1);
+        assert_eq!(latest.calls[0].name, "list_insights");
+
+        let searched = fixture_response(&json!({
+            "input": "Search insights for systems design"
+        }));
+        assert_eq!(searched.calls.len(), 1);
+        assert_eq!(searched.calls[0].name, "search_insights");
+        assert!(searched.calls[0].arguments.contains("systems design"));
+
+        let followed = fixture_response(&json!({
+            "input": [
+                {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Can you read our latest insights?"}]
+                },
+                {"type": "function_call_output", "call_id": "call_list_insights", "output": "{}"}
+            ]
+        }));
+        assert!(followed.calls.is_empty());
+        assert!(followed.text.contains("I read your insights"));
     }
 
     #[test]
