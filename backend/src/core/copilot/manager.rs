@@ -1004,6 +1004,21 @@ async fn persist_tool_result(
                 .and_then(Value::as_str)
                 .unwrap_or_default()
         ),
+        "list_insights" => format!(
+            "Read {} insights",
+            parsed
+                .get("insights")
+                .and_then(Value::as_array)
+                .map(Vec::len)
+                .unwrap_or(0)
+        ),
+        "search_insights" => format!(
+            "Searched insights for {}",
+            parsed
+                .get("query")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+        ),
         "update_sources" => "Updated the article sources".to_owned(),
         "select_sources_for_edit" => format!(
             "🧠 Selected {} sources for edit context",
@@ -1158,8 +1173,12 @@ fn convert_step(step: &TurnStep) -> ChainOfThoughtStep {
 }
 
 fn generate_document_context(title: &str, markdown: &str) -> String {
-    let title_line = if title.trim().is_empty() {
-        "Title: (empty). Set it with set_title. Do not put the title in the body."
+    let trimmed_title = title.trim();
+    let untitled = trimmed_title.is_empty()
+        || trimmed_title.eq_ignore_ascii_case("untitled")
+        || trimmed_title.eq_ignore_ascii_case("untitled article");
+    let title_line = if untitled {
+        "The title is still a placeholder. Call set_title with the real title in this turn. Do not put the title in the body."
     } else {
         "Title is a separate field. Edit it with set_title. Do not write it into the body."
     };
@@ -1170,7 +1189,7 @@ fn generate_document_context(title: &str, markdown: &str) -> String {
     };
     if markdown.trim().is_empty() {
         return format!(
-            "--- Document Context ---\nTitle: {shown_title}\n{title_line}\nTotal: 0 lines, 0 chars, 0 paragraphs\n(empty body — write it with apply_patch: old_str empty, new_str the body markdown, without the title or a sources section)\n---"
+            "--- Document Context ---\nTitle: {shown_title}\n{title_line}\nTotal: 0 lines, 0 chars, 0 paragraphs\n(empty body — write the draft with apply_patch: old_str empty, new_str the body markdown, without the title or a sources section)\n---"
         );
     }
     let lines = markdown.lines().collect::<Vec<_>>();

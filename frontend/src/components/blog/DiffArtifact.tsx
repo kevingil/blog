@@ -72,41 +72,28 @@ export const DiffArtifact = memo(function DiffArtifact({
 
         {/* Stats summary */}
         {hasDiffData && (
-          <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
-            <span className="flex items-center gap-1">
-              <span className="text-red-600 dark:text-red-400">-{oldText.length}</span>
-              <span>/</span>
-              <span className="text-green-600 dark:text-green-400">+{newText.length}</span>
-              <span>chars</span>
-            </span>
+          <div className="mb-2 font-mono text-[11px]">
+            {oldText ? <span className="text-red-600 dark:text-red-400">-{oldLines.length}</span> : null}
+            {oldText && newText ? <span className="mx-1 text-muted-foreground">/</span> : null}
+            {newText ? <span className="text-green-600 dark:text-green-400">+{newLines.length}</span> : null}
           </div>
         )}
 
-        {/* Simple old/new blocks */}
         {hasDiffData && (
-          <div className="space-y-2 mb-3">
-            {/* Old content - red */}
-            {oldText && (
-              <div>
-                <div className="text-xs font-medium text-red-600 dark:text-red-400 mb-1">Removing:</div>
-                <div className="bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded p-2 font-mono text-xs whitespace-pre-wrap text-red-800 dark:text-red-200 max-h-64 overflow-auto">
-                  {displayOldText}
-                  {oldTruncated && <span className="text-red-400 dark:text-red-500">...</span>}
-                </div>
+          <pre className="scrollbar-subtle mb-2 max-h-64 overflow-auto rounded-md bg-muted/40 p-2 font-mono text-xs leading-5">
+            {displayOldText.split('\n').filter(() => displayOldText.length > 0).map((line, index) => (
+              <div key={`old-${index}`} className="whitespace-pre-wrap text-red-700 dark:text-red-300">
+                - {line}
+                {oldTruncated && index === displayOldText.split('\n').length - 1 ? '…' : ''}
               </div>
-            )}
-
-            {/* New content - green */}
-            {newText && (
-              <div>
-                <div className="text-xs font-medium text-green-600 dark:text-green-400 mb-1">Adding:</div>
-                <div className="bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded p-2 font-mono text-xs whitespace-pre-wrap text-green-800 dark:text-green-200 max-h-64 overflow-auto">
-                  {displayNewText}
-                  {newTruncated && <span className="text-green-400 dark:text-green-500">...</span>}
-                </div>
+            ))}
+            {displayNewText.split('\n').filter(() => displayNewText.length > 0).map((line, index) => (
+              <div key={`new-${index}`} className="whitespace-pre-wrap text-green-700 dark:text-green-300">
+                + {line}
+                {newTruncated && index === displayNewText.split('\n').length - 1 ? '…' : ''}
               </div>
-            )}
-          </div>
+            ))}
+          </pre>
         )}
 
         {/* Expand/collapse button */}

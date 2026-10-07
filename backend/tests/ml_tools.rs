@@ -3,9 +3,10 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use blog_backend::{
     core::ml::llm::{
-        ApplyPatchTool, ArticleSourceView, DraftSaver, ReadDocumentTool, ReplaceLinesTool,
-        SetTitleTool, SourceResource, SourceResourcePort, SourceSelection, Tool, ToolCallRequest,
-        ToolContext, UpdateSourcesTool, WebSearchResult,
+        ApplyPatchTool, ArticleSourceView, DraftSaver, InsightBrief, InsightQuery, InsightReader,
+        ListInsightsTool, ReadDocumentTool, ReplaceLinesTool, SearchInsightsTool, SetTitleTool,
+        SourceResource, SourceResourcePort, SourceSelection, Tool, ToolCallRequest, ToolContext,
+        UpdateSourcesTool, WebSearchResult,
     },
     error::AppError,
 };
@@ -540,4 +541,162 @@ async fn read_document_reports_title_and_sources_separately() {
             .unwrap_or_default()
             .contains("Kept apart")
     );
+}
+
+struct StaticInsights {
+    recent: Vec<InsightBrief>,
+}
+
+fn insight_matches(insight: &InsightBrief, text: Option<&str>, filter: &InsightQuery) -> bool {
+    if let Some(text) = text {
+        let text = text.to_ascii_lowercase();
+        let haystack = format!(
+            "{} {} {}",
+            insight.title.to_ascii_lowercase(),
+            insight.summary.to_ascii_lowercase(),
+            insight.topic.to_ascii_lowercase()
+        );
+        if !haystack.contains(&text) {
+            return false;
+        }
+    }
+    if let Some(topic) = filter.topic.as_deref().map(str::trim).filter(|topic| !topic.is_empty())
+        && !insight.topic.to_ascii_lowercase().contains(&topic.to_ascii_lowercase())
+    {
+        return false;
+    }
+    if let Some(unread) = filter.unread && insight.is_read == unread {
+        return false;
+    }
+    if let Some(pinned) = filter.pinned && insight.is_pinned != pinned {
+        return false;
+    }
+    if let Some(unused) = filter.unused && insight.is_used_in_article == unused {
+        return false;
+    }
+    true
+}
+
+#[async_trait]
+impl InsightReader for StaticInsights {
+    async fn list_recent(
+        &self,
+        limit: i64,
+        query: &InsightQuery,
+    ) -> Result<Vec<InsightBrief>, AppError> {
+        let limit = usize::try_from(limit).unwrap_or(0);
+        Ok(self
+            .recent
+            .iter()
+            .filter(|insight| insight_matches(insight, None, query))
+            .take(limit)
+            .cloned()
+            .collect())
+    }
+
+    async fn search(
+        &self,
+        query: &str,
+        limit: i64,
+        filter: &InsightQuery,
+    ) -> Result<Vec<InsightBrief>, AppError> {
+        let limit = usize::try_from(limit).unwrap_or(0);
+        Ok(self
+            .recent
+            .iter()
+            .filter(|insight| insight_matches(insight, Some(query), filter))
+            .take(limit)
+            .cloned()
+            .collect())
+    }
+}
+
+fn sample_insight() -> InsightBrief {
+    InsightBrief {
+        id: Uuid::new_v4(),
+        title: "RSI is a systems problem".to_owned(),
+        summary: "Repetitive strain shows up in the tools, not just the wrists.".to_owned(),
+        key_points: vec!["Change the keyboard".to_owned()],
+        topic: "Health".to_owned(),
+        content: "A short briefing.".to_owned(),
+        is_read: false,
+        is_pinned: false,
+        is_used_in_article: false,
+    }
+}
+
+#[tokio::test]
+async fn list_insights_returns_recent_briefings() {
+    let tool = ListInsightsTool::new(Arc::new(StaticInsights {
+        recent: vec![sample_insight()],
+    }));
+    let response = tool
+        .run(context(""), ToolCallRequest {
+            id: "insights-1".to_owned(),
+            name: "list_insights".to_owned(),
+            input: r#"{"limit":8}"#.to_owned(),
+        })
+        .await
+        .expect("list");
+    assert!(!response.is_error, "{}", response.content);
+    let value: serde_json::Value = serde_json::from_str(&response.content).expect("json");
+    assert_eq!(value["tool_name"], "list_insights");
+    assert_eq!(value["total"], 1);
+    assert_eq!(value["insights"][0]["title"], "RSI is a systems problem");
+    assert_eq!(value["insights"][0]["topic"], "Health");
+}
+
+#[tokio::test]
+async fn search_insights_filters_by_query_and_rejects_an_empty_query() {
+    let tool = SearchInsightsTool::new(Arc::new(StaticInsights {
+        recent: vec![sample_insight()],
+    }));
+    let empty = tool
+        .run(context(""), ToolCallRequest {
+            id: "insights-2".to_owned(),
+            name: "search_insights".to_owned(),
+            input: r#"{"query":"  "}"#.to_owned(),
+        })
+        .await
+        .expect("empty");
+    assert!(empty.is_error);
+
+    let response = tool
+        .run(context(""), ToolCallRequest {
+            id: "insights-3".to_owned(),
+            name: "search_insights".to_owned(),
+            input: r#"{"query":"systems"}"#.to_owned(),
+        })
+        .await
+        .expect("search");
+    let value: serde_json::Value = serde_json::from_str(&response.content).expect("json");
+    assert_eq!(value["query"], "systems");
+    assert_eq!(value["insights"][0]["title"], "RSI is a systems problem");
+    assert_eq!(value["insights"][0]["key_points"][0], "Change the keyboard");
+}
+
+#[tokio::test]
+async fn list_insights_filters_unread_briefings_in_a_topic() {
+    let mut read = sample_insight();
+    read.title = "Already read".to_owned();
+    read.is_read = true;
+    let mut other = sample_insight();
+    other.title = "Shipping notes".to_owned();
+    other.topic = "Engineering".to_owned();
+    let tool = ListInsightsTool::new(Arc::new(StaticInsights {
+        recent: vec![sample_insight(), read, other],
+    }));
+    let response = tool
+        .run(context(""), ToolCallRequest {
+            id: "insights-4".to_owned(),
+            name: "list_insights".to_owned(),
+            input: r#"{"topic":"health","unread":true}"#.to_owned(),
+        })
+        .await
+        .expect("filter");
+    let value: serde_json::Value = serde_json::from_str(&response.content).expect("json");
+    assert_eq!(value["total"], 1);
+    assert_eq!(value["insights"][0]["title"], "RSI is a systems problem");
+    assert_eq!(value["filters"]["topic"], "health");
+    assert_eq!(value["filters"]["unread"], true);
 }

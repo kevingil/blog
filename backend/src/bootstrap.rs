@@ -46,9 +46,10 @@ use crate::{
             TextGenerationService,
             llm::{
                 Agent, ApplyPatchTool, GenerateImagePromptTool, GetRelevantSourcesTool,
-                InMemorySessionStore, Model, ReadDocumentTool, ReplaceLinesTool,
-                SearchWebSourcesTool, SelectSourcesForEditTool, SessionStore, SetTitleTool, Tool,
-                ToolRegistry, UpdateSourcesTool,
+                InMemorySessionStore, InsightReader, ListInsightsTool, Model, ReadDocumentTool,
+                ReplaceLinesTool, SearchInsightsTool, SearchWebSourcesTool,
+                SelectSourcesForEditTool, SessionStore, SetTitleTool, Tool, ToolRegistry,
+                UpdateSourcesTool,
             },
         },
         organization::OrganizationService,
@@ -310,9 +311,12 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
     let drafts = Arc::new(ArticleDraftAdapter::new(articles.clone()));
     let session_store: Arc<dyn SessionStore> = Arc::new(InMemorySessionStore::default());
     let text_generation = Arc::new(TextGenerationService::new(openai.clone()));
+    let insight_reader: Arc<dyn InsightReader> = insight_service.clone();
     let tools: Vec<Arc<dyn Tool>> = vec![
         Arc::new(ReadDocumentTool),
         Arc::new(SetTitleTool::new(Some(drafts.clone()))),
+        Arc::new(ListInsightsTool::new(insight_reader.clone())),
+        Arc::new(SearchInsightsTool::new(insight_reader)),
         Arc::new(UpdateSourcesTool::new(source_service.clone())),
         Arc::new(ApplyPatchTool::new(Some(drafts.clone())).with_sources(source_service.clone())),
         Arc::new(ReplaceLinesTool::new(Some(drafts.clone())).with_sources(source_service.clone())),

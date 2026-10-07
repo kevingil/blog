@@ -93,18 +93,17 @@ fn copilot_prompt_only_advertises_registered_tools() {
         "web_search".to_owned(),
         "sandbox".to_owned(),
     ]);
-    assert!(prompt.contains("blog writing agent"));
-    assert!(prompt.contains("workspace is on the left"));
-    assert!(prompt.contains("Research, brainstorm"));
-    assert!(prompt.contains("Follow the user's instructions"));
+    assert!(prompt.contains("ghostwriter"));
+    assert!(prompt.contains("Research with your tools"));
+    assert!(prompt.contains("If they told you to edit, edit."));
+    assert!(prompt.contains("confirm first"));
+    assert!(prompt.contains("If you are unsure, ask."));
     assert!(prompt.contains("read_document"));
     assert!(prompt.contains("replace_lines"));
-    assert!(prompt.contains("set_title"));
-    assert!(prompt.contains("update_sources"));
-    assert!(prompt.contains("Never write the title"));
     assert!(!prompt.contains("ask_question"));
-    assert!(prompt.contains("use web_search"));
-    assert!(prompt.contains("deep_research"));
+    assert!(!prompt.contains("set_title"));
+    assert!(!prompt.contains("list_insights"));
+    assert!(!prompt.contains("web_search"));
     assert!(!prompt.contains("sandbox"));
     assert!(!prompt.contains("Present a plan of proposed changes before editing"));
 }

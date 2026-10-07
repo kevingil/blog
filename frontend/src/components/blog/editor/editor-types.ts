@@ -129,6 +129,8 @@ export function getToolDisplayName(toolName: string): string {
     'set_title': 'Updating title',
     'update_sources': 'Updating sources',
     'read_document': 'Reading article',
+    'list_insights': 'Reading insights',
+    'search_insights': 'Searching insights',
     'web_search': 'Searching the web',
     'sandbox': 'Running OpenAI sandbox',
     'analyze_document': 'Analyzing document',

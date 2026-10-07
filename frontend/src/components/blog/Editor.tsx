@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearch } from '@tanstack/react-router';
 import { useAuth } from '@/services/auth/auth';
+import { useAdminDashboard } from '@/services/dashboard/dashboard';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format } from "date-fns"
@@ -98,6 +99,8 @@ import {
 } from '@/services/blog';
 import { Link } from '@tanstack/react-router';
 import { ArticleListItem, ArticleVersion, ArticleVersionListResponse, isPublished, hasDraftChanges } from '@/services/types';
+import { listItemFromArticle, patchSidebarArticleTitle, upsertSidebarArticle, type SidebarArticlesPage } from '@/lib/sidebar-articles';
+import type { InfiniteData } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Eye, Globe, EyeOff, History, Save, Tag } from 'lucide-react';
 import { Dialog, DialogTitle, DialogContent, DialogTrigger, DialogDescription, DialogFooter, DialogHeader, DialogClose } from '@/components/ui/dialog';
@@ -417,6 +420,7 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { setPageTitle } = useAdminDashboard();
   
   // Route params only exist on the edit page. The dashboard launchpad stays
   // mounted and fills these in after the first send or voice start.
@@ -424,6 +428,7 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
   const params = routed ? useParams({ from: '/dashboard/blog/edit/$blogSlug' }) : null;
   const search = routed ? useSearch({ from: '/dashboard/blog/edit/$blogSlug' }) : ({} as { requestId?: string });
   const [launchedSlug, setLaunchedSlug] = useState<string | null>(null);
+  const launchedArticleIdRef = useRef<string | null>(null);
   const [launchedRequestId, setLaunchedRequestId] = useState<string | null>(null);
   const [launchPhase, setLaunchPhase] = useState<'landing' | 'editor'>(launchpad ? 'landing' : 'editor');
   const [launching, setLaunching] = useState(false);
@@ -636,6 +641,14 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
+  const rememberSession = (item: ArticleListItem) => {
+    launchedArticleIdRef.current = item.article.id;
+    queryClient.setQueryData<InfiniteData<SidebarArticlesPage>>(
+      ['sidebar-articles', 'all'],
+      (current) => upsertSidebarArticle(current, item),
+    );
+  };
+
   // Mutation for creating new articles
   const createArticleMutation = useMutation({
     mutationFn: (data: {
@@ -660,6 +673,7 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
       external_url: data.external_url,
     }),
     onSuccess: (response, variables) => {
+      rememberSession(response);
       queryClient.invalidateQueries({ queryKey: ['articles'] });
       if (variables.autosave && response.article.slug) {
         const latest = getFormValuesRef.current?.();
@@ -910,6 +924,21 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
   const watchedTags = useWatch({ control, name: 'tags' });
   const watchedContent = useWatch({ control, name: 'content' });
   const watchedTitle = useWatch({ control, name: 'title' });
+
+  useEffect(() => {
+    if (!launchpad) return;
+    setPageTitle(watchedTitle?.trim() || 'New');
+  }, [launchpad, setPageTitle, watchedTitle]);
+
+  useEffect(() => {
+    const articleId = article?.article.id ?? launchedArticleIdRef.current;
+    const title = watchedTitle?.trim();
+    if (!articleId || !title) return;
+    queryClient.setQueriesData<InfiniteData<SidebarArticlesPage>>(
+      { queryKey: ['sidebar-articles'], exact: false },
+      (current) => patchSidebarArticleTitle(current, articleId, title),
+    );
+  }, [article?.article.id, queryClient, watchedTitle]);
   const watchedExternalUrl = useWatch({ control, name: 'external_url' });
   const articleIsLive = isPublished(article?.article);
   const articleWordCount = (watchedContent ?? "")
@@ -1397,6 +1426,8 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
         if (launchTokenRef.current !== token) return;
         await attachSources(String(created.article.id));
         if (launchTokenRef.current !== token) return;
+        rememberSession(created);
+        setValue('title', created.article.draft_title || 'Untitled');
         queryClient.setQueryData(['article', created.article.slug], created);
         setLaunchedSlug(created.article.slug);
         return;
@@ -1406,6 +1437,10 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
       if (launchTokenRef.current !== token) return;
       await attachSources(String(article.id));
       if (launchTokenRef.current !== token) return;
+      const session = listItemFromArticle(article, user.name || 'You');
+      rememberSession(session);
+      queryClient.setQueryData(['article', article.slug], session);
+      setValue('title', session.article.draft_title);
       setLaunchedRequestId(request_id);
       setLaunchedSlug(article.slug);
     } catch (err) {
@@ -2707,7 +2742,7 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
         <div
           ref={chatMessagesRef}
           className={cn(
-            "flex-1 space-y-2 overflow-y-auto p-3 md:p-1.5",
+            "scrollbar-hide min-h-0 flex-1 space-y-2 overflow-y-auto p-3 md:p-1.5",
             landing && "hidden",
           )}
         >

@@ -161,7 +161,7 @@ export function NavDocuments({
             className="mx-2 mb-2 h-8 rounded-lg border border-sidebar-border bg-transparent px-2.5 text-sm outline-none focus:ring-2 focus:ring-sidebar-ring/40"
           />
         )}
-        <SidebarMenu className="flex-1 overflow-y-auto min-h-0">
+        <SidebarMenu className="scrollbar-subtle flex-1 overflow-y-auto min-h-0">
           {visibleArticles.map((articleItem) => {
               const editUrl = `/dashboard/blog/edit/${articleItem.article.slug || ''}`
               const published = isPublished(articleItem.article)

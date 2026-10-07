@@ -248,7 +248,7 @@ export function TipTapEditor({
   return (
     <div className="article-editor relative flex h-full min-h-0 flex-col bg-background">
       {sideControls}
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="scrollbar-subtle min-h-0 flex-1 overflow-auto">
         <article className="article-editor-document">
           <input
             value={title ?? ''}
@@ -314,12 +314,12 @@ export function TipTapEditor({
             </button>
           ) : null}
           {authorName && (
-            <div className="mb-6 flex items-center">
+            <div className="flex items-center">
               <p className="font-semibold">{authorName}</p>
             </div>
           )}
           <div
-            className="article-body-drop"
+            className={authorName ? 'article-body-drop article-body-drop-after-author' : 'article-body-drop'}
             onDragEnter={(event) => {
               if (!dragHasFiles(event)) return;
               event.preventDefault();
