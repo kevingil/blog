@@ -102,6 +102,9 @@ fn copilot_prompt_only_advertises_registered_tools() {
     assert!(prompt.contains("set_title"));
     assert!(prompt.contains("update_sources"));
     assert!(prompt.contains("Never write the title"));
+    assert!(prompt.contains("list_insights"));
+    assert!(prompt.contains("search_insights"));
+    assert!(prompt.contains("Do not leave the title as Untitled"));
     assert!(!prompt.contains("ask_question"));
     assert!(prompt.contains("use web_search"));
     assert!(prompt.contains("deep_research"));
