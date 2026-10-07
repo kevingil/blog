@@ -2742,7 +2742,7 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
         <div
           ref={chatMessagesRef}
           className={cn(
-            "scrollbar-subtle flex-1 space-y-2 overflow-y-auto p-3 md:p-1.5",
+            "scrollbar-hide min-h-0 flex-1 space-y-2 overflow-y-auto p-3 md:p-1.5",
             landing && "hidden",
           )}
         >

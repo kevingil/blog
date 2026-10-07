@@ -45,7 +45,11 @@ export const Route = createFileRoute('/dashboard')({
 
 function DashboardLayout() {
   const location = useLocation();
-  const isEditorRoute = location.pathname.startsWith('/dashboard/blog/edit/');
+  const path = location.pathname.replace(/\/$/, "") || "/";
+  const isEditorRoute =
+    path === "/dashboard" ||
+    path === "/dashboard/blog/new" ||
+    path.startsWith("/dashboard/blog/edit/");
 
   useLayoutEffect(() => {
     document.documentElement.scrollLeft = 0;
