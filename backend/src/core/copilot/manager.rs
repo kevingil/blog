@@ -1189,7 +1189,7 @@ fn generate_document_context(title: &str, markdown: &str) -> String {
     };
     if markdown.trim().is_empty() {
         return format!(
-            "--- Document Context ---\nTitle: {shown_title}\n{title_line}\nTotal: 0 lines, 0 chars, 0 paragraphs\n(empty body — write it with apply_patch: old_str empty, new_str the body markdown, without the title or a sources section)\n---"
+            "--- Document Context ---\nTitle: {shown_title}\n{title_line}\nTotal: 0 lines, 0 chars, 0 paragraphs\n(empty body — write the draft with apply_patch: old_str empty, new_str the body markdown, without the title or a sources section)\n---"
         );
     }
     let lines = markdown.lines().collect::<Vec<_>>();
