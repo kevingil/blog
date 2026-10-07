@@ -303,6 +303,8 @@ export type ToolCategory = 'research' | 'analysis' | 'editing' | 'generation';
 
 export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   search_web_sources: 'research',
+  list_insights: 'research',
+  search_insights: 'research',
   web_search: 'research',
   ask_question: 'research',
   get_relevant_sources: 'research',
@@ -344,6 +346,8 @@ export const ARTIFACT_TOOLS = new Set([
 
 export const TOOL_DISPLAY_NAMES: Record<string, string> = {
   search_web_sources: 'Web Search',
+  list_insights: 'Read Insights',
+  search_insights: 'Search Insights',
   web_search: 'Web Search',
   ask_question: 'Ask Question',
   sandbox: 'Sandbox',
