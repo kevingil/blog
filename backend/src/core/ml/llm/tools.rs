@@ -348,6 +348,90 @@ pub trait SourceResourcePort: Send + Sync {
     }
 }
 
+/// A research briefing the copilot can read when suggesting what to write.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InsightBrief {
+    pub id: Uuid,
+    pub title: String,
+    pub summary: String,
+    pub key_points: Vec<String>,
+    pub topic: String,
+    pub content: String,
+}
+
+#[async_trait]
+pub trait InsightReader: Send + Sync {
+    async fn list_recent(&self, limit: i64) -> Result<Vec<InsightBrief>, AppError>;
+    async fn search(&self, query: &str, limit: i64) -> Result<Vec<InsightBrief>, AppError>;
+}
+
+fn insight_limit(limit: i64) -> i64 {
+    if limit <= 0 {
+        8
+    } else {
+        limit.min(20)
+    }
+}
+
+fn truncate_chars(text: &str, max: usize) -> String {
+    let mut end = text.len();
+    if text.len() > max {
+        end = text
+            .char_indices()
+            .map(|(index, _)| index)
+            .take_while(|index| *index <= max)
+            .last()
+            .unwrap_or(0);
+    }
+    let mut excerpt = text[..end].trim().to_owned();
+    if end < text.len() {
+        excerpt.push('…');
+    }
+    excerpt
+}
+
+fn brief_from_response(insight: crate::core::insight::InsightResponse) -> InsightBrief {
+    InsightBrief {
+        id: insight.id,
+        title: insight.title,
+        summary: insight.summary,
+        key_points: insight.key_points.unwrap_or_default(),
+        topic: insight.topic_name.unwrap_or_default(),
+        content: truncate_chars(insight.content.as_deref().unwrap_or(""), 700),
+    }
+}
+
+#[async_trait]
+impl InsightReader for crate::core::insight::InsightService {
+    async fn list_recent(&self, limit: i64) -> Result<Vec<InsightBrief>, AppError> {
+        let (insights, _) = self.list_all_insights(1, insight_limit(limit)).await?;
+        Ok(insights.into_iter().map(brief_from_response).collect())
+    }
+
+    async fn search(&self, query: &str, limit: i64) -> Result<Vec<InsightBrief>, AppError> {
+        let insights = self
+            .search_insights(crate::core::insight::InsightSearchRequest {
+                query: query.to_owned(),
+                topic_id: None,
+                limit: insight_limit(limit),
+                is_unread: None,
+            })
+            .await?;
+        Ok(insights.into_iter().map(brief_from_response).collect())
+    }
+}
+
+fn insight_json(brief: &InsightBrief) -> Value {
+    json!({
+        "id": brief.id,
+        "title": brief.title,
+        "summary": brief.summary,
+        "key_points": brief.key_points,
+        "topic": brief.topic,
+        "content": brief.content,
+    })
+}
+
 #[async_trait]
 impl SourceResourcePort for crate::core::source::SourceService {
     async fn create_web_source(
@@ -1420,6 +1504,120 @@ impl Tool for SetTitleTool {
             "title_updated": true,
             "reason": input.reason,
             "tool_name": "set_title",
+        }))
+    }
+}
+
+pub struct ListInsightsTool {
+    insights: Arc<dyn InsightReader>,
+}
+
+impl ListInsightsTool {
+    pub fn new(insights: Arc<dyn InsightReader>) -> Self {
+        Self { insights }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct ListInsightsInput {
+    #[serde(default = "default_insight_limit")]
+    limit: i64,
+}
+
+fn default_insight_limit() -> i64 {
+    8
+}
+
+#[async_trait]
+impl Tool for ListInsightsTool {
+    fn info(&self) -> ToolInfo {
+        ToolInfo {
+            name: "list_insights".to_owned(),
+            description: "Read the author's latest research insights. Each insight is a briefing with a title, summary, key points, and an excerpt. Use this when they ask what to write, what is new, or to read their latest insights.".to_owned(),
+            parameters: BTreeMap::from([(
+                "limit".to_owned(),
+                json!({"type": "integer", "description": "How many recent insights to return. Defaults to 8, maximum 20."}),
+            )]),
+            required: Vec::new(),
+            parallel_safe: true,
+        }
+    }
+
+    async fn run(
+        &self,
+        _context: ToolContext,
+        call: ToolCallRequest,
+    ) -> Result<ToolResponse, AppError> {
+        let input: ListInsightsInput = serde_json::from_str(&call.input).unwrap_or(ListInsightsInput {
+            limit: default_insight_limit(),
+        });
+        let insights = self.insights.list_recent(input.limit).await?;
+        let count = insights.len();
+        structured_result(json!({
+            "insights": insights.iter().map(insight_json).collect::<Vec<_>>(),
+            "total": count,
+            "tool_name": "list_insights",
+        }))
+    }
+}
+
+pub struct SearchInsightsTool {
+    insights: Arc<dyn InsightReader>,
+}
+
+impl SearchInsightsTool {
+    pub fn new(insights: Arc<dyn InsightReader>) -> Self {
+        Self { insights }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct SearchInsightsInput {
+    query: String,
+    #[serde(default = "default_insight_limit")]
+    limit: i64,
+}
+
+#[async_trait]
+impl Tool for SearchInsightsTool {
+    fn info(&self) -> ToolInfo {
+        ToolInfo {
+            name: "search_insights".to_owned(),
+            description: "Query the author's research insights by subject. Returns matching briefings with title, summary, key points, and an excerpt. Use this to find what they have already researched before suggesting or drafting an article.".to_owned(),
+            parameters: BTreeMap::from([
+                (
+                    "query".to_owned(),
+                    json!({"type": "string", "description": "What to look for in the insight briefings."}),
+                ),
+                (
+                    "limit".to_owned(),
+                    json!({"type": "integer", "description": "Maximum matches. Defaults to 8, maximum 20."}),
+                ),
+            ]),
+            required: vec!["query".to_owned()],
+            parallel_safe: true,
+        }
+    }
+
+    async fn run(
+        &self,
+        _context: ToolContext,
+        call: ToolCallRequest,
+    ) -> Result<ToolResponse, AppError> {
+        let input: SearchInsightsInput = match serde_json::from_str(&call.input) {
+            Ok(input) => input,
+            Err(_) => return Ok(ToolResponse::error("query is required")),
+        };
+        let query = input.query.trim();
+        if query.is_empty() {
+            return Ok(ToolResponse::error("query is required"));
+        }
+        let insights = self.insights.search(query, input.limit).await?;
+        structured_result(json!({
+            "query": query,
+            "insights": insights.iter().map(insight_json).collect::<Vec<_>>(),
+            "total": insights.len(),
+            "tool_name": "search_insights",
         }))
     }
 }

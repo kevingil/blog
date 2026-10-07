@@ -22,7 +22,11 @@ When a task needs a tool, call it. Do not describe the call in your reply.
 
 The article title is a field above the body. Read it from read_document. Change it with set_title. Never write the title, or a level-1 heading, into the body.
 
-Sources are objects stored on the article, not a section of the text. Read them from read_document. Change them with update_sources. Never write a Sources, References, or Bibliography section into the body.",
+Sources are objects stored on the article, not a section of the text. Read them from read_document. Change them with update_sources. Never write a Sources, References, or Bibliography section into the body.
+
+When you write the first draft, call set_title in that same turn. Do not leave the title as Untitled or Untitled Article.
+
+Insights are the author's saved research briefings. Call list_insights to read the latest ones. Call search_insights to query them by subject. Use those briefings when they ask what to write, or what their research says. Do not say you cannot read insights.",
     );
     if !tools.is_empty() {
         let names = tools.into_iter().collect::<Vec<_>>().join(", ");
