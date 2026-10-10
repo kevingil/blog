@@ -79,24 +79,28 @@ impl FromRef<TestState> for SourceState {
 #[derive(Default)]
 struct Accounts;
 
+fn account(id: AccountId) -> Account {
+    Account {
+        id,
+        name: "Test Account".to_owned(),
+        email: "test@example.test".to_owned(),
+        password_hash: String::new(),
+        role: "admin".to_owned(),
+        created_at: None,
+        updated_at: None,
+        bio: None,
+        profile_image: None,
+        email_public: None,
+        social_links: None,
+        meta_description: None,
+        organization_id: None,
+    }
+}
+
 #[async_trait]
 impl AccountRepository for Accounts {
     async fn find_by_id(&self, id: AccountId) -> Result<Option<Account>, AppError> {
-        Ok(Some(Account {
-            id,
-            name: "Test Account".to_owned(),
-            email: "test@example.test".to_owned(),
-            password_hash: String::new(),
-            role: "admin".to_owned(),
-            created_at: None,
-            updated_at: None,
-            bio: None,
-            profile_image: None,
-            email_public: None,
-            social_links: None,
-            meta_description: None,
-            organization_id: None,
-        }))
+        Ok(Some(account(id)))
     }
 
     async fn find_by_email(&self, _email: &str) -> Result<Option<Account>, AppError> {
@@ -149,7 +153,7 @@ fn fixture() -> TestResult<Fixture> {
     let auth_service = Arc::new(AuthService::new(accounts.clone(), TEST_SECRET)?);
     let bearer = format!(
         "Bearer {}",
-        auth_service.issue_token(AccountId(Uuid::new_v4()))?
+        auth_service.issue_token(&account(AccountId(Uuid::new_v4())))?
     );
 
     let data_sources = Arc::new(DieselDataSourceRepository::new(pool.clone()));
@@ -474,6 +478,7 @@ fn generated_openapi_contains_every_data_domain_operation() -> TestResult {
         "listAllSources",
         "createSource",
         "scrapeAndCreateSource",
+        "listPublicArticleSources",
         "getArticleSources",
         "searchSimilarSources",
         "getSource",
@@ -485,7 +490,7 @@ fn generated_openapi_contains_every_data_domain_operation() -> TestResult {
             "missing OpenAPI operation {operation_id}"
         );
     }
-    assert_eq!(operation_ids.len(), 36);
+    assert_eq!(operation_ids.len(), 37);
     assert_eq!(
         document["components"]["schemas"]["DataSourceCreateRequest"]["properties"]["name"]["minLength"],
         1

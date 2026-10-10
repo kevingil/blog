@@ -59,10 +59,28 @@ impl FromRef<TestState> for ImageState {
 #[derive(Default)]
 struct Accounts;
 
+fn account(id: AccountId) -> Account {
+    Account {
+        id,
+        name: "Image Author".to_owned(),
+        email: "images@example.test".to_owned(),
+        password_hash: String::new(),
+        role: "admin".to_owned(),
+        created_at: None,
+        updated_at: None,
+        bio: None,
+        profile_image: None,
+        email_public: None,
+        social_links: None,
+        meta_description: None,
+        organization_id: None,
+    }
+}
+
 #[async_trait]
 impl AccountRepository for Accounts {
-    async fn find_by_id(&self, _id: AccountId) -> Result<Option<Account>, AppError> {
-        Ok(None)
+    async fn find_by_id(&self, id: AccountId) -> Result<Option<Account>, AppError> {
+        Ok(Some(account(id)))
     }
 
     async fn find_by_email(&self, _email: &str) -> Result<Option<Account>, AppError> {
@@ -173,8 +191,10 @@ struct Fixture {
 
 fn fixture() -> TestResult<Fixture> {
     let auth_service = Arc::new(AuthService::new(Arc::new(Accounts), TEST_SECRET)?);
-    let account_id = AccountId(Uuid::new_v4());
-    let bearer = format!("Bearer {}", auth_service.issue_token(account_id)?);
+    let bearer = format!(
+        "Bearer {}",
+        auth_service.issue_token(&account(AccountId(Uuid::new_v4())))?
+    );
     let images = Arc::new(Images::default());
     let queue = Arc::new(Queue::default());
     let state = TestState {

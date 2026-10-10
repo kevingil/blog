@@ -148,24 +148,23 @@ async fn content_crud_routes_use_constructor_injected_postgres_services() -> Tes
 
     let account_id = AccountId::new(Uuid::new_v4());
     let password_hash = auth_service.hash_password("test-password").await?;
-    accounts
-        .create(&Account {
-            id: account_id,
-            name: "Content CRUD Admin".to_owned(),
-            email: format!("content-crud-{}@example.com", account_id.into_inner()),
-            password_hash,
-            role: "admin".to_owned(),
-            created_at: None,
-            updated_at: None,
-            bio: None,
-            profile_image: None,
-            email_public: None,
-            social_links: None,
-            meta_description: None,
-            organization_id: None,
-        })
-        .await?;
-    let bearer = format!("Bearer {}", auth_service.issue_token(account_id)?);
+    let admin = Account {
+        id: account_id,
+        name: "Content CRUD Admin".to_owned(),
+        email: format!("content-crud-{}@example.com", account_id.into_inner()),
+        password_hash,
+        role: "admin".to_owned(),
+        created_at: None,
+        updated_at: None,
+        bio: None,
+        profile_image: None,
+        email_public: None,
+        social_links: None,
+        meta_description: None,
+        organization_id: None,
+    };
+    accounts.create(&admin).await?;
+    let bearer = format!("Bearer {}", auth_service.issue_token(&admin)?);
 
     let (status, unauthorized) = call(
         router.clone(),
