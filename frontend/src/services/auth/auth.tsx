@@ -64,7 +64,10 @@ export async function ensureSession(): Promise<Session | null> {
   if (!session || session.token === confirmedToken) {
     return session;
   }
-  return refreshSession(AbortSignal.timeout(CONFIRM_TIMEOUT_MS));
+  // AbortSignal.timeout is missing before Safari 16; there the request has no deadline.
+  const deadline =
+    typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(CONFIRM_TIMEOUT_MS) : undefined;
+  return refreshSession(deadline);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
