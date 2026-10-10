@@ -5,17 +5,26 @@ import {
   AuthenticationError,
   type ApiErrorResponse,
 } from "./authenticatedFetch";
+import { currentSession, endSession } from "./auth/session";
 
 client.setConfig({
   baseUrl: VITE_API_BASE_URL,
-  auth: () =>
-    typeof window === "undefined" ? undefined : localStorage.getItem("token") ?? undefined,
+  auth: () => currentSession()?.token,
 });
 
 type GeneratedResult = {
   data?: unknown;
   error?: unknown;
+  request?: Request;
   response: Response;
+};
+
+export type RequestOptions = {
+  /**
+   * The endpoint checks a password the user typed and answers 401 when it is
+   * wrong. That 401 says nothing about the session, so it must not end it.
+   */
+  credentialCheck?: boolean;
 };
 
 function errorEnvelope(error: unknown): ApiErrorResponse {
@@ -28,6 +37,14 @@ function errorEnvelope(error: unknown): ApiErrorResponse {
   };
 }
 
+/** Ends the session only if the server rejected the token it still holds. */
+function endRejectedSession(request: Request | undefined) {
+  const session = currentSession();
+  if (session && request?.headers.get("Authorization") === `Bearer ${session.token}`) {
+    endSession();
+  }
+}
+
 /**
  * Preserve the service layer's existing behavior while using the generated
  * request definitions. The Rust API keeps the Go-compatible `{ data: ... }`
@@ -35,6 +52,7 @@ function errorEnvelope(error: unknown): ApiErrorResponse {
  */
 export async function generatedData<T>(
   request: Promise<GeneratedResult>,
+  options: RequestOptions = {},
 ): Promise<T> {
   const result = await request;
 
@@ -44,12 +62,8 @@ export async function generatedData<T>(
     const status = result.response?.status ?? 0;
 
     if (status === 401) {
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        setTimeout(() => {
-          window.location.href = "/login";
-        }, 1500);
+      if (!options.credentialCheck) {
+        endRejectedSession(result.request);
       }
       throw new AuthenticationError(envelope.error, code);
     }
