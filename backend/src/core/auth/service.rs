@@ -1,16 +1,21 @@
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use bcrypt::{non_truncating_hash, non_truncating_verify};
 use chrono::Utc;
 use jsonwebtoken::{
     Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode,
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tokio::sync::Semaphore;
 use uuid::Uuid;
 
-use crate::{error::AppError, setup::registration_role};
+use crate::{
+    error::AppError,
+    setup::{SUPERUSER_ROLE, registration_role},
+};
 
 use super::{
     Account, AccountId, AccountUpdate, LoginInput, LoginResult, PasswordUpdate, RegistrationInput,
@@ -20,12 +25,19 @@ use super::{
 const BCRYPT_COST: u32 = 10;
 const BCRYPT_MAX_PASSWORD_BYTES: usize = 72;
 const BCRYPT_PARALLELISM: usize = 4;
-const TOKEN_LIFETIME: Duration = Duration::from_secs(24 * 60 * 60);
+const TOKEN_LIFETIME: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+/// Verified when no account matches the email, so a miss costs the same bcrypt
+/// work as a wrong password and timing does not reveal which emails exist.
+const UNKNOWN_ACCOUNT_HASH: &str = "$2b$10$jtQO49smyDNuKhbtFroZ5.x/dqeeUoR4iqDX4MEKn8azE7cs5LWrm";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
     pub exp: usize,
+    pub iat: usize,
+    /// Digest of the password hash the token was issued against. Changing the
+    /// password changes it, which signs out every earlier session.
+    pub sv: String,
 }
 
 #[async_trait]
@@ -155,8 +167,12 @@ impl AuthService {
             .accounts
             .find_by_email(&input.email)
             .await
-            .map_err(|_| AppError::Unauthorized)?
-            .ok_or(AppError::Unauthorized)?;
+            .map_err(|_| AppError::Unauthorized)?;
+        let Some(account) = account else {
+            self.verify_password(&input.password, UNKNOWN_ACCOUNT_HASH)
+                .await?;
+            return Err(AppError::Unauthorized);
+        };
 
         if !self
             .verify_password(&input.password, &account.password_hash)
@@ -165,24 +181,26 @@ impl AuthService {
             return Err(AppError::Unauthorized);
         }
 
-        let token = self.issue_token(account.id)?;
-        Ok(LoginResult {
-            token,
-            user: UserData {
-                id: account.id.0.to_string(),
-                name: account.name,
-                email: account.email,
-                role: account.role,
-            },
-        })
+        self.issue_session(account)
     }
 
-    pub async fn register(&self, input: RegistrationInput) -> Result<(), AppError> {
+    /// Anyone may register while the database has no accounts; that first
+    /// account becomes the admin. After that only an admin can add accounts.
+    pub async fn register(
+        &self,
+        input: RegistrationInput,
+        requested_by: Option<&Account>,
+    ) -> Result<(), AppError> {
+        let existing_accounts = self.accounts.count().await?;
+        let requested_by_admin = requested_by.is_some_and(|account| account.role == SUPERUSER_ROLE);
+        if existing_accounts > 0 && !requested_by_admin {
+            return Err(AppError::Forbidden);
+        }
+
         if self.accounts.find_by_email(&input.email).await?.is_some() {
             return Err(AppError::Conflict("resource already exists".to_owned()));
         }
 
-        let existing_accounts = self.accounts.count().await?;
         let account = Account {
             id: AccountId(Uuid::new_v4()),
             name: input.name,
@@ -237,11 +255,13 @@ impl AuthService {
         }
     }
 
+    /// Changes the password and returns a token for the new password. Tokens
+    /// issued before the change stop working.
     pub async fn update_password(
         &self,
         id: AccountId,
         update: PasswordUpdate,
-    ) -> Result<(), AppError> {
+    ) -> Result<String, AppError> {
         let account = self.get_account(id).await?;
         if !self
             .verify_password(&update.current_password, &account.password_hash)
@@ -251,15 +271,17 @@ impl AuthService {
         }
 
         let new_password_hash = self.hash_password(&update.new_password).await?;
-        if self
+        if !self
             .accounts
             .update_password_if_current(id, &account.password_hash, &new_password_hash)
             .await?
         {
-            Ok(())
-        } else {
-            Err(AppError::Unauthorized)
+            return Err(AppError::Unauthorized);
         }
+        self.issue_token(&Account {
+            password_hash: new_password_hash,
+            ..account
+        })
     }
 
     pub async fn delete_account(&self, id: AccountId, password: &str) -> Result<(), AppError> {
@@ -282,16 +304,29 @@ impl AuthService {
         }
     }
 
-    pub fn issue_token(&self, id: AccountId) -> Result<String, AppError> {
+    pub fn issue_session(&self, account: Account) -> Result<LoginResult, AppError> {
+        Ok(LoginResult {
+            token: self.issue_token(&account)?,
+            user: UserData {
+                id: account.id.0.to_string(),
+                name: account.name,
+                email: account.email,
+                role: account.role,
+            },
+        })
+    }
+
+    pub fn issue_token(&self, account: &Account) -> Result<String, AppError> {
         let now = Utc::now().timestamp();
         let lifetime = i64::try_from(TOKEN_LIFETIME.as_secs()).map_err(AppError::internal)?;
         let expires_at = now
             .checked_add(lifetime)
             .ok_or(AppError::internal("token expiry overflowed"))?;
-        let exp = usize::try_from(expires_at).map_err(AppError::internal)?;
         let claims = Claims {
-            sub: id.0.to_string(),
-            exp,
+            sub: account.id.0.to_string(),
+            exp: usize::try_from(expires_at).map_err(AppError::internal)?,
+            iat: usize::try_from(now).map_err(AppError::internal)?,
+            sv: session_version(&account.password_hash),
         };
 
         encode(
@@ -314,10 +349,26 @@ impl AuthService {
         .map_err(|_| AppError::Unauthorized)
     }
 
-    pub fn account_id_from_token(&self, token: &str) -> Result<AccountId, AppError> {
-        let token = self.validate_token(token)?;
-        Uuid::parse_str(&token.claims.sub)
+    /// Resolves a bearer token to its account. Rejects tokens that are invalid
+    /// or expired, whose account was deleted, or that predate a password change.
+    pub async fn authenticate(&self, token: &str) -> Result<Account, AppError> {
+        let claims = self.validate_token(token)?.claims;
+        let id = Uuid::parse_str(&claims.sub)
             .map(AccountId)
-            .map_err(|_| AppError::Unauthorized)
+            .map_err(|_| AppError::Unauthorized)?;
+        let account = self
+            .accounts
+            .find_by_id(id)
+            .await?
+            .ok_or(AppError::Unauthorized)?;
+        if claims.sv != session_version(&account.password_hash) {
+            return Err(AppError::Unauthorized);
+        }
+        Ok(account)
     }
+}
+
+fn session_version(password_hash: &str) -> String {
+    let digest = Sha256::digest(password_hash.as_bytes());
+    URL_SAFE_NO_PAD.encode(&digest[..16])
 }
