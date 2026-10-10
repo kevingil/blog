@@ -7,7 +7,11 @@ use axum::{
 use uuid::Uuid;
 
 use crate::{
-    api::{auth::AuthenticatedAccount, request::JsonBody, response::SuccessResponse},
+    api::{
+        auth::{AuthenticatedAccount, OptionalAccount},
+        request::JsonBody,
+        response::SuccessResponse,
+    },
     core::article::{CreateArticle, CreateExternalArticle, UpdateArticle},
     error::AppError,
 };
@@ -204,15 +208,26 @@ pub async fn update_article_with_context(
     )))
 }
 
+/// Drafts are only visible to signed-in authors. Anonymous requests for
+/// `all` or `drafts` get the published list, reported as `include_drafts: false`.
+fn visible_status<'a>(requested: Option<&'a str>, viewer: &OptionalAccount) -> &'a str {
+    match requested.unwrap_or("published") {
+        "all" | "drafts" if viewer.0.is_none() => "published",
+        status => status,
+    }
+}
+
 #[utoipa::path(
     get,
     path = "/blog/articles",
     params(ArticleListQuery),
     responses((status = 200, body = SuccessResponse<crate::core::article::ArticleListResponse>)),
+    security((), ("bearerAuth" = [])),
     tag = "articles",
     operation_id = "getArticles"
 )]
 pub async fn get_articles(
+    viewer: OptionalAccount,
     State(state): State<ArticleState>,
     Query(query): Query<ArticleListQuery>,
 ) -> ApiResult<crate::core::article::ArticleListResponse> {
@@ -222,7 +237,7 @@ pub async fn get_articles(
             .list(
                 query.page.unwrap_or(1),
                 query.tag.as_deref().unwrap_or_default(),
-                query.status.as_deref().unwrap_or("published"),
+                visible_status(query.status.as_deref(), &viewer),
                 query.articles_per_page.unwrap_or(6),
                 query.sort_by.as_deref().unwrap_or_default(),
                 query.sort_order.as_deref().unwrap_or_default(),
@@ -239,10 +254,12 @@ pub async fn get_articles(
         (status = 200, body = SuccessResponse<crate::core::article::ArticleListResponse>),
         (status = 400, body = crate::error::ErrorEnvelope)
     ),
+    security((), ("bearerAuth" = [])),
     tag = "articles",
     operation_id = "searchArticles"
 )]
 pub async fn search_articles(
+    viewer: OptionalAccount,
     State(state): State<ArticleState>,
     Query(query): Query<ArticleSearchQuery>,
 ) -> ApiResult<crate::core::article::ArticleListResponse> {
@@ -260,7 +277,7 @@ pub async fn search_articles(
             .search(
                 &query.query,
                 query.page.unwrap_or(1),
-                query.status.as_deref().unwrap_or("published"),
+                visible_status(query.status.as_deref(), &viewer),
             )
             .await?,
     )))
@@ -285,21 +302,26 @@ pub async fn get_popular_tags(State(state): State<ArticleState>) -> ApiResult<Po
     params(("slug" = String, Path)),
     responses(
         (status = 200, body = SuccessResponse<crate::core::article::ArticleListItem>),
-        (status = 404, body = crate::error::ErrorEnvelope)
+        (status = 404, body = crate::error::ErrorEnvelope,
+            description = "No such article, or it is unpublished and the caller is not signed in")
     ),
+    security((), ("bearerAuth" = [])),
     tag = "articles",
     operation_id = "getArticleData"
 )]
 pub async fn get_article_data(
+    viewer: OptionalAccount,
     State(state): State<ArticleState>,
     Path(slug): Path<String>,
 ) -> ApiResult<crate::core::article::ArticleListItem> {
     if slug.is_empty() {
         return Err(AppError::InvalidInput("slug is required".to_owned()));
     }
-    Ok(Json(SuccessResponse::new(
-        state.service()?.get_by_slug(&slug).await?,
-    )))
+    let item = state.service()?.get_by_slug(&slug).await?;
+    if viewer.0.is_none() && item.article.published_at.is_none() {
+        return Err(AppError::NotFound);
+    }
+    Ok(Json(SuccessResponse::new(item)))
 }
 
 #[utoipa::path(
