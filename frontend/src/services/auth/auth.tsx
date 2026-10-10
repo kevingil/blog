@@ -135,7 +135,7 @@ export async function updateAccount(formData: FormData): Promise<void> {
 
 /** A password change signs out every other session and returns this one's new token. */
 export async function updatePassword(formData: FormData): Promise<void> {
-  const { token } = await generatedData<{ message: string; token: string }>(
+  const { token } = await generatedData<{ message: string; token?: string }>(
     Auth.authUpdatePassword({
       body: {
         currentPassword: requiredFormValue(formData, 'currentPassword'),
@@ -145,7 +145,7 @@ export async function updatePassword(formData: FormData): Promise<void> {
     { credentialCheck: true },
   );
   const session = currentSession();
-  if (session) {
+  if (session && token) {
     adopt(token, session.user);
   }
 }
