@@ -8,13 +8,20 @@ import { routeTree } from './routeTree.gen'
 import { trackPageView } from './lib/analytics'
 import { AuthProvider, useAuthContext } from './services/auth/auth'
 
-// Create a router instance
 const router = createRouter({
   routeTree,
   context: {
-    auth: undefined!, // This will be properly set in the RouterWithAuth component
+    auth: undefined!, // RouterWithAuth supplies the live auth context
+  },
+  defaultErrorComponent: ({ error }) => {
+    console.error("Error:", error);
+    return null;
   },
 })
+
+router.subscribe("onResolved", ({ toLocation }) => {
+  trackPageView(`${toLocation.pathname}${toLocation.searchStr}`);
+});
 
 // Register the router instance for type safety
 declare module '@tanstack/react-router' {
@@ -23,32 +30,21 @@ declare module '@tanstack/react-router' {
   }
 }
 
-// Wrap the RouterProvider with AuthProvider to make auth available to routes
 function RouterWithAuth() {
   const auth = useAuthContext();
-  
-  // Create router with auth context
-  const routerWithAuth = React.useMemo(() => {
-    const nextRouter = createRouter({
-      routeTree,
-      context: {
-        auth,
-      },
-      defaultErrorComponent: ({ error }) => {
-        if (error.message?.includes("Cannot read properties of undefined")) {
-          // Handle auth context errors
-          console.error("Auth context error:", error);
-        }
-        console.error("Error:", error);
-      },
-    });
-    nextRouter.subscribe("onResolved", ({ toLocation }) => {
-      trackPageView(`${toLocation.pathname}${toLocation.searchStr}`);
-    });
-    return nextRouter;
-  }, [auth]);
+  const signedIn = React.useRef(auth.isAuthenticated);
 
-  return <RouterProvider router={routerWithAuth} />;
+  // Guards only run on navigation. Re-run them when the session starts or ends
+  // so a dead session leaves the dashboard at once.
+  React.useEffect(() => {
+    if (signedIn.current === auth.isAuthenticated) {
+      return;
+    }
+    signedIn.current = auth.isAuthenticated;
+    void router.invalidate();
+  }, [auth.isAuthenticated]);
+
+  return <RouterProvider router={router} context={{ auth }} />;
 }
 
 const rootElement = document.getElementById('root')!

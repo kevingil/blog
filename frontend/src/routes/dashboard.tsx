@@ -10,6 +10,7 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar"
 import { AdminDashboardProvider } from "@/services/dashboard/dashboard"
+import { ensureSession } from "@/services/auth/auth"
 // Preload child routes so they are discovered in route tree
 import './dashboard/blog/index'
 import './dashboard/blog/new'
@@ -30,9 +31,8 @@ import './dashboard/sources/index'
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardLayout,
-  beforeLoad: ({ context, location }) => {
-    if (!context.auth || !context.auth.isAuthenticated) {
-      console.log("user dashboard beforeLoad", JSON.stringify(context.auth));
+  beforeLoad: async ({ location }) => {
+    if (!(await ensureSession())) {
       throw redirect({
         to: '/login',
         search: {

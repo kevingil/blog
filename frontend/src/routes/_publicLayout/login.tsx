@@ -1,22 +1,41 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { useRouter } from '@tanstack/react-router';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Orbit as OrbitIcon, Loader2 } from 'lucide-react';
 import { useAuth } from '../../services/auth/auth';
+import { isApiError } from '../../services/authenticatedFetch';
 import { createFileRoute } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/_publicLayout/login')({
   component: Login,
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } => ({
+    redirect: typeof search.redirect === 'string' ? search.redirect : undefined,
+  }),
 });
+
+/** Only same-app paths, so a crafted link cannot send a fresh session elsewhere. */
+function afterLogin(redirect: string | undefined): string {
+  if (
+    redirect &&
+    redirect.startsWith('/') &&
+    !redirect.startsWith('//') &&
+    !redirect.startsWith('/\\') &&
+    !redirect.startsWith('/login')
+  ) {
+    return redirect;
+  }
+  return '/dashboard';
+}
 
 function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate();
+  const router = useRouter();
+  const { redirect } = Route.useSearch();
   const { login, isAuthenticated } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,7 +50,11 @@ function Login() {
     try {
       await login(email, password);
     } catch (err) {
-      setError('Invalid email or password');
+      setError(
+        isApiError(err) && err.status === 429
+          ? 'Too many sign-in attempts. Try again in a few minutes.'
+          : 'Invalid email or password',
+      );
     } finally {
       setIsLoading(false);
     }
@@ -39,9 +62,9 @@ function Login() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate({ to: '/dashboard' });
+      router.history.replace(afterLogin(redirect));
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, redirect, router]);
 
   return (
     <div className="flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -67,7 +90,7 @@ function Login() {
                 type="email"
                 autoComplete="email"
                 required
-                maxLength={50}
+                maxLength={255}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="appearance-none rounded-full relative block w-full h-12 border border-gray-300 focus:outline-none focus:z-10 sm:text-sm"
