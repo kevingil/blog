@@ -158,7 +158,11 @@ where
         }
         AuthState::from_ref(state)
             .authenticate(&parts.headers)
-            .map_err(|_| ProjectApiError::unauthorized("Invalid or expired token"))?;
+            .await
+            .map_err(|error| match error {
+                AppError::Unauthorized => ProjectApiError::unauthorized("Invalid or expired token"),
+                error => error.into(),
+            })?;
         Ok(Self)
     }
 }

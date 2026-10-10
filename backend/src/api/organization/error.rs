@@ -139,9 +139,15 @@ where
         if !header.starts_with("Bearer ") {
             return Err(OrganizationApiError::unauthorized("Invalid token format"));
         }
-        let account_id = AuthState::from_ref(state)
+        let account = AuthState::from_ref(state)
             .authenticate(&parts.headers)
-            .map_err(|_| OrganizationApiError::unauthorized("Invalid or expired token"))?;
-        Ok(Self(account_id))
+            .await
+            .map_err(|error| match error {
+                AppError::Unauthorized => {
+                    OrganizationApiError::unauthorized("Invalid or expired token")
+                }
+                error => error.into(),
+            })?;
+        Ok(Self(account.id))
     }
 }

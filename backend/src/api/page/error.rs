@@ -140,7 +140,11 @@ where
         }
         AuthState::from_ref(state)
             .authenticate(&parts.headers)
-            .map_err(|_| PageApiError::unauthorized("Invalid or expired token"))?;
+            .await
+            .map_err(|error| match error {
+                AppError::Unauthorized => PageApiError::unauthorized("Invalid or expired token"),
+                error => error.into(),
+            })?;
         Ok(Self)
     }
 }
