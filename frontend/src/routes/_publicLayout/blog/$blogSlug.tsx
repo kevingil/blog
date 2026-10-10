@@ -2,6 +2,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { redirect, useParams } from '@tanstack/react-router';
 import { format } from 'date-fns';
 import { marked, Token } from 'marked';
+import DOMPurify from 'dompurify';
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -253,7 +254,9 @@ function ArticleContent({ slug, articleData }: { slug: string, articleData: Arti
           </p>
         </div>
       </div>
-      <div className="blog-post prose max-w-none mb-8" dangerouslySetInnerHTML={{ __html: marked(displayContent || '') }}
+      {/* Drafts include text the copilot pulled from the web, and this page runs
+          with the author's token in storage, so markup must not carry scripts. */}
+      <div className="blog-post prose max-w-none mb-8" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(displayContent || '', { async: false })) }}
       />
       <ArticleSources sources={sources} />
       <div className="flex flex-wrap gap-2 mb-8">
