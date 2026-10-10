@@ -420,7 +420,7 @@ fn fixture() -> TestResult<Fixture> {
     let account_id = AccountId(Uuid::new_v4());
     let organization_id = Uuid::new_v4();
     let accounts = Arc::new(Accounts::default());
-    accounts.state().push(Account {
+    let user = Account {
         id: account_id,
         name: "Support User".to_owned(),
         email: "support@example.com".to_owned(),
@@ -434,9 +434,10 @@ fn fixture() -> TestResult<Fixture> {
         social_links: None,
         meta_description: None,
         organization_id: Some(organization_id),
-    });
+    };
+    accounts.state().push(user.clone());
     let auth_service = Arc::new(AuthService::new(accounts, TEST_SECRET)?);
-    let bearer = format!("Bearer {}", auth_service.issue_token(account_id)?);
+    let bearer = format!("Bearer {}", auth_service.issue_token(&user)?);
 
     let article_id = Uuid::new_v4();
     let message_id = Uuid::new_v4();
@@ -610,6 +611,72 @@ async fn call(
     let status = response.status();
     let body = response.into_body().collect().await?.to_bytes();
     Ok((status, serde_json::from_slice(&body)?))
+}
+
+#[tokio::test]
+async fn live_socket_handshake_requires_a_bearer_subprotocol() -> TestResult {
+    use futures_util::StreamExt;
+    use tokio_tungstenite::{
+        connect_async,
+        tungstenite::{self, Message, client::IntoClientRequest, http::HeaderValue},
+    };
+
+    let fixture = fixture()?;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+    let url = format!("ws://{}/agent/live", listener.local_addr()?);
+    let cancellation = CancellationToken::new();
+    let server = tokio::spawn(blog_backend::server::serve(
+        listener,
+        fixture.router.clone(),
+        cancellation.clone(),
+        std::time::Duration::from_millis(500),
+    ));
+    let with_protocols = |protocols: &str| -> TestResult<_> {
+        let mut request = url.as_str().into_client_request()?;
+        request
+            .headers_mut()
+            .insert("sec-websocket-protocol", HeaderValue::from_str(protocols)?);
+        Ok(request)
+    };
+
+    let anonymous = connect_async(url.as_str()).await;
+    assert!(
+        matches!(&anonymous, Err(tungstenite::Error::Http(response)) if response.status() == StatusCode::UNAUTHORIZED),
+        "anonymous live socket was not rejected"
+    );
+    let forged = connect_async(with_protocols("bearer, not-a-jwt")?).await;
+    assert!(
+        matches!(&forged, Err(tungstenite::Error::Http(response)) if response.status() == StatusCode::UNAUTHORIZED),
+        "live socket accepted an invalid token"
+    );
+
+    let token = fixture.bearer.trim_start_matches("Bearer ");
+    let (mut socket, response) =
+        connect_async(with_protocols(&format!("bearer, {token}"))?).await?;
+    assert_eq!(response.status(), StatusCode::SWITCHING_PROTOCOLS);
+    assert_eq!(
+        response
+            .headers()
+            .get("sec-websocket-protocol")
+            .and_then(|value| value.to_str().ok()),
+        Some("bearer")
+    );
+    // The fixture has no GPT-Live upstream, so the admitted session reports that.
+    let frame = tokio::time::timeout(std::time::Duration::from_secs(2), socket.next())
+        .await?
+        .ok_or("live socket closed without a frame")??;
+    let Message::Text(text) = frame else {
+        return Err(format!("unexpected live frame: {frame:?}").into());
+    };
+    assert_eq!(
+        serde_json::from_str::<Value>(&text)?,
+        json!({"type": "error", "error": "Could not open the GPT-Live session"})
+    );
+
+    drop(socket);
+    cancellation.cancel();
+    server.await??;
+    Ok(())
 }
 
 #[tokio::test]
@@ -1187,6 +1254,7 @@ fn support_openapi_has_stable_operations_security_and_multipart_contract() -> Te
     let live = &document["paths"]["/agent/live"]["get"];
     assert_eq!(live["operationId"], "connectLiveSession");
     assert!(live["responses"].get("101").is_some());
+    assert!(live["responses"].get("401").is_some());
     let callback = &document["paths"]["/agent/connectors/oauth/callback"]["get"];
     assert_eq!(callback["operationId"], "completeOauthConnector");
     assert!(callback["responses"].get("302").is_some());

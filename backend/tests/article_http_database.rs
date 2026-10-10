@@ -139,24 +139,23 @@ async fn article_http_routes_use_constructor_injected_postgres_services() -> Tes
 
     let account_id = AccountId(Uuid::new_v4());
     let password_hash = auth_service.hash_password("test-password").await?;
-    accounts
-        .create(&Account {
-            id: account_id,
-            name: "Article HTTP Author".to_owned(),
-            email: format!("article-http-{}@example.com", account_id.0),
-            password_hash: password_hash.clone(),
-            role: "admin".to_owned(),
-            created_at: None,
-            updated_at: None,
-            bio: None,
-            profile_image: None,
-            email_public: None,
-            social_links: None,
-            meta_description: None,
-            organization_id: None,
-        })
-        .await?;
-    let bearer = format!("Bearer {}", auth_service.issue_token(account_id)?);
+    let author = Account {
+        id: account_id,
+        name: "Article HTTP Author".to_owned(),
+        email: format!("article-http-{}@example.com", account_id.0),
+        password_hash: password_hash.clone(),
+        role: "admin".to_owned(),
+        created_at: None,
+        updated_at: None,
+        bio: None,
+        profile_image: None,
+        email_public: None,
+        social_links: None,
+        meta_description: None,
+        organization_id: None,
+    };
+    accounts.create(&author).await?;
+    let bearer = format!("Bearer {}", auth_service.issue_token(&author)?);
     let title = format!("Article HTTP {}", Uuid::new_v4());
 
     let generation_title = format!("Rejected Generation {}", Uuid::new_v4());
@@ -233,16 +232,72 @@ async fn article_http_routes_use_constructor_injected_postgres_services() -> Tes
     assert_eq!(created["data"]["author"]["name"], "Article HTTP Author");
     assert_eq!(created["data"]["tags"].as_array().map(Vec::len), Some(2));
 
-    let (status, fetched) = call(
+    let article_path = format!("/blog/articles/{slug}");
+    let (status, hidden) = call(
         router.clone(),
         Method::GET,
-        &format!("/blog/articles/{slug}"),
+        &article_path,
         Body::empty(),
         None,
     )
     .await?;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{hidden}");
+    let (status, fetched) = call(
+        router.clone(),
+        Method::GET,
+        &article_path,
+        Body::empty(),
+        Some(&bearer),
+    )
+    .await?;
     assert_eq!(status, StatusCode::OK, "{fetched}");
     assert_eq!(fetched["data"]["article"]["id"], article_id.to_string());
+
+    let unique_title = title.rsplit(' ').next().unwrap_or(&title);
+    let search_path = format!("/blog/articles/search?query={unique_title}&status=all");
+    let (status, anonymous_search) = call(
+        router.clone(),
+        Method::GET,
+        &search_path,
+        Body::empty(),
+        None,
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{anonymous_search}");
+    assert_eq!(anonymous_search["data"]["include_drafts"], false);
+    assert_eq!(anonymous_search["data"]["articles"], json!([]));
+    let (status, author_search) = call(
+        router.clone(),
+        Method::GET,
+        &search_path,
+        Body::empty(),
+        Some(&bearer),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{author_search}");
+    assert_eq!(author_search["data"]["include_drafts"], true);
+    assert_eq!(
+        author_search["data"]["articles"][0]["article"]["id"],
+        article_id.to_string()
+    );
+    let (status, anonymous_list) = call(
+        router.clone(),
+        Method::GET,
+        "/blog/articles?status=all&articlesPerPage=50",
+        Body::empty(),
+        None,
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{anonymous_list}");
+    assert_eq!(anonymous_list["data"]["include_drafts"], false);
+    assert!(
+        anonymous_list["data"]["articles"]
+            .as_array()
+            .is_some_and(|articles| articles
+                .iter()
+                .all(|item| !item["article"]["published_at"].is_null())),
+        "anonymous listing exposed a draft: {anonymous_list}"
+    );
 
     let (status, unauthorized) = call(
         router.clone(),
