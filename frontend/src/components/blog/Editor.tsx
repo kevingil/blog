@@ -1008,9 +1008,17 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
     setAddedRanges(addedTextRanges(previous, next));
   };
 
-  if (!user) {
-    return <div>Please log in to edit articles.</div>;
-  }
+  // A session can end mid-edit. Keep unsaved text so this article reopens
+  // with it once the author signs back in.
+  useEffect(() => {
+    if (user || !blogSlug || savedSnapshotRef.current === null) {
+      return;
+    }
+    const values = getValues();
+    if (draftSnapshot(values) !== savedSnapshotRef.current) {
+      rememberPendingDraft(blogSlug, values);
+    }
+  }, [user, blogSlug, getValues]);
 
   // Sync stagedImageUrl to form; add new URLs to versions
   useEffect(() => {
@@ -2066,6 +2074,10 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
       }
     })();
   }, [initialRequestId, article?.article?.id, isNew]);
+
+  if (!user) {
+    return <div>Please log in to edit articles.</div>;
+  }
 
   // Show loading state while fetching article
   if (articleLoading && !isNew && !launchpad) {

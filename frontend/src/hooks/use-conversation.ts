@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { VITE_API_BASE_URL } from "@/services/constants";
+import { currentSession } from "@/services/auth/session";
 
 export type ConversationState = "idle" | "connecting" | "live" | "speaking";
 
@@ -117,13 +118,22 @@ export function useConversation(options: {
       return;
     }
 
+    const session = currentSession();
+    if (!session) {
+      setError("Sign in again to start a live session");
+      setState("idle");
+      return;
+    }
+
     let stopped = false;
     let context: AudioContext | null = null;
     let stream: MediaStream | null = null;
     let processor: ScriptProcessorNode | null = null;
     let contextTimer = 0;
     const nextTime = { current: 0 };
-    const socket = new WebSocket(liveSocketUrl());
+    // Browsers cannot set headers on a WebSocket handshake; the server reads
+    // the token from the offered subprotocols and selects "bearer".
+    const socket = new WebSocket(liveSocketUrl(), ["bearer", session.token]);
     socketRef.current = socket;
     setError(null);
     setCaption("");
