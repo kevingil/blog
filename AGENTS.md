@@ -55,8 +55,13 @@ The checked-in example signs in as `ada@example.test` / `VerifyStack123!` and
 publishes `verification-note`.
 
 If that file is missing or has no `author`, the first account created through
-`POST /auth/register` becomes `admin` and the public author. Later accounts
-stay `user`. Seed does not run again once any account exists.
+`POST /auth/register` becomes `admin` and the public author. After that,
+registration needs an admin's bearer token, and the accounts it creates stay
+`user`. Seed does not run again once any account exists.
+
+Sessions are 30-day JWTs bound to the account's current password hash.
+`POST /auth/refresh` renews a live token, which the dashboard does on each
+load. Changing the password or deleting the account ends every earlier token.
 
 Host-side Rust tests that talk to the running stack:
 
