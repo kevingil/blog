@@ -1,9 +1,11 @@
+use std::time::Duration;
+
 use axum::{
     Json,
     extract::{FromRequest, Multipart, Request, State},
     http::{
-        HeaderMap, StatusCode,
-        header::{AUTHORIZATION, CONTENT_TYPE},
+        HeaderMap, HeaderValue, StatusCode,
+        header::{AUTHORIZATION, CONTENT_TYPE, RETRY_AFTER},
     },
     response::{IntoResponse, Response},
 };
@@ -14,14 +16,14 @@ use crate::{
         auth::{
             dto::{
                 AuthErrorResponse, DeleteAccountRequest, LoginRequest, LoginResponse,
-                MessageResponse, RegisterRequest, UpdateAccountRequest, UpdatePasswordRequest,
-                Validate, ValidationIssue,
+                MessageResponse, PasswordUpdateResponse, RegisterRequest, UpdateAccountRequest,
+                UpdatePasswordRequest, Validate, ValidationIssue,
             },
-            state::AuthState,
+            state::{AuthState, bearer_token},
         },
         response::SuccessResponse,
     },
-    core::auth::AccountId,
+    core::auth::Account,
     error::AppError,
 };
 
@@ -34,6 +36,7 @@ pub struct AuthApiError {
     status: StatusCode,
     body: AuthErrorResponse,
     cause: String,
+    retry_after: Option<Duration>,
 }
 
 impl AuthApiError {
@@ -46,6 +49,21 @@ impl AuthApiError {
                 code: "INVALID_INPUT",
                 details: None,
             },
+            retry_after: None,
+        }
+    }
+
+    fn too_many_attempts(retry_after: Duration) -> Self {
+        let message = "Too many failed sign-in attempts. Try again later.";
+        Self {
+            status: StatusCode::TOO_MANY_REQUESTS,
+            cause: message.to_owned(),
+            body: AuthErrorResponse {
+                error: message.to_owned(),
+                code: "TOO_MANY_REQUESTS",
+                details: None,
+            },
+            retry_after: Some(retry_after),
         }
     }
 
@@ -66,6 +84,7 @@ impl AuthApiError {
                 code: "VALIDATION_ERROR",
                 details: Some(details),
             },
+            retry_after: None,
         }
     }
 
@@ -78,6 +97,7 @@ impl AuthApiError {
                 code: "UNAUTHORIZED",
                 details: None,
             },
+            retry_after: None,
         }
     }
 }
@@ -131,6 +151,7 @@ impl From<AppError> for AuthApiError {
                 code,
                 details: None,
             },
+            retry_after: None,
         }
     }
 }
@@ -138,7 +159,14 @@ impl From<AppError> for AuthApiError {
 impl IntoResponse for AuthApiError {
     fn into_response(self) -> Response {
         crate::error::log_error_response(self.status, self.body.code, &self.cause);
-        (self.status, Json(self.body)).into_response()
+        let mut response = (self.status, Json(self.body)).into_response();
+        if let Some(retry_after) = self.retry_after {
+            let seconds = retry_after.as_secs().saturating_add(1);
+            response
+                .headers_mut()
+                .insert(RETRY_AFTER, HeaderValue::from(seconds));
+        }
+        response
     }
 }
 
@@ -152,6 +180,8 @@ impl IntoResponse for AuthApiError {
         (status = 200, body = SuccessResponse<LoginResponse>),
         (status = 400, body = AuthErrorResponse),
         (status = 401, body = AuthErrorResponse),
+        (status = 429, body = AuthErrorResponse,
+            description = "Too many failed attempts for this email; see Retry-After"),
         (status = 500, body = AuthErrorResponse)
     )
 )]
@@ -160,7 +190,43 @@ pub async fn login(
     request: Request,
 ) -> AuthResult<Json<SuccessResponse<LoginResponse>>> {
     let body: LoginRequest = parse_json_and_validate(request).await?;
-    let result = state.service().login(body.into()).await?;
+    let throttle = state.login_throttle();
+    if let Some(retry_after) = throttle.retry_after(&body.email) {
+        return Err(AuthApiError::too_many_attempts(retry_after));
+    }
+    let email = body.email.clone();
+    match state.service().login(body.into()).await {
+        Ok(result) => {
+            throttle.record_success(&email);
+            Ok(Json(SuccessResponse::new(result.into())))
+        }
+        Err(AppError::Unauthorized) => {
+            throttle.record_failure(&email);
+            Err(AppError::Unauthorized.into())
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/auth/refresh",
+    operation_id = "authRefresh",
+    tag = "auth",
+    security(("bearerAuth" = [])),
+    responses(
+        (status = 200, body = SuccessResponse<LoginResponse>,
+            description = "A new token and the current account details"),
+        (status = 401, body = AuthErrorResponse),
+        (status = 500, body = AuthErrorResponse)
+    )
+)]
+pub async fn refresh(
+    State(state): State<AuthState>,
+    headers: HeaderMap,
+) -> AuthResult<Json<SuccessResponse<LoginResponse>>> {
+    let account = authenticated_account(&headers, &state).await?;
+    let result = state.service().issue_session(account)?;
     Ok(Json(SuccessResponse::new(result.into())))
 }
 
@@ -169,10 +235,13 @@ pub async fn login(
     path = "/auth/register",
     operation_id = "authRegister",
     tag = "auth",
+    security((), ("bearerAuth" = [])),
     request_body = RegisterRequest,
     responses(
         (status = 201, body = SuccessResponse<MessageResponse>),
         (status = 400, body = AuthErrorResponse),
+        (status = 403, body = AuthErrorResponse,
+            description = "Accounts already exist and the caller is not an admin"),
         (status = 409, body = AuthErrorResponse),
         (status = 500, body = AuthErrorResponse)
     )
@@ -181,8 +250,12 @@ pub async fn register(
     State(state): State<AuthState>,
     request: Request,
 ) -> AuthResult<(StatusCode, Json<SuccessResponse<MessageResponse>>)> {
+    let requested_by = state.optional_account(request.headers()).await?;
     let body: RegisterRequest = parse_json_and_validate(request).await?;
-    state.service().register(body.into()).await?;
+    state
+        .service()
+        .register(body.into(), requested_by.as_ref())
+        .await?;
     Ok((
         StatusCode::CREATED,
         Json(SuccessResponse::new(MessageResponse {
@@ -229,11 +302,11 @@ pub async fn update_account(
     State(state): State<AuthState>,
     request: Request,
 ) -> AuthResult<Json<SuccessResponse<MessageResponse>>> {
-    let account_id = authenticated_account_id(request.headers(), &state)?;
+    let account = authenticated_account(request.headers(), &state).await?;
     let body: UpdateAccountRequest = parse_and_validate(request, &["name", "email"]).await?;
     state
         .service()
-        .update_account(account_id, body.into())
+        .update_account(account.id, body.into())
         .await?;
     Ok(Json(SuccessResponse::new(MessageResponse {
         message: "Account updated successfully",
@@ -253,7 +326,7 @@ pub async fn update_account(
         )
     ),
     responses(
-        (status = 200, body = SuccessResponse<MessageResponse>),
+        (status = 200, body = SuccessResponse<PasswordUpdateResponse>),
         (status = 400, body = AuthErrorResponse),
         (status = 401, body = AuthErrorResponse),
         (status = 404, body = AuthErrorResponse),
@@ -263,20 +336,21 @@ pub async fn update_account(
 pub async fn update_password(
     State(state): State<AuthState>,
     request: Request,
-) -> AuthResult<Json<SuccessResponse<MessageResponse>>> {
-    let account_id = authenticated_account_id(request.headers(), &state)?;
+) -> AuthResult<Json<SuccessResponse<PasswordUpdateResponse>>> {
+    let account = authenticated_account(request.headers(), &state).await?;
     let body: UpdatePasswordRequest = parse_and_validate(request, &[
         "currentPassword",
         "newPassword",
         "confirmPassword",
     ])
     .await?;
-    state
+    let token = state
         .service()
-        .update_password(account_id, body.into())
+        .update_password(account.id, body.into())
         .await?;
-    Ok(Json(SuccessResponse::new(MessageResponse {
+    Ok(Json(SuccessResponse::new(PasswordUpdateResponse {
         message: "Password updated successfully",
+        token,
     })))
 }
 
@@ -304,11 +378,11 @@ pub async fn delete_account(
     State(state): State<AuthState>,
     request: Request,
 ) -> AuthResult<Json<SuccessResponse<MessageResponse>>> {
-    let account_id = authenticated_account_id(request.headers(), &state)?;
+    let account = authenticated_account(request.headers(), &state).await?;
     let body: DeleteAccountRequest = parse_and_validate(request, &["password"]).await?;
     state
         .service()
-        .delete_account(account_id, &body.password)
+        .delete_account(account.id, &body.password)
         .await?;
     Ok(Json(SuccessResponse::new(MessageResponse {
         message: "Account deleted successfully",
@@ -401,20 +475,16 @@ async fn parse_body<T: DeserializeOwned>(
     Err(AuthApiError::invalid_body())
 }
 
-fn authenticated_account_id(headers: &HeaderMap, state: &AuthState) -> AuthResult<AccountId> {
-    let header = headers
-        .get(AUTHORIZATION)
-        .ok_or_else(|| AuthApiError::unauthorized("Not authenticated"))?;
-    let header = header
-        .to_str()
-        .map_err(|_| AuthApiError::unauthorized("Invalid token format"))?;
-    let token = header
-        .strip_prefix("Bearer ")
-        .filter(|token| !token.is_empty())
-        .ok_or_else(|| AuthApiError::unauthorized("Invalid token format"))?;
+async fn authenticated_account(headers: &HeaderMap, state: &AuthState) -> AuthResult<Account> {
+    if !headers.contains_key(AUTHORIZATION) {
+        return Err(AuthApiError::unauthorized("Not authenticated"));
+    }
+    let token =
+        bearer_token(headers).ok_or_else(|| AuthApiError::unauthorized("Invalid token format"))?;
 
-    state
-        .service()
-        .account_id_from_token(token)
-        .map_err(|_| AuthApiError::unauthorized("Invalid or expired token"))
+    match state.service().authenticate(token).await {
+        Ok(account) => Ok(account),
+        Err(AppError::Unauthorized) => Err(AuthApiError::unauthorized("Invalid or expired token")),
+        Err(error) => Err(error.into()),
+    }
 }

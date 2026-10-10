@@ -77,6 +77,14 @@ pub struct MessageResponse {
     pub message: &'static str,
 }
 
+/// A password change signs out every earlier session, including the one that
+/// made the request; `token` replaces it.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PasswordUpdateResponse {
+    pub message: &'static str,
+    pub token: String,
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AuthErrorResponse {
     pub error: String,

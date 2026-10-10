@@ -3,9 +3,9 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 
 use super::{
     handlers::{
-        __path_delete_account, __path_login, __path_logout, __path_register, __path_update_account,
-        __path_update_password, delete_account, login, logout, register, update_account,
-        update_password,
+        __path_delete_account, __path_login, __path_logout, __path_refresh, __path_register,
+        __path_update_account, __path_update_password, delete_account, login, logout, refresh,
+        register, update_account, update_password,
     },
     state::AuthState,
 };
@@ -17,6 +17,7 @@ where
 {
     OpenApiRouter::new()
         .routes(routes!(login))
+        .routes(routes!(refresh))
         .routes(routes!(register))
         .routes(routes!(logout))
         .routes(routes!(update_account))
