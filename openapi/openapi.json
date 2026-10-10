@@ -1097,6 +1097,7 @@
         "tags": [
           "agent"
         ],
+        "summary": "Clients authenticate by offering the WebSocket subprotocols `bearer` and\nthe JWT, because browsers cannot send an Authorization header here.",
         "operationId": "connectLiveSession",
         "responses": {
           "101": {
@@ -1104,6 +1105,16 @@
           },
           "400": {
             "description": "Invalid WebSocket upgrade headers"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           },
           "426": {
             "description": "Connection cannot be upgraded"
@@ -1627,6 +1638,16 @@
               }
             }
           },
+          "429": {
+            "description": "Too many failed attempts for this email; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -1687,7 +1708,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_MessageResponse"
+                  "$ref": "#/components/schemas/SuccessResponse_PasswordUpdateResponse"
                 }
               }
             }
@@ -1713,6 +1734,51 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "authRefresh",
+        "responses": {
+          "200": {
+            "description": "A new token and the current account details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_LoginResponse"
+                }
+              }
+            }
+          },
+          "401": {
             "description": "",
             "content": {
               "application/json": {
@@ -1777,6 +1843,16 @@
               }
             }
           },
+          "403": {
+            "description": "Accounts already exist and the caller is not an admin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          },
           "409": {
             "description": "",
             "content": {
@@ -1797,7 +1873,13 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/blog/articles": {
@@ -1874,7 +1956,13 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "post": {
         "tags": [
@@ -2076,7 +2164,13 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/blog/articles/versions/{versionId}": {
@@ -2225,7 +2319,7 @@
             }
           },
           "404": {
-            "description": "",
+            "description": "No such article, or it is unpublished and the caller is not signed in",
             "content": {
               "application/json": {
                 "schema": {
@@ -2234,7 +2328,13 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "delete": {
         "tags": [
@@ -10724,6 +10824,22 @@
           }
         }
       },
+      "PasswordUpdateResponse": {
+        "type": "object",
+        "description": "A password change signs out every earlier session, including the one that\nmade the request; `token` replaces it.",
+        "required": [
+          "message",
+          "token"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
       "PendingArtifactsResponse": {
         "type": "object",
         "required": [
@@ -13232,6 +13348,30 @@
                     "$ref": "#/components/schemas/ImageAsset"
                   }
                 ]
+              }
+            }
+          }
+        }
+      },
+      "SuccessResponse_PasswordUpdateResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "A password change signs out every earlier session, including the one that\nmade the request; `token` replaces it.",
+            "required": [
+              "message",
+              "token"
+            ],
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "token": {
+                "type": "string"
               }
             }
           }
