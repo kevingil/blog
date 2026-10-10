@@ -234,7 +234,7 @@ async fn postgres_repository_and_http_auth_flow_preserve_atomic_fields() -> Test
         ("currentPassword", "correctpassword"),
         ("newPassword", "newpassword"),
     ]);
-    let (status, _) = call(
+    let (status, changed) = call(
         app.clone(),
         Method::PUT,
         "/auth/password",
@@ -244,6 +244,10 @@ async fn postgres_repository_and_http_auth_flow_preserve_atomic_fields() -> Test
     )
     .await?;
     assert_eq!(status, StatusCode::OK);
+    let replacement = changed["data"]["token"]
+        .as_str()
+        .map(|token| format!("Bearer {token}"))
+        .ok_or_else(|| io::Error::other("password change returned no token"))?;
 
     let relogin = auth
         .login(LoginInput {
@@ -255,23 +259,45 @@ async fn postgres_repository_and_http_auth_flow_preserve_atomic_fields() -> Test
 
     let (content_type, body) = multipart(&[("password", "newpassword")]);
     let (status, _) = call(
+        app.clone(),
+        Method::DELETE,
+        "/auth/account",
+        &content_type,
+        body.clone(),
+        Some(&bearer),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let (status, _) = call(
         app,
         Method::DELETE,
         "/auth/account",
         &content_type,
         body,
-        Some(&bearer),
+        Some(&replacement),
     )
     .await?;
     assert_eq!(status, StatusCode::OK);
     assert!(repository.find_by_id(account_id).await?.is_none());
+    assert!(matches!(
+        auth.authenticate(&relogin.token).await,
+        Err(AppError::Unauthorized)
+    ));
 
     let registration_email = format!("registration-{}@example.com", Uuid::new_v4());
-    auth.register(RegistrationInput {
-        name: "Registered User".to_owned(),
-        email: registration_email.clone(),
-        password: "registration-password".to_owned(),
-    })
+    let admin = Account {
+        id: AccountId(Uuid::new_v4()),
+        role: "admin".to_owned(),
+        ..account_value
+    };
+    auth.register(
+        RegistrationInput {
+            name: "Registered User".to_owned(),
+            email: registration_email.clone(),
+            password: "registration-password".to_owned(),
+        },
+        Some(&admin),
+    )
     .await?;
     let registered = repository
         .find_by_email(&registration_email)

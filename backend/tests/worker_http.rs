@@ -137,10 +137,8 @@ struct Fixture {
 }
 
 fn fixture() -> TestResult<Fixture> {
-    let account_id = AccountId(Uuid::new_v4());
-    let accounts = Arc::new(Accounts::default());
-    accounts.state().push(Account {
-        id: account_id,
+    let operator = Account {
+        id: AccountId(Uuid::new_v4()),
         name: "Worker Operator".to_owned(),
         email: "worker@example.com".to_owned(),
         password_hash: String::new(),
@@ -153,9 +151,11 @@ fn fixture() -> TestResult<Fixture> {
         social_links: None,
         meta_description: None,
         organization_id: Some(Uuid::new_v4()),
-    });
+    };
+    let accounts = Arc::new(Accounts::default());
+    accounts.state().push(operator.clone());
     let auth_service = Arc::new(AuthService::new(accounts, TEST_SECRET)?);
-    let bearer = format!("Bearer {}", auth_service.issue_token(account_id)?);
+    let bearer = format!("Bearer {}", auth_service.issue_token(&operator)?);
     let status = Arc::new(StatusService::new(Arc::new(SystemClock)));
     let manager = WorkerManager::new(
         status.clone(),

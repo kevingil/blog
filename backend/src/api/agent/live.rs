@@ -1,13 +1,20 @@
 use axum::{
     extract::{State, WebSocketUpgrade},
+    http::HeaderMap,
     response::Response,
 };
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
 
-use crate::core::live::{LiveClientCommand, LivePorts};
+use crate::{
+    api::auth::{AuthState, WEBSOCKET_BEARER_PROTOCOL},
+    core::live::{LiveClientCommand, LivePorts},
+    error::AppError,
+};
 
+/// Clients authenticate by offering the WebSocket subprotocols `bearer` and
+/// the JWT, because browsers cannot send an Authorization header here.
 #[utoipa::path(
     get,
     path = "/agent/live",
@@ -16,15 +23,21 @@ use crate::core::live::{LiveClientCommand, LivePorts};
     responses(
         (status = 101, description = "GPT-Live session switching protocols"),
         (status = 400, description = "Invalid WebSocket upgrade headers"),
+        (status = 401, body = crate::error::ErrorEnvelope),
         (status = 426, description = "Connection cannot be upgraded")
     )
 )]
 pub async fn live_session(
     State(state): State<super::state::AgentState>,
+    State(auth): State<AuthState>,
+    headers: HeaderMap,
     upgrade: WebSocketUpgrade,
-) -> Response {
+) -> Result<Response, AppError> {
+    auth.authenticate_websocket(&headers).await?;
     let ports = state.live();
-    upgrade.on_upgrade(move |socket| serve_live_session(socket, ports))
+    Ok(upgrade
+        .protocols([WEBSOCKET_BEARER_PROTOCOL])
+        .on_upgrade(move |socket| serve_live_session(socket, ports)))
 }
 
 async fn serve_live_session(socket: axum::extract::ws::WebSocket, ports: LivePorts) {

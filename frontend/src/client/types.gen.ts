@@ -669,6 +669,15 @@ export type PageUpdateRequest = {
     image_upload_id?: string | null;
 };
 
+/**
+ * A password change signs out every earlier session, including the one that
+ * made the request; `token` replaces it.
+ */
+export type PasswordUpdateResponse = {
+    message: string;
+    token: string;
+};
+
 export type PendingArtifactsResponse = {
     artifacts: Array<ChatMessageResponse>;
 };
@@ -1300,6 +1309,17 @@ export type SuccessResponsePageResponse = {
         updated_at: string;
         upload_file_id?: string | null;
         image?: null | ImageAsset;
+    };
+};
+
+export type SuccessResponsePasswordUpdateResponse = {
+    /**
+     * A password change signs out every earlier session, including the one that
+     * made the request; `token` replaces it.
+     */
+    data: {
+        message: string;
+        token: string;
     };
 };
 
@@ -2253,11 +2273,14 @@ export type ConnectLiveSessionErrors = {
      * Invalid WebSocket upgrade headers
      */
     400: unknown;
+    401: ErrorEnvelope;
     /**
      * Connection cannot be upgraded
      */
     426: unknown;
 };
+
+export type ConnectLiveSessionError = ConnectLiveSessionErrors[keyof ConnectLiveSessionErrors];
 
 export type ListAgentSkillsData = {
     body?: never;
@@ -2422,6 +2445,10 @@ export type AuthLoginData = {
 export type AuthLoginErrors = {
     400: AuthErrorResponse;
     401: AuthErrorResponse;
+    /**
+     * Too many failed attempts for this email; see Retry-After
+     */
+    429: AuthErrorResponse;
     500: AuthErrorResponse;
 };
 
@@ -2463,10 +2490,33 @@ export type AuthUpdatePasswordErrors = {
 export type AuthUpdatePasswordError = AuthUpdatePasswordErrors[keyof AuthUpdatePasswordErrors];
 
 export type AuthUpdatePasswordResponses = {
-    200: SuccessResponseMessageResponse;
+    200: SuccessResponsePasswordUpdateResponse;
 };
 
 export type AuthUpdatePasswordResponse = AuthUpdatePasswordResponses[keyof AuthUpdatePasswordResponses];
+
+export type AuthRefreshData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/auth/refresh';
+};
+
+export type AuthRefreshErrors = {
+    401: AuthErrorResponse;
+    500: AuthErrorResponse;
+};
+
+export type AuthRefreshError = AuthRefreshErrors[keyof AuthRefreshErrors];
+
+export type AuthRefreshResponses = {
+    /**
+     * A new token and the current account details
+     */
+    200: SuccessResponseLoginResponse;
+};
+
+export type AuthRefreshResponse = AuthRefreshResponses[keyof AuthRefreshResponses];
 
 export type AuthRegisterData = {
     body: RegisterRequest;
@@ -2477,6 +2527,10 @@ export type AuthRegisterData = {
 
 export type AuthRegisterErrors = {
     400: AuthErrorResponse;
+    /**
+     * Accounts already exist and the caller is not an admin
+     */
+    403: AuthErrorResponse;
     409: AuthErrorResponse;
     500: AuthErrorResponse;
 };
@@ -2663,6 +2717,9 @@ export type GetArticleDataData = {
 };
 
 export type GetArticleDataErrors = {
+    /**
+     * No such article, or it is unpublished and the caller is not signed in
+     */
     404: ErrorEnvelope;
 };
 

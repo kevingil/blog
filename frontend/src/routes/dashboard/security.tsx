@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Lock, Trash2, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { updatePassword, deleteAccount } from '@/services/auth/auth';
+import { isAuthError } from '@/services/authenticatedFetch';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 
 type ActionState = {
@@ -60,9 +61,13 @@ function SecurityPage() {
 
     try {
       await updatePassword(formData);
-      setPasswordState({ success: 'Password updated successfully' });
+      setPasswordState({
+        success: 'Password updated. Other devices are signed out.',
+      });
     } catch (error) {
-      setPasswordState({ error: 'Failed to update password' });
+      setPasswordState({
+        error: isAuthError(error) ? 'Current password is incorrect' : 'Failed to update password',
+      });
     } finally {
       setIsPasswordPending(false);
     }
@@ -89,7 +94,9 @@ function SecurityPage() {
       setDeleteState({ success: 'Account deleted successfully' });
       navigate({ to: '/' });
     } catch (error) {
-      setDeleteState({ error: 'Failed to delete account' });
+      setDeleteState({
+        error: isAuthError(error) ? 'Password is incorrect' : 'Failed to delete account',
+      });
     } finally {
       setIsDeletePending(false);
     }
