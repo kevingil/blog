@@ -11,7 +11,7 @@ services:
     # nor a HEIF-capable ImageMagick, and its root filesystem is read-only.
     # The build downloads bookworm-backports packages into backend/opt/heif.
     plan: starter
-    # Oregon is Render's closest region to the existing Fly SJC deployment.
+    # Oregon is Render's closest region to the retired Fly SJC deployment.
     # Confirm the Supabase region before the first Blueprint sync because this
     # value cannot be changed after service creation.
     region: oregon

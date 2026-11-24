@@ -64,4 +64,3 @@ frontend/**/*.ntvs*
 frontend/**/*.njsproj
 frontend/**/*.sln
 frontend/**/*.sw?
-fly.toml
