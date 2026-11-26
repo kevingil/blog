@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { GALAXY, layoutForWidth, POPULATION } from './config';
-import { FLOATS_PER_VERTEX, projectParticle, writeFrame, type FrameState } from './frame';
+import { GALAXY, layoutForWidth, NEBULA, POPULATION, STAR_HALO } from './config';
+import { diskEllipse, FLOATS_PER_VERTEX, projectParticle, SPRITE, writeFrame, type FrameState } from './frame';
 import { temperatureToRgb } from './palette';
 import { generateParticles, type Particle } from './particles';
 import { seededRandom } from './random';
@@ -33,6 +33,8 @@ describe('generateParticles', () => {
 
   test('builds every population, with arm stars and dust thresholded', () => {
     const counts = countKinds(generateParticles(seededRandom(1)));
+    expect(counts.nebula).toBeGreaterThan(NEBULA.coreHaze);
+    expect(counts.nebula).toBeLessThan(NEBULA.coreHaze + NEBULA.armCandidates);
     expect(counts.bulge).toBe(POPULATION.bulge);
     expect(counts.nucleus).toBe(1);
     expect(counts.background).toBe(POPULATION.background);
@@ -55,9 +57,20 @@ describe('generateParticles', () => {
     }
   });
 
-  test('draws the bulge first, so the nucleus glows on top of it', () => {
+  test('draws smoke first and the nucleus after the bulge, so stars sit on top', () => {
     const particles = generateParticles(seededRandom(5));
-    expect(particles[POPULATION.bulge].kind).toBe('nucleus');
+    const firstNonSmoke = particles.findIndex((p) => p.kind !== 'nebula');
+    expect(particles.slice(0, firstNonSmoke).every((p) => p.kind === 'nebula')).toBe(true);
+    expect(particles[firstNonSmoke].kind).toBe('bulge');
+    expect(particles[firstNonSmoke + POPULATION.bulge].kind).toBe('nucleus');
+    expect(particles.slice(firstNonSmoke).some((p) => p.kind === 'nebula')).toBe(false);
+  });
+
+  test('gives every smoke sprite its own texture seed', () => {
+    const seeds = generateParticles(seededRandom(9))
+      .filter((p) => p.kind === 'nebula')
+      .map((p) => p.seed);
+    expect(new Set(seeds).size).toBe(seeds.length);
   });
 });
 
@@ -112,6 +125,32 @@ describe('projectParticle', () => {
   });
 });
 
+describe('diskEllipse', () => {
+  test('matches the outline of a projected ring in the disk', () => {
+    for (const tilt of [{}, { pitch: 0.04, yaw: -0.03 }]) {
+      const state = frameState(tilt);
+      const centre = { x: state.width / 2 + state.layout.offsetX, y: state.layout.offsetY };
+      let farthest = { distance: 0, angle: 0 };
+      for (let i = 0; i < 720; i++) {
+        const angle = (i / 720) * 2 * Math.PI;
+        const ring = { kind: 'dust', radius: 100, angle, angularSpeed: 0, x: 0, y: 0, z: 0 } as Particle;
+        const point = projectParticle(ring, state);
+        const distance = Math.hypot(point.x - centre.x, point.y - centre.y);
+        if (distance > farthest.distance) farthest = { distance, angle: Math.atan2(point.y - centre.y, point.x - centre.x) };
+      }
+      const { angle } = diskEllipse(state);
+      // Same axis, modulo π.
+      expect(Math.abs(Math.sin(angle - farthest.angle))).toBeLessThan(0.02);
+    }
+  });
+
+  test('never flattens smoke below the minimum thickness', () => {
+    const { aspect } = diskEllipse(frameState());
+    expect(aspect).toBeGreaterThanOrEqual(NEBULA.minAspect);
+    expect(aspect).toBeLessThanOrEqual(1);
+  });
+});
+
 describe('writeFrame', () => {
   const particles = generateParticles(seededRandom(11));
   const buffer = () => new Float32Array(particles.length * FLOATS_PER_VERTEX);
@@ -140,5 +179,20 @@ describe('writeFrame', () => {
       expect(out[base + 6]).toBeLessThanOrEqual(1);
       expect(out[base + 2]).toBeGreaterThanOrEqual(1);
     }
+  });
+
+  test('sizes star sprites to hold a halo that grows with brightness', () => {
+    const out = buffer();
+    const count = writeFrame(particles, frameState(), out);
+    let stars = 0;
+    for (let i = 0; i < count; i++) {
+      const base = i * FLOATS_PER_VERTEX;
+      if (out[base + 7] !== SPRITE.star && out[base + 7] !== SPRITE.armStar) continue;
+      stars++;
+      const halo = out[base + 8];
+      expect(halo).toBeCloseTo(STAR_HALO.min + STAR_HALO.perBrightness * Math.min(1, out[base + 6]), 4);
+      expect(out[base + 2]).toBeGreaterThanOrEqual(halo - 1e-4);
+    }
+    expect(stars).toBeGreaterThan(0);
   });
 });

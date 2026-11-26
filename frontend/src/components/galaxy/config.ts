@@ -25,6 +25,30 @@ export const POPULATION = {
   background: 2000,
 } as const;
 
+/** Diffuse "smoke" that fills the core and arms between the stars. */
+export const NEBULA = {
+  /** Sprites of warm haze around the bulge. */
+  coreHaze: 140,
+  /** Candidate sprites along the disk, thinned toward the arms. */
+  armCandidates: 1600,
+  /** Smoke never looks thinner than this, however edge-on the disk is. */
+  minAspect: 0.22,
+  /** How fast the smoke's texture churns, per unit of simulation time. */
+  churn: 0.0001,
+} as const;
+
+/**
+ * Stars are drawn as a point-spread function: a sharp core plus a faint wide
+ * halo. The sprite is `min + perBrightness × alpha` times the core size.
+ */
+export const STAR_HALO = {
+  min: 3,
+  perBrightness: 5,
+} as const;
+
+/** Cap on device pixels per CSS pixel, to bound fill cost on dense screens. */
+export const MAX_PIXEL_RATIO = 2;
+
 export const ANIMATION = {
   /** Simulation time advanced per wall-clock millisecond. */
   timePerMs: 0.16,

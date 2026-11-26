@@ -1,16 +1,17 @@
-import { GALAXY, POPULATION } from './config';
+import { GALAXY, NEBULA, POPULATION } from './config';
 import { regionColor, temperatureToRgb, type Rgb255 } from './palette';
 import { uniform, uniformInt, type Random } from './random';
 import { DUST_ARM_WIDTHS, STAR_ARM_WIDTHS, spiralStrength } from './spiral';
 
 /**
- * - `bulge`: soft glowing gas at the centre; the only animated population.
+ * - `nebula`: large, faint, wispy smoke filling the core and arms.
+ * - `bulge`: soft glowing gas at the centre; it breathes slowly.
  * - `nucleus`: one very bright point at the exact centre.
- * - `dust`: diffuse gas and dust tracing the arms.
+ * - `dust`: small diffuse specks of gas and dust tracing the arms.
  * - `star`: stars, concentrated on the arms.
  * - `background`: unrelated field stars spread across the whole sky.
  */
-export type ParticleKind = 'bulge' | 'nucleus' | 'dust' | 'star' | 'background';
+export type ParticleKind = 'nebula' | 'bulge' | 'nucleus' | 'dust' | 'star' | 'background';
 
 export interface Particle {
   kind: ParticleKind;
@@ -30,6 +31,8 @@ export interface Particle {
   color: Rgb255;
   /** Marks stars on spiral arms, which the shader renders with a warm glow. */
   spiralArm: boolean;
+  /** 0–1 per-sprite offset into the smoke texture, so no two wisps match. */
+  seed: number;
 }
 
 const TWO_PI = 2 * Math.PI;
@@ -43,26 +46,77 @@ function particle(
   brightness: number,
   color: Rgb255,
   spiralArm = false,
+  seed = 0,
 ): Particle {
   const radius = Math.sqrt(x * x + y * y);
   const { coreRadius, coreAngularSpeed } = GALAXY;
   // Solid-body rotation inside the core, flat rotation curve outside it.
   const angularSpeed = radius > coreRadius ? (coreAngularSpeed * coreRadius) / radius : coreAngularSpeed;
-  return { kind, x, y, z, radius, angle: Math.atan2(y, x), angularSpeed, size, brightness, color, spiralArm };
+  return { kind, x, y, z, radius, angle: Math.atan2(y, x), angularSpeed, size, brightness, color, spiralArm, seed };
 }
 
 /**
  * Builds every particle in the scene. The array order is also the draw order,
- * which matters for light mode's non-additive blending.
+ * which matters for light mode's non-additive blending: smoke goes first so
+ * stars sit on top of it.
  */
 export function generateParticles(random: Random = Math.random): Particle[] {
   const particles: Particle[] = [];
+  addNebula(particles, random);
   addBulge(particles, random);
   particles.push(particle('nucleus', 0, 0, 0, 8.0, 1.0, [255, 255, 255]));
   addDust(particles, random);
   addStars(particles, random);
   addBackground(particles, random);
   return particles;
+}
+
+const CORE_HAZE: Rgb255 = [255, 196, 120];
+const INNER_ARM_SMOKE: Rgb255 = [255, 170, 150];
+const OUTER_ARM_SMOKE: Rgb255 = [130, 160, 255];
+const HII_REGION: Rgb255 = [255, 110, 180];
+
+function mix(a: Rgb255, b: Rgb255, t: number): Rgb255 {
+  const channel = (i: 0 | 1 | 2) => Math.round(a[i] + (b[i] - a[i]) * t);
+  return [channel(0), channel(1), channel(2)];
+}
+
+/**
+ * Smoke: a warm haze over the core, and gas along the arms that shifts from
+ * rose near the centre to blue at the rim (young hot stars light the outer
+ * arms), with rare pink star-forming knots. Each sprite is large and faint;
+ * the shader gives it a wispy texture.
+ */
+function addNebula(out: Particle[], random: Random): void {
+  const { coreRadius, diskRadius } = GALAXY;
+  const hazeRadius = coreRadius * 2.2;
+
+  for (let i = 0; i < NEBULA.coreHaze; i++) {
+    const r = hazeRadius * Math.sqrt(random());
+    const theta = random() * TWO_PI;
+    const z = (random() - 0.5) * 8;
+    const color: Rgb255 = [255, uniformInt(random, CORE_HAZE[1] - 10, 30), uniformInt(random, CORE_HAZE[2] - 20, 50)];
+    const size = uniform(random, 60, 50) * (1 - (0.4 * r) / hazeRadius);
+    const brightness = uniform(random, 0.1, 0.08);
+    out.push(particle('nebula', r * Math.cos(theta), r * Math.sin(theta), z, size, brightness, color, false, random()));
+  }
+
+  const outerRadius = diskRadius * 1.05;
+  for (let i = 0; i < NEBULA.armCandidates; i++) {
+    const r = coreRadius + (outerRadius - coreRadius) * Math.sqrt(random());
+    const theta = random() * TWO_PI;
+    const arm = spiralStrength(r, theta, DUST_ARM_WIDTHS, 'max', random);
+    // Mostly on the arms, with a thin veil between them.
+    const armWeight = Math.min(1, arm / 2.5);
+    if (random() > 0.04 + armWeight * 0.9) continue;
+
+    const outward = Math.min(1, Math.max(0, (r - coreRadius * 1.5) / (diskRadius * 0.7)));
+    const color = arm > 1.5 && random() < 0.08 ? HII_REGION : mix(INNER_ARM_SMOKE, OUTER_ARM_SMOKE, outward);
+    const z = (random() - 0.5) * 12 * Math.exp(-r / diskRadius);
+    const size = uniform(random, 30, 35) * (0.6 + 0.4 * armWeight);
+    const brightness = uniform(random, 0.1, 0.1) * (0.4 + 0.6 * armWeight);
+    out.push(particle('nebula', r * Math.cos(theta), r * Math.sin(theta), z, size, brightness, color, false, random()));
+  }
 }
 
 /** A flattened sphere of glowing gas, white-hot at the centre and yellow at the edge. */

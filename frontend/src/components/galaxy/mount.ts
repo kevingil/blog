@@ -1,5 +1,5 @@
-import { ANIMATION, layoutForWidth, POINTER_TILT, type ThemeMode } from './config';
-import { FLOATS_PER_VERTEX, writeFrame, type FrameState } from './frame';
+import { ANIMATION, layoutForWidth, MAX_PIXEL_RATIO, POINTER_TILT, type ThemeMode } from './config';
+import { diskEllipse, FLOATS_PER_VERTEX, writeFrame, type FrameState } from './frame';
 import { generateParticles } from './particles';
 import type { Random } from './random';
 import { GalaxyRenderer } from './renderer';
@@ -29,6 +29,7 @@ export function mountGalaxy(canvas: HTMLCanvasElement, options: GalaxyOptions = 
   let renderer = GalaxyRenderer.create(canvas, particles.length);
   let frameId: number | null = null;
   let lastFrameAt: number | null = null;
+  let pixelRatio = 1;
   const targetTilt = { pitch: 0, yaw: 0 };
   const state: FrameState = {
     time: 0,
@@ -41,11 +42,13 @@ export function mountGalaxy(canvas: HTMLCanvasElement, options: GalaxyOptions = 
   };
 
   const resize = () => {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    state.width = canvas.width;
-    state.height = canvas.height;
+    // Render at device resolution so star cores stay crisp; layout stays in CSS px.
+    pixelRatio = Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO);
+    state.width = window.innerWidth;
+    state.height = window.innerHeight;
     state.layout = layoutForWidth(window.innerWidth);
+    canvas.width = Math.round(state.width * pixelRatio);
+    canvas.height = Math.round(state.height * pixelRatio);
   };
 
   const onMouseMove = (event: MouseEvent) => {
@@ -69,7 +72,14 @@ export function mountGalaxy(canvas: HTMLCanvasElement, options: GalaxyOptions = 
     state.yaw += (targetTilt.yaw - state.yaw) * POINTER_TILT.easing;
 
     const count = writeFrame(particles, state, vertices, random);
-    renderer.draw(vertices, count, state.theme);
+    renderer.draw(vertices, count, {
+      theme: state.theme,
+      time: state.time,
+      disk: diskEllipse(state),
+      cssWidth: state.width,
+      cssHeight: state.height,
+      pixelRatio,
+    });
     frameId = requestAnimationFrame(frame);
   };
 

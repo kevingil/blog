@@ -1,5 +1,5 @@
 import { BACKGROUND, type ThemeMode } from './config';
-import { FLOATS_PER_VERTEX } from './frame';
+import { FLOATS_PER_VERTEX, type DiskEllipse } from './frame';
 import { FRAGMENT_SHADER, VERTEX_SHADER } from './shaders';
 
 const BYTES_PER_VERTEX = FLOATS_PER_VERTEX * Float32Array.BYTES_PER_ELEMENT;
@@ -10,8 +10,30 @@ const ATTRIBUTES: ReadonlyArray<[name: string, size: number]> = [
   ['a_size', 1],
   ['a_color', 3],
   ['a_alpha', 1],
-  ['a_spiralArm', 1],
+  ['a_kind', 1],
+  ['a_extra', 1],
 ];
+
+const UNIFORMS = [
+  'u_resolution',
+  'u_pixelRatio',
+  'u_maxPointSize',
+  'u_time',
+  'u_light',
+  'u_diskAngle',
+  'u_diskAspect',
+] as const;
+type UniformName = (typeof UNIFORMS)[number];
+
+export interface DrawParams {
+  theme: ThemeMode;
+  time: number;
+  disk: DiskEllipse;
+  /** Viewport in CSS pixels; vertex positions use the same units. */
+  cssWidth: number;
+  cssHeight: number;
+  pixelRatio: number;
+}
 
 /** Owns the WebGL program and vertex buffer, and draws prepared frames. */
 export class GalaxyRenderer {
@@ -19,7 +41,8 @@ export class GalaxyRenderer {
     private readonly gl: WebGLRenderingContext,
     private readonly program: WebGLProgram,
     private readonly buffer: WebGLBuffer,
-    private readonly resolution: WebGLUniformLocation | null,
+    private readonly uniforms: Record<UniformName, WebGLUniformLocation | null>,
+    private readonly maxPointSize: number,
   ) {}
 
   /** Returns `null` when WebGL is unavailable or the shaders fail to build. */
@@ -46,19 +69,24 @@ export class GalaxyRenderer {
       offset += size * Float32Array.BYTES_PER_ELEMENT;
     }
 
+    const uniforms = Object.fromEntries(
+      UNIFORMS.map((name) => [name, gl.getUniformLocation(program, name)]),
+    ) as Record<UniformName, WebGLUniformLocation | null>;
+    const [, maxPointSize] = gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE) as Float32Array;
+
     gl.enable(gl.BLEND);
-    return new GalaxyRenderer(gl, program, buffer, gl.getUniformLocation(program, 'u_resolution'));
+    return new GalaxyRenderer(gl, program, buffer, uniforms, maxPointSize);
   }
 
   /** Clears to the theme background and draws the first `count` vertices of `vertices`. */
-  draw(vertices: Float32Array, count: number, theme: ThemeMode): void {
-    const { gl } = this;
-    const { width, height } = gl.canvas;
+  draw(vertices: Float32Array, count: number, params: DrawParams): void {
+    const { gl, uniforms } = this;
+    const light = params.theme === 'light';
 
-    gl.viewport(0, 0, width, height);
-    gl.clearColor(...BACKGROUND[theme], 1.0);
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    gl.clearColor(...BACKGROUND[params.theme], 1.0);
     // Dark mode adds light for a glow; light mode layers dark ink normally.
-    if (theme === 'light') {
+    if (light) {
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     } else {
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
@@ -66,7 +94,13 @@ export class GalaxyRenderer {
     gl.clear(gl.COLOR_BUFFER_BIT);
     if (count === 0) return;
 
-    gl.uniform2f(this.resolution, width, height);
+    gl.uniform2f(uniforms.u_resolution, params.cssWidth, params.cssHeight);
+    gl.uniform1f(uniforms.u_pixelRatio, params.pixelRatio);
+    gl.uniform1f(uniforms.u_maxPointSize, this.maxPointSize);
+    gl.uniform1f(uniforms.u_time, params.time);
+    gl.uniform1f(uniforms.u_light, light ? 1 : 0);
+    gl.uniform1f(uniforms.u_diskAngle, params.disk.angle);
+    gl.uniform1f(uniforms.u_diskAspect, params.disk.aspect);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices.subarray(0, count * FLOATS_PER_VERTEX));
     gl.drawArrays(gl.POINTS, 0, count);
   }
