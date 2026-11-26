@@ -1,22 +1,20 @@
-import { ANIMATION, CAMERA, GALAXY, NEBULA, STAR_HALO, type GalaxyLayout, type ThemeMode } from './config';
+import { ANIMATION, CAMERA, GALAXY, STAR_HALO, type GalaxyLayout, type ThemeMode } from './config';
 import { toLightMode, type Rgb } from './palette';
 import type { Particle } from './particles';
 import type { Random } from './random';
 
-/** Interleaved vertex layout: x, y, size, r, g, b, alpha, kind, extra. */
+/** Interleaved vertex layout: x, y, size, r, g, b, alpha, kind, halo. */
 export const FLOATS_PER_VERTEX = 9;
 
-/**
- * How the shader draws each vertex. `extra` carries the halo ratio for stars
- * and the texture seed for smoke. Mirrored as `#define`s in the shader.
- */
+/** How the shader draws each vertex. Mirrored as `#define`s in the shader. */
 export const SPRITE = {
   star: 0,
   armStar: 1,
   nucleus: 2,
   gas: 3,
   dust: 4,
-  smoke: 5,
+  cloud: 5,
+  dustLane: 6,
 } as const;
 
 export interface FrameState {
@@ -38,14 +36,14 @@ export interface ScreenPoint {
   y: number;
   /** Perspective scale, including zoom. */
   scale: number;
+  /** Distance behind the galaxy's centre plane along the view axis; negative is nearer. */
+  depth: number;
 }
 
-/** The galaxy disk's outline on screen, for shaping smoke sprites. */
-export interface DiskEllipse {
-  /** Angle of the major axis, clockwise from +x in screen space (y down). */
-  angle: number;
-  /** Minor / major axis ratio, floored at `NEBULA.minAspect`. */
-  aspect: number;
+/** Vertex counts for one frame. Absorbing vertices follow the emissive ones. */
+export interface FrameCounts {
+  total: number;
+  emissive: number;
 }
 
 const COS_INCLINATION = Math.cos(-GALAXY.inclination);
@@ -53,12 +51,26 @@ const SIN_INCLINATION = Math.sin(-GALAXY.inclination);
 const COS_ORIENTATION = Math.cos(GALAXY.orientation);
 const SIN_ORIENTATION = Math.sin(GALAXY.orientation);
 
+/** Neutral ink for gas and dust in light mode, where colour would look garish. */
+const LIGHT_MODE_GAS_INK: Rgb = [0.24, 0.22, 0.22];
+
 /**
- * Turns a point in the galaxy's frame into screen-aligned axes (before the
- * horizontal mirror, zoom and offset): pointer tilt, then the fixed
- * inclination and position angle. Returns [x, y, depth].
+ * Places a particle on screen: differential rotation in the galaxy plane,
+ * pointer tilt, the fixed inclination and position angle, then perspective.
  */
-function orient(x: number, y: number, z: number, state: FrameState): [number, number, number] {
+export function projectParticle(particle: Particle, state: FrameState): ScreenPoint {
+  const { time, layout, width } = state;
+  const angle = particle.angle + particle.angularSpeed * time * ANIMATION.rotationSpeed;
+  let x = particle.radius * Math.cos(angle);
+  let y = particle.radius * Math.sin(angle);
+  const z = particle.z;
+
+  if (particle.kind === 'bulge') {
+    // Slow turbulent drift of the central gas.
+    x += Math.sin(time * 0.00005 + particle.x * 0.01) * 0.5;
+    y += Math.cos(time * 0.00005 + particle.y * 0.01) * 0.5;
+  }
+
   // Pointer pitch, about the x axis.
   const cosPitch = Math.cos(state.pitch);
   const sinPitch = Math.sin(state.pitch);
@@ -74,56 +86,16 @@ function orient(x: number, y: number, z: number, state: FrameState): [number, nu
   // Fixed inclination, then position angle on screen.
   const inclinedY = yawedY * COS_INCLINATION - pitchedZ * SIN_INCLINATION;
   const depth = yawedY * SIN_INCLINATION + pitchedZ * COS_INCLINATION;
-  return [
-    yawedX * COS_ORIENTATION - inclinedY * SIN_ORIENTATION,
-    yawedX * SIN_ORIENTATION + inclinedY * COS_ORIENTATION,
-    depth,
-  ];
-}
+  const screenX = yawedX * COS_ORIENTATION - inclinedY * SIN_ORIENTATION;
+  const screenY = yawedX * SIN_ORIENTATION + inclinedY * COS_ORIENTATION;
 
-/** Places a particle on screen, applying differential rotation and perspective. */
-export function projectParticle(particle: Particle, state: FrameState): ScreenPoint {
-  const { time, layout, width } = state;
-  const angle = particle.angle + particle.angularSpeed * time * ANIMATION.rotationSpeed;
-  let x = particle.radius * Math.cos(angle);
-  let y = particle.radius * Math.sin(angle);
-
-  if (particle.kind === 'bulge') {
-    // Slow turbulent drift of the central gas.
-    x += Math.sin(time * 0.00005 + particle.x * 0.01) * 0.5;
-    y += Math.cos(time * 0.00005 + particle.y * 0.01) * 0.5;
-  }
-
-  const [screenX, screenY, depth] = orient(x, y, particle.z, state);
   const scale = (CAMERA.distance / (CAMERA.distance + depth)) * layout.zoom;
   return {
     // The galaxy is mirrored horizontally on screen.
     x: width / 2 - screenX * scale + layout.offsetX,
     y: layout.offsetY + screenY * scale,
     scale,
-  };
-}
-
-/**
- * The on-screen ellipse of a circle in the disk plane: the singular vectors
- * of the 2×2 map from disk axes to screen axes.
- */
-export function diskEllipse(state: FrameState): DiskEllipse {
-  const [ux, uy] = orient(1, 0, 0, state);
-  const [vx, vy] = orient(0, 1, 0, state);
-  // Screen x is mirrored.
-  const a = [-ux, uy];
-  const b = [-vx, vy];
-  const sxx = a[0] * a[0] + b[0] * b[0];
-  const syy = a[1] * a[1] + b[1] * b[1];
-  const sxy = a[0] * a[1] + b[0] * b[1];
-  const mean = (sxx + syy) / 2;
-  const spread = Math.sqrt(((sxx - syy) / 2) ** 2 + sxy * sxy);
-  const major = Math.sqrt(mean + spread);
-  const minor = Math.sqrt(Math.max(0, mean - spread));
-  return {
-    angle: 0.5 * Math.atan2(2 * sxy, sxx - syy),
-    aspect: Math.max(NEBULA.minAspect, minor / major),
+    depth,
   };
 }
 
@@ -136,8 +108,10 @@ const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
 function spriteFor(particle: Particle): number {
   switch (particle.kind) {
-    case 'nebula':
-      return SPRITE.smoke;
+    case 'cloud':
+      return SPRITE.cloud;
+    case 'dustLane':
+      return SPRITE.dustLane;
     case 'bulge':
       return SPRITE.gas;
     case 'dust':
@@ -150,26 +124,39 @@ function spriteFor(particle: Particle): number {
 }
 
 /**
+ * Dust only hides what is behind it. Lanes on the near side of the disk
+ * (in front of the bulge) keep full opacity; far-side lanes mostly fade, since
+ * the light they would block is in front of them.
+ */
+function dustLaneVisibility(depth: number): number {
+  return Math.max(0.15, Math.min(1, 0.5 - depth / (GALAXY.diskRadius * 0.5)));
+}
+
+/**
  * Writes one vertex per visible particle into `out`, in particle order, and
- * returns how many were written. `random` drives light mode's shimmer.
+ * returns the counts. Particles must list absorbing dust lanes last (as
+ * `generateParticles` does). `random` drives light mode's star shimmer.
  */
 export function writeFrame(
   particles: readonly Particle[],
   state: FrameState,
   out: Float32Array,
   random: Random = Math.random,
-): number {
+): FrameCounts {
   const { time, theme, width, height } = state;
+  const light = theme === 'light';
   let count = 0;
+  let emissive = 0;
 
   for (const particle of particles) {
     const point = projectParticle(particle, state);
     const sprite = spriteFor(particle);
     const isStar = sprite === SPRITE.star || sprite === SPRITE.armStar || sprite === SPRITE.nucleus;
+    const isGasOrDust = sprite === SPRITE.cloud || sprite === SPRITE.dustLane;
 
     let size = particle.size * point.scale;
     let alpha = particle.brightness * Math.min(1, point.scale);
-    let extra = particle.seed;
+    let halo = 0;
 
     const [baseR, baseG, baseB] = particle.color;
     let color: Rgb = [baseR / 255, baseG / 255, baseB / 255];
@@ -181,7 +168,14 @@ export function writeFrame(
       color = [clamp01(color[0] + shift), clamp01(color[1] + shift * 0.5), clamp01(color[2] + shift * 0.8)];
       alpha *= 0.8 + 0.2 * Math.sin(time * 0.00008 + particle.x * 0.005 + particle.y * 0.003);
     }
-    if (theme === 'light') {
+    if (sprite === SPRITE.dustLane) {
+      alpha *= dustLaneVisibility(point.depth);
+    }
+    if (light && isGasOrDust) {
+      // A faint wash: ink pools far more visibly than light adds up.
+      color = LIGHT_MODE_GAS_INK;
+      alpha *= 0.6;
+    } else if (light) {
       color = toLightMode(particle.color, color, random);
       alpha = Math.min(1.0, alpha * 2.0);
     }
@@ -189,8 +183,8 @@ export function writeFrame(
     size = Math.max(1.0, size);
     if (isStar) {
       // The sprite holds the halo; the core keeps the star's own size.
-      extra = STAR_HALO.min + STAR_HALO.perBrightness * clamp01(alpha);
-      size *= extra;
+      halo = STAR_HALO.min + STAR_HALO.perBrightness * clamp01(alpha);
+      size *= halo;
     }
     if (!isOnScreen(point, size / 2, width, height)) continue;
 
@@ -203,9 +197,10 @@ export function writeFrame(
     out[offset + 5] = color[2];
     out[offset + 6] = alpha;
     out[offset + 7] = sprite;
-    out[offset + 8] = extra;
+    out[offset + 8] = halo;
     count++;
+    if (sprite !== SPRITE.dustLane) emissive = count;
   }
 
-  return count;
+  return { total: count, emissive };
 }

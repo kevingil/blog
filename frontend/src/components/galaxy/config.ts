@@ -25,25 +25,30 @@ export const POPULATION = {
   background: 2000,
 } as const;
 
-/** Diffuse "smoke" that fills the core and arms between the stars. */
+/**
+ * Interstellar gas, built from many faint puffs scattered in 3D so it has
+ * real thickness and parallax rather than being painted on.
+ */
 export const NEBULA = {
-  /** Sprites of warm haze around the bulge. */
-  coreHaze: 140,
-  /** Candidate sprites along the disk, thinned toward the arms. */
-  armCandidates: 1600,
-  /** Smoke never looks thinner than this, however edge-on the disk is. */
-  minAspect: 0.22,
-  /** How fast the smoke's texture churns, per unit of simulation time. */
-  churn: 0.0001,
+  /** Puffs in the thick, rounded haze around the bulge. */
+  coreHazePuffs: 360,
+  /** Cloud complexes along the arms; each is a clump of puffs. */
+  cloudComplexes: 240,
+  puffsPerComplex: { min: 6, span: 9 },
+  /** Absorbing puffs tracing the inner edge of each main arm. */
+  dustLanePuffsPerArm: 260,
 } as const;
+
+/** Dark mode colour saturation (1 = as generated, 0 = greyscale). */
+export const SATURATION = 0.8;
 
 /**
  * Stars are drawn as a point-spread function: a sharp core plus a faint wide
  * halo. The sprite is `min + perBrightness × alpha` times the core size.
  */
 export const STAR_HALO = {
-  min: 3,
-  perBrightness: 5,
+  min: 2.5,
+  perBrightness: 3.5,
 } as const;
 
 /** Cap on device pixels per CSS pixel, to bound fill cost on dense screens. */

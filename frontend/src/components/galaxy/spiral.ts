@@ -55,6 +55,15 @@ const OUTER_ARMS: ArmFamily = {
 /** Short, randomly shaped arm fragments that break up the clean spiral. */
 const SPUR_COUNT = 12;
 
+/** Angle of main arm `arm` (0 or 1) at radius r, along its centre line. */
+export function mainArmAngle(r: number, arm: number): number {
+  const rootRadius = GALAXY.coreRadius * MAIN_ARMS.rootRadius;
+  const rootAngle = (arm * TWO_PI) / MAIN_ARMS.armCount + MAIN_ARMS.startAngle;
+  return -(1 / MAIN_ARMS.tightness) * Math.log(Math.max(r, rootRadius) / rootRadius) + rootAngle;
+}
+
+export const MAIN_ARM_COUNT = MAIN_ARMS.armCount;
+
 /** Wraps an angle into [-π, π). */
 export function wrapAngle(angle: number): number {
   return (((angle % TWO_PI) + 3 * Math.PI) % TWO_PI) - Math.PI;

@@ -1,4 +1,4 @@
-import { NEBULA } from './config';
+import { SATURATION } from './config';
 import { SPRITE } from './frame';
 
 const SPRITE_DEFINES = Object.entries(SPRITE)
@@ -12,7 +12,7 @@ export const VERTEX_SHADER = /* glsl */ `
   attribute vec3 a_color;
   attribute float a_alpha;
   attribute float a_kind;
-  attribute float a_extra;
+  attribute float a_halo;
 
   uniform vec2 u_resolution;
   uniform float u_pixelRatio;
@@ -21,7 +21,7 @@ export const VERTEX_SHADER = /* glsl */ `
   varying vec3 v_color;
   varying float v_alpha;
   varying float v_kind;
-  varying float v_extra;
+  varying float v_halo;
 
   void main() {
     vec2 clip = (a_position / u_resolution) * 2.0 - 1.0;
@@ -30,134 +30,87 @@ export const VERTEX_SHADER = /* glsl */ `
     v_color = a_color;
     v_alpha = a_alpha;
     v_kind = a_kind;
-    v_extra = a_extra;
+    v_halo = a_halo;
   }
 `;
 
 /**
- * Draws each point sprite according to its kind:
- * - stars: a point-spread function, a sharp (white-hot in dark mode) core
- *   inside a faint, wide halo, as a telescope or the eye sees a star;
- * - smoke: a disk-aligned ellipse of domain-warped noise, so overlapping
- *   sprites read as wisps of gas rather than round blobs;
- * - gas and dust: soft Gaussian glows.
+ * Draws each point sprite according to its kind. Every profile fades to zero
+ * before the sprite's edge, so nothing shows as a hard disc.
+ * - Stars: a point-spread function, a soft core (white-hot in dark mode)
+ *   inside a faint halo.
+ * - Gas, dust, clouds and dust lanes: soft glows of different widths. Volume
+ *   comes from where the sprites sit in 3D, not from any texture.
  */
 export const FRAGMENT_SHADER = /* glsl */ `
-  #ifdef GL_FRAGMENT_PRECISION_HIGH
-  precision highp float;
-  #else
   precision mediump float;
-  #endif
 
   ${SPRITE_DEFINES}
+  #define SATURATION ${SATURATION.toFixed(3)}
 
-  uniform float u_time;
   uniform float u_light;
-  uniform float u_diskAngle;
-  uniform float u_diskAspect;
 
   varying vec3 v_color;
   varying float v_alpha;
   varying float v_kind;
-  varying float v_extra;
+  varying float v_halo;
 
   const vec3 WARM = vec3(1.0, 0.85, 0.3);
+  const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 
   bool isSprite(float kind) {
     return abs(v_kind - kind) < 0.5;
   }
 
-  float hash(vec2 p) {
-    p = fract(p * vec2(123.34, 456.21));
-    p += dot(p, p + 45.32);
-    return fract(p.x * p.y);
-  }
-
-  float noise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(
-      mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
-      mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
-      u.y
-    );
-  }
-
-  float fbm(vec2 p) {
-    float value = 0.0;
-    float amplitude = 0.5;
-    for (int octave = 0; octave < 4; octave++) {
-      value += amplitude * noise(p);
-      p = p * 2.03 + vec2(1.7, 9.2);
-      amplitude *= 0.5;
-    }
-    return value;
-  }
-
-  vec4 star(vec2 p) {
+  vec4 star(float dist) {
     // x is 1 at the edge of the core; the sprite extends to x = halo.
-    float halo = v_extra;
-    float x = length(p) * 2.0 * halo;
-    float core = exp(-x * x * 2.5);
-    float glow = pow(1.0 + x * x * 1.5, -2.0);
-    float fade = 1.0 - smoothstep(halo * 0.5, halo, x);
+    float x = dist * 2.0 * v_halo;
+    float core = exp(-x * x * 1.3);
+    float glow = pow(1.0 + x * x, -1.8);
+    float fade = 1.0 - smoothstep(v_halo * 0.45, v_halo, x);
 
     vec3 color = v_color;
     if (isSprite(SPRITE_ARMSTAR)) color = mix(color, WARM, 0.25 * glow);
     if (isSprite(SPRITE_NUCLEUS)) color = mix(color, WARM, 0.4 * glow);
     // Bright cores saturate to white, leaving the colour in the halo.
-    if (u_light < 0.5) color = mix(color, vec3(1.0), core * 0.5);
-    return vec4(color, v_alpha * (core + glow * 0.18) * fade);
+    if (u_light < 0.5) color = mix(color, vec3(1.0), core * 0.4);
+    return vec4(color, v_alpha * (core + glow * 0.3) * fade);
   }
 
-  vec4 smoke(vec2 p) {
-    // Squash the sprite into the disk's on-screen ellipse.
-    float c = cos(u_diskAngle);
-    float s = sin(u_diskAngle);
-    vec2 q = vec2(c * p.x + s * p.y, -s * p.x + c * p.y);
-    q.y /= u_diskAspect;
-    float d = length(q) * 2.0;
-    if (d >= 1.0) return vec4(0.0);
-
-    vec2 uv = q * 2.4 + v_extra * 37.0;
-    float t = u_time * ${NEBULA.churn.toFixed(6)};
-    float warp = fbm(uv + t);
-    float density = fbm(uv + vec2(warp, -warp) * 1.8 - t * 0.5);
-    float wisps = smoothstep(0.3, 0.75, density);
-    float body = 1.0 - smoothstep(0.1, 1.0, d);
-    return vec4(v_color, v_alpha * body * (0.25 + 0.75 * wisps));
+  vec4 gas(float d2, float fade) {
+    return vec4(v_color, v_alpha * (exp(-d2 * 2.0) + exp(-d2 * 0.8) * 0.6 + exp(-d2 * 0.3) * 0.3) * fade);
   }
 
-  // Gas and dust: soft Gaussian glows that reach zero at the sprite edge.
-  vec4 gas(float dist) {
-    float d2 = dist * dist * 16.0;
-    float fade = 1.0 - smoothstep(0.3, 0.5, dist);
-    return vec4(v_color, v_alpha * (exp(-d2 * 2.0) + exp(-d2 * 0.5) * 0.5) * fade);
+  vec4 dust(float d2, float fade) {
+    return vec4(v_color, v_alpha * (exp(-d2 * 1.5) * 1.5 + exp(-d2 * 0.6) * 1.2 + exp(-d2 * 0.25) * 0.8) * fade);
   }
 
-  vec4 dust(float dist) {
-    float d2 = dist * dist * 16.0;
-    float fade = 1.0 - smoothstep(0.3, 0.5, dist);
-    return vec4(v_color, v_alpha * (exp(-d2 * 1.2) * 1.5 + exp(-d2 * 0.35) * 0.9) * fade);
+  // A Gaussian puff that is effectively zero at the sprite edge.
+  vec4 puff(float dist) {
+    return vec4(v_color, v_alpha * exp(-dist * dist * 12.0));
   }
 
   void main() {
-    vec2 p = gl_PointCoord - 0.5;
-    float dist = length(p);
+    float dist = length(gl_PointCoord - 0.5);
     if (dist > 0.5) discard;
+    // Gas and dust keep their broad profile but roll off before the rim.
+    float rim = 1.0 - smoothstep(0.25, 0.5, dist);
 
     vec4 color;
-    if (isSprite(SPRITE_SMOKE)) {
-      color = smoke(p);
+    if (isSprite(SPRITE_CLOUD) || isSprite(SPRITE_DUSTLANE)) {
+      color = puff(dist);
     } else if (isSprite(SPRITE_GAS)) {
-      color = gas(dist);
+      color = gas(dist * dist, rim);
     } else if (isSprite(SPRITE_DUST)) {
-      color = dust(dist);
+      color = dust(dist * dist, rim);
     } else {
-      color = star(p);
+      color = star(dist);
     }
     if (color.a < 0.002) discard;
+
+    if (u_light < 0.5) {
+      color.rgb = mix(vec3(dot(color.rgb, LUMA)), color.rgb, SATURATION);
+    }
     gl_FragColor = color;
   }
 `;

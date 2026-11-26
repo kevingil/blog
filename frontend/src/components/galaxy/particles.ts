@@ -1,17 +1,18 @@
 import { GALAXY, NEBULA, POPULATION } from './config';
 import { regionColor, temperatureToRgb, type Rgb255 } from './palette';
-import { uniform, uniformInt, type Random } from './random';
-import { DUST_ARM_WIDTHS, STAR_ARM_WIDTHS, spiralStrength } from './spiral';
+import { gaussian, uniform, uniformInt, type Random } from './random';
+import { DUST_ARM_WIDTHS, MAIN_ARM_COUNT, mainArmAngle, STAR_ARM_WIDTHS, spiralStrength } from './spiral';
 
 /**
- * - `nebula`: large, faint, wispy smoke filling the core and arms.
+ * - `cloud`: faint puffs of glowing gas around the bulge and along the arms.
  * - `bulge`: soft glowing gas at the centre; it breathes slowly.
  * - `nucleus`: one very bright point at the exact centre.
  * - `dust`: small diffuse specks of gas and dust tracing the arms.
  * - `star`: stars, concentrated on the arms.
  * - `background`: unrelated field stars spread across the whole sky.
+ * - `dustLane`: dark, light-absorbing dust on the inner edge of the arms.
  */
-export type ParticleKind = 'nebula' | 'bulge' | 'nucleus' | 'dust' | 'star' | 'background';
+export type ParticleKind = 'cloud' | 'bulge' | 'nucleus' | 'dust' | 'star' | 'background' | 'dustLane';
 
 export interface Particle {
   kind: ParticleKind;
@@ -31,8 +32,6 @@ export interface Particle {
   color: Rgb255;
   /** Marks stars on spiral arms, which the shader renders with a warm glow. */
   spiralArm: boolean;
-  /** 0–1 per-sprite offset into the smoke texture, so no two wisps match. */
-  seed: number;
 }
 
 const TWO_PI = 2 * Math.PI;
@@ -46,76 +45,112 @@ function particle(
   brightness: number,
   color: Rgb255,
   spiralArm = false,
-  seed = 0,
 ): Particle {
   const radius = Math.sqrt(x * x + y * y);
   const { coreRadius, coreAngularSpeed } = GALAXY;
   // Solid-body rotation inside the core, flat rotation curve outside it.
   const angularSpeed = radius > coreRadius ? (coreAngularSpeed * coreRadius) / radius : coreAngularSpeed;
-  return { kind, x, y, z, radius, angle: Math.atan2(y, x), angularSpeed, size, brightness, color, spiralArm, seed };
+  return { kind, x, y, z, radius, angle: Math.atan2(y, x), angularSpeed, size, brightness, color, spiralArm };
 }
 
 /**
  * Builds every particle in the scene. The array order is also the draw order,
- * which matters for light mode's non-additive blending: smoke goes first so
- * stars sit on top of it.
+ * which matters for blending: glowing gas goes first so stars sit on top of
+ * it, and absorbing dust lanes go last so they can darken everything behind.
  */
 export function generateParticles(random: Random = Math.random): Particle[] {
   const particles: Particle[] = [];
-  addNebula(particles, random);
+  addClouds(particles, random);
   addBulge(particles, random);
   particles.push(particle('nucleus', 0, 0, 0, 8.0, 1.0, [255, 255, 255]));
   addDust(particles, random);
   addStars(particles, random);
   addBackground(particles, random);
+  addDustLanes(particles, random);
   return particles;
 }
 
-const CORE_HAZE: Rgb255 = [255, 196, 120];
-const INNER_ARM_SMOKE: Rgb255 = [255, 170, 150];
-const OUTER_ARM_SMOKE: Rgb255 = [130, 160, 255];
-const HII_REGION: Rgb255 = [255, 110, 180];
+// Muted, dusty tones: real nebulae look grey-beige next to their stars.
+const HAZE_WARM: Rgb255 = [230, 206, 170];
+const CLOUD_INNER: Rgb255 = [220, 202, 178];
+const CLOUD_OUTER: Rgb255 = [176, 186, 204];
+const DUST_LANE: Rgb255 = [62, 50, 42];
 
 function mix(a: Rgb255, b: Rgb255, t: number): Rgb255 {
   const channel = (i: 0 | 1 | 2) => Math.round(a[i] + (b[i] - a[i]) * t);
   return [channel(0), channel(1), channel(2)];
 }
 
-/**
- * Smoke: a warm haze over the core, and gas along the arms that shifts from
- * rose near the centre to blue at the rim (young hot stars light the outer
- * arms), with rare pink star-forming knots. Each sprite is large and faint;
- * the shader gives it a wispy texture.
- */
-function addNebula(out: Particle[], random: Random): void {
-  const { coreRadius, diskRadius } = GALAXY;
-  const hazeRadius = coreRadius * 2.2;
+function jitter(color: Rgb255, random: Random, amount: number): Rgb255 {
+  const shift = (random() - 0.5) * 2 * amount;
+  const channel = (c: number) => Math.max(0, Math.min(255, Math.round(c + shift)));
+  return [channel(color[0]), channel(color[1]), channel(color[2])];
+}
 
-  for (let i = 0; i < NEBULA.coreHaze; i++) {
-    const r = hazeRadius * Math.sqrt(random());
-    const theta = random() * TWO_PI;
-    const z = (random() - 0.5) * 8;
-    const color: Rgb255 = [255, uniformInt(random, CORE_HAZE[1] - 10, 30), uniformInt(random, CORE_HAZE[2] - 20, 50)];
-    const size = uniform(random, 60, 50) * (1 - (0.4 * r) / hazeRadius);
-    const brightness = uniform(random, 0.1, 0.08);
-    out.push(particle('nebula', r * Math.cos(theta), r * Math.sin(theta), z, size, brightness, color, false, random()));
+/**
+ * Glowing gas: a thick, rounded haze around the bulge, and clumpy cloud
+ * complexes along the arms. Every puff is a small soft sprite at a real 3D
+ * position, so the gas has thickness and shifts with perspective.
+ */
+function addClouds(out: Particle[], random: Random): void {
+  const { coreRadius, diskRadius } = GALAXY;
+
+  for (let i = 0; i < NEBULA.coreHazePuffs; i++) {
+    // The bulge is nearly spherical, so its haze is too.
+    const x = gaussian(random) * coreRadius * 1.1;
+    const y = gaussian(random) * coreRadius * 1.1;
+    const z = gaussian(random) * coreRadius * 0.7;
+    const size = uniform(random, 22, 22);
+    const brightness = uniform(random, 0.04, 0.035);
+    out.push(particle('cloud', x, y, z, size, brightness, jitter(HAZE_WARM, random, 8)));
   }
 
-  const outerRadius = diskRadius * 1.05;
-  for (let i = 0; i < NEBULA.armCandidates; i++) {
-    const r = coreRadius + (outerRadius - coreRadius) * Math.sqrt(random());
+  for (let i = 0; i < NEBULA.cloudComplexes; i++) {
+    const r = coreRadius * 1.2 + (diskRadius - coreRadius * 1.2) * Math.sqrt(random());
     const theta = random() * TWO_PI;
     const arm = spiralStrength(r, theta, DUST_ARM_WIDTHS, 'max', random);
-    // Mostly on the arms, with a thin veil between them.
-    const armWeight = Math.min(1, arm / 2.5);
-    if (random() > 0.04 + armWeight * 0.9) continue;
+    // Complexes form on the arms; a few drift between them.
+    if (random() > 0.12 + 0.88 * Math.min(1, arm / 2.5)) continue;
 
+    const centreX = r * Math.cos(theta);
+    const centreY = r * Math.sin(theta);
+    const scaleHeight = 6 + 16 * Math.exp(-r / (diskRadius * 0.5));
+    const centreZ = gaussian(random) * scaleHeight * 0.5;
+    const spread = uniform(random, 10, 16);
     const outward = Math.min(1, Math.max(0, (r - coreRadius * 1.5) / (diskRadius * 0.7)));
-    const color = arm > 1.5 && random() < 0.08 ? HII_REGION : mix(INNER_ARM_SMOKE, OUTER_ARM_SMOKE, outward);
-    const z = (random() - 0.5) * 12 * Math.exp(-r / diskRadius);
-    const size = uniform(random, 30, 35) * (0.6 + 0.4 * armWeight);
-    const brightness = uniform(random, 0.1, 0.1) * (0.4 + 0.6 * armWeight);
-    out.push(particle('nebula', r * Math.cos(theta), r * Math.sin(theta), z, size, brightness, color, false, random()));
+    const tone = mix(CLOUD_INNER, CLOUD_OUTER, outward);
+
+    const puffs = uniformInt(random, NEBULA.puffsPerComplex.min, NEBULA.puffsPerComplex.span);
+    for (let j = 0; j < puffs; j++) {
+      const x = centreX + gaussian(random) * spread;
+      const y = centreY + gaussian(random) * spread;
+      const z = centreZ + gaussian(random) * scaleHeight * 0.6;
+      const size = uniform(random, 16, 16);
+      const brightness = uniform(random, 0.032, 0.035);
+      out.push(particle('cloud', x, y, z, size, brightness, jitter(tone, random, 10)));
+    }
+  }
+}
+
+/**
+ * Dark dust on the inner edge of each main arm. It absorbs light, so where
+ * the near side of the disk crosses in front of the bright bulge it shows as
+ * a dark lane, the clearest depth cue in an inclined galaxy.
+ */
+function addDustLanes(out: Particle[], random: Random): void {
+  const { coreRadius, diskRadius } = GALAXY;
+
+  for (let arm = 0; arm < MAIN_ARM_COUNT; arm++) {
+    for (let i = 0; i < NEBULA.dustLanePuffsPerArm; i++) {
+      // Denser toward the centre, like the arms themselves.
+      const r = coreRadius * 1.4 + (diskRadius * 0.95 - coreRadius * 1.4) * Math.pow(random(), 1.3);
+      // A negative offset from the arm's centre line is its inner edge.
+      const theta = mainArmAngle(r, arm) - 0.28 + gaussian(random) * 0.07;
+      const z = gaussian(random) * 3;
+      const size = uniform(random, 12, 12) * (0.7 + (0.6 * r) / diskRadius);
+      const opacity = uniform(random, 0.22, 0.18);
+      out.push(particle('dustLane', r * Math.cos(theta), r * Math.sin(theta), z, size, opacity, DUST_LANE));
+    }
   }
 }
 

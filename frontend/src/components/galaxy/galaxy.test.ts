@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { GALAXY, layoutForWidth, NEBULA, POPULATION, STAR_HALO } from './config';
-import { diskEllipse, FLOATS_PER_VERTEX, projectParticle, SPRITE, writeFrame, type FrameState } from './frame';
+import { FLOATS_PER_VERTEX, projectParticle, SPRITE, writeFrame, type FrameState } from './frame';
 import { temperatureToRgb } from './palette';
 import { generateParticles, type Particle } from './particles';
 import { seededRandom } from './random';
@@ -33,8 +33,8 @@ describe('generateParticles', () => {
 
   test('builds every population, with arm stars and dust thresholded', () => {
     const counts = countKinds(generateParticles(seededRandom(1)));
-    expect(counts.nebula).toBeGreaterThan(NEBULA.coreHaze);
-    expect(counts.nebula).toBeLessThan(NEBULA.coreHaze + NEBULA.armCandidates);
+    expect(counts.cloud).toBeGreaterThan(NEBULA.coreHazePuffs);
+    expect(counts.dustLane).toBe(2 * NEBULA.dustLanePuffsPerArm);
     expect(counts.bulge).toBe(POPULATION.bulge);
     expect(counts.nucleus).toBe(1);
     expect(counts.background).toBe(POPULATION.background);
@@ -57,20 +57,21 @@ describe('generateParticles', () => {
     }
   });
 
-  test('draws smoke first and the nucleus after the bulge, so stars sit on top', () => {
-    const particles = generateParticles(seededRandom(5));
-    const firstNonSmoke = particles.findIndex((p) => p.kind !== 'nebula');
-    expect(particles.slice(0, firstNonSmoke).every((p) => p.kind === 'nebula')).toBe(true);
-    expect(particles[firstNonSmoke].kind).toBe('bulge');
-    expect(particles[firstNonSmoke + POPULATION.bulge].kind).toBe('nucleus');
-    expect(particles.slice(firstNonSmoke).some((p) => p.kind === 'nebula')).toBe(false);
+  test('draws gas first and dust lanes last, so stars sit on the gas and dust can darken it', () => {
+    const kinds = generateParticles(seededRandom(5)).map((p) => p.kind);
+    const firstNonCloud = kinds.findIndex((kind) => kind !== 'cloud');
+    const firstLane = kinds.indexOf('dustLane');
+    expect(kinds.slice(0, firstNonCloud).every((kind) => kind === 'cloud')).toBe(true);
+    expect(kinds.slice(firstLane).every((kind) => kind === 'dustLane')).toBe(true);
+    expect(kinds.slice(firstNonCloud, firstLane)).not.toContain('cloud');
+    expect(kinds[firstNonCloud]).toBe('bulge');
+    expect(kinds[firstNonCloud + POPULATION.bulge]).toBe('nucleus');
   });
 
-  test('gives every smoke sprite its own texture seed', () => {
-    const seeds = generateParticles(seededRandom(9))
-      .filter((p) => p.kind === 'nebula')
-      .map((p) => p.seed);
-    expect(new Set(seeds).size).toBe(seeds.length);
+  test('gives the gas real thickness around the core', () => {
+    const haze = generateParticles(seededRandom(4)).filter((p) => p.kind === 'cloud' && p.radius < GALAXY.coreRadius);
+    const spread = Math.sqrt(haze.reduce((sum, p) => sum + p.z * p.z, 0) / haze.length);
+    expect(spread).toBeGreaterThan(GALAXY.coreRadius * 0.4);
   });
 });
 
@@ -125,41 +126,39 @@ describe('projectParticle', () => {
   });
 });
 
-describe('diskEllipse', () => {
-  test('matches the outline of a projected ring in the disk', () => {
-    for (const tilt of [{}, { pitch: 0.04, yaw: -0.03 }]) {
-      const state = frameState(tilt);
-      const centre = { x: state.width / 2 + state.layout.offsetX, y: state.layout.offsetY };
-      let farthest = { distance: 0, angle: 0 };
-      for (let i = 0; i < 720; i++) {
-        const angle = (i / 720) * 2 * Math.PI;
-        const ring = { kind: 'dust', radius: 100, angle, angularSpeed: 0, x: 0, y: 0, z: 0 } as Particle;
-        const point = projectParticle(ring, state);
-        const distance = Math.hypot(point.x - centre.x, point.y - centre.y);
-        if (distance > farthest.distance) farthest = { distance, angle: Math.atan2(point.y - centre.y, point.x - centre.x) };
-      }
-      const { angle } = diskEllipse(state);
-      // Same axis, modulo π.
-      expect(Math.abs(Math.sin(angle - farthest.angle))).toBeLessThan(0.02);
-    }
-  });
-
-  test('never flattens smoke below the minimum thickness', () => {
-    const { aspect } = diskEllipse(frameState());
-    expect(aspect).toBeGreaterThanOrEqual(NEBULA.minAspect);
-    expect(aspect).toBeLessThanOrEqual(1);
-  });
-});
-
 describe('writeFrame', () => {
   const particles = generateParticles(seededRandom(11));
   const buffer = () => new Float32Array(particles.length * FLOATS_PER_VERTEX);
 
+  test('puts every absorbing dust lane after the emissive vertices', () => {
+    const out = buffer();
+    const { total, emissive } = writeFrame(particles, frameState(), out);
+    expect(emissive).toBeGreaterThan(0);
+    expect(total).toBeGreaterThan(emissive);
+    for (let i = 0; i < total; i++) {
+      const isLane = out[i * FLOATS_PER_VERTEX + 7] === SPRITE.dustLane;
+      expect(isLane).toBe(i >= emissive);
+    }
+  });
+
+  test('keeps near-side dust lanes darker than far-side ones', () => {
+    const lanes = particles.filter((p) => p.kind === 'dustLane');
+    const state = frameState();
+    const opacity = (p: Particle) => {
+      const out = new Float32Array(FLOATS_PER_VERTEX);
+      writeFrame([p], state, out);
+      return out[6] / p.brightness;
+    };
+    const near = lanes.find((p) => projectParticle(p, state).depth < -150)!;
+    const far = lanes.find((p) => projectParticle(p, state).depth > 150)!;
+    expect(opacity(near)).toBeGreaterThan(opacity(far));
+  });
+
   test('culls particles that fall off screen', () => {
-    const count = writeFrame(particles, frameState(), buffer());
-    expect(count).toBeGreaterThan(0);
-    expect(count).toBeLessThan(particles.length);
-    expect(writeFrame(particles, frameState({ width: 10, height: 10 }), buffer())).toBeLessThan(count);
+    const { total } = writeFrame(particles, frameState(), buffer());
+    expect(total).toBeGreaterThan(0);
+    expect(total).toBeLessThan(particles.length);
+    expect(writeFrame(particles, frameState({ width: 10, height: 10 }), buffer()).total).toBeLessThan(total);
   });
 
   test('dark mode does not consume randomness', () => {
@@ -172,7 +171,7 @@ describe('writeFrame', () => {
 
   test('light mode darkens every colour and keeps alpha in range', () => {
     const out = buffer();
-    const count = writeFrame(particles, frameState({ theme: 'light' }), out, seededRandom(1));
+    const { total: count } = writeFrame(particles, frameState({ theme: 'light' }), out, seededRandom(1));
     for (let i = 0; i < count; i++) {
       const base = i * FLOATS_PER_VERTEX;
       for (const channel of out.subarray(base + 3, base + 6)) expect(channel).toBeLessThanOrEqual(0.41);
@@ -183,7 +182,7 @@ describe('writeFrame', () => {
 
   test('sizes star sprites to hold a halo that grows with brightness', () => {
     const out = buffer();
-    const count = writeFrame(particles, frameState(), out);
+    const { total: count } = writeFrame(particles, frameState(), out);
     let stars = 0;
     for (let i = 0; i < count; i++) {
       const base = i * FLOATS_PER_VERTEX;

@@ -1,5 +1,5 @@
 import { BACKGROUND, type ThemeMode } from './config';
-import { FLOATS_PER_VERTEX, type DiskEllipse } from './frame';
+import { FLOATS_PER_VERTEX, type FrameCounts } from './frame';
 import { FRAGMENT_SHADER, VERTEX_SHADER } from './shaders';
 
 const BYTES_PER_VERTEX = FLOATS_PER_VERTEX * Float32Array.BYTES_PER_ELEMENT;
@@ -11,24 +11,14 @@ const ATTRIBUTES: ReadonlyArray<[name: string, size: number]> = [
   ['a_color', 3],
   ['a_alpha', 1],
   ['a_kind', 1],
-  ['a_extra', 1],
+  ['a_halo', 1],
 ];
 
-const UNIFORMS = [
-  'u_resolution',
-  'u_pixelRatio',
-  'u_maxPointSize',
-  'u_time',
-  'u_light',
-  'u_diskAngle',
-  'u_diskAspect',
-] as const;
+const UNIFORMS = ['u_resolution', 'u_pixelRatio', 'u_maxPointSize', 'u_light'] as const;
 type UniformName = (typeof UNIFORMS)[number];
 
 export interface DrawParams {
   theme: ThemeMode;
-  time: number;
-  disk: DiskEllipse;
   /** Viewport in CSS pixels; vertex positions use the same units. */
   cssWidth: number;
   cssHeight: number;
@@ -78,8 +68,11 @@ export class GalaxyRenderer {
     return new GalaxyRenderer(gl, program, buffer, uniforms, maxPointSize);
   }
 
-  /** Clears to the theme background and draws the first `count` vertices of `vertices`. */
-  draw(vertices: Float32Array, count: number, params: DrawParams): void {
+  /**
+   * Clears to the theme background, draws the emissive vertices, then the
+   * absorbing ones (dust lanes) on top.
+   */
+  draw(vertices: Float32Array, counts: FrameCounts, params: DrawParams): void {
     const { gl, uniforms } = this;
     const light = params.theme === 'light';
 
@@ -92,17 +85,21 @@ export class GalaxyRenderer {
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
     }
     gl.clear(gl.COLOR_BUFFER_BIT);
-    if (count === 0) return;
+    if (counts.total === 0) return;
 
     gl.uniform2f(uniforms.u_resolution, params.cssWidth, params.cssHeight);
     gl.uniform1f(uniforms.u_pixelRatio, params.pixelRatio);
     gl.uniform1f(uniforms.u_maxPointSize, this.maxPointSize);
-    gl.uniform1f(uniforms.u_time, params.time);
     gl.uniform1f(uniforms.u_light, light ? 1 : 0);
-    gl.uniform1f(uniforms.u_diskAngle, params.disk.angle);
-    gl.uniform1f(uniforms.u_diskAspect, params.disk.aspect);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices.subarray(0, count * FLOATS_PER_VERTEX));
-    gl.drawArrays(gl.POINTS, 0, count);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, vertices.subarray(0, counts.total * FLOATS_PER_VERTEX));
+    gl.drawArrays(gl.POINTS, 0, counts.emissive);
+
+    const absorbing = counts.total - counts.emissive;
+    if (absorbing > 0) {
+      // Dark mode: dust removes light (dst × (1 − a)). Light mode: it is more ink.
+      if (!light) gl.blendFunc(gl.ZERO, gl.ONE_MINUS_SRC_ALPHA);
+      gl.drawArrays(gl.POINTS, counts.emissive, absorbing);
+    }
   }
 
   /** Frees GPU resources. Leaves the context itself alive so the canvas can be reused. */

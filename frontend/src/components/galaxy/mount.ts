@@ -1,5 +1,5 @@
 import { ANIMATION, layoutForWidth, MAX_PIXEL_RATIO, POINTER_TILT, type ThemeMode } from './config';
-import { diskEllipse, FLOATS_PER_VERTEX, writeFrame, type FrameState } from './frame';
+import { FLOATS_PER_VERTEX, writeFrame, type FrameState } from './frame';
 import { generateParticles } from './particles';
 import type { Random } from './random';
 import { GalaxyRenderer } from './renderer';
@@ -71,11 +71,9 @@ export function mountGalaxy(canvas: HTMLCanvasElement, options: GalaxyOptions = 
     state.pitch += (targetTilt.pitch - state.pitch) * POINTER_TILT.easing;
     state.yaw += (targetTilt.yaw - state.yaw) * POINTER_TILT.easing;
 
-    const count = writeFrame(particles, state, vertices, random);
-    renderer.draw(vertices, count, {
+    const counts = writeFrame(particles, state, vertices, random);
+    renderer.draw(vertices, counts, {
       theme: state.theme,
-      time: state.time,
-      disk: diskEllipse(state),
       cssWidth: state.width,
       cssHeight: state.height,
       pixelRatio,
