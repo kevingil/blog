@@ -480,6 +480,7 @@ fn generated_openapi_contains_every_data_domain_operation() -> TestResult {
         "scrapeAndCreateSource",
         "listPublicArticleSources",
         "getArticleSources",
+        "upsertArticleSources",
         "searchSimilarSources",
         "getSource",
         "updateSource",
@@ -490,7 +491,7 @@ fn generated_openapi_contains_every_data_domain_operation() -> TestResult {
             "missing OpenAPI operation {operation_id}"
         );
     }
-    assert_eq!(operation_ids.len(), 37);
+    assert_eq!(operation_ids.len(), 38);
     assert_eq!(
         document["components"]["schemas"]["DataSourceCreateRequest"]["properties"]["name"]["minLength"],
         1
