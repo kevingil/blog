@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::{
     core::source::{
-        CreateSourceRequest as CoreCreateRequest, Source as CoreSource,
+        CreateSourceRequest as CoreCreateRequest, Source as CoreSource, SourceByUrl,
         SourceListResponse as CoreListResponse, SourceWithArticle as CoreSourceWithArticle,
         UpdateSourceRequest as CoreUpdateRequest,
     },
@@ -79,6 +79,38 @@ pub struct ScrapeSourceRequest {
     pub article_id: Uuid,
     #[schema(format = "uri")]
     pub url: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpsertArticleSourcesRequest {
+    #[serde(default)]
+    pub sources: Vec<UpsertArticleSource>,
+}
+
+impl UpsertArticleSourcesRequest {
+    pub fn into_items(self) -> Vec<SourceByUrl> {
+        self.sources
+            .into_iter()
+            .map(|source| SourceByUrl {
+                title: source.title,
+                content: source.content,
+                url: source.url,
+                source_type: source.source_type,
+            })
+            .collect()
+    }
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpsertArticleSource {
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub content: String,
+    #[serde(default)]
+    pub url: String,
+    #[serde(default)]
+    pub source_type: String,
 }
 
 impl ScrapeSourceRequest {

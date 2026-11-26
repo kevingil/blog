@@ -5,6 +5,6 @@ mod types;
 pub use ports::{ArticleLookupPort, EmbeddingPort, FetchExtractPort, SourceRepository};
 pub use service::SourceService;
 pub use types::{
-    AgentResourceSelection, CreateSourceRequest, MetaData, ScrapedContent, Source,
+    AgentResourceSelection, CreateSourceRequest, MetaData, ScrapedContent, Source, SourceByUrl,
     SourceListOptions, SourceListResponse, SourceWithArticle, UpdateSourceRequest,
 };

@@ -12,7 +12,7 @@ use crate::{
         request::JsonBody,
         response::SuccessResponse,
     },
-    core::article::{CreateArticle, CreateExternalArticle, UpdateArticle},
+    core::article::{CreateArticle, CreateDraft, CreateExternalArticle, UpdateArticle},
     error::AppError,
 };
 
@@ -105,9 +105,9 @@ pub async fn generate_article(
     operation_id = "createArticle"
 )]
 pub async fn create_article(
-    _authenticated: AuthenticatedAccount,
+    authenticated: AuthenticatedAccount,
     State(state): State<ArticleState>,
-    JsonBody(request): JsonBody<CreateArticle>,
+    JsonBody(mut request): JsonBody<CreateArticle>,
 ) -> Result<
     (
         StatusCode,
@@ -115,7 +115,39 @@ pub async fn create_article(
     ),
     AppError,
 > {
+    request.author_id = authenticated.into_inner().into_inner();
     let article = state.service()?.create(request).await?;
+    Ok((StatusCode::CREATED, Json(SuccessResponse::new(article))))
+}
+
+#[utoipa::path(
+    post,
+    path = "/blog/drafts",
+    request_body = CreateDraft,
+    responses(
+        (status = 201, body = SuccessResponse<crate::core::article::ArticleListItem>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "articles",
+    operation_id = "createDraft"
+)]
+pub async fn create_draft(
+    authenticated: AuthenticatedAccount,
+    State(state): State<ArticleState>,
+    JsonBody(request): JsonBody<CreateDraft>,
+) -> Result<
+    (
+        StatusCode,
+        Json<SuccessResponse<crate::core::article::ArticleListItem>>,
+    ),
+    AppError,
+> {
+    let article = state
+        .service()?
+        .create_draft(authenticated.into_inner().into_inner(), request)
+        .await?;
     Ok((StatusCode::CREATED, Json(SuccessResponse::new(article))))
 }
 

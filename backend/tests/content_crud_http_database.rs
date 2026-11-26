@@ -482,9 +482,88 @@ async fn content_crud_routes_use_constructor_injected_postgres_services() -> Tes
     assert_eq!(status, StatusCode::OK, "{updated_project}");
     assert_eq!(updated_project["data"]["title"], "Updated Content Project");
 
+    let project_url = format!("https://example.com/content-project-{suffix}");
+    let (status, unauthorized_upsert) = call(
+        router.clone(),
+        Method::POST,
+        "/projects/upsert",
+        json!({
+            "title": "Imported Project",
+            "description": "Imported description",
+            "content": "Imported body",
+            "tags": ["rust"],
+            "image_url": "https://example.com/image.png",
+            "url": project_url,
+        })
+        .to_string(),
+        None,
+    )
+    .await?;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{unauthorized_upsert}");
+    assert_eq!(unauthorized_upsert["error"], "Not authenticated");
+    assert_eq!(unauthorized_upsert["code"], "UNAUTHORIZED");
+
+    let (status, upserted) = call(
+        router.clone(),
+        Method::POST,
+        "/projects/upsert",
+        json!({
+            "title": "Imported Project",
+            "description": "Imported description",
+            "content": "Imported body",
+            "tags": ["rust"],
+            "image_url": "https://example.com/image.png",
+            "url": project_url,
+        })
+        .to_string(),
+        Some(&bearer),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{upserted}");
+    let upsert_id = upserted["data"]["id"]
+        .as_str()
+        .ok_or_else(|| io::Error::other("upserted project omitted id"))?
+        .to_owned();
+    let mixed_case_url = format!("HTTPS://EXAMPLE.COM/content-project-{suffix}");
+    let (status, upserted_again) = call(
+        router.clone(),
+        Method::POST,
+        "/projects/upsert",
+        json!({
+            "title": "Imported Project Revised",
+            "description": "Revised description",
+            "content": "Revised body",
+            "tags": ["rust"],
+            "image_url": "https://example.com/image.png",
+            "url": mixed_case_url,
+        })
+        .to_string(),
+        Some(&bearer),
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{upserted_again}");
+    assert_eq!(upserted_again["data"]["id"], upsert_id);
+    assert_eq!(upserted_again["data"]["title"], "Imported Project Revised");
+    assert_eq!(upserted_again["data"]["url"], mixed_case_url);
+
+    let (status, upserted_detail) = call(
+        router.clone(),
+        Method::GET,
+        &format!("/projects/{upsert_id}"),
+        Body::empty(),
+        None,
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{upserted_detail}");
+    assert_eq!(
+        upserted_detail["data"]["project"]["title"],
+        "Imported Project Revised"
+    );
+
     for (path, protected) in [
         (format!("/dashboard/pages/{page_id}"), true),
         (format!("/projects/{project_id}"), true),
+        (format!("/projects/{upsert_id}"), true),
         (format!("/organizations/{organization_id}"), true),
     ] {
         let (status, response) = call(

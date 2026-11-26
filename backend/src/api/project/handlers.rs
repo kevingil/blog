@@ -96,6 +96,31 @@ pub async fn create_project(
 }
 
 #[utoipa::path(
+    post,
+    path = "/projects/upsert",
+    request_body = ProjectCreateRequest,
+    responses(
+        (status = 200, body = SuccessResponse<ProjectResponse>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "projects",
+    operation_id = "upsertProject"
+)]
+pub async fn upsert_project(
+    _authenticated: ProjectAuthenticated,
+    State(state): State<ProjectState>,
+    body: Result<Json<ProjectCreateRequest>, JsonRejection>,
+) -> ApiResult<ProjectResponse> {
+    let Json(request) = body.map_err(|_| ProjectApiError::invalid_body())?;
+    Ok(Json(SuccessResponse::new(
+        state.service().upsert(request.validate()?).await?.into(),
+    )))
+}
+
+#[utoipa::path(
     put,
     path = "/projects/{id}",
     params(("id" = Uuid, Path)),

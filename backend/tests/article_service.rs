@@ -1127,7 +1127,7 @@ fn slug_generation_matches_go_normalization() {
 }
 
 #[test]
-fn article_openapi_exposes_all_fifteen_stable_operations() {
+fn article_openapi_exposes_stable_operations() {
     let document = serde_json::to_value(blog_backend::openapi::document()).expect("OpenAPI JSON");
     let operations = [
         ("get", "/blog/articles/search", "searchArticles"),
@@ -1140,6 +1140,7 @@ fn article_openapi_exposes_all_fifteen_stable_operations() {
         ("get", "/blog/articles", "getArticles"),
         ("get", "/blog/tags/popular", "getPopularTags"),
         ("post", "/blog/generate", "generateArticle"),
+        ("post", "/blog/drafts", "createDraft"),
         ("put", "/blog/{id}/update", "updateArticleWithContext"),
         ("post", "/blog/articles/{slug}/update", "updateArticle"),
         ("post", "/blog/articles", "createArticle"),

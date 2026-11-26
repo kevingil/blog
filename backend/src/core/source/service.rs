@@ -8,7 +8,7 @@ use crate::error::AppError;
 
 use super::{
     AgentResourceSelection, ArticleLookupPort, CreateSourceRequest, EmbeddingPort,
-    FetchExtractPort, Source, SourceListOptions, SourceListResponse, SourceRepository,
+    FetchExtractPort, Source, SourceByUrl, SourceListOptions, SourceListResponse, SourceRepository,
     UpdateSourceRequest,
 };
 
@@ -202,15 +202,10 @@ impl SourceService {
         };
 
         if existing.is_none() && !request.url.is_empty() {
-            existing = self
-                .sources
-                .find_by_article_id(request.article_id)
-                .await?
-                .into_iter()
-                .find(|source| {
-                    !source.url.is_empty()
-                        && source.url.trim().eq_ignore_ascii_case(request.url.trim())
-                });
+            existing = source_with_url(
+                &self.sources.find_by_article_id(request.article_id).await?,
+                &request.url,
+            );
         }
 
         if let Some(mut source) = existing {
@@ -246,6 +241,67 @@ impl SourceService {
         })
         .await
     }
+
+    /// Insert each source or update the article's existing row with the same URL,
+    /// compared without regard to case. Later items in `items` win when the
+    /// batch repeats a URL.
+    pub async fn upsert_by_url(
+        &self,
+        article_id: Uuid,
+        items: Vec<SourceByUrl>,
+    ) -> Result<Vec<Source>, AppError> {
+        if article_id.is_nil() {
+            return Err(AppError::InvalidInput("article_id is required".to_owned()));
+        }
+        self.articles.ensure_exists(article_id).await?;
+        let mut saved = Vec::with_capacity(items.len());
+        for item in items {
+            let url = item.url.trim().to_owned();
+            if url.is_empty() {
+                return Err(AppError::InvalidInput("url is required".to_owned()));
+            }
+            let existing =
+                source_with_url(&self.sources.find_by_article_id(article_id).await?, &url);
+            let source = if let Some(existing) = existing {
+                self.update(
+                    existing.id,
+                    UpdateSourceRequest {
+                        title: (!item.title.is_empty()).then_some(item.title),
+                        content: (!item.content.is_empty()).then_some(item.content),
+                        url: Some(url),
+                        source_type: (!item.source_type.is_empty()).then_some(item.source_type),
+                        meta_data: None,
+                    },
+                )
+                .await?
+            } else if item.content.trim().is_empty() {
+                return Err(AppError::InvalidInput("content is required".to_owned()));
+            } else {
+                self.create(CreateSourceRequest {
+                    article_id,
+                    title: item.title,
+                    content: item.content,
+                    url,
+                    source_type: item.source_type,
+                    meta_data: None,
+                })
+                .await?
+            };
+            saved.push(source);
+        }
+        Ok(saved)
+    }
+}
+
+fn source_with_url(sources: &[Source], url: &str) -> Option<Source> {
+    let url = url.trim();
+    sources
+        .iter()
+        .find(|source| {
+            let existing = source.url.trim();
+            !existing.is_empty() && existing.eq_ignore_ascii_case(url)
+        })
+        .cloned()
 }
 
 fn agent_resource_meta(

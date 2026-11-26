@@ -33,6 +33,23 @@ impl ProjectRepository for MemoryProjects {
             .ok_or(AppError::NotFound)
     }
 
+    async fn find_by_url(&self, url: &str) -> Result<Option<Project>, AppError> {
+        let needle = url.trim();
+        if needle.is_empty() {
+            return Ok(None);
+        }
+        Ok(self
+            .values
+            .lock()
+            .map_err(AppError::internal)?
+            .values()
+            .filter(|project| {
+                !project.url.is_empty() && project.url.trim().eq_ignore_ascii_case(needle)
+            })
+            .min_by_key(|project| project.id)
+            .cloned())
+    }
+
     async fn list(&self, options: ProjectListOptions) -> Result<(Vec<Project>, i64), AppError> {
         *self.last_list.lock().map_err(AppError::internal)? = Some(options);
         let values: Vec<_> = self
@@ -385,5 +402,61 @@ async fn project_delete_preserves_success_and_not_found() {
     assert!(matches!(
         service.delete(value.id).await,
         Err(AppError::NotFound)
+    ));
+}
+
+#[tokio::test]
+async fn project_upsert_reuses_the_row_when_the_url_case_differs() {
+    let projects = Arc::new(MemoryProjects::default());
+    let service = service(projects.clone(), Arc::new(MemoryTags::default()));
+    let created = service
+        .upsert(ProjectCreateRequest {
+            title: "Imported".to_owned(),
+            description: "Imported description".to_owned(),
+            content: "Imported body".to_owned(),
+            tags: vec!["rust".to_owned()],
+            image_url: String::new(),
+            url: " HTTPS://Example.com/Repo ".to_owned(),
+            image_upload_id: None,
+        })
+        .await;
+    let updated = service
+        .upsert(ProjectCreateRequest {
+            title: "Imported again".to_owned(),
+            description: "Updated description".to_owned(),
+            content: "Updated body".to_owned(),
+            tags: Vec::new(),
+            image_url: "https://example.com/image.png".to_owned(),
+            url: "https://example.com/repo".to_owned(),
+            image_upload_id: None,
+        })
+        .await;
+    let created_id = created.as_ref().ok().map(|project| project.id);
+    let updated_project = updated.as_ref().ok();
+    assert_eq!(created_id, updated_project.map(|project| project.id));
+    assert!(updated_project.is_some_and(|project| {
+        project.title == "Imported again" && project.url == "https://example.com/repo"
+    }));
+    assert_eq!(
+        projects
+            .values
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .len(),
+        1
+    );
+    assert!(matches!(
+        service
+            .upsert(ProjectCreateRequest {
+                title: "Missing URL".to_owned(),
+                description: "Still needs a URL".to_owned(),
+                content: String::new(),
+                tags: Vec::new(),
+                image_url: String::new(),
+                url: "  ".to_owned(),
+                image_upload_id: None,
+            })
+            .await,
+        Err(AppError::InvalidInput(_))
     ));
 }

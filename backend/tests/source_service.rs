@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use blog_backend::{
     core::source::{
         AgentResourceSelection, ArticleLookupPort, CreateSourceRequest, EmbeddingPort,
-        FetchExtractPort, ScrapedContent, Source, SourceListOptions, SourceRepository,
+        FetchExtractPort, ScrapedContent, Source, SourceByUrl, SourceListOptions, SourceRepository,
         SourceService, SourceWithArticle, UpdateSourceRequest,
     },
     error::AppError,
@@ -259,6 +259,46 @@ async fn test_service_upsert_agent_resource_updates_existing_source() -> TestRes
 }
 
 #[tokio::test]
+async fn test_service_upsert_by_url_inserts_and_updates_without_duplicates() -> TestResult {
+    let store = Arc::new(Store::default());
+    let article_id = Uuid::new_v4();
+    let source_service = service(store.clone());
+    let created = source_service
+        .upsert_by_url(
+            article_id,
+            vec![
+                source_by_url("One", "https://Example.com/one"),
+                source_by_url("Two", "https://example.com/two"),
+            ],
+        )
+        .await?;
+    let updated = source_service
+        .upsert_by_url(
+            article_id,
+            vec![
+                source_by_url("One revised", "https://example.com/ONE"),
+                source_by_url("Three", "https://example.com/three"),
+            ],
+        )
+        .await?;
+    assert_eq!(updated.len(), 2);
+    assert_eq!(updated[0].id, created[0].id);
+    assert_eq!(updated[0].title, "One revised");
+    assert_eq!(updated[0].content, "One revised body");
+    assert_eq!(lock(&store.values)?.len(), 3);
+    Ok(())
+}
+
+fn source_by_url(title: &str, url: &str) -> SourceByUrl {
+    SourceByUrl {
+        title: title.to_owned(),
+        content: format!("{title} body"),
+        url: url.to_owned(),
+        source_type: "web".to_owned(),
+    }
+}
+
+#[tokio::test]
 async fn create_update_search_and_scrape_use_injected_ports() -> TestResult {
     let store = Arc::new(Store::default());
     let article_id = Uuid::new_v4();
@@ -274,10 +314,13 @@ async fn create_update_search_and_scrape_use_injected_ports() -> TestResult {
         .await?;
     assert_eq!(value.source_type, "manual");
     let updated = service(store.clone())
-        .update(value.id, UpdateSourceRequest {
-            content: Some("Updated".to_owned()),
-            ..UpdateSourceRequest::default()
-        })
+        .update(
+            value.id,
+            UpdateSourceRequest {
+                content: Some("Updated".to_owned()),
+                ..UpdateSourceRequest::default()
+            },
+        )
         .await?;
     assert_eq!(updated.embedding, Some(vec![0.25; 4]));
     assert_eq!(

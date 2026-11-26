@@ -82,6 +82,52 @@ impl ProjectService {
         Ok(project)
     }
 
+    /// Insert a project or replace the row whose URL matches `request.url`
+    /// under `lower(url)`. A unique violation on insert is the same match
+    /// winning a race, and is applied as an update.
+    pub async fn upsert(&self, mut request: ProjectCreateRequest) -> Result<Project, AppError> {
+        request.url = request.url.trim().to_owned();
+        if request.url.is_empty() {
+            return Err(AppError::InvalidInput("url is required".to_owned()));
+        }
+        if request.title.is_empty() || request.description.is_empty() {
+            return Err(AppError::InvalidInput("validation failed".to_owned()));
+        }
+        if let Some(existing) = self.projects.find_by_url(&request.url).await? {
+            return self.replace_from_create(existing.id, request).await;
+        }
+        match self.create(request.clone()).await {
+            Ok(project) => Ok(project),
+            Err(AppError::Conflict(message)) => {
+                match self.projects.find_by_url(&request.url).await? {
+                    Some(existing) => self.replace_from_create(existing.id, request).await,
+                    None => Err(AppError::Conflict(message)),
+                }
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    async fn replace_from_create(
+        &self,
+        id: Uuid,
+        request: ProjectCreateRequest,
+    ) -> Result<Project, AppError> {
+        self.update(
+            id,
+            ProjectUpdateRequest {
+                title: Some(request.title),
+                description: Some(request.description),
+                content: Some(request.content),
+                tags: Some(request.tags),
+                image_url: Some(request.image_url),
+                url: Some(request.url),
+                image_upload_id: request.image_upload_id,
+            },
+        )
+        .await
+    }
+
     pub async fn update(
         &self,
         id: Uuid,

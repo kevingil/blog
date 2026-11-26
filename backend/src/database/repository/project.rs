@@ -3,7 +3,9 @@ use chrono::Utc;
 use diesel::{
     ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper,
     dsl::count_star,
+    expression_methods::NullableExpressionMethods,
     result::{DatabaseErrorKind, Error as DieselError},
+    sql_types::Text,
 };
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
@@ -17,6 +19,8 @@ use crate::{
     error::AppError,
     schema::project,
 };
+
+diesel::define_sql_function!(fn lower(value: Text) -> Text);
 
 #[derive(Clone)]
 pub struct DieselProjectRepository {
@@ -51,6 +55,24 @@ impl ProjectRepository for DieselProjectRepository {
             .map_err(map_diesel_error)?
             .ok_or(AppError::NotFound)?
             .try_into()
+    }
+
+    async fn find_by_url(&self, url: &str) -> Result<Option<Project>, AppError> {
+        let url = url.trim();
+        if url.is_empty() {
+            return Ok(None);
+        }
+        let mut connection = self.connection().await?;
+        project::table
+            .filter(lower(project::url.assume_not_null()).eq(lower(url)))
+            .order(project::id.asc())
+            .select(ProjectRow::as_select())
+            .first::<ProjectRow>(&mut connection)
+            .await
+            .optional()
+            .map_err(map_diesel_error)?
+            .map(Project::try_from)
+            .transpose()
     }
 
     async fn list(&self, options: ProjectListOptions) -> Result<(Vec<Project>, i64), AppError> {

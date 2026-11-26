@@ -12,6 +12,7 @@ use super::{
         CreateSourceRequest, PublicSourceResponse, PublicSourcesResponse, ScrapeSourceRequest,
         SearchSourcesResponse, SourceListQuery, SourceListResponse, SourceResponse,
         SourceSearchQuery, SourcesResponse, SuccessFlag, UpdateSourceRequest,
+        UpsertArticleSourcesRequest,
     },
     error::SourceApiError,
     state::SourceState,
@@ -166,6 +167,42 @@ pub async fn get_article_sources(
         sources: state
             .service()
             .get_by_article_id(article_id)
+            .await?
+            .into_iter()
+            .map(Into::into)
+            .collect(),
+    })))
+}
+
+#[utoipa::path(
+    put,
+    path = "/sources/article/{articleId}",
+    params(("articleId" = Uuid, Path)),
+    request_body = UpsertArticleSourcesRequest,
+    responses(
+        (status = 200, body = SuccessResponse<SourcesResponse>),
+        (status = 400, body = crate::error::ErrorEnvelope),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 404, body = crate::error::ErrorEnvelope),
+        (status = 500, body = crate::error::ErrorEnvelope),
+        (status = 502, body = crate::error::ErrorEnvelope)
+    ),
+    security(("bearerAuth" = [])),
+    tag = "sources",
+    operation_id = "upsertArticleSources"
+)]
+pub async fn upsert_article_sources(
+    _authenticated: AuthenticatedAccount,
+    State(state): State<SourceState>,
+    Path(article_id): Path<String>,
+    body: Result<Json<UpsertArticleSourcesRequest>, JsonRejection>,
+) -> ApiResult<SourcesResponse> {
+    let article_id = parse_article_id(&article_id)?;
+    let Json(request) = body.map_err(invalid_request_body)?;
+    Ok(Json(SuccessResponse::new(SourcesResponse {
+        sources: state
+            .service()
+            .upsert_by_url(article_id, request.into_items())
             .await?
             .into_iter()
             .map(Into::into)
