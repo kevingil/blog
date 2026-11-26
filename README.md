@@ -189,10 +189,6 @@ The API uses Render's [pre-deploy command](https://render.com/docs/deploys#pre-d
 on a paid service, so migration failure blocks the new API deployment.
 Production never runs the local fixture seed. Existing accounts remain intact.
 
-The existing Fly deploy workflow remains enabled until the compute cutover;
-merging to `main` can still deploy there. Coordinate its disablement and the
-frontend domain cutover with the first successful Render deployment.
-
 ## Verification
 
 The blocking Rust matrix is partitioned into exact targets so failures identify
