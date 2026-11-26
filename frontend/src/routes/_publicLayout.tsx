@@ -4,10 +4,12 @@ import { Navbar } from "@/components/navbar";
 import { Suspense, useEffect } from 'react';
 import { createFileRoute, Outlet, useLocation } from '@tanstack/react-router';
 import './_publicLayout/projects/index'
-import { SpiralGalaxyAnimation } from "@/components/home/galaxy";
+import { SpiralGalaxy } from "@/components/galaxy";
+import { useTheme } from "@/components/theme-provider";
 
 function PublicLayout() {
   const location = useLocation();
+  const { theme } = useTheme();
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -17,7 +19,8 @@ function PublicLayout() {
     <div className="min-h-[100dvh] flex flex-col relative">
       <Suspense fallback={<div>Loading...</div>}>
         {/* <Aurora /> */}
-        <SpiralGalaxyAnimation />
+        {/* "system" renders dark, as before. */}
+        <SpiralGalaxy theme={theme === "light" ? "light" : "dark"} />
         <Navbar />
         <main className="w-full max-w-7xl mx-auto px-2 sm:px-6 z-[1]" data-vaul-drawer-wrapper="">
           <Outlet />
