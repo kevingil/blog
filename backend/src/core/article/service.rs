@@ -110,13 +110,29 @@ pub struct CreateArticle {
     pub tags: Vec<String>,
     #[serde(default)]
     pub publish: bool,
-    #[serde(rename = "authorId")]
+    /// Kept so existing clients can still send it. `POST /blog/articles` replaces
+    /// this with the authenticated account before the article is saved.
+    #[serde(default, rename = "authorId")]
     pub author_id: Uuid,
     /// When set, the public article opens this link. Empty keeps it on this site.
     #[serde(default)]
     pub external_url: Option<String>,
     #[serde(default)]
     pub image_upload_id: Option<Uuid>,
+}
+
+/// Minimal unpublished article. The article row has no summary column, so a
+/// summary is not part of this body. `content` wins when it is non-empty;
+/// otherwise `markdown` is stored as the draft body.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, ToSchema)]
+pub struct CreateDraft {
+    pub title: String,
+    #[serde(default)]
+    pub content: String,
+    #[serde(default)]
+    pub markdown: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, ToSchema)]
@@ -369,6 +385,33 @@ impl ArticleService {
         article.tag_ids = None;
         self.articles.save(&mut article).await?;
         Ok(article)
+    }
+
+    pub async fn create_draft(
+        &self,
+        author_id: Uuid,
+        request: CreateDraft,
+    ) -> Result<ArticleListItem, AppError> {
+        let title = request.title.trim();
+        if title.is_empty() {
+            return Err(AppError::InvalidInput("title is required".to_owned()));
+        }
+        let content = if request.content.trim().is_empty() {
+            request.markdown
+        } else {
+            request.content
+        };
+        self.create(CreateArticle {
+            title: title.to_owned(),
+            content,
+            image_url: String::new(),
+            tags: request.tags,
+            publish: false,
+            author_id,
+            external_url: None,
+            image_upload_id: None,
+        })
+        .await
     }
 
     pub async fn update_generated_draft(

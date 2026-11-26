@@ -10,7 +10,7 @@ pub use repository::ArticleRepository;
 pub use service::{
     ArticleContextWriter, ArticleData, ArticleEmbeddingProvider, ArticleListItem,
     ArticleListResponse, ArticleService, ArticleVersionListResponse, ArticleVersionResponse,
-    AuthorData, CreateArticle, CreateExternalArticle, RecommendedArticle, TagData, UpdateArticle,
-    generate_slug,
+    AuthorData, CreateArticle, CreateDraft, CreateExternalArticle, RecommendedArticle, TagData,
+    UpdateArticle, generate_slug,
 };
 pub use types::{Article, ArticleListOptions, ArticleSearchOptions, ArticleVersion};
