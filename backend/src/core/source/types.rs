@@ -44,6 +44,14 @@ pub struct CreateSourceRequest {
     pub meta_data: Option<MetaData>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceByUrl {
+    pub title: String,
+    pub content: String,
+    pub url: String,
+    pub source_type: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct UpdateSourceRequest {
     pub title: Option<String>,
