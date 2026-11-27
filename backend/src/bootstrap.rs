@@ -12,7 +12,6 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     api::{
-        agent::AgentState,
         article::ArticleState,
         auth::AuthState,
         datasource::DataSourceState,
@@ -34,29 +33,14 @@ use crate::{
     core::{
         article::{ArticleRepository, ArticleService, ObjectImageCache},
         auth::AuthService,
-        chat::ChatMessageService,
-        conversation::ConversationService,
-        copilot::{ArticleDraftAdapter, CopilotConfig, CopilotManager},
         datasource::{DataSourceRepository, DataSourceService, RecommendationService},
         image::ImageService,
         insight::{InsightService, InsightTopicRepository, TrackerCatalog},
-        live::LivePorts,
-        mcp::McpConnectorService,
-        ml::{
-            TextGenerationService,
-            llm::{
-                Agent, ApplyPatchTool, GenerateImagePromptTool, GetRelevantSourcesTool,
-                InMemorySessionStore, InsightReader, ListInsightsTool, Model, ReadDocumentTool,
-                ReplaceLinesTool, SearchInsightsTool, SearchWebSourcesTool,
-                SelectSourcesForEditTool, SessionStore, SetTitleTool, Tool, ToolRegistry,
-                UpdateSourcesTool,
-            },
-        },
+        ml::llm::Model,
         organization::OrganizationService,
         page::PageService,
         profile::{ProfileService, SiteSettingsRepository},
         project::ProjectService,
-        skill::SkillService,
         source::SourceService,
         storage::StorageService,
         storage::UploadRepository,
@@ -68,13 +52,12 @@ use crate::{
     },
     database::pool::create_pool,
     database::repository::{
-        account::DieselAccountRepository, agent_skill::DieselSkillRepository,
-        article::DieselArticleRepository, chat_message::DieselChatMessageRepository,
+        account::DieselAccountRepository, article::DieselArticleRepository,
         content_topic_match::DieselContentTopicMatchRepository,
         crawled_content::DieselCrawledContentRepository, data_source::DieselDataSourceRepository,
         image::DieselImageRepository, insight::DieselInsightRepository,
-        insight_topic::DieselInsightTopicRepository, mcp_connector::DieselMcpConnectorRepository,
-        organization::DieselOrganizationRepository, page::DieselPageRepository,
+        insight_topic::DieselInsightTopicRepository, organization::DieselOrganizationRepository,
+        page::DieselPageRepository,
         project::DieselProjectRepository, site_settings::DieselSiteSettingsRepository,
         source::DieselSourceRepository, tag::DieselTagRepository,
         task_run::DieselTaskRunRepository, upload::DieselUploadRepository,
@@ -88,9 +71,8 @@ use crate::{
         s3::S3ObjectStore,
     },
     runtime::{
-        AgentQueueWorker, CombinedAgentStreamProvider, CopilotLiveHarness, CopilotRuntime,
-        INSIGHT_INSTRUCTIONS, ImageQueueWorker, RuntimeAgentQueue, RuntimeImageQueue,
-        RuntimeInsightGenerator,
+        AgentQueueWorker, INSIGHT_INSTRUCTIONS, ImageQueueWorker, RuntimeAgentQueue,
+        RuntimeImageQueue, RuntimeInsightGenerator,
     },
     server,
 };
@@ -103,7 +85,6 @@ pub struct Application {
     articles: Arc<DieselArticleRepository>,
     agent_worker: Option<AgentQueueWorker>,
     image_worker: Option<ImageQueueWorker>,
-    copilot: Arc<CopilotRuntime>,
     worker_manager: Arc<WorkerManager>,
     websocket: WebSocketSupervisor,
 }
@@ -153,10 +134,6 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         .await?,
     );
 
-    let chat = Arc::new(ChatMessageService::new(
-        Arc::new(DieselChatMessageRepository::new(pool.clone())),
-        cancellation.child_token(),
-    ));
     let task_runs = Arc::new(TaskRunService::new(
         Arc::new(DieselTaskRunRepository::new(pool.clone())),
         cancellation.child_token(),
@@ -181,7 +158,7 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
             ),
     );
     let (article_generation_queue, agent_worker) =
-        RuntimeAgentQueue::new(chat.clone(), article_service.clone(), openai.clone());
+        RuntimeAgentQueue::new(article_service.clone(), openai.clone());
     let article = ArticleState::new(article_service.clone(), article_generation_queue.clone());
 
     let data_sources_repository = Arc::new(DieselDataSourceRepository::new(pool.clone()));
@@ -311,64 +288,13 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
     let insight = insight.with_workers(worker_manager.clone());
     let worker = WorkerState::new(worker_manager.clone(), worker_status.clone());
 
-    let drafts = Arc::new(ArticleDraftAdapter::new(articles.clone()));
-    let session_store: Arc<dyn SessionStore> = Arc::new(InMemorySessionStore::default());
-    let text_generation = Arc::new(TextGenerationService::new(openai.clone()));
-    let insight_reader: Arc<dyn InsightReader> = insight_service.clone();
-    let tools: Vec<Arc<dyn Tool>> = vec![
-        Arc::new(ReadDocumentTool),
-        Arc::new(SetTitleTool::new(Some(drafts.clone()))),
-        Arc::new(ListInsightsTool::new(insight_reader.clone())),
-        Arc::new(SearchInsightsTool::new(insight_reader)),
-        Arc::new(UpdateSourcesTool::new(source_service.clone())),
-        Arc::new(ApplyPatchTool::new(Some(drafts.clone())).with_sources(source_service.clone())),
-        Arc::new(ReplaceLinesTool::new(Some(drafts.clone())).with_sources(source_service.clone())),
-        Arc::new(GenerateImagePromptTool::new(text_generation)),
-        Arc::new(SearchWebSourcesTool::new(
-            exa.clone(),
-            source_service.clone(),
-        )),
-        Arc::new(GetRelevantSourcesTool::new(source_service.clone())),
-        Arc::new(SelectSourcesForEditTool::new(source_service.clone())),
-    ];
-    let registry = ToolRegistry::from_builtin(tools);
-    let connectors = McpConnectorService::new(
-        Arc::new(DieselMcpConnectorRepository::new(pool.clone())),
-        registry.clone(),
-        cancellation.child_token(),
-    );
-    if let Err(error) = connectors.refresh_enabled().await {
-        tracing::warn!(%error, "failed to refresh MCP connectors at startup");
-    }
-    let conversation = ConversationService::new(openai.clone());
-    let skills = SkillService::new(
-        Arc::new(DieselSkillRepository::new(pool.clone())),
-        cancellation.child_token(),
-    );
-    let live_upstream = openai.clone();
-    let copilot_manager = CopilotManager::new(
-        Agent::with_registry(openai.clone(), session_store.clone(), registry.clone()),
-        session_store,
-        chat.clone(),
-        Some(source_service),
-        Some(drafts),
-        CopilotConfig::from_env()
-            .map_err(|error| anyhow::anyhow!("invalid copilot configuration: {error}"))?,
-        cancellation.child_token(),
-        Some(openai),
-        Some(skills.clone()),
-    );
-    let copilot = CopilotRuntime::new(copilot_manager);
-    let live = LivePorts::new(CopilotLiveHarness::new(copilot.clone()), live_upstream);
-    let agent_streams =
-        CombinedAgentStreamProvider::new(copilot.clone(), article_generation_queue.clone());
     let websocket_config = WebSocketConfig {
         shutdown_wait: BACKGROUND_SHUTDOWN_TIMEOUT.saturating_sub(Duration::from_secs(1)),
         ..WebSocketConfig::default()
     };
     let (websocket_handle, websocket) = WebSocketSupervisor::new(
         websocket_config,
-        agent_streams,
+        article_generation_queue,
         Arc::new(WorkerStatusAdapter::new(worker_status)),
     )
     .map_err(|error| anyhow::anyhow!("invalid WebSocket configuration: {error}"))?;
@@ -377,16 +303,6 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         auth,
         websocket_handle,
         AppDependencies {
-            agent: AgentState::new(
-                chat,
-                copilot.clone(),
-                connectors,
-                conversation,
-                registry,
-                skills,
-                live,
-            )
-            .with_public_urls(config.public_api_url.clone(), config.public_app_url.clone()),
             article,
             datasource,
             image,
@@ -427,7 +343,6 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
         articles,
         agent_worker: Some(agent_worker),
         image_worker: Some(image_worker),
-        copilot,
         worker_manager,
         websocket,
     })
@@ -490,7 +405,6 @@ impl Application {
         .await;
 
         cancellation.cancel();
-        let copilot_result = self.copilot.shutdown(BACKGROUND_SHUTDOWN_TIMEOUT).await;
         let worker_result = self.worker_manager.shutdown().await;
         let task_errors =
             drain_application_tasks(&mut self.tasks, BACKGROUND_SHUTDOWN_TIMEOUT).await;
@@ -512,9 +426,6 @@ impl Application {
                 error.timed_out,
                 error.task_failures.join(", ")
             ));
-        }
-        if let Err(error) = copilot_result {
-            errors.push(format!("copilot shutdown failed: {error}"));
         }
         errors.extend(task_errors);
         if errors.is_empty() {

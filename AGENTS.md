@@ -27,7 +27,7 @@ No real API keys are required. `docker-compose.yml` supplies safe local values
 for every setting (`DATABASE_URL`, `AUTH_SECRET`, `OPENAI_*`, `GROQ_*`, `EXA_*`,
 `S3_*`): the database and object store run locally, and all model/search calls
 hit the bundled `external-fixtures` service. The full product flow (auth,
-articles, AI search, copilot, image generation) is exercisable offline.
+articles, AI search, insights, image generation) is exercisable offline.
 
 ## Bare VM without Docker (cloud agent sandboxes)
 

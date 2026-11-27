@@ -1,4 +1,3 @@
-pub mod agent;
 pub mod article;
 pub mod auth;
 pub mod datasource;

@@ -11,11 +11,10 @@ use uuid::Uuid;
 
 use crate::{
     api::{
-        agent::{AgentRequestQueue, ChatRequest},
         article::{ArticleGenerationQueue, GenerationRequest},
         websocket::{AgentStreamEvent, AgentStreamProvider},
     },
-    core::{article::ArticleService, chat::ChatMessageService},
+    core::article::ArticleService,
     error::AppError,
     integrations::openai::OpenAiClient,
 };
@@ -26,7 +25,8 @@ const MAX_CONCURRENT_REQUESTS: usize = 8;
 const WRITER_INSTRUCTIONS: &str = "You are the blog writing assistant. Respond with useful, publication-ready prose. Preserve the user's intent and do not claim to have used tools that were not provided.";
 
 struct AgentJob {
-    request: ChatRequest,
+    message: String,
+    article_id: Uuid,
     events: mpsc::Sender<AgentStreamEvent>,
 }
 
@@ -38,14 +38,12 @@ pub struct RuntimeAgentQueue {
 
 pub struct AgentQueueWorker {
     jobs: mpsc::Receiver<AgentJob>,
-    chat: Arc<ChatMessageService>,
     articles: Arc<ArticleService>,
     openai: Arc<OpenAiClient>,
 }
 
 impl RuntimeAgentQueue {
     pub fn new(
-        chat: Arc<ChatMessageService>,
         articles: Arc<ArticleService>,
         openai: Arc<OpenAiClient>,
     ) -> (Arc<Self>, AgentQueueWorker) {
@@ -54,51 +52,39 @@ impl RuntimeAgentQueue {
             jobs,
             streams: Arc::new(Mutex::new(HashMap::new())),
         });
-        (queue, AgentQueueWorker {
-            jobs: receiver,
-            chat,
-            articles,
-            openai,
-        })
-    }
-
-    async fn submit_request(&self, request: ChatRequest) -> Result<String, AppError> {
-        let request_id = Uuid::new_v4().to_string();
-        let (events, receiver) = mpsc::channel(EVENT_QUEUE_CAPACITY);
-        self.streams
-            .lock()
-            .map_err(AppError::internal)?
-            .insert(request_id.clone(), receiver);
-        if self.jobs.send(AgentJob { request, events }).await.is_err() {
-            self.streams
-                .lock()
-                .map_err(AppError::internal)?
-                .remove(&request_id);
-            return Err(AppError::external("agent request queue is closed"));
-        }
-        Ok(request_id)
-    }
-}
-
-#[async_trait]
-impl AgentRequestQueue for RuntimeAgentQueue {
-    async fn submit(&self, request: ChatRequest) -> Result<String, AppError> {
-        self.submit_request(request).await
+        (
+            queue,
+            AgentQueueWorker {
+                jobs: receiver,
+                articles,
+                openai,
+            },
+        )
     }
 }
 
 #[async_trait]
 impl ArticleGenerationQueue for RuntimeAgentQueue {
     async fn submit(&self, request: GenerationRequest) -> Result<String, AppError> {
-        self.submit_request(ChatRequest {
+        let request_id = Uuid::new_v4().to_string();
+        let (events, receiver) = mpsc::channel(EVENT_QUEUE_CAPACITY);
+        self.streams
+            .lock()
+            .map_err(AppError::internal)?
+            .insert(request_id.clone(), receiver);
+        let job = AgentJob {
             message: request.message,
-            document_content: String::new(),
-            document_markdown: String::new(),
-            document_title: String::new(),
-            article_id: request.article_id.to_string(),
-            channel: String::new(),
-        })
-        .await
+            article_id: request.article_id,
+            events,
+        };
+        if self.jobs.send(job).await.is_err() {
+            self.streams
+                .lock()
+                .map_err(AppError::internal)?
+                .remove(&request_id);
+            return Err(AppError::external("article generation queue is closed"));
+        }
+        Ok(request_id)
     }
 }
 
@@ -117,16 +103,15 @@ impl AgentQueueWorker {
                 () = cancellation.cancelled() => break,
                 completed = tasks.join_next(), if !tasks.is_empty() => {
                     if let Some(Err(error)) = completed {
-                        tracing::error!(%error, "agent request task failed");
+                        tracing::error!(%error, "article generation task failed");
                     }
                 }
                 job = self.jobs.recv(), if tasks.len() < MAX_CONCURRENT_REQUESTS => {
                     let Some(job) = job else { break };
-                    let chat = self.chat.clone();
                     let articles = self.articles.clone();
                     let openai = self.openai.clone();
                     tasks.spawn(async move {
-                        process_job(job, chat, articles, openai).await;
+                        process_job(job, articles, openai).await;
                     });
                 }
             }
@@ -137,59 +122,26 @@ impl AgentQueueWorker {
         }
         while let Some(result) = tasks.join_next().await {
             if let Err(error) = result {
-                tracing::error!(%error, "agent request task failed during shutdown");
+                tracing::error!(%error, "article generation task failed during shutdown");
             }
         }
         Ok(())
     }
 }
 
-async fn process_job(
-    job: AgentJob,
-    chat: Arc<ChatMessageService>,
-    articles: Arc<ArticleService>,
-    openai: Arc<OpenAiClient>,
-) {
-    let article_id = match Uuid::parse_str(&job.request.article_id) {
-        Ok(value) => value,
-        Err(_) => {
-            send_error(job.events, "Invalid article ID format").await;
-            return;
-        }
-    };
-    if chat
-        .save_message(article_id, "user", job.request.message.clone(), None)
-        .await
-        .is_err()
-    {
-        send_error(job.events, "failed to persist user message").await;
-        return;
-    }
+async fn process_job(job: AgentJob, articles: Arc<ArticleService>, openai: Arc<OpenAiClient>) {
     let _ = send_event(&job.events, json!({"type": "turn_started"})).await;
-    let prompt = if job.request.document_markdown.is_empty() {
-        job.request.message.clone()
-    } else {
-        format!(
-            "Current document:\n{}\n\nUser request:\n{}",
-            job.request.document_markdown, job.request.message
-        )
-    };
-    match openai.generate_text(WRITER_INSTRUCTIONS, &prompt).await {
+    match openai
+        .generate_text(WRITER_INSTRUCTIONS, &job.message)
+        .await
+    {
         Ok(content) => {
             if articles
-                .update_generated_draft(article_id, &content)
+                .update_generated_draft(job.article_id, &content)
                 .await
                 .is_err()
             {
                 send_error(job.events, "failed to persist generated article").await;
-                return;
-            }
-            if chat
-                .save_message(article_id, "assistant", content.clone(), None)
-                .await
-                .is_err()
-            {
-                send_error(job.events, "failed to persist assistant message").await;
                 return;
             }
             let _ = send_event(

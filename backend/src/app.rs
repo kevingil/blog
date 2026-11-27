@@ -19,7 +19,6 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
     api::{
-        agent::AgentState,
         article::ArticleState,
         auth::{AuthState, attach_resource_metadata},
         datasource::DataSourceState,
@@ -44,7 +43,6 @@ use crate::{
 pub struct AppState {
     pub(crate) pool: PgPool,
     auth: AuthState,
-    agent: AgentState,
     article: ArticleState,
     datasource: DataSourceState,
     image: ImageState,
@@ -61,7 +59,6 @@ pub struct AppState {
 }
 
 pub struct AppDependencies {
-    pub agent: AgentState,
     pub article: ArticleState,
     pub datasource: DataSourceState,
     pub image: ImageState,
@@ -86,7 +83,6 @@ impl AppState {
         Self {
             pool,
             auth,
-            agent: dependencies.agent,
             article: dependencies.article,
             datasource: dependencies.datasource,
             image: dependencies.image,
@@ -124,7 +120,6 @@ macro_rules! from_app_state {
     };
 }
 
-from_app_state!(AgentState, agent);
 impl axum::extract::FromRef<AppState> for ArticleState {
     fn from_ref(state: &AppState) -> Self {
         state.article.clone()

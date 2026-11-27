@@ -255,5 +255,5 @@ bootstrap -> AppState -> typed FromRef substates
 ```
 
 Application-owned cancellation tokens and task sets cover the HTTP server,
-article/image queues, copilot requests and WebSocket bridges, workers, and
+article/image queues, WebSocket bridges, workers, and
 graceful SIGINT/SIGTERM shutdown.
