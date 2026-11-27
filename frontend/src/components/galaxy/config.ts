@@ -43,7 +43,9 @@ export const DENSITY_WAVE = {
   /** Radius where material and pattern move together, as a multiple of the disk radius. */
   corotation: 1.25,
   /** Gas brightness between the arms, as a fraction of its brightness on them. */
-  interArmGlow: 0.1,
+  interArmGlow: 0.08,
+  /** Gas lanes are this fraction of an arm's full width, so they read as long thin spirals. */
+  gasLaneWidth: 0.6,
   /** Dust lanes sit this far upstream of the arm centre, and are this wide. */
   laneOffset: -0.22,
   laneWidth: 0.15,
@@ -59,9 +61,10 @@ export const DENSITY_WAVE = {
 export const NEBULA = {
   /** Puffs in the thick, rounded haze around the bulge. */
   coreHazePuffs: 280,
-  /** Cloud complexes spread over the disk; each is a clump of puffs, sheared along its orbit. */
-  cloudComplexes: 280,
-  puffsPerComplex: { min: 5, span: 7 },
+  /** Gas streamers spread over the disk; each is a thin arc of puffs along its orbit. */
+  streamers: 300,
+  streamerArc: { min: 0.5, span: 0.6 },
+  puffsPerStreamer: { min: 9, span: 6 },
   /** Absorbing puffs over the disk; only those in a lane show at any moment. */
   dustLanePuffs: 4200,
 } as const;

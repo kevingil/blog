@@ -123,6 +123,13 @@ function jitter(color: Rgb255, random: Random, amount: number): Rgb255 {
   return [channel(color[0]), channel(color[1]), channel(color[2])];
 }
 
+/** Pulls a colour `amount` of the way toward its own grey. */
+function muted(color: Rgb255, amount: number): Rgb255 {
+  const grey = 0.2126 * color[0] + 0.7152 * color[1] + 0.0722 * color[2];
+  const channel = (c: number) => Math.round(c + (grey - c) * amount);
+  return [channel(color[0]), channel(color[1]), channel(color[2])];
+}
+
 function toRgb255([r, g, b]: readonly [number, number, number]): Rgb255 {
   return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }
@@ -147,30 +154,32 @@ function addCoreHaze(out: Particle[], random: Random): void {
 }
 
 /**
- * Gas complexes spread across the disk. Differential rotation shears each one
- * along its orbit, so its puffs are stretched tangentially; the density wave
- * then lights them up as they stream through an arm.
+ * Gas in long, thin streamers along circular orbits: differential rotation
+ * shears any cloud into an arc. Spread evenly over the disk, the streamers
+ * light up only where they cross an arm, so together they draw the arms as
+ * long continuous spiral lanes, with fine striations along the orbits.
  */
 function addClouds(out: Particle[], random: Random): void {
   const { coreRadius, diskRadius } = GALAXY;
 
-  for (let i = 0; i < NEBULA.cloudComplexes; i++) {
+  for (let i = 0; i < NEBULA.streamers; i++) {
     const centreR = coreRadius * 1.2 + (diskRadius - coreRadius * 1.2) * Math.sqrt(random());
     const centreTheta = random() * TWO_PI;
-    const scaleHeight = 6 + 16 * Math.exp(-centreR / (diskRadius * 0.5));
-    const centreZ = gaussian(random) * scaleHeight * 0.5;
+    const scaleHeight = 5 + 14 * Math.exp(-centreR / (diskRadius * 0.5));
+    const centreZ = gaussian(random) * scaleHeight * 0.4;
     const tone = mix(CLOUD_INNER, CLOUD_OUTER, outwardness(centreR));
-    const radialSpread = uniform(random, 5, 5);
-    const alongOrbit = radialSpread * uniform(random, 3, 2);
+    // Arc length in radians; long enough to span an arm at any radius.
+    const arc = uniform(random, NEBULA.streamerArc.min, NEBULA.streamerArc.span);
+    const thickness = uniform(random, 2, 3);
 
-    const puffs = uniformInt(random, NEBULA.puffsPerComplex.min, NEBULA.puffsPerComplex.span);
+    const puffs = uniformInt(random, NEBULA.puffsPerStreamer.min, NEBULA.puffsPerStreamer.span);
     for (let j = 0; j < puffs; j++) {
-      const r = centreR + gaussian(random) * radialSpread;
-      const theta = centreTheta + (gaussian(random) * alongOrbit) / centreR;
-      const z = centreZ + gaussian(random) * scaleHeight * 0.6;
-      const size = uniform(random, 16, 16);
-      const brightness = uniform(random, 0.06, 0.05);
-      out.push(polar('cloud', r, theta, z, size, brightness, jitter(tone, random, 10)));
+      const r = centreR + gaussian(random) * thickness;
+      const theta = centreTheta + (random() - 0.5) * arc;
+      const z = centreZ + gaussian(random) * scaleHeight * 0.4;
+      const size = uniform(random, 12, 10);
+      const brightness = uniform(random, 0.09, 0.06);
+      out.push(polar('cloud', r, theta, z, size, brightness, jitter(tone, random, 8)));
     }
   }
 }
@@ -224,9 +233,9 @@ function addDust(out: Particle[], random: Random): void {
       uniformInt(random, 25, 55),
       uniformInt(random, 10, 40),
     ];
-    const brightness = uniform(random, 0.05, 0.15);
+    const brightness = uniform(random, 0.04, 0.1);
     const size = uniform(random, 1.2, 3.8);
-    out.push(polar('dust', r, theta, z, size, brightness, color));
+    out.push(polar('dust', r, theta, z, size, brightness, muted(color, 0.55)));
   }
 }
 

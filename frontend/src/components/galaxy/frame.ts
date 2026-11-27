@@ -143,6 +143,12 @@ function waveFactor(particle: Particle, time: number): number {
   return youth(particle.arms, phase);
 }
 
+/**
+ * Gaussian gas and dust sprites show about half their width, so they are
+ * drawn this much larger to keep their apparent size.
+ */
+const SOFT_SPRITE_SCALE = 1.8;
+
 /** Below this opacity a sprite contributes nothing visible, so it is skipped. */
 const MIN_ALPHA = 0.003;
 
@@ -198,6 +204,7 @@ export function writeFrame(
       alpha = Math.min(1.0, alpha * 2.0);
     }
 
+    if (sprite === SPRITE.gas || sprite === SPRITE.dust) size *= SOFT_SPRITE_SCALE;
     size = Math.max(1.0, size);
     if (isStar) {
       // The sprite holds the halo; the core keeps the star's own size.

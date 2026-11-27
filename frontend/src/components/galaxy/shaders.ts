@@ -65,44 +65,35 @@ export const FRAGMENT_SHADER = /* glsl */ `
   vec4 star(float dist) {
     // x is 1 at the edge of the core; the sprite extends to x = halo.
     float x = dist * 2.0 * v_halo;
-    float core = exp(-x * x * 0.9);
-    float glow = pow(1.0 + x * x * 0.7, -1.5);
-    float fade = 1.0 - smoothstep(v_halo * 0.4, v_halo, x);
+    float core = exp(-x * x * 0.7);
+    float glow = pow(1.0 + x * x * 0.5, -1.4);
+    float fade = 1.0 - smoothstep(v_halo * 0.35, v_halo, x);
 
     vec3 color = v_color;
     if (isSprite(SPRITE_ARMSTAR)) color = mix(color, WARM, 0.25 * glow);
     if (isSprite(SPRITE_NUCLEUS)) color = mix(color, WARM, 0.4 * glow);
     // Bright cores saturate to white, leaving the colour in the halo.
     if (u_light < 0.5) color = mix(color, vec3(1.0), core * 0.3);
-    return vec4(color, v_alpha * (core * 0.85 + glow * 0.45) * fade);
+    return vec4(color, v_alpha * (core * 0.8 + glow * 0.55) * fade);
   }
 
-  vec4 gas(float d2, float fade) {
-    return vec4(v_color, v_alpha * (exp(-d2 * 2.0) + exp(-d2 * 0.8) * 0.6 + exp(-d2 * 0.3) * 0.3) * fade);
-  }
-
-  vec4 dust(float d2, float fade) {
-    return vec4(v_color, v_alpha * (exp(-d2 * 1.5) * 1.5 + exp(-d2 * 0.6) * 1.2 + exp(-d2 * 0.25) * 0.8) * fade);
-  }
-
-  // A Gaussian puff that is effectively zero at the sprite edge.
-  vec4 puff(float dist) {
-    return vec4(v_color, v_alpha * exp(-dist * dist * 12.0));
+  // Gaussian glows: brightest at the centre and falling off continuously, so
+  // no sprite has a flat top or a visible rim (which reads as a bokeh disc).
+  vec4 glow(float dist, float peak) {
+    return vec4(v_color, v_alpha * peak * exp(-dist * dist * 13.0));
   }
 
   void main() {
     float dist = length(gl_PointCoord - 0.5);
     if (dist > 0.5) discard;
-    // Gas and dust keep their broad profile but roll off before the rim.
-    float rim = 1.0 - smoothstep(0.25, 0.5, dist);
 
     vec4 color;
     if (isSprite(SPRITE_CLOUD) || isSprite(SPRITE_DUSTLANE)) {
-      color = puff(dist);
+      color = glow(dist, 1.0);
     } else if (isSprite(SPRITE_GAS)) {
-      color = gas(dist * dist, rim);
+      color = glow(dist, 1.4);
     } else if (isSprite(SPRITE_DUST)) {
-      color = dust(dist * dist, rim);
+      color = glow(dist, 2.0);
     } else {
       color = star(dist);
     }

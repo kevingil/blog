@@ -35,7 +35,7 @@ describe('generateParticles', () => {
   test('builds every population, with arm stars and dust thresholded', () => {
     const counts = countKinds(generateParticles(seededRandom(1)));
     expect(counts.haze).toBe(NEBULA.coreHazePuffs);
-    expect(counts.cloud).toBeGreaterThan(NEBULA.cloudComplexes * NEBULA.puffsPerComplex.min);
+    expect(counts.cloud).toBeGreaterThanOrEqual(NEBULA.streamers * NEBULA.puffsPerStreamer.min);
     expect(counts.dustLane).toBe(NEBULA.dustLanePuffs);
     expect(counts.youngStar).toBeGreaterThan(0);
     expect(counts.bulge).toBe(POPULATION.bulge);

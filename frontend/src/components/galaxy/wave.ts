@@ -35,7 +35,7 @@ export function armGlow(arms: readonly number[], phase: number): number {
   let lit = 0;
   for (let i = 0; i < arms.length; i++) {
     if (Number.isNaN(arms[i])) continue;
-    const { width } = ARMS[i].family;
+    const width = ARMS[i].family.width * DENSITY_WAVE.gasLaneWidth;
     const strength = ARM_GLOW[i] * Math.exp(-Math.pow(wrapAngle(phase - arms[i]) / width, 2));
     lit = Math.max(lit, strength);
   }
