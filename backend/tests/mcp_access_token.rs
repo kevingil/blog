@@ -293,6 +293,8 @@ async fn mcp_access_tokens_authenticate_until_revoked_and_survive_password_chang
     assert!(item.get("token_hash").is_none());
     assert_eq!(item["tokenPrefix"], prefix);
     assert_eq!(item["name"], "cursor");
+    assert!(item["clientName"].is_null());
+    assert!(item["expiresAt"].is_null());
     assert!(item["revokedAt"].is_null());
 
     let mcp = bearer(&plaintext);
