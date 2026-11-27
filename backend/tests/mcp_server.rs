@@ -1,10 +1,23 @@
-use std::{collections::HashMap, error::Error, sync::Mutex};
+use std::{
+    collections::HashMap,
+    error::Error,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::{Duration as StdDuration, Instant},
+};
 
 use async_trait::async_trait;
 use axum::{
-    Router,
+    Json, Router,
     body::Body,
-    http::{Request, StatusCode, header::WWW_AUTHENTICATE},
+    http::{
+        HeaderMap, Request, StatusCode,
+        header::{AUTHORIZATION, WWW_AUTHENTICATE},
+    },
+    response::IntoResponse,
+    routing::{get, post as route_post},
 };
 use blog_backend::{
     api::{auth::AuthState, mcp::router as mcp_router},
@@ -168,6 +181,8 @@ struct Harness {
     router: Router,
     static_token: String,
     oauth_token: String,
+    drafts: Arc<Mutex<Vec<Value>>>,
+    forbidden_hits: Arc<AtomicUsize>,
 }
 
 async fn harness() -> TestResult<Harness> {
@@ -218,11 +233,107 @@ async fn harness() -> TestResult<Harness> {
         .access_token;
 
     let auth = AuthState::with_public_base_url(auth_service, PUBLIC_BASE);
+    let (api, drafts, forbidden_hits) = content_api(static_token.clone());
     Ok(Harness {
-        router: mcp_router(auth),
+        router: mcp_router(auth, api),
         static_token,
         oauth_token,
+        drafts,
+        forbidden_hits,
     })
+}
+
+fn content_api(token: String) -> (Router, Arc<Mutex<Vec<Value>>>, Arc<AtomicUsize>) {
+    let drafts = Arc::new(Mutex::new(Vec::new()));
+    let forbidden_hits = Arc::new(AtomicUsize::new(0));
+    let create_drafts = Arc::clone(&drafts);
+    let create_token = token.clone();
+    let list_drafts = Arc::clone(&drafts);
+    let list_token = token;
+    let forbidden = Arc::clone(&forbidden_hits);
+    let router = Router::new()
+        .route(
+            "/blog/drafts",
+            route_post(move |headers: HeaderMap, Json(body): Json<Value>| {
+                let drafts = Arc::clone(&create_drafts);
+                let token = create_token.clone();
+                async move { store_draft(headers, body, &drafts, &token) }
+            }),
+        )
+        .route(
+            "/blog/articles",
+            get(move |headers: HeaderMap| {
+                let drafts = Arc::clone(&list_drafts);
+                let token = list_token.clone();
+                async move { list_drafts_response(headers, &drafts, &token) }
+            }),
+        )
+        .route(
+            "/auth/me",
+            get(move || {
+                let forbidden = Arc::clone(&forbidden);
+                async move {
+                    forbidden.fetch_add(1, Ordering::SeqCst);
+                    Json(json!({"leaked": true}))
+                }
+            }),
+        );
+    (router, drafts, forbidden_hits)
+}
+
+fn bearer_matches(headers: &HeaderMap, token: &str) -> bool {
+    let expected = format!("Bearer {token}");
+    headers
+        .get(AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        == Some(expected.as_str())
+}
+
+fn store_draft(
+    headers: HeaderMap,
+    body: Value,
+    drafts: &Mutex<Vec<Value>>,
+    token: &str,
+) -> axum::response::Response {
+    if !bearer_matches(&headers, token) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"error": "unauthorized"})),
+        )
+            .into_response();
+    }
+    let draft = json!({
+        "title": body.get("title").cloned().unwrap_or(Value::Null),
+        "markdown": body.get("markdown").cloned().unwrap_or(Value::Null),
+    });
+    let Ok(mut stored) = drafts.lock() else {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "store"})),
+        )
+            .into_response();
+    };
+    stored.push(draft.clone());
+    (StatusCode::CREATED, Json(json!({"data": draft}))).into_response()
+}
+
+fn list_drafts_response(
+    headers: HeaderMap,
+    drafts: &Mutex<Vec<Value>>,
+    token: &str,
+) -> axum::response::Response {
+    if !bearer_matches(&headers, token) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({"error": "unauthorized"})),
+        )
+            .into_response();
+    }
+    let articles = drafts
+        .lock()
+        .map(|stored| stored.clone())
+        .unwrap_or_default();
+    Json(json!({"data": {"articles": articles}})).into_response()
 }
 
 async fn post(
@@ -426,9 +537,17 @@ async fn static_and_oauth_tokens_list_search_and_hide_excluded_paths() -> TestRe
         .as_array()
         .cloned()
         .ok_or("tools/list had no tools")?;
-    assert_eq!(tools.len(), 1, "{tools:?}");
-    assert_eq!(tools[0]["name"], "search");
-    let description = tools[0]["description"].as_str().unwrap_or("");
+    let mut names: Vec<&str> = tools
+        .iter()
+        .filter_map(|tool| tool["name"].as_str())
+        .collect();
+    names.sort_unstable();
+    assert_eq!(names, ["execute", "search"], "{tools:?}");
+    let description = tools
+        .iter()
+        .find(|tool| tool["name"] == "search")
+        .and_then(|tool| tool["description"].as_str())
+        .unwrap_or("");
     assert!(
         description.contains("execute"),
         "tool description should point at execute: {description}"
@@ -477,5 +596,152 @@ async fn static_and_oauth_tokens_list_search_and_hide_excluded_paths() -> TestRe
     .await?;
     assert_eq!(status, StatusCode::OK, "{oauth_initialized}");
     assert_eq!(result_of(&oauth_initialized)?["serverInfo"]["name"], "blog");
+    Ok(())
+}
+
+async fn execute(router: Router, token: &str, code: &str) -> TestResult<(StatusCode, Value)> {
+    let (status, _, payload) = post(
+        router,
+        rpc(
+            4,
+            "tools/call",
+            json!({"name": "execute", "arguments": {"code": code}}),
+        ),
+        Some(token),
+    )
+    .await?;
+    Ok((status, payload))
+}
+
+fn tool_text(payload: &Value) -> TestResult<(bool, &str)> {
+    let result = result_of(payload)?;
+    let is_error = result["isError"]
+        .as_bool()
+        .ok_or("tool result had no isError")?;
+    let text = result["content"]
+        .as_array()
+        .and_then(|blocks| blocks.first())
+        .and_then(|block| block["text"].as_str())
+        .ok_or("tool result had no text")?;
+    Ok((is_error, text))
+}
+
+#[tokio::test]
+async fn execute_creates_a_draft_and_reads_it_back() -> TestResult {
+    let harness = harness().await?;
+    let code = r#"
+        const created = await blog.request({
+            method: "POST",
+            path: "/blog/drafts",
+            body: { title: "From execute", markdown: "hello from execute" }
+        });
+        if (created.status !== 201) {
+            throw new Error("create failed " + created.status);
+        }
+        console.log("created", created.body.data.title);
+        const listed = await blog.request({ method: "GET", path: "/blog/articles" });
+        const titles = listed.body.data.articles.map((article) => article.title);
+        if (!titles.includes("From execute")) {
+            throw new Error("draft missing " + JSON.stringify(listed));
+        }
+        return { title: created.body.data.title, titles };
+    "#;
+    let (status, payload) = execute(harness.router, &harness.static_token, code).await?;
+    assert_eq!(status, StatusCode::OK, "{payload}");
+    let (is_error, text) = tool_text(&payload)?;
+    assert!(!is_error, "{text}");
+    let body: Value = serde_json::from_str(text)?;
+    assert_eq!(body["result"]["title"], "From execute");
+    assert!(
+        body["console"][0]
+            .as_str()
+            .unwrap_or("")
+            .contains("From execute")
+    );
+    let stored = harness
+        .drafts
+        .lock()
+        .map_err(|error| format!("draft lock: {error}"))?;
+    assert_eq!(stored.len(), 1, "{stored:?}");
+    assert_eq!(stored[0]["title"], "From execute");
+    assert_eq!(harness.forbidden_hits.load(Ordering::SeqCst), 0);
+    Ok(())
+}
+
+#[tokio::test]
+async fn execute_rejects_a_disallowed_path_without_dispatching() -> TestResult {
+    let harness = harness().await?;
+    for code in [
+        r#"return await blog.request({ method: "GET", path: "/auth/me" });"#,
+        r#"return await blog.request({ method: "GET", path: "/mcp" });"#,
+        r#"return await blog.request({ method: "POST", path: "/blog/../auth/me" });"#,
+        r#"return await blog.request({ method: "GET", path: "/insights/topics" });"#,
+    ] {
+        let (status, payload) =
+            execute(harness.router.clone(), &harness.static_token, code).await?;
+        assert_eq!(status, StatusCode::OK, "{code}: {payload}");
+        let (is_error, text) = tool_text(&payload)?;
+        assert!(is_error, "{code}: {text}");
+        assert!(
+            text.contains("refused") || text.contains("outside"),
+            "{code}: {text}"
+        );
+        assert!(!text.contains("leaked"), "{code} dispatched: {text}");
+    }
+    assert_eq!(harness.forbidden_hits.load(Ordering::SeqCst), 0);
+    Ok(())
+}
+
+#[tokio::test]
+async fn execute_interrupts_an_infinite_loop() -> TestResult {
+    let harness = harness().await?;
+    let started = Instant::now();
+    let (status, payload) = tokio::time::timeout(
+        StdDuration::from_secs(30),
+        execute(harness.router, &harness.static_token, "while (true) {}"),
+    )
+    .await
+    .map_err(|_| "infinite loop was not interrupted within 30 seconds")??;
+    assert!(
+        started.elapsed() < StdDuration::from_secs(30),
+        "loop ran for {:?}",
+        started.elapsed()
+    );
+    assert_eq!(status, StatusCode::OK, "{payload}");
+    let (is_error, text) = tool_text(&payload)?;
+    assert!(is_error, "{text}");
+    assert!(text.contains("interrupted"), "{text}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn execute_stops_a_memory_bomb() -> TestResult {
+    let harness = harness().await?;
+    let (status, payload) = execute(
+        harness.router,
+        &harness.static_token,
+        r#""x".repeat(32 * 1024 * 1024)"#,
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{payload}");
+    let (is_error, text) = tool_text(&payload)?;
+    assert!(is_error, "{text}");
+    assert!(text.to_ascii_lowercase().contains("memory"), "{text}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn execute_returns_a_javascript_exception() -> TestResult {
+    let harness = harness().await?;
+    let (status, payload) = execute(
+        harness.router,
+        &harness.static_token,
+        r#"throw new Error("boom");"#,
+    )
+    .await?;
+    assert_eq!(status, StatusCode::OK, "{payload}");
+    let (is_error, text) = tool_text(&payload)?;
+    assert!(is_error, "{text}");
+    assert!(text.contains("boom"), "{text}");
     Ok(())
 }

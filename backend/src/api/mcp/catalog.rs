@@ -106,6 +106,70 @@ fn path_has_prefix(path: &str, prefix: &str) -> bool {
             .is_some_and(|rest| rest.starts_with('/'))
 }
 
+/// Why `execute` must not dispatch `path`, or `None` when the path is on the
+/// same articles, pages, projects, sources, and storage allowlist as search.
+pub(crate) fn execute_path_block(path: &str) -> Option<&'static str> {
+    if path.is_empty() || !path.starts_with('/') || !path.is_ascii() {
+        return Some("path must be an absolute ASCII path starting with /");
+    }
+    if path.len() > 2048
+        || path
+            .bytes()
+            .any(|byte| byte.is_ascii_control() || matches!(byte, b' ' | b'\\' | b'?' | b'#'))
+    {
+        return Some("path must be a single absolute path without a query or fragment");
+    }
+    let Some(decoded) = decode_path(path) else {
+        return Some("path is not valid percent-encoding");
+    };
+    if !decoded.is_ascii()
+        || decoded
+            .bytes()
+            .any(|byte| byte.is_ascii_control() || matches!(byte, b' ' | b'\\' | b'?' | b'#'))
+        || decoded.contains("://")
+    {
+        return Some("path must be a single absolute path without a query or fragment");
+    }
+    let mut segments: Vec<&str> = decoded.split('/').skip(1).collect();
+    if segments.last() == Some(&"") {
+        segments.pop();
+    }
+    if segments
+        .iter()
+        .any(|segment| segment.is_empty() || *segment == "." || *segment == "..")
+    {
+        return Some("path must not contain '.', '..', or empty segments");
+    }
+    if excluded_path(&decoded) || !allowed_path(&decoded) {
+        return Some("path is outside articles, pages, projects, sources, and storage");
+    }
+    None
+}
+
+fn decode_path(path: &str) -> Option<String> {
+    let bytes = path.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] != b'%' {
+            decoded.push(bytes[index]);
+            index += 1;
+            continue;
+        }
+        if index + 2 >= bytes.len() {
+            return None;
+        }
+        let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).ok()?;
+        let byte = u8::from_str_radix(hex, 16).ok()?;
+        if byte == 0 {
+            return None;
+        }
+        decoded.push(byte);
+        index += 3;
+    }
+    String::from_utf8(decoded).ok()
+}
+
 fn operations(item: &PathItem) -> [(&'static str, Option<&Operation>); 8] {
     [
         ("DELETE", item.delete.as_ref()),
@@ -348,5 +412,44 @@ mod tests {
             }
         }
         assert!(visible > 0, "content API produced no operations");
+    }
+
+    #[test]
+    fn execute_follows_the_search_allowlist() {
+        for path in [
+            "/blog/drafts",
+            "/blog/articles/verification-note",
+            "/pages/home",
+            "/dashboard/pages",
+            "/projects",
+            "/sources",
+            "/dashboard/sources/1",
+            "/storage/upload",
+            "/blog/",
+        ] {
+            assert!(execute_path_block(path).is_none(), "{path}");
+        }
+        for path in [
+            "/auth/me",
+            "/mcp",
+            "/oauth/token",
+            "/insights",
+            "/workers/jobs",
+            "/agent/chat",
+            "/health",
+            "/blogs",
+            "/blog/../auth/me",
+            "/blog/%2e%2e/auth/me",
+            "/blog/%2e%2e%2fauth/me",
+            "blog/drafts",
+            "https://example.test/blog/drafts",
+            "/blog/drafts?x=1",
+            "/blog//drafts",
+        ] {
+            assert!(
+                execute_path_block(path).is_some(),
+                "{path} should be refused"
+            );
+        }
     }
 }

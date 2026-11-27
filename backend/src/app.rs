@@ -181,14 +181,16 @@ pub fn router(state: AppState, cors_origins: &[String]) -> anyhow::Result<Router
         DEFAULT_REQUEST_TIMEOUT,
         cors.clone(),
         auth.clone(),
-    );
+    )
+    .with_state(state.clone());
     let mcp = with_http_middleware(
-        crate::api::mcp::router(auth.clone()),
+        crate::api::mcp::router(auth.clone(), api.clone()),
         MCP_REQUEST_TIMEOUT,
         cors,
         auth,
-    );
-    Ok(Router::new().merge(api).merge(mcp).with_state(state))
+    )
+    .with_state(state);
+    Ok(Router::new().merge(api).merge(mcp))
 }
 
 fn timeout_layer(request_timeout: std::time::Duration) -> TimeoutLayer {
