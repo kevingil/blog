@@ -18,14 +18,15 @@ use crate::{
 };
 
 use super::{
-    Account, AccountId, AccountUpdate, IssuedMcpAccessToken, LoginInput, LoginResult,
-    McpAccessToken, NewMcpAccessToken, PasswordUpdate, RegistrationInput, UserData,
+    Account, AccountId, AccountUpdate, AuthorizationCode, IssuedMcpAccessToken, LoginInput,
+    LoginResult, McpAccessToken, NewAuthorizationCode, NewMcpAccessToken, NewOauthClient,
+    OauthClient, OauthTokenRotation, PasswordUpdate, RegistrationInput, UserData,
 };
 
 /// Distinguishes an MCP access token from a JWT, which always contains `.`.
-const MCP_ACCESS_TOKEN_PREFIX: &str = "mcp_";
+pub(in crate::core::auth) const MCP_ACCESS_TOKEN_PREFIX: &str = "mcp_";
 /// Characters of the plaintext shown in lists. Includes `mcp_` plus 8 hex chars.
-const MCP_ACCESS_TOKEN_PREFIX_CHARS: usize = 12;
+pub(in crate::core::auth) const MCP_ACCESS_TOKEN_PREFIX_CHARS: usize = 12;
 const MCP_ACCESS_TOKEN_RANDOM_HEX: usize = 64;
 const MCP_ACCESS_TOKEN_LEN: usize = MCP_ACCESS_TOKEN_PREFIX.len() + MCP_ACCESS_TOKEN_RANDOM_HEX;
 /// How long `last_used_at` may sit before authentication writes it again.
@@ -109,11 +110,44 @@ pub trait AccountRepository: Send + Sync {
     ) -> Result<Option<McpAccessToken>, AppError> {
         Ok(None)
     }
+
+    async fn insert_oauth_client(&self, _client: &NewOauthClient) -> Result<(), AppError> {
+        Err(AppError::internal("oauth clients are not available"))
+    }
+
+    async fn find_oauth_client(&self, _client_id: &str) -> Result<Option<OauthClient>, AppError> {
+        Ok(None)
+    }
+
+    async fn insert_authorization_code(
+        &self,
+        _code: &NewAuthorizationCode,
+    ) -> Result<(), AppError> {
+        Err(AppError::internal(
+            "oauth authorization codes are not available",
+        ))
+    }
+
+    async fn consume_authorization_code(
+        &self,
+        _code_hash: &str,
+    ) -> Result<Option<AuthorizationCode>, AppError> {
+        Ok(None)
+    }
+
+    async fn rotate_oauth_refresh_token(
+        &self,
+        _refresh_hash: &str,
+        _client_id: &str,
+        _rotation: &OauthTokenRotation,
+    ) -> Result<Option<McpAccessToken>, AppError> {
+        Ok(None)
+    }
 }
 
 #[derive(Clone)]
 pub struct AuthService {
-    accounts: Arc<dyn AccountRepository>,
+    pub(in crate::core::auth) accounts: Arc<dyn AccountRepository>,
     jwt_secret: Arc<[u8]>,
     bcrypt_slots: Arc<Semaphore>,
 }
@@ -200,7 +234,9 @@ impl AuthService {
         .map_err(AppError::internal)?
     }
 
-    pub async fn login(&self, input: LoginInput) -> Result<LoginResult, AppError> {
+    /// Checks the email and password. A missing account does the same bcrypt work
+    /// as a wrong password.
+    pub async fn authenticate_credentials(&self, input: LoginInput) -> Result<Account, AppError> {
         let account = self
             .accounts
             .find_by_email(&input.email)
@@ -218,7 +254,11 @@ impl AuthService {
         {
             return Err(AppError::Unauthorized);
         }
+        Ok(account)
+    }
 
+    pub async fn login(&self, input: LoginInput) -> Result<LoginResult, AppError> {
+        let account = self.authenticate_credentials(input).await?;
         self.issue_session(account)
     }
 
@@ -437,6 +477,8 @@ impl AuthService {
             created_at,
             last_used_at: None,
             revoked_at: None,
+            client_name: None,
+            expires_at: None,
         };
         self.accounts
             .insert_mcp_token(&NewMcpAccessToken {
@@ -446,6 +488,11 @@ impl AuthService {
                 token_hash: mcp_token_hash(&plaintext),
                 token_prefix,
                 created_at,
+                oauth_client_id: None,
+                client_name: None,
+                expires_at: None,
+                refresh_token_hash: None,
+                refresh_expires_at: None,
             })
             .await?;
         Ok(IssuedMcpAccessToken { record, plaintext })
@@ -519,8 +566,13 @@ pub fn mcp_token_hash(plaintext: &str) -> String {
 
 /// `mcp_` plus 64 hex characters from two v4 UUIDs (256 bits, OS CSPRNG).
 fn generate_mcp_access_token() -> String {
-    let mut token = String::with_capacity(MCP_ACCESS_TOKEN_LEN);
-    token.push_str(MCP_ACCESS_TOKEN_PREFIX);
+    random_bearer(MCP_ACCESS_TOKEN_PREFIX)
+}
+
+/// `prefix` plus 64 hex characters from two v4 UUIDs.
+pub(in crate::core::auth) fn random_bearer(prefix: &str) -> String {
+    let mut token = String::with_capacity(prefix.len() + MCP_ACCESS_TOKEN_RANDOM_HEX);
+    token.push_str(prefix);
     token.push_str(&Uuid::new_v4().simple().to_string());
     token.push_str(&Uuid::new_v4().simple().to_string());
     token

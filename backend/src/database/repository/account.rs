@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use diesel::{
-    ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper,
+    BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper,
     result::{DatabaseErrorKind, Error as DieselError},
     sql_types::Uuid as SqlUuid,
 };
@@ -9,16 +9,23 @@ use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use crate::{
-    core::auth::{Account, AccountId, AccountRepository, McpAccessToken, NewMcpAccessToken},
+    core::auth::{
+        Account, AccountId, AccountRepository, AuthorizationCode, McpAccessToken,
+        NewAuthorizationCode, NewMcpAccessToken, NewOauthClient, OauthClient, OauthTokenRotation,
+    },
     database::{
         models::{
             account::{AccountIdentityChangeset, AccountRow, NewAccountRow},
-            mcp_access_token::{McpAccessTokenRow, NewMcpAccessTokenRow},
+            mcp_access_token::{McpAccessTokenRow, NewMcpAccessTokenRow, RotatedMcpAccessTokenRow},
+            oauth::{
+                NewOauthAuthorizationCodeRow, NewOauthClientRow, OauthAuthorizationCodeRow,
+                OauthClientRow,
+            },
         },
         pool::PgPool,
     },
     error::AppError,
-    schema::{account, mcp_access_token},
+    schema::{account, mcp_access_token, oauth_authorization_code, oauth_client},
 };
 
 #[derive(Clone)]
@@ -191,6 +198,11 @@ impl AccountRepository for DieselAccountRepository {
         mcp_access_token::table
             .filter(mcp_access_token::token_hash.eq(token_hash))
             .filter(mcp_access_token::revoked_at.is_null())
+            .filter(
+                mcp_access_token::expires_at
+                    .is_null()
+                    .or(mcp_access_token::expires_at.gt(Utc::now())),
+            )
             .select(McpAccessTokenRow::as_select())
             .first::<McpAccessTokenRow>(&mut connection)
             .await
@@ -244,6 +256,91 @@ impl AccountRepository for DieselAccountRepository {
             .optional()
             .map_err(map_diesel_error)
             .map(|row| row.map(McpAccessToken::from))
+    }
+
+    async fn insert_oauth_client(&self, client: &NewOauthClient) -> Result<(), AppError> {
+        let mut connection = self.connection().await?;
+        diesel::insert_into(oauth_client::table)
+            .values(NewOauthClientRow::from(client))
+            .execute(&mut connection)
+            .await
+            .map(|_| ())
+            .map_err(map_diesel_error)
+    }
+
+    async fn find_oauth_client(&self, client_id: &str) -> Result<Option<OauthClient>, AppError> {
+        let mut connection = self.connection().await?;
+        oauth_client::table
+            .filter(oauth_client::client_id.eq(client_id))
+            .select(OauthClientRow::as_select())
+            .first::<OauthClientRow>(&mut connection)
+            .await
+            .optional()
+            .map_err(map_diesel_error)
+            .map(|row| row.map(OauthClient::from))
+    }
+
+    async fn insert_authorization_code(&self, code: &NewAuthorizationCode) -> Result<(), AppError> {
+        let mut connection = self.connection().await?;
+        diesel::insert_into(oauth_authorization_code::table)
+            .values(NewOauthAuthorizationCodeRow::from(code))
+            .execute(&mut connection)
+            .await
+            .map(|_| ())
+            .map_err(map_diesel_error)
+    }
+
+    async fn consume_authorization_code(
+        &self,
+        code_hash: &str,
+    ) -> Result<Option<AuthorizationCode>, AppError> {
+        let mut connection = self.connection().await?;
+        diesel::update(
+            oauth_authorization_code::table
+                .filter(oauth_authorization_code::code_hash.eq(code_hash))
+                .filter(oauth_authorization_code::used_at.is_null())
+                .filter(oauth_authorization_code::expires_at.gt(Utc::now())),
+        )
+        .set(oauth_authorization_code::used_at.eq(Utc::now()))
+        .returning(OauthAuthorizationCodeRow::as_returning())
+        .get_result::<OauthAuthorizationCodeRow>(&mut connection)
+        .await
+        .optional()
+        .map_err(map_diesel_error)
+        .map(|row| row.map(AuthorizationCode::from))
+    }
+
+    async fn rotate_oauth_refresh_token(
+        &self,
+        refresh_hash: &str,
+        client_id: &str,
+        rotation: &OauthTokenRotation,
+    ) -> Result<Option<McpAccessToken>, AppError> {
+        let mut connection = self.connection().await?;
+        diesel::update(
+            mcp_access_token::table
+                .filter(mcp_access_token::refresh_token_hash.eq(refresh_hash))
+                .filter(mcp_access_token::oauth_client_id.eq(client_id))
+                .filter(mcp_access_token::revoked_at.is_null())
+                .filter(
+                    mcp_access_token::refresh_expires_at
+                        .is_null()
+                        .or(mcp_access_token::refresh_expires_at.gt(Utc::now())),
+                ),
+        )
+        .set(RotatedMcpAccessTokenRow {
+            token_hash: rotation.token_hash.clone(),
+            token_prefix: rotation.token_prefix.clone(),
+            expires_at: Some(rotation.expires_at),
+            refresh_token_hash: Some(rotation.refresh_token_hash.clone()),
+            refresh_expires_at: Some(rotation.refresh_expires_at),
+        })
+        .returning(McpAccessTokenRow::as_returning())
+        .get_result::<McpAccessTokenRow>(&mut connection)
+        .await
+        .optional()
+        .map_err(map_diesel_error)
+        .map(|row| row.map(McpAccessToken::from))
     }
 }
 

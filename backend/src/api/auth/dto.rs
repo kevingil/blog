@@ -169,6 +169,9 @@ pub struct McpTokenResponse {
     pub created_at: DateTime<Utc>,
     pub last_used_at: Option<DateTime<Utc>>,
     pub revoked_at: Option<DateTime<Utc>>,
+    /// OAuth client name. Null for a token created at `POST /auth/mcp-tokens`.
+    pub client_name: Option<String>,
+    pub expires_at: Option<DateTime<Utc>>,
 }
 
 /// Create response. `token` is the bearer secret and is not returned again.
@@ -182,6 +185,8 @@ pub struct McpTokenCreatedResponse {
     pub created_at: DateTime<Utc>,
     pub last_used_at: Option<DateTime<Utc>>,
     pub revoked_at: Option<DateTime<Utc>>,
+    pub client_name: Option<String>,
+    pub expires_at: Option<DateTime<Utc>>,
 }
 
 impl From<McpAccessToken> for McpTokenResponse {
@@ -193,6 +198,8 @@ impl From<McpAccessToken> for McpTokenResponse {
             created_at: token.created_at,
             last_used_at: token.last_used_at,
             revoked_at: token.revoked_at,
+            client_name: token.client_name,
+            expires_at: token.expires_at,
         }
     }
 }
@@ -207,6 +214,8 @@ impl From<IssuedMcpAccessToken> for McpTokenCreatedResponse {
             created_at: issued.record.created_at,
             last_used_at: issued.record.last_used_at,
             revoked_at: issued.record.revoked_at,
+            client_name: issued.record.client_name,
+            expires_at: issued.record.expires_at,
         }
     }
 }
