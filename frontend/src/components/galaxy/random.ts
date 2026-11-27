@@ -17,6 +17,17 @@ export function gaussian(random: Random): number {
 }
 
 /**
+ * A normal sample limited to ±`limit` standard deviations (by resampling), for
+ * clouds that should thin out smoothly without stray outliers.
+ */
+export function truncatedGaussian(random: Random, limit: number): number {
+  for (;;) {
+    const sample = gaussian(random);
+    if (Math.abs(sample) <= limit) return sample;
+  }
+}
+
+/**
  * A deterministic generator (mulberry32), for tests and reproducible
  * screenshots. Not suitable for anything security related.
  */

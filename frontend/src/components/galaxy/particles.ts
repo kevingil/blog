@@ -1,6 +1,6 @@
 import { GALAXY, NEBULA, POPULATION, YOUNG_STARS } from './config';
 import { regionColor, temperatureToRgb, type Rgb255 } from './palette';
-import { gaussian, uniform, uniformInt, type Random } from './random';
+import { gaussian, truncatedGaussian, uniform, uniformInt, type Random } from './random';
 import { armAngles, spiralStrength } from './spiral';
 
 /**
@@ -140,15 +140,23 @@ function outwardness(r: number): number {
   return Math.min(1, Math.max(0, (r - coreRadius * 1.5) / (diskRadius * 0.7)));
 }
 
+/**
+ * Gas is drawn as many large, very faint, heavily overlapping puffs: no
+ * single puff is visible, only their summed density, which reads as one
+ * continuous cloud. Puffs are kept within a couple of standard deviations so
+ * none sits alone at the fringe as a visible blob.
+ */
+const GAS_SPREAD_LIMIT = 2.2;
+
 /** The bulge is nearly spherical, so its haze is too. */
 function addCoreHaze(out: Particle[], random: Random): void {
   const { coreRadius } = GALAXY;
   for (let i = 0; i < NEBULA.coreHazePuffs; i++) {
-    const x = gaussian(random) * coreRadius * 1.1;
-    const y = gaussian(random) * coreRadius * 1.1;
-    const z = gaussian(random) * coreRadius * 0.9;
-    const size = uniform(random, 22, 22);
-    const brightness = uniform(random, 0.02, 0.018);
+    const x = truncatedGaussian(random, GAS_SPREAD_LIMIT) * coreRadius * 1.0;
+    const y = truncatedGaussian(random, GAS_SPREAD_LIMIT) * coreRadius * 1.0;
+    const z = truncatedGaussian(random, GAS_SPREAD_LIMIT) * coreRadius * 0.6;
+    const size = uniform(random, 60, 40);
+    const brightness = uniform(random, 0.006, 0.004);
     out.push(particle('haze', x, y, z, size, brightness, jitter(HAZE_WARM, random, 8)));
   }
 }
@@ -166,19 +174,19 @@ function addClouds(out: Particle[], random: Random): void {
     const centreR = coreRadius * 1.2 + (diskRadius - coreRadius * 1.2) * Math.sqrt(random());
     const centreTheta = random() * TWO_PI;
     const scaleHeight = (5 + 14 * Math.exp(-centreR / (diskRadius * 0.5))) * GALAXY.thickness;
-    const centreZ = gaussian(random) * scaleHeight * 0.4;
+    const centreZ = truncatedGaussian(random, GAS_SPREAD_LIMIT) * scaleHeight * 0.4;
     const tone = mix(CLOUD_INNER, CLOUD_OUTER, outwardness(centreR));
     // Arc length in radians; long enough to span an arm at any radius.
     const arc = uniform(random, NEBULA.streamerArc.min, NEBULA.streamerArc.span);
-    const thickness = uniform(random, 2, 3);
+    const thickness = uniform(random, 4, 5);
 
     const puffs = uniformInt(random, NEBULA.puffsPerStreamer.min, NEBULA.puffsPerStreamer.span);
     for (let j = 0; j < puffs; j++) {
-      const r = centreR + gaussian(random) * thickness;
+      const r = centreR + truncatedGaussian(random, GAS_SPREAD_LIMIT) * thickness;
       const theta = centreTheta + (random() - 0.5) * arc;
-      const z = centreZ + gaussian(random) * scaleHeight * 0.4;
-      const size = uniform(random, 12, 10);
-      const brightness = uniform(random, 0.05, 0.035);
+      const z = centreZ + truncatedGaussian(random, GAS_SPREAD_LIMIT) * scaleHeight * 0.4;
+      const size = uniform(random, 30, 18);
+      const brightness = uniform(random, 0.009, 0.006);
       out.push(polar('cloud', r, theta, z, size, brightness, jitter(tone, random, 8)));
     }
   }
@@ -328,9 +336,9 @@ function addDustLanes(out: Particle[], random: Random): void {
     // Denser toward the centre, like the arms themselves.
     const r = coreRadius * 1.4 + (diskRadius * 0.95 - coreRadius * 1.4) * Math.pow(random(), 1.3);
     const theta = random() * TWO_PI;
-    const z = gaussian(random) * 3 * GALAXY.thickness;
-    const size = uniform(random, 12, 12) * (0.7 + (0.6 * r) / diskRadius);
-    const opacity = uniform(random, 0.22, 0.18);
+    const z = truncatedGaussian(random, GAS_SPREAD_LIMIT) * 3 * GALAXY.thickness;
+    const size = uniform(random, 20, 12) * (0.7 + (0.6 * r) / diskRadius);
+    const opacity = uniform(random, 0.1, 0.06);
     out.push(polar('dustLane', r, theta, z, size, opacity, DUST_LANE));
   }
 }

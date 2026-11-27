@@ -64,11 +64,11 @@ export const DENSITY_WAVE = {
  */
 export const NEBULA = {
   /** Puffs in the thick, rounded haze around the bulge. */
-  coreHazePuffs: 280,
+  coreHazePuffs: 420,
   /** Gas streamers spread over the disk; each is a thin arc of puffs along its orbit. */
   streamers: 300,
   streamerArc: { min: 0.5, span: 0.6 },
-  puffsPerStreamer: { min: 9, span: 6 },
+  puffsPerStreamer: { min: 20, span: 10 },
   /** Absorbing puffs over the disk; only those in a lane show at any moment. */
   dustLanePuffs: 4200,
 } as const;
