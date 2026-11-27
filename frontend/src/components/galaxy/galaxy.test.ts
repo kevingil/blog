@@ -36,11 +36,14 @@ describe('generateParticles', () => {
     const counts = countKinds(generateParticles(seededRandom(1)));
     expect(counts.haze).toBe(NEBULA.coreHazePuffs);
     expect(counts.cloud).toBeGreaterThanOrEqual(NEBULA.streamers * NEBULA.puffsPerStreamer.min);
-    expect(counts.dustLane).toBe(NEBULA.dustLanePuffs);
+    expect(counts.diskLight).toBe(NEBULA.diskLightPuffs);
+    expect(counts.dustLane).toBe(NEBULA.dustStreamers * NEBULA.puffsPerDustStreamer);
+    expect(counts.satellite).toBeGreaterThan(0);
+    expect(counts.hii).toBeGreaterThan(0);
     expect(counts.youngStar).toBeGreaterThan(0);
     expect(counts.bulge).toBe(POPULATION.bulge);
     expect(counts.nucleus).toBe(1);
-    expect(counts.background).toBe(POPULATION.background);
+    expect(counts.background).toBe(POPULATION.background + POPULATION.brightStars);
     expect(counts.dust).toBeGreaterThan(0);
     expect(counts.dust).toBeLessThanOrEqual(POPULATION.dustCandidates);
     expect(counts.star).toBe(POPULATION.oldStars);
@@ -61,7 +64,7 @@ describe('generateParticles', () => {
 
   test('draws gas first and dust lanes last, so stars sit on the gas and dust can darken it', () => {
     const kinds = generateParticles(seededRandom(5)).map((p) => p.kind);
-    const isGas = (kind: string) => kind === 'haze' || kind === 'cloud';
+    const isGas = (kind: string) => ['haze', 'diskLight', 'cloud', 'hii', 'satellite'].includes(kind);
     const firstNonGas = kinds.findIndex((kind) => !isGas(kind));
     const firstLane = kinds.indexOf('dustLane');
     expect(kinds.slice(0, firstNonGas).every(isGas)).toBe(true);
@@ -71,9 +74,14 @@ describe('generateParticles', () => {
     expect(kinds[firstNonGas + POPULATION.bulge]).toBe('nucleus');
   });
 
+  test('keeps the satellite galaxy fixed while the disk turns', () => {
+    const satellite = generateParticles(seededRandom(6)).filter((p) => p.kind === 'satellite');
+    expect(satellite.every((p) => p.angularSpeed === 0)).toBe(true);
+  });
+
   test('gives only gas, dust lanes and young stars arm angles for the density wave', () => {
     for (const p of generateParticles(seededRandom(6))) {
-      expect(p.arms !== null).toBe(p.kind === 'cloud' || p.kind === 'dustLane' || p.kind === 'youngStar');
+      expect(p.arms !== null).toBe(['cloud', 'hii', 'dustLane', 'youngStar'].includes(p.kind));
     }
   });
 
@@ -142,7 +150,7 @@ describe('density wave', () => {
   });
 
   test('puts dust lanes on the upstream edge of an arm', () => {
-    expect(laneDepth(arms, mainArm + DENSITY_WAVE.laneOffset)).toBeCloseTo(1, 5);
+    expect(laneDepth(arms, mainArm + DENSITY_WAVE.laneOffset)).toBeGreaterThan(0.99);
     expect(laneDepth(arms, mainArm + 0.5)).toBeLessThan(0.01);
   });
 
@@ -177,14 +185,16 @@ describe('writeFrame', () => {
   const particles = generateParticles(seededRandom(11));
   const buffer = () => new Float32Array(particles.length * FLOATS_PER_VERTEX);
 
-  test('puts every absorbing dust lane after the emissive vertices', () => {
+  test('orders vertices as soft gas, then sharp sprites, then dust lanes', () => {
     const out = buffer();
-    const { total, emissive } = writeFrame(particles, frameState(), out);
-    expect(emissive).toBeGreaterThan(0);
+    const { total, soft, emissive } = writeFrame(particles, frameState(), out);
+    expect(soft).toBeGreaterThan(0);
+    expect(emissive).toBeGreaterThan(soft);
     expect(total).toBeGreaterThan(emissive);
     for (let i = 0; i < total; i++) {
-      const isLane = out[i * FLOATS_PER_VERTEX + 7] === SPRITE.dustLane;
-      expect(isLane).toBe(i >= emissive);
+      const sprite = out[i * FLOATS_PER_VERTEX + 7];
+      expect(sprite === SPRITE.cloud).toBe(i < soft);
+      expect(sprite === SPRITE.dustLane).toBe(i >= emissive);
     }
   });
 

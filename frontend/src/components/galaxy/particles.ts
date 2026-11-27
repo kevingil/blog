@@ -4,8 +4,11 @@ import { gaussian, truncatedGaussian, uniform, uniformInt, type Random } from '.
 import { armAngles, spiralStrength } from './spiral';
 
 /**
- * - `haze`: thick, rounded glowing gas around the bulge.
+ * - `haze`: the bulge's smooth, rounded glow of unresolved old stars.
+ * - `diskLight`: the continuous sheet of starlight the arms sit in.
  * - `cloud`: gas in the disk; it lights up as it flows through an arm.
+ * - `hii`: the pink glow around newborn star clusters; it fades as they age.
+ * - `satellite`: M32, Andromeda's compact companion galaxy; it does not orbit with the disk.
  * - `bulge`: soft glowing gas at the centre; it breathes slowly.
  * - `nucleus`: one very bright point at the exact centre.
  * - `dust`: small diffuse specks of gas and dust.
@@ -16,7 +19,10 @@ import { armAngles, spiralStrength } from './spiral';
  */
 export type ParticleKind =
   | 'haze'
+  | 'diskLight'
   | 'cloud'
+  | 'hii'
+  | 'satellite'
   | 'bulge'
   | 'nucleus'
   | 'dust'
@@ -26,7 +32,7 @@ export type ParticleKind =
   | 'dustLane';
 
 /** Kinds whose brightness follows the density wave. */
-const WAVE_KINDS: ReadonlySet<ParticleKind> = new Set(['cloud', 'youngStar', 'dustLane']);
+const WAVE_KINDS: ReadonlySet<ParticleKind> = new Set(['cloud', 'hii', 'youngStar', 'dustLane']);
 
 export interface Particle {
   kind: ParticleKind;
@@ -65,7 +71,9 @@ function particle(
   const radius = Math.sqrt(x * x + y * y);
   const { coreRadius, coreAngularSpeed } = GALAXY;
   // Solid-body rotation inside the core, flat rotation curve outside it.
-  const angularSpeed = radius > coreRadius ? (coreAngularSpeed * coreRadius) / radius : coreAngularSpeed;
+  // A satellite galaxy is not part of the disk, so it holds its place.
+  const angularSpeed =
+    kind === 'satellite' ? 0 : radius > coreRadius ? (coreAngularSpeed * coreRadius) / radius : coreAngularSpeed;
   return {
     kind,
     x,
@@ -94,23 +102,33 @@ function polar(kind: ParticleKind, r: number, theta: number, z: number, size: nu
  */
 export function generateParticles(random: Random = Math.random): Particle[] {
   const particles: Particle[] = [];
+  const clusters = youngClusters(random);
   addCoreHaze(particles, random);
+  addDiskLight(particles, random);
   addClouds(particles, random);
+  addStarFormingNebulae(particles, clusters, random);
+  addSatellite(particles, random);
   addBulge(particles, random);
-  particles.push(particle('nucleus', 0, 0, 0, 8.0, 1.0, [255, 255, 255]));
+  particles.push(particle('nucleus', 0, 0, 0, 6.0, 0.6, [255, 246, 232]));
   addDust(particles, random);
   addOldStars(particles, random);
-  addYoungStars(particles, random);
+  addYoungStars(particles, clusters, random);
   addBackground(particles, random);
   addDustLanes(particles, random);
   return particles;
 }
 
-// Muted, dusty tones: real nebulae look grey-beige next to their stars.
-const HAZE_WARM: Rgb255 = [230, 206, 170];
-const CLOUD_INNER: Rgb255 = [220, 202, 178];
-const CLOUD_OUTER: Rgb255 = [176, 186, 204];
-const DUST_LANE: Rgb255 = [62, 50, 42];
+// Andromeda's palette, muted: a cream-white core fading to peach, a warm
+// pinkish-beige inner disk, blue outer arms, and mauve star-forming knots.
+const CORE_CENTRE: Rgb255 = [255, 232, 206];
+const CORE_EDGE: Rgb255 = [238, 196, 164];
+const DISK_INNER: Rgb255 = [228, 200, 188];
+const DISK_OUTER: Rgb255 = [150, 170, 214];
+const CLOUD_INNER: Rgb255 = [222, 200, 192];
+const CLOUD_OUTER: Rgb255 = [146, 168, 218];
+const HII_GLOW: Rgb255 = [214, 156, 196];
+const SATELLITE_GLOW: Rgb255 = [255, 238, 222];
+const DUST_LANE: Rgb255 = [92, 58, 42];
 
 function mix(a: Rgb255, b: Rgb255, t: number): Rgb255 {
   const channel = (i: 0 | 1 | 2) => Math.round(a[i] + (b[i] - a[i]) * t);
@@ -148,16 +166,60 @@ function outwardness(r: number): number {
  */
 const GAS_SPREAD_LIMIT = 2.2;
 
-/** The bulge is nearly spherical, so its haze is too. */
+/**
+ * The bulge: billions of unresolved old stars, seen as one large, smooth glow,
+ * cream-white at the centre and peach at the edge. It is a slightly flattened
+ * spheroid, a little wider than it is tall.
+ */
 function addCoreHaze(out: Particle[], random: Random): void {
   const { coreRadius } = GALAXY;
+  const spread = coreRadius * 1.4;
   for (let i = 0; i < NEBULA.coreHazePuffs; i++) {
-    const x = truncatedGaussian(random, GAS_SPREAD_LIMIT) * coreRadius * 1.0;
-    const y = truncatedGaussian(random, GAS_SPREAD_LIMIT) * coreRadius * 1.0;
-    const z = truncatedGaussian(random, GAS_SPREAD_LIMIT) * coreRadius * 0.6;
-    const size = uniform(random, 60, 40);
-    const brightness = uniform(random, 0.006, 0.004);
-    out.push(particle('haze', x, y, z, size, brightness, jitter(HAZE_WARM, random, 8)));
+    const x = truncatedGaussian(random, GAS_SPREAD_LIMIT) * spread;
+    const y = truncatedGaussian(random, GAS_SPREAD_LIMIT) * spread;
+    const z = truncatedGaussian(random, GAS_SPREAD_LIMIT) * spread * 0.6;
+    const edge = Math.min(1, Math.sqrt(x * x + y * y + z * z) / (spread * 2));
+    const size = uniform(random, 55, 45);
+    const brightness = uniform(random, 0.009, 0.006);
+    out.push(particle('haze', x, y, z, size, brightness, jitter(mix(CORE_CENTRE, CORE_EDGE, edge), random, 5)));
+  }
+}
+
+/**
+ * Unresolved starlight across the whole disk: a smooth exponential sheet,
+ * warm and bright inside, bluer and fainter outward. It gives the galaxy one
+ * continuous body for the arms and dust lanes to sit in.
+ */
+function addDiskLight(out: Particle[], random: Random): void {
+  const { coreRadius, diskRadius } = GALAXY;
+  for (let i = 0; i < NEBULA.diskLightPuffs; i++) {
+    const r = coreRadius * 0.9 + Math.min(diskRadius * 1.15, -Math.log(1 - random()) * diskRadius * 0.32);
+    const theta = random() * TWO_PI;
+    const height = (4 + 10 * Math.exp(-r / (diskRadius * 0.35))) * GALAXY.thickness;
+    const z = truncatedGaussian(random, GAS_SPREAD_LIMIT) * height;
+    const color = mix(DISK_INNER, DISK_OUTER, Math.pow(outwardness(r), 0.8));
+    const size = uniform(random, 40, 30);
+    const brightness = uniform(random, 0.01, 0.006) * (0.35 + 0.65 * Math.exp(-r / (diskRadius * 0.5)));
+    out.push(polar('diskLight', r, theta, z, size, brightness, jitter(color, random, 6)));
+  }
+}
+
+/**
+ * M32, Andromeda's compact elliptical companion, just above the disk and to
+ * the left of the core as seen here. Its light is concentrated toward its
+ * centre, so overlapping puffs make a bright, fuzzy ball.
+ */
+const M32_POSITION = { x: 107, y: 0, z: -74 };
+
+function addSatellite(out: Particle[], random: Random): void {
+  for (let i = 0; i < 160; i++) {
+    const spread = 9 * Math.pow(random(), 0.8);
+    const x = M32_POSITION.x + truncatedGaussian(random, 2) * spread;
+    const y = M32_POSITION.y + truncatedGaussian(random, 2) * spread;
+    const z = M32_POSITION.z + truncatedGaussian(random, 2) * spread;
+    const size = uniform(random, 12, 18);
+    const brightness = uniform(random, 0.008, 0.01);
+    out.push(particle('satellite', x, y, z, size, brightness, SATELLITE_GLOW));
   }
 }
 
@@ -211,7 +273,8 @@ function addBulge(out: Particle[], random: Random): void {
     const green = Math.floor(242 * t + 255 * (1 - t) - random() * 20 - edge * 20);
     const blue = Math.floor(220 * (1 - t));
 
-    const brightness = uniform(random, 0.2, 0.3) * (0.3 + falloff * 0.7);
+    // Faint: the smooth core glow carries the light; these only add a slow shimmer.
+    const brightness = uniform(random, 0.2, 0.3) * (0.3 + falloff * 0.7) * 0.3;
     const size = uniform(random, 1.2, 2.5) * (0.8 + falloff * 0.4);
     out.push(particle('bulge', x, y, z, size, brightness, [255, green, blue]));
   }
@@ -241,7 +304,8 @@ function addDust(out: Particle[], random: Random): void {
       uniformInt(random, 25, 55),
       uniformInt(random, 10, 40),
     ];
-    const brightness = uniform(random, 0.04, 0.1);
+    // Faint, so the smooth glows underneath are not grainy.
+    const brightness = uniform(random, 0.02, 0.05);
     const size = uniform(random, 1.2, 3.8);
     out.push(polar('dust', r, theta, z, size, brightness, muted(color, 0.55)));
   }
@@ -262,9 +326,9 @@ function addOldStars(out: Particle[], random: Random): void {
     let temperature: number;
     let brightness: number;
     if (r <= coreRadius * 2) {
-      // Bulge giants.
+      // Bulge giants, kept faint so the core stays a smooth glow.
       temperature = uniform(random, 3200, 2600);
-      brightness = uniform(random, 0.55, 0.4);
+      brightness = uniform(random, 0.2, 0.2);
     } else if (random() < 0.85) {
       temperature = uniform(random, 3200, 2800);
       brightness = uniform(random, 0.15, 0.3);
@@ -285,21 +349,51 @@ function addOldStars(out: Particle[], random: Random): void {
   }
 }
 
+interface Cluster {
+  r: number;
+  theta: number;
+  stars: number;
+  /** Still inside the glowing nebula it formed from. */
+  nebula: boolean;
+}
+
 /**
- * Hot blue-white stars in small clusters (OB associations), spread over the
- * disk. The density wave decides when each one is visible.
+ * Small clusters of young stars (OB associations) spread over the disk. The
+ * density wave decides when each is visible: they ignite in an arm and fade.
  */
-function addYoungStars(out: Particle[], random: Random): void {
+function youngClusters(random: Random): Cluster[] {
   const { coreRadius, diskRadius } = GALAXY;
+  return Array.from({ length: YOUNG_STARS.clusters }, () => ({
+    r: coreRadius * 1.3 + (diskRadius * 1.02 - coreRadius * 1.3) * Math.sqrt(random()),
+    theta: random() * TWO_PI,
+    stars: uniformInt(random, YOUNG_STARS.perCluster.min, YOUNG_STARS.perCluster.span),
+    nebula: random() < YOUNG_STARS.hiiFraction,
+  }));
+}
 
-  for (let c = 0; c < YOUNG_STARS.clusters; c++) {
-    const centreR = coreRadius * 1.3 + (diskRadius * 1.02 - coreRadius * 1.3) * Math.sqrt(random());
-    const centreTheta = random() * TWO_PI;
-    const stars = uniformInt(random, YOUNG_STARS.perCluster.min, YOUNG_STARS.perCluster.span);
+/** A soft pink glow around some young clusters, fading with them. */
+function addStarFormingNebulae(out: Particle[], clusters: readonly Cluster[], random: Random): void {
+  for (const cluster of clusters) {
+    if (!cluster.nebula) continue;
+    for (let i = 0; i < 4; i++) {
+      const r = cluster.r + gaussian(random) * 2;
+      const theta = cluster.theta + (gaussian(random) * 4) / cluster.r;
+      const z = gaussian(random) * 2 * GALAXY.thickness;
+      const size = uniform(random, 8, 8);
+      const brightness = uniform(random, 0.05, 0.04);
+      out.push(polar('hii', r, theta, z, size, brightness, jitter(HII_GLOW, random, 8)));
+    }
+  }
+}
 
-    for (let s = 0; s < stars; s++) {
-      const r = centreR + gaussian(random) * 3;
-      const theta = centreTheta + (gaussian(random) * 8) / centreR;
+/** Hot blue-white stars in the young clusters. */
+function addYoungStars(out: Particle[], clusters: readonly Cluster[], random: Random): void {
+  const { diskRadius } = GALAXY;
+
+  for (const cluster of clusters) {
+    for (let s = 0; s < cluster.stars; s++) {
+      const r = cluster.r + gaussian(random) * 3;
+      const theta = cluster.theta + (gaussian(random) * 8) / cluster.r;
       const z = gaussian(random) * 2.5 * GALAXY.thickness;
       const temperature = uniform(random, 9000, 16000);
       const brightness = uniform(random, 0.7, 0.3) * Math.exp(-Math.pow(r / (diskRadius * 1.1), 2));
@@ -310,14 +404,18 @@ function addYoungStars(out: Particle[], random: Random): void {
   }
 }
 
-/** Distant field stars, unrelated to the galaxy, filling the sky. */
+/**
+ * Field stars of our own galaxy, unrelated to Andromeda, filling the sky; a
+ * few bright ones are drawn larger with big glows.
+ */
 function addBackground(out: Particle[], random: Random): void {
-  for (let i = 0; i < POPULATION.background; i++) {
+  for (let i = 0; i < POPULATION.background + POPULATION.brightStars; i++) {
+    const bright = i >= POPULATION.background;
     const x = (random() - 0.5) * 3000;
     const y = (random() - 0.5) * 2000;
     const z = (random() - 0.5) * 1000;
-    const brightness = uniform(random, 0.08, 0.15);
-    const size = uniform(random, 0.8, 1.5);
+    const brightness = bright ? uniform(random, 0.5, 0.45) : uniform(random, 0.08, 0.15);
+    const size = bright ? uniform(random, 1.6, 1.4) : uniform(random, 0.8, 1.5);
     const roll = random();
     const color: Rgb255 = roll < 0.6 ? [255, 255, 255] : roll < 0.8 ? [255, 250, 200] : [200, 220, 255];
     out.push(particle('background', x, y, z, size, brightness, color));
@@ -325,20 +423,27 @@ function addBackground(out: Particle[], random: Random): void {
 }
 
 /**
- * Dark dust spread thinly over the disk. The density wave makes it visible
- * only where it piles up in a lane on an arm's upstream edge, so the lanes
- * persist while the dust itself streams through them.
+ * Dark dust in thin streamers along orbits, like the gas. The density wave
+ * makes it visible only where it piles up on an arm's upstream edge, so the
+ * lanes persist as long continuous streaks while the dust streams through.
  */
 function addDustLanes(out: Particle[], random: Random): void {
   const { coreRadius, diskRadius } = GALAXY;
 
-  for (let i = 0; i < NEBULA.dustLanePuffs; i++) {
+  for (let i = 0; i < NEBULA.dustStreamers; i++) {
     // Denser toward the centre, like the arms themselves.
-    const r = coreRadius * 1.4 + (diskRadius * 0.95 - coreRadius * 1.4) * Math.pow(random(), 1.3);
-    const theta = random() * TWO_PI;
-    const z = truncatedGaussian(random, GAS_SPREAD_LIMIT) * 3 * GALAXY.thickness;
-    const size = uniform(random, 20, 12) * (0.7 + (0.6 * r) / diskRadius);
-    const opacity = uniform(random, 0.1, 0.06);
-    out.push(polar('dustLane', r, theta, z, size, opacity, DUST_LANE));
+    const centreR = coreRadius * 1.4 + (diskRadius * 0.95 - coreRadius * 1.4) * Math.pow(random(), 1.3);
+    const centreTheta = random() * TWO_PI;
+    const arc = uniform(random, NEBULA.streamerArc.min, NEBULA.streamerArc.span);
+    const centreZ = truncatedGaussian(random, GAS_SPREAD_LIMIT) * 2 * GALAXY.thickness;
+
+    for (let j = 0; j < NEBULA.puffsPerDustStreamer; j++) {
+      const r = centreR + truncatedGaussian(random, GAS_SPREAD_LIMIT) * 2.5;
+      const theta = centreTheta + (random() - 0.5) * arc;
+      const z = centreZ + truncatedGaussian(random, GAS_SPREAD_LIMIT) * 1.5 * GALAXY.thickness;
+      const size = uniform(random, 10, 8) * (0.7 + (0.6 * r) / diskRadius);
+      const opacity = uniform(random, 0.13, 0.08);
+      out.push(polar('dustLane', r, theta, z, size, opacity, DUST_LANE));
+    }
   }
 }

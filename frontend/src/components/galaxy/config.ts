@@ -28,12 +28,16 @@ export const POPULATION = {
   /** The smooth disk of old stars; the arms barely show in it. */
   oldStars: 1700,
   background: 2000,
+  /** Bright foreground stars of our own galaxy, with large glows. */
+  brightStars: 28,
 } as const;
 
 /** Young, hot stars born in clusters where gas crosses an arm. */
 export const YOUNG_STARS = {
   clusters: 540,
   perCluster: { min: 2, span: 6 },
+  /** Share of clusters still wrapped in the pink glow of their birth nebula (an HII region). */
+  hiiFraction: 0.3,
 } as const;
 
 /**
@@ -52,7 +56,7 @@ export const DENSITY_WAVE = {
   gasLaneWidth: 0.6,
   /** Dust lanes sit this far upstream of the arm centre, and are this wide. */
   laneOffset: -0.22,
-  laneWidth: 0.15,
+  laneWidth: 0.2,
   /** Stars are born this far from the arm centre, and fade over this many radians downstream. */
   birthOffset: -0.06,
   youthDecay: 0.7,
@@ -63,18 +67,21 @@ export const DENSITY_WAVE = {
  * real thickness and parallax rather than being painted on.
  */
 export const NEBULA = {
-  /** Puffs in the thick, rounded haze around the bulge. */
-  coreHazePuffs: 420,
+  /** Puffs in the smooth, rounded glow of the bulge. */
+  coreHazePuffs: 900,
+  /** Puffs in the continuous sheet of starlight the arms sit in. */
+  diskLightPuffs: 900,
   /** Gas streamers spread over the disk; each is a thin arc of puffs along its orbit. */
   streamers: 300,
   streamerArc: { min: 0.5, span: 0.6 },
   puffsPerStreamer: { min: 20, span: 10 },
-  /** Absorbing puffs over the disk; only those in a lane show at any moment. */
-  dustLanePuffs: 4200,
+  /** Dust streamers over the disk; only the parts inside a lane show at any moment. */
+  dustStreamers: 560,
+  puffsPerDustStreamer: 20,
 } as const;
 
 /** Dark mode colour saturation (1 = as generated, 0 = greyscale). */
-export const SATURATION = 0.8;
+export const SATURATION = 0.7;
 
 /**
  * Stars are drawn as a point-spread function: a sharp core plus a faint wide
@@ -87,6 +94,13 @@ export const STAR_HALO = {
 
 /** Cap on device pixels per CSS pixel, to bound fill cost on dense screens. */
 export const MAX_PIXEL_RATIO = 2;
+
+/**
+ * Resolution of the offscreen layers that gas and dust are drawn into, as a
+ * fraction of CSS resolution. They are smooth, so lower resolution is
+ * invisible, and they cover most of the pixels drawn.
+ */
+export const SOFT_LAYER_SCALE = 0.5;
 
 export const ANIMATION = {
   /** Simulation time advanced per wall-clock millisecond. */

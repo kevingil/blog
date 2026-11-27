@@ -49,6 +49,8 @@ export const FRAGMENT_SHADER = /* glsl */ `
   #define SATURATION ${SATURATION.toFixed(3)}
 
   uniform float u_light;
+  // 1 when drawing into a layer that is composited with premultiplied alpha.
+  uniform float u_premultiply;
 
   varying vec3 v_color;
   varying float v_alpha;
@@ -56,6 +58,8 @@ export const FRAGMENT_SHADER = /* glsl */ `
   varying float v_halo;
 
   const vec3 WARM = vec3(1.0, 0.85, 0.3);
+  // Dust blocks blue light more than red, so lanes look reddish-brown.
+  const vec3 DUST_ABSORPTION = vec3(0.55, 0.75, 0.95);
   const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 
   bool isSprite(float kind) {
@@ -88,7 +92,14 @@ export const FRAGMENT_SHADER = /* glsl */ `
     if (dist > 0.5) discard;
 
     vec4 color;
-    if (isSprite(SPRITE_CLOUD) || isSprite(SPRITE_DUSTLANE)) {
+    if (isSprite(SPRITE_DUSTLANE)) {
+      color = glow(dist, 1.0);
+      if (u_light < 0.5) {
+        // The absorbing pass multiplies what is behind by (1 - rgb).
+        gl_FragColor = vec4(DUST_ABSORPTION * color.a, color.a);
+        return;
+      }
+    } else if (isSprite(SPRITE_CLOUD)) {
       color = glow(dist, 1.0);
     } else if (isSprite(SPRITE_GAS)) {
       color = glow(dist, 1.4);
@@ -102,6 +113,27 @@ export const FRAGMENT_SHADER = /* glsl */ `
     if (u_light < 0.5) {
       color.rgb = mix(vec3(dot(color.rgb, LUMA)), color.rgb, SATURATION);
     }
-    gl_FragColor = color;
+    gl_FragColor = u_premultiply > 0.5 ? vec4(color.rgb * color.a, color.a) : color;
+  }
+`;
+
+/** Draws a full-screen triangle that samples an offscreen layer. */
+export const COMPOSITE_VERTEX_SHADER = /* glsl */ `
+  attribute vec2 a_corner;
+  varying vec2 v_uv;
+
+  void main() {
+    v_uv = a_corner * 0.5 + 0.5;
+    gl_Position = vec4(a_corner, 0.0, 1.0);
+  }
+`;
+
+export const COMPOSITE_FRAGMENT_SHADER = /* glsl */ `
+  precision mediump float;
+  uniform sampler2D u_layer;
+  varying vec2 v_uv;
+
+  void main() {
+    gl_FragColor = texture2D(u_layer, v_uv);
   }
 `;

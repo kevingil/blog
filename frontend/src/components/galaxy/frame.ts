@@ -41,9 +41,16 @@ export interface ScreenPoint {
   depth: number;
 }
 
-/** Vertex counts for one frame. Absorbing vertices follow the emissive ones. */
+/**
+ * Vertex counts for one frame, in draw order: soft gas first (drawn into a
+ * low-resolution layer), then the sharp emissive sprites, then absorbing
+ * dust lanes.
+ */
 export interface FrameCounts {
   total: number;
+  /** Leading vertices that are soft gas. */
+  soft: number;
+  /** Leading vertices that emit light (soft gas included). */
   emissive: number;
 }
 
@@ -52,8 +59,10 @@ const SIN_INCLINATION = Math.sin(-GALAXY.inclination);
 const COS_ORIENTATION = Math.cos(GALAXY.orientation);
 const SIN_ORIENTATION = Math.sin(GALAXY.orientation);
 
-/** Neutral ink for gas and dust in light mode, where colour would look garish. */
+/** Neutral ink for gas in light mode, where colour would look garish. */
 const LIGHT_MODE_GAS_INK: Rgb = [0.24, 0.22, 0.22];
+/** Dust lanes in light mode: a slightly warmer, darker ink. */
+const LIGHT_MODE_DUST_INK: Rgb = [0.26, 0.18, 0.14];
 
 /**
  * Places a particle on screen: differential rotation in the galaxy plane,
@@ -110,7 +119,10 @@ const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 function spriteFor(particle: Particle): number {
   switch (particle.kind) {
     case 'haze':
+    case 'diskLight':
     case 'cloud':
+    case 'hii':
+    case 'satellite':
       return SPRITE.cloud;
     case 'dustLane':
       return SPRITE.dustLane;
@@ -140,6 +152,7 @@ function waveFactor(particle: Particle, time: number): number {
   const phase = patternAngle(particle, time);
   if (particle.kind === 'cloud') return armGlow(particle.arms, phase);
   if (particle.kind === 'dustLane') return laneDepth(particle.arms, phase);
+  // Young stars and the nebulae around them share a lifetime.
   return youth(particle.arms, phase);
 }
 
@@ -166,6 +179,7 @@ export function writeFrame(
   const { time, theme, width, height } = state;
   const light = theme === 'light';
   let count = 0;
+  let soft = 0;
   let emissive = 0;
 
   for (const particle of particles) {
@@ -197,8 +211,8 @@ export function writeFrame(
     }
     if (light && isGasOrDust) {
       // A faint wash: ink pools far more visibly than light adds up.
-      color = LIGHT_MODE_GAS_INK;
-      alpha *= 0.6;
+      color = sprite === SPRITE.dustLane ? LIGHT_MODE_DUST_INK : LIGHT_MODE_GAS_INK;
+      alpha *= sprite === SPRITE.dustLane ? 0.6 : 0.35;
     } else if (light) {
       color = toLightMode(particle.color, color, random);
       alpha = Math.min(1.0, alpha * 2.0);
@@ -224,8 +238,10 @@ export function writeFrame(
     out[offset + 7] = sprite;
     out[offset + 8] = halo;
     count++;
+    // Particles list all soft gas first, so it forms a prefix.
+    if (sprite === SPRITE.cloud && soft === count - 1) soft = count;
     if (sprite !== SPRITE.dustLane) emissive = count;
   }
 
-  return { total: count, emissive };
+  return { total: count, soft, emissive };
 }

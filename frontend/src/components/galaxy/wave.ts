@@ -1,5 +1,5 @@
 import { ANIMATION, DENSITY_WAVE, GALAXY } from './config';
-import { ARMS, MAIN_ARM_COUNT, wrapAngle } from './spiral';
+import { ARM_FAMILIES, ARMS, MAIN_ARM_COUNT, wrapAngle } from './spiral';
 
 const TWO_PI = 2 * Math.PI;
 
@@ -42,12 +42,17 @@ export function armGlow(arms: readonly number[], phase: number): number {
   return DENSITY_WAVE.interArmGlow + (1 - DENSITY_WAVE.interArmGlow) * lit;
 }
 
-/** 0–1: how deep in a dust lane (on a main arm's upstream edge) the orbiter is. */
+/** Dust lane strength per arm family (main, inner, outer): the outer arms have none. */
+const LANE_BY_FAMILY = [1, 0.7, 0];
+const LANE_STRENGTH = ARMS.map(({ family }) => LANE_BY_FAMILY[ARM_FAMILIES.indexOf(family)]);
+
+/** 0–1: how deep in a dust lane (on an arm's upstream edge) the orbiter is. */
 export function laneDepth(arms: readonly number[], phase: number): number {
   let depth = 0;
-  for (let i = 0; i < MAIN_ARM_COUNT; i++) {
+  for (let i = 0; i < arms.length; i++) {
+    if (LANE_STRENGTH[i] === 0 || Number.isNaN(arms[i])) continue;
     const offset = wrapAngle(phase - (arms[i] + DENSITY_WAVE.laneOffset));
-    depth = Math.max(depth, Math.exp(-Math.pow(offset / DENSITY_WAVE.laneWidth, 2)));
+    depth = Math.max(depth, LANE_STRENGTH[i] * Math.exp(-Math.pow(offset / DENSITY_WAVE.laneWidth, 2)));
   }
   return depth;
 }
