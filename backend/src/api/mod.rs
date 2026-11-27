@@ -5,6 +5,7 @@ pub mod datasource;
 pub mod health;
 pub mod image;
 pub mod insight;
+pub mod mcp;
 pub mod middleware;
 pub mod organization;
 pub mod page;

@@ -35,7 +35,7 @@ use crate::{
         websocket::WebSocketSupervisorHandle,
         worker::WorkerState,
     },
-    constants::{DEFAULT_REQUEST_TIMEOUT, MAX_REQUEST_BODY_BYTES},
+    constants::{DEFAULT_REQUEST_TIMEOUT, MAX_REQUEST_BODY_BYTES, MCP_REQUEST_TIMEOUT},
     database::pool::PgPool,
     openapi,
 };
@@ -172,6 +172,38 @@ pub fn router(state: AppState, cors_origins: &[String]) -> anyhow::Result<Router
         .allow_credentials(true)
         .max_age(std::time::Duration::from_secs(300));
 
+    let auth = state.auth.clone();
+    let api = with_http_middleware(
+        Router::new()
+            .merge(api)
+            .merge(SwaggerUi::new("/swagger").url("/api/openapi.json", document))
+            .fallback(not_found),
+        DEFAULT_REQUEST_TIMEOUT,
+        cors.clone(),
+        auth.clone(),
+    );
+    let mcp = with_http_middleware(
+        crate::api::mcp::router(auth.clone()),
+        MCP_REQUEST_TIMEOUT,
+        cors,
+        auth,
+    );
+    Ok(Router::new().merge(api).merge(mcp).with_state(state))
+}
+
+fn timeout_layer(request_timeout: std::time::Duration) -> TimeoutLayer {
+    TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, request_timeout)
+}
+
+fn with_http_middleware<S>(
+    router: Router<S>,
+    request_timeout: std::time::Duration,
+    cors: CorsLayer,
+    auth: AuthState,
+) -> Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
     let request_id = HeaderName::from_static("x-request-id");
     let middleware = ServiceBuilder::new()
         .layer(SetRequestIdLayer::new(request_id.clone(), MakeRequestUuid))
@@ -192,10 +224,7 @@ pub fn router(state: AppState, cors_origins: &[String]) -> anyhow::Result<Router
                 )
             }),
         )
-        .layer(TimeoutLayer::with_status_code(
-            StatusCode::REQUEST_TIMEOUT,
-            DEFAULT_REQUEST_TIMEOUT,
-        ))
+        .layer(timeout_layer(request_timeout))
         .layer(RequestBodyLimitLayer::new(MAX_REQUEST_BODY_BYTES))
         .layer(cors)
         .layer(SetResponseHeaderLayer::if_not_present(
@@ -211,15 +240,70 @@ pub fn router(state: AppState, cors_origins: &[String]) -> anyhow::Result<Router
             HeaderValue::from_static("1; mode=block"),
         ));
 
-    let auth = state.auth.clone();
-    Ok(Router::new()
-        .merge(api)
-        .merge(SwaggerUi::new("/swagger").url("/api/openapi.json", document))
-        .fallback(not_found)
+    router
         .layer(axum::middleware::from_fn_with_state(
             auth,
             attach_resource_metadata,
         ))
         .layer(middleware)
-        .with_state(state))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use axum::{
+        Router,
+        body::Body,
+        http::{Request, StatusCode},
+        routing::{get, post},
+    };
+    use tower::ServiceExt;
+
+    use super::*;
+
+    async fn slow_ok() -> &'static str {
+        tokio::time::sleep(Duration::from_millis(80)).await;
+        "ok"
+    }
+
+    #[tokio::test]
+    async fn mcp_timeout_is_split_from_the_api_timeout() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(DEFAULT_REQUEST_TIMEOUT, Duration::from_secs(30));
+        assert_eq!(MCP_REQUEST_TIMEOUT, Duration::from_secs(60));
+
+        let app = Router::new()
+            .merge(
+                Router::new()
+                    .route("/blog/articles", get(slow_ok))
+                    .layer(timeout_layer(Duration::from_millis(20))),
+            )
+            .merge(
+                Router::new()
+                    .route("/mcp", post(slow_ok))
+                    .layer(timeout_layer(Duration::from_millis(200))),
+            );
+
+        let api = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/blog/articles")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(api.status(), StatusCode::REQUEST_TIMEOUT);
+
+        let mcp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/mcp")
+                    .body(Body::empty())?,
+            )
+            .await?;
+        assert_eq!(mcp.status(), StatusCode::OK);
+        Ok(())
+    }
 }

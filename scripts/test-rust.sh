@@ -16,6 +16,7 @@ case "$mode" in
       auth_database \
       mcp_access_token \
       oauth_mcp \
+      mcp_server \
       chat_repository \
       chat_service \
       content_crud_http_database \
