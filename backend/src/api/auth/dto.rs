@@ -1,10 +1,13 @@
 use std::collections::BTreeMap;
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 use crate::core::auth::{
-    AccountUpdate, LoginInput, LoginResult, PasswordUpdate, RegistrationInput, UserData,
+    AccountUpdate, IssuedMcpAccessToken, LoginInput, LoginResult, McpAccessToken, PasswordUpdate,
+    RegistrationInput, UserData,
 };
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -145,6 +148,73 @@ impl Validate for UpdatePasswordRequest {
         validate_password_bytes(&mut issues, "CurrentPassword", &self.current_password);
         validate_length(&mut issues, "NewPassword", &self.new_password, 6, None);
         validate_password_bytes(&mut issues, "NewPassword", &self.new_password);
+        issues
+    }
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateMcpTokenRequest {
+    #[schema(min_length = 1, max_length = 100)]
+    pub name: String,
+}
+
+/// MCP access token metadata. The plaintext and the hash are not included.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct McpTokenResponse {
+    pub id: Uuid,
+    pub name: String,
+    pub token_prefix: String,
+    pub created_at: DateTime<Utc>,
+    pub last_used_at: Option<DateTime<Utc>>,
+    pub revoked_at: Option<DateTime<Utc>>,
+}
+
+/// Create response. `token` is the bearer secret and is not returned again.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct McpTokenCreatedResponse {
+    pub id: Uuid,
+    pub name: String,
+    pub token: String,
+    pub token_prefix: String,
+    pub created_at: DateTime<Utc>,
+    pub last_used_at: Option<DateTime<Utc>>,
+    pub revoked_at: Option<DateTime<Utc>>,
+}
+
+impl From<McpAccessToken> for McpTokenResponse {
+    fn from(token: McpAccessToken) -> Self {
+        Self {
+            id: token.id,
+            name: token.name,
+            token_prefix: token.token_prefix,
+            created_at: token.created_at,
+            last_used_at: token.last_used_at,
+            revoked_at: token.revoked_at,
+        }
+    }
+}
+
+impl From<IssuedMcpAccessToken> for McpTokenCreatedResponse {
+    fn from(issued: IssuedMcpAccessToken) -> Self {
+        Self {
+            id: issued.record.id,
+            name: issued.record.name,
+            token: issued.plaintext,
+            token_prefix: issued.record.token_prefix,
+            created_at: issued.record.created_at,
+            last_used_at: issued.record.last_used_at,
+            revoked_at: issued.record.revoked_at,
+        }
+    }
+}
+
+impl Validate for CreateMcpTokenRequest {
+    fn validate(&self) -> Vec<ValidationIssue> {
+        let mut issues = Vec::new();
+        validate_length(&mut issues, "Name", self.name.trim(), 1, Some(100));
         issues
     }
 }

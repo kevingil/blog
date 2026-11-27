@@ -85,7 +85,7 @@ impl AuthState {
 
     pub async fn authenticate(&self, headers: &HeaderMap) -> Result<Account, AppError> {
         let token = bearer_token(headers).ok_or(AppError::Unauthorized)?;
-        self.service.authenticate(token).await
+        self.service.authenticate_bearer(token).await
     }
 
     pub async fn optional_account(&self, headers: &HeaderMap) -> Result<Option<Account>, AppError> {
@@ -98,7 +98,7 @@ impl AuthState {
 
     pub async fn authenticate_websocket(&self, headers: &HeaderMap) -> Result<Account, AppError> {
         let token = websocket_bearer_token(headers).ok_or(AppError::Unauthorized)?;
-        self.service.authenticate(token).await
+        self.service.authenticate_bearer(token).await
     }
 }
 

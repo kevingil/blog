@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use axum::{
     Json,
-    extract::{FromRequest, Multipart, Request, State},
+    extract::{FromRequest, Multipart, Path, Request, State},
     http::{
         HeaderMap, HeaderValue, StatusCode,
         header::{AUTHORIZATION, CONTENT_TYPE, RETRY_AFTER},
@@ -10,13 +10,15 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::de::DeserializeOwned;
+use uuid::Uuid;
 
 use crate::{
     api::{
         auth::{
             dto::{
-                AuthErrorResponse, DeleteAccountRequest, LoginRequest, LoginResponse,
-                MessageResponse, PasswordUpdateResponse, RegisterRequest, UpdateAccountRequest,
+                AuthErrorResponse, CreateMcpTokenRequest, DeleteAccountRequest, LoginRequest,
+                LoginResponse, McpTokenCreatedResponse, McpTokenResponse, MessageResponse,
+                PasswordUpdateResponse, RegisterRequest, UpdateAccountRequest,
                 UpdatePasswordRequest, Validate, ValidationIssue,
             },
             state::{AuthState, bearer_token},
@@ -25,6 +27,7 @@ use crate::{
     },
     core::auth::Account,
     error::AppError,
+    setup::SUPERUSER_ROLE,
 };
 
 const MAX_AUTH_MULTIPART_FIELDS: usize = 3;
@@ -318,6 +321,7 @@ pub async fn update_account(
     path = "/auth/password",
     operation_id = "authUpdatePassword",
     tag = "auth",
+    description = "Requires a JWT session. An MCP access token cannot change the password.",
     security(("bearerAuth" = [])),
     request_body(
         content(
@@ -337,7 +341,7 @@ pub async fn update_password(
     State(state): State<AuthState>,
     request: Request,
 ) -> AuthResult<Json<SuccessResponse<PasswordUpdateResponse>>> {
-    let account = authenticated_account(request.headers(), &state).await?;
+    let account = session_account(request.headers(), &state).await?;
     let body: UpdatePasswordRequest = parse_and_validate(request, &[
         "currentPassword",
         "newPassword",
@@ -475,14 +479,131 @@ async fn parse_body<T: DeserializeOwned>(
     Err(AuthApiError::invalid_body())
 }
 
+#[utoipa::path(
+    post,
+    path = "/auth/mcp-tokens",
+    operation_id = "authCreateMcpToken",
+    tag = "auth",
+    description = "Creates an MCP access token for the authenticated admin. The plaintext token is returned once. Requires a JWT session; an MCP token cannot call this route.",
+    security(("bearerAuth" = [])),
+    request_body = CreateMcpTokenRequest,
+    responses(
+        (status = 201, body = SuccessResponse<McpTokenCreatedResponse>),
+        (status = 400, body = AuthErrorResponse),
+        (status = 401, body = AuthErrorResponse),
+        (status = 403, body = AuthErrorResponse,
+            description = "The JWT session is not an admin"),
+        (status = 500, body = AuthErrorResponse)
+    )
+)]
+pub async fn create_mcp_token(
+    State(state): State<AuthState>,
+    request: Request,
+) -> AuthResult<(StatusCode, Json<SuccessResponse<McpTokenCreatedResponse>>)> {
+    let account = admin_session(request.headers(), &state).await?;
+    let body: CreateMcpTokenRequest = parse_json_and_validate(request).await?;
+    let issued = state
+        .service()
+        .create_mcp_token(account.id, &body.name)
+        .await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(SuccessResponse::new(issued.into())),
+    ))
+}
+
+#[utoipa::path(
+    get,
+    path = "/auth/mcp-tokens",
+    operation_id = "authListMcpTokens",
+    tag = "auth",
+    description = "Lists the authenticated admin's MCP access tokens. The plaintext and the hash are omitted. Requires a JWT session.",
+    security(("bearerAuth" = [])),
+    responses(
+        (status = 200, body = SuccessResponse<Vec<McpTokenResponse>>),
+        (status = 401, body = AuthErrorResponse),
+        (status = 403, body = AuthErrorResponse),
+        (status = 500, body = AuthErrorResponse)
+    )
+)]
+pub async fn list_mcp_tokens(
+    State(state): State<AuthState>,
+    headers: HeaderMap,
+) -> AuthResult<Json<SuccessResponse<Vec<McpTokenResponse>>>> {
+    let account = admin_session(&headers, &state).await?;
+    let tokens = state.service().list_mcp_tokens(account.id).await?;
+    Ok(Json(SuccessResponse::new(
+        tokens.into_iter().map(McpTokenResponse::from).collect(),
+    )))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/auth/mcp-tokens/{id}",
+    operation_id = "authRevokeMcpToken",
+    tag = "auth",
+    description = "Revokes one of the authenticated admin's MCP access tokens. Requires a JWT session.",
+    params(("id" = Uuid, Path)),
+    security(("bearerAuth" = [])),
+    responses(
+        (status = 200, body = SuccessResponse<McpTokenResponse>),
+        (status = 400, body = AuthErrorResponse),
+        (status = 401, body = AuthErrorResponse),
+        (status = 403, body = AuthErrorResponse),
+        (status = 404, body = AuthErrorResponse),
+        (status = 500, body = AuthErrorResponse)
+    )
+)]
+pub async fn revoke_mcp_token(
+    State(state): State<AuthState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> AuthResult<Json<SuccessResponse<McpTokenResponse>>> {
+    let account = admin_session(&headers, &state).await?;
+    let id = Uuid::parse_str(&id)
+        .map_err(|_| AuthApiError::from(AppError::InvalidInput("Invalid token id".to_owned())))?;
+    let token = state.service().revoke_mcp_token(account.id, id).await?;
+    Ok(Json(SuccessResponse::new(token.into())))
+}
+
+enum CredentialKind {
+    /// JWT session or MCP access token.
+    Bearer,
+    /// JWT session only. MCP access tokens are rejected.
+    Session,
+}
+
 async fn authenticated_account(headers: &HeaderMap, state: &AuthState) -> AuthResult<Account> {
+    account_from_headers(headers, state, CredentialKind::Bearer).await
+}
+
+async fn session_account(headers: &HeaderMap, state: &AuthState) -> AuthResult<Account> {
+    account_from_headers(headers, state, CredentialKind::Session).await
+}
+
+async fn admin_session(headers: &HeaderMap, state: &AuthState) -> AuthResult<Account> {
+    let account = session_account(headers, state).await?;
+    if account.role != SUPERUSER_ROLE {
+        return Err(AppError::Forbidden.into());
+    }
+    Ok(account)
+}
+
+async fn account_from_headers(
+    headers: &HeaderMap,
+    state: &AuthState,
+    kind: CredentialKind,
+) -> AuthResult<Account> {
     if !headers.contains_key(AUTHORIZATION) {
         return Err(AuthApiError::unauthorized("Not authenticated"));
     }
     let token =
         bearer_token(headers).ok_or_else(|| AuthApiError::unauthorized("Invalid token format"))?;
-
-    match state.service().authenticate(token).await {
+    let result = match kind {
+        CredentialKind::Bearer => state.service().authenticate_bearer(token).await,
+        CredentialKind::Session => state.service().authenticate(token).await,
+    };
+    match result {
         Ok(account) => Ok(account),
         Err(AppError::Unauthorized) => Err(AuthApiError::unauthorized("Invalid or expired token")),
         Err(error) => Err(error.into()),
