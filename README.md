@@ -226,6 +226,42 @@ docker compose -f docker-compose.parity.yml up --build \
   --abort-on-container-exit --exit-code-from contract-tests contract-tests
 ```
 
+## MCP demo
+
+[`scripts/mcp-demo.sh`](scripts/mcp-demo.sh) starts the same test-profile
+Postgres and MinIO services, migrates a separate `blog_mcp_demo` database with
+the local `migrate` binary, and runs `blog-backend` against the local fixture
+process. The first account, `mcp-demo@example.com` / `McpDemoPass123!`, is the
+admin. The script mints an `mcp_` token and registers
+`http://127.0.0.1:8080/mcp` with the Codex CLI as a Streamable HTTP server.
+
+Codex (`npx @openai/codex`, then `codex exec --dangerously-bypass-approvals-and-sandbox`) follows
+[`scripts/mcp-demo-prompt.txt`](scripts/mcp-demo-prompt.txt): search the content
+API, create two drafts, edit one and read its versions, edit a page, upsert one
+project by URL twice, upsert that article's sources, list storage, and call
+`GET /auth/me`, which the server refuses. The script then reads those rows
+back through the REST API and exits non-zero if any check fails.
+
+```bash
+export OPENAI_API_KEY=sk-...
+./scripts/mcp-demo.sh
+```
+
+`codex exec` cannot ask for approval, and the `never` policy rejects MCP calls,
+so the script bypasses the sandbox for that process. The prompt tells Codex to
+use only the blog MCP tools.
+
+`OPENAI_API_KEY` is read from the environment for Codex only. The script passes
+that value to Codex as `CODEX_API_KEY`, which is the credential the Responses
+API call uses. The backend keeps the fixture key from the test profile. `MCP_DEMO_CLIENT=1`, or a missing key,
+skips Codex and runs the same MCP calls from
+[`scripts/mcp-demo.mjs`](scripts/mcp-demo.mjs). That path does not write a Codex
+transcript. The script is not part of CI.
+
+Logs and, when `asciinema` is installed, a cast of the run go to `tmp/mcp-demo`.
+Set `MCP_DEMO_ARTIFACT_DIR` to write them somewhere else. `agg` renders a gif
+from the cast, and `ffmpeg` makes an mp4 from that gif.
+
 ## OpenAPI and frontend client
 
 Axum routes and the OpenAPI document share the same Utoipa construction path.
