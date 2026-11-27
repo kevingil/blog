@@ -1010,6 +1010,37 @@ fn auth_openapi_enumerates_operations_content_types_security_and_errors() -> Tes
         document["paths"]["/auth/register"]["post"]["security"],
         json!([{}, {"bearerAuth": []}])
     );
+    assert_eq!(
+        document["paths"]["/auth/mcp-tokens"]["post"]["operationId"],
+        "authCreateMcpToken"
+    );
+    assert_eq!(
+        document["paths"]["/auth/mcp-tokens"]["post"]["tags"][0],
+        "auth"
+    );
+    assert_eq!(
+        document["paths"]["/auth/mcp-tokens"]["get"]["operationId"],
+        "authListMcpTokens"
+    );
+    assert_eq!(
+        document["paths"]["/auth/mcp-tokens"]["get"]["tags"][0],
+        "auth"
+    );
+    assert_eq!(
+        document["paths"]["/auth/mcp-tokens/{id}"]["delete"]["operationId"],
+        "authRevokeMcpToken"
+    );
+    assert_eq!(
+        document["paths"]["/auth/mcp-tokens/{id}"]["delete"]["tags"][0],
+        "auth"
+    );
+    let listed = &document["components"]["schemas"]["McpTokenResponse"]["properties"];
+    assert!(listed["tokenPrefix"].is_object());
+    assert!(listed.get("token").is_none());
+    assert!(listed.get("tokenHash").is_none());
+    let created = &document["components"]["schemas"]["McpTokenCreatedResponse"]["properties"];
+    assert!(created["token"].is_object());
+    assert!(created.get("tokenHash").is_none());
     assert!(
         document["paths"]["/auth/account"]["put"]["requestBody"]["content"]["multipart/form-data"]
             .is_object()
@@ -1042,6 +1073,17 @@ fn auth_openapi_enumerates_operations_content_types_security_and_errors() -> Tes
             "/auth/account",
             "delete",
             &["200", "400", "401", "404", "500"][..],
+        ),
+        (
+            "/auth/mcp-tokens",
+            "post",
+            &["201", "400", "401", "403", "500"][..],
+        ),
+        ("/auth/mcp-tokens", "get", &["200", "401", "403", "500"][..]),
+        (
+            "/auth/mcp-tokens/{id}",
+            "delete",
+            &["200", "400", "401", "403", "404", "500"][..],
         ),
     ];
     for (path, method, statuses) in expected {
