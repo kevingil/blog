@@ -15,15 +15,92 @@ export const GALAXY = {
   orientation: (10 * Math.PI) / 180,
   /** Angular speed inside the core; falls off as 1/r outside it (flat rotation curve). */
   coreAngularSpeed: 0.0001,
+  /** Multiplies the vertical spread of every disk population; higher looks thicker. */
+  thickness: 2.2,
+  /** Height of the bulge relative to its width (1 would be a sphere). */
+  bulgeFlattening: 0.55,
 } as const;
 
-/** How many candidates each population draws before density thresholding. */
+/** How many particles each population draws (dust is thinned afterwards). */
 export const POPULATION = {
   bulge: 500,
   dustCandidates: 1400,
-  starCandidates: 2000,
+  /** The smooth disk of old stars; the arms barely show in it. */
+  oldStars: 1700,
   background: 2000,
+  /** Bright foreground stars of our own galaxy, with large glows. */
+  brightStars: 28,
 } as const;
+
+/** Young, hot stars born in clusters where gas crosses an arm. */
+export const YOUNG_STARS = {
+  clusters: 540,
+  perCluster: { min: 2, span: 6 },
+  /** Share of clusters still wrapped in the pink glow of their birth nebula (an HII region). */
+  hiiFraction: 0.3,
+} as const;
+
+/**
+ * The spiral arms are a density wave: a pattern that turns rigidly and more
+ * slowly than the material, which flows through it. Gas brightens as it
+ * enters an arm, dust collects on the upstream edge, and young stars light
+ * up just past it and fade as they drift downstream. Angles are radians in
+ * the pattern's frame.
+ */
+export const DENSITY_WAVE = {
+  /** Radius where material and pattern move together, as a multiple of the disk radius. */
+  corotation: 1.25,
+  /** Gas brightness between the arms, as a fraction of its brightness on them. */
+  interArmGlow: 0.08,
+  /** Gas lanes are this fraction of an arm's full width, so they read as long thin spirals. */
+  gasLaneWidth: 0.6,
+  /** Dust lanes sit this far upstream of the arm centre, and are this wide. */
+  laneOffset: -0.22,
+  laneWidth: 0.2,
+  /** Stars are born this far from the arm centre, and fade over this many radians downstream. */
+  birthOffset: -0.06,
+  youthDecay: 0.7,
+} as const;
+
+/**
+ * Interstellar gas, built from many faint puffs scattered in 3D so it has
+ * real thickness and parallax rather than being painted on.
+ */
+export const NEBULA = {
+  /** Puffs in the smooth, rounded glow of the bulge. */
+  coreHazePuffs: 900,
+  /** Puffs in the continuous sheet of starlight the arms sit in. */
+  diskLightPuffs: 900,
+  /** Gas streamers spread over the disk; each is a thin arc of puffs along its orbit. */
+  streamers: 300,
+  streamerArc: { min: 0.5, span: 0.6 },
+  puffsPerStreamer: { min: 20, span: 10 },
+  /** Dust streamers over the disk; only the parts inside a lane show at any moment. */
+  dustStreamers: 560,
+  puffsPerDustStreamer: 20,
+} as const;
+
+/** Dark mode colour saturation (1 = as generated, 0 = greyscale). */
+export const SATURATION = 0.7;
+
+/**
+ * Stars are drawn as a point-spread function: a sharp core plus a faint wide
+ * halo. The sprite is `min + perBrightness × alpha` times the core size.
+ */
+export const STAR_HALO = {
+  min: 3.5,
+  perBrightness: 5,
+} as const;
+
+/** Cap on device pixels per CSS pixel, to bound fill cost on dense screens. */
+export const MAX_PIXEL_RATIO = 2;
+
+/**
+ * Resolution of the offscreen layers that gas and dust are drawn into, as a
+ * fraction of CSS resolution. They are smooth, so lower resolution is
+ * invisible, and they cover most of the pixels drawn.
+ */
+export const SOFT_LAYER_SCALE = 0.5;
 
 export const ANIMATION = {
   /** Simulation time advanced per wall-clock millisecond. */

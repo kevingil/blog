@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { GALAXY, layoutForWidth, POPULATION } from './config';
-import { FLOATS_PER_VERTEX, projectParticle, writeFrame, type FrameState } from './frame';
+import { DENSITY_WAVE, GALAXY, layoutForWidth, NEBULA, POPULATION, STAR_HALO } from './config';
+import { FLOATS_PER_VERTEX, projectParticle, SPRITE, writeFrame, type FrameState } from './frame';
 import { temperatureToRgb } from './palette';
 import { generateParticles, type Particle } from './particles';
 import { seededRandom } from './random';
-import { wrapAngle } from './spiral';
+import { armAngles, wrapAngle } from './spiral';
+import { armGlow, laneDepth, PATTERN_SPEED, patternAngle, youth } from './wave';
 
 function frameState(overrides: Partial<FrameState> = {}): FrameState {
   return {
@@ -33,13 +34,19 @@ describe('generateParticles', () => {
 
   test('builds every population, with arm stars and dust thresholded', () => {
     const counts = countKinds(generateParticles(seededRandom(1)));
+    expect(counts.haze).toBe(NEBULA.coreHazePuffs);
+    expect(counts.cloud).toBeGreaterThanOrEqual(NEBULA.streamers * NEBULA.puffsPerStreamer.min);
+    expect(counts.diskLight).toBe(NEBULA.diskLightPuffs);
+    expect(counts.dustLane).toBe(NEBULA.dustStreamers * NEBULA.puffsPerDustStreamer);
+    expect(counts.satellite).toBeGreaterThan(0);
+    expect(counts.hii).toBeGreaterThan(0);
+    expect(counts.youngStar).toBeGreaterThan(0);
     expect(counts.bulge).toBe(POPULATION.bulge);
     expect(counts.nucleus).toBe(1);
-    expect(counts.background).toBe(POPULATION.background);
+    expect(counts.background).toBe(POPULATION.background + POPULATION.brightStars);
     expect(counts.dust).toBeGreaterThan(0);
     expect(counts.dust).toBeLessThanOrEqual(POPULATION.dustCandidates);
-    expect(counts.star).toBeGreaterThan(0);
-    expect(counts.star).toBeLessThan(POPULATION.starCandidates);
+    expect(counts.star).toBe(POPULATION.oldStars);
   });
 
   test('keeps sizes, brightness and colours in range', () => {
@@ -55,9 +62,33 @@ describe('generateParticles', () => {
     }
   });
 
-  test('draws the bulge first, so the nucleus glows on top of it', () => {
-    const particles = generateParticles(seededRandom(5));
-    expect(particles[POPULATION.bulge].kind).toBe('nucleus');
+  test('draws gas first and dust lanes last, so stars sit on the gas and dust can darken it', () => {
+    const kinds = generateParticles(seededRandom(5)).map((p) => p.kind);
+    const isGas = (kind: string) => ['haze', 'diskLight', 'cloud', 'hii', 'satellite'].includes(kind);
+    const firstNonGas = kinds.findIndex((kind) => !isGas(kind));
+    const firstLane = kinds.indexOf('dustLane');
+    expect(kinds.slice(0, firstNonGas).every(isGas)).toBe(true);
+    expect(kinds.slice(firstLane).every((kind) => kind === 'dustLane')).toBe(true);
+    expect(kinds.slice(firstNonGas, firstLane).some(isGas)).toBe(false);
+    expect(kinds[firstNonGas]).toBe('bulge');
+    expect(kinds[firstNonGas + POPULATION.bulge]).toBe('nucleus');
+  });
+
+  test('keeps the satellite galaxy fixed while the disk turns', () => {
+    const satellite = generateParticles(seededRandom(6)).filter((p) => p.kind === 'satellite');
+    expect(satellite.every((p) => p.angularSpeed === 0)).toBe(true);
+  });
+
+  test('gives only gas, dust lanes and young stars arm angles for the density wave', () => {
+    for (const p of generateParticles(seededRandom(6))) {
+      expect(p.arms !== null).toBe(['cloud', 'hii', 'dustLane', 'youngStar'].includes(p.kind));
+    }
+  });
+
+  test('gives the gas real thickness around the core', () => {
+    const haze = generateParticles(seededRandom(4)).filter((p) => p.kind === 'haze' && p.radius < GALAXY.coreRadius);
+    const spread = Math.sqrt(haze.reduce((sum, p) => sum + p.z * p.z, 0) / haze.length);
+    expect(spread).toBeGreaterThan(GALAXY.coreRadius * 0.4);
   });
 });
 
@@ -94,6 +125,44 @@ describe('layoutForWidth', () => {
   });
 });
 
+describe('density wave', () => {
+  const r = GALAXY.diskRadius * 0.5;
+  const arms = armAngles(r);
+  const mainArm = arms[0];
+
+  test('turns more slowly than the material everywhere in the disk', () => {
+    const slowestDiskSpeed = (GALAXY.coreAngularSpeed * GALAXY.coreRadius) / GALAXY.diskRadius;
+    expect(PATTERN_SPEED).toBeGreaterThan(0);
+    expect(PATTERN_SPEED).toBeLessThan(slowestDiskSpeed);
+  });
+
+  test('moves material forward through the pattern over time', () => {
+    const orbiter = { angle: 1, angularSpeed: GALAXY.coreAngularSpeed * 0.2 };
+    expect(patternAngle(orbiter, 0)).toBe(1);
+    expect(patternAngle(orbiter, 1e5)).toBeGreaterThan(1);
+  });
+
+  test('lights gas on a main arm and leaves it dim between arms', () => {
+    expect(armGlow(arms, mainArm)).toBeCloseTo(1, 5);
+    const between = Math.min(...Array.from({ length: 64 }, (_, i) => armGlow(arms, (i / 64) * 2 * Math.PI)));
+    expect(between).toBeGreaterThanOrEqual(DENSITY_WAVE.interArmGlow);
+    expect(between).toBeLessThan(DENSITY_WAVE.interArmGlow + 0.05);
+  });
+
+  test('puts dust lanes on the upstream edge of an arm', () => {
+    expect(laneDepth(arms, mainArm + DENSITY_WAVE.laneOffset)).toBeGreaterThan(0.99);
+    expect(laneDepth(arms, mainArm + 0.5)).toBeLessThan(0.01);
+  });
+
+  test('ignites young stars just past an arm and fades them downstream', () => {
+    const birth = mainArm + DENSITY_WAVE.birthOffset;
+    expect(youth(arms, birth - 0.05)).toBeLessThan(0.05); // not yet born
+    expect(youth(arms, birth + 0.2)).toBeGreaterThan(0.6);
+    expect(youth(arms, birth + 0.2)).toBeGreaterThan(youth(arms, birth + 1));
+    expect(youth(arms, birth + 2.5)).toBeLessThan(0.05);
+  });
+});
+
 describe('projectParticle', () => {
   test('puts the galaxy centre at the layout offset', () => {
     const nucleus = generateParticles(seededRandom(1)).find((p) => p.kind === 'nucleus')!;
@@ -116,11 +185,30 @@ describe('writeFrame', () => {
   const particles = generateParticles(seededRandom(11));
   const buffer = () => new Float32Array(particles.length * FLOATS_PER_VERTEX);
 
-  test('culls particles that fall off screen', () => {
-    const count = writeFrame(particles, frameState(), buffer());
-    expect(count).toBeGreaterThan(0);
-    expect(count).toBeLessThan(particles.length);
-    expect(writeFrame(particles, frameState({ width: 10, height: 10 }), buffer())).toBeLessThan(count);
+  test('orders vertices as soft gas, then sharp sprites, then dust lanes', () => {
+    const out = buffer();
+    const { total, soft, emissive } = writeFrame(particles, frameState(), out);
+    expect(soft).toBeGreaterThan(0);
+    expect(emissive).toBeGreaterThan(soft);
+    expect(total).toBeGreaterThan(emissive);
+    for (let i = 0; i < total; i++) {
+      const sprite = out[i * FLOATS_PER_VERTEX + 7];
+      expect(sprite === SPRITE.cloud).toBe(i < soft);
+      expect(sprite === SPRITE.dustLane).toBe(i >= emissive);
+    }
+  });
+
+  test('keeps near-side dust lanes darker than far-side ones', () => {
+    const state = frameState();
+    const inLane = particles.filter((p) => p.kind === 'dustLane' && laneDepth(p.arms!, patternAngle(p, 0)) > 0.9);
+    const opacity = (p: Particle) => {
+      const out = new Float32Array(FLOATS_PER_VERTEX);
+      writeFrame([p], state, out);
+      return out[6] / (p.brightness * laneDepth(p.arms!, patternAngle(p, 0)));
+    };
+    const near = inLane.find((p) => projectParticle(p, state).depth < -150)!;
+    const far = inLane.find((p) => projectParticle(p, state).depth > 150)!;
+    expect(opacity(near)).toBeGreaterThan(opacity(far));
   });
 
   test('dark mode does not consume randomness', () => {
@@ -133,12 +221,27 @@ describe('writeFrame', () => {
 
   test('light mode darkens every colour and keeps alpha in range', () => {
     const out = buffer();
-    const count = writeFrame(particles, frameState({ theme: 'light' }), out, seededRandom(1));
+    const { total: count } = writeFrame(particles, frameState({ theme: 'light' }), out, seededRandom(1));
     for (let i = 0; i < count; i++) {
       const base = i * FLOATS_PER_VERTEX;
       for (const channel of out.subarray(base + 3, base + 6)) expect(channel).toBeLessThanOrEqual(0.41);
       expect(out[base + 6]).toBeLessThanOrEqual(1);
       expect(out[base + 2]).toBeGreaterThanOrEqual(1);
     }
+  });
+
+  test('sizes star sprites to hold a halo that grows with brightness', () => {
+    const out = buffer();
+    const { total: count } = writeFrame(particles, frameState(), out);
+    let stars = 0;
+    for (let i = 0; i < count; i++) {
+      const base = i * FLOATS_PER_VERTEX;
+      if (out[base + 7] !== SPRITE.star && out[base + 7] !== SPRITE.armStar) continue;
+      stars++;
+      const halo = out[base + 8];
+      expect(halo).toBeCloseTo(STAR_HALO.min + STAR_HALO.perBrightness * Math.min(1, out[base + 6]), 4);
+      expect(out[base + 2]).toBeGreaterThanOrEqual(halo - 1e-4);
+    }
+    expect(stars).toBeGreaterThan(0);
   });
 });
