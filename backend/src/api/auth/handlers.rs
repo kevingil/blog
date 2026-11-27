@@ -342,11 +342,10 @@ pub async fn update_password(
     request: Request,
 ) -> AuthResult<Json<SuccessResponse<PasswordUpdateResponse>>> {
     let account = session_account(request.headers(), &state).await?;
-    let body: UpdatePasswordRequest = parse_and_validate(request, &[
-        "currentPassword",
-        "newPassword",
-        "confirmPassword",
-    ])
+    let body: UpdatePasswordRequest = parse_and_validate(
+        request,
+        &["currentPassword", "newPassword", "confirmPassword"],
+    )
     .await?;
     let token = state
         .service()
@@ -517,7 +516,7 @@ pub async fn create_mcp_token(
     path = "/auth/mcp-tokens",
     operation_id = "authListMcpTokens",
     tag = "auth",
-    description = "Lists the authenticated admin's MCP access tokens. The plaintext and the hash are omitted. Requires a JWT session.",
+    description = "Lists the authenticated admin's MCP access tokens, including OAuth-issued tokens and their client name. The plaintext and the hash are omitted. Requires a JWT session.",
     security(("bearerAuth" = [])),
     responses(
         (status = 200, body = SuccessResponse<Vec<McpTokenResponse>>),

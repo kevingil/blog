@@ -121,10 +121,13 @@ pub async fn build(config: Config) -> anyhow::Result<Application> {
     drop(connection);
     let cancellation = CancellationToken::new();
     let accounts = Arc::new(DieselAccountRepository::new(pool.clone()));
-    let auth = AuthState::new(Arc::new(AuthService::new(
-        accounts.clone(),
-        config.jwt_secret.expose_secret(),
-    )?));
+    let auth = AuthState::with_public_base_url(
+        Arc::new(AuthService::new(
+            accounts.clone(),
+            config.jwt_secret.expose_secret(),
+        )?),
+        config.public_api_url.clone(),
+    );
     let articles = Arc::new(DieselArticleRepository::new(pool.clone()));
     let tags = Arc::new(DieselTagRepository::new(pool.clone()));
     let openai = Arc::new(OpenAiClient::with_base_url(

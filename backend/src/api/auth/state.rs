@@ -1,16 +1,18 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{FromRef, FromRequestParts},
+    extract::{FromRef, FromRequestParts, Request, State},
     http::{
-        HeaderMap,
-        header::{AUTHORIZATION, SEC_WEBSOCKET_PROTOCOL},
+        HeaderMap, HeaderValue, StatusCode,
+        header::{AUTHORIZATION, SEC_WEBSOCKET_PROTOCOL, WWW_AUTHENTICATE},
         request::Parts,
     },
+    middleware::Next,
+    response::Response,
 };
 
 use crate::{
-    core::auth::{Account, AccountId, AuthService},
+    core::auth::{Account, AccountId, AuthService, oauth::resource_metadata_header},
     error::AppError,
 };
 
@@ -24,6 +26,7 @@ pub const WEBSOCKET_BEARER_PROTOCOL: &str = "bearer";
 pub struct AuthState {
     service: Arc<AuthService>,
     login_throttle: Arc<LoginThrottle>,
+    public_base_url: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,10 +72,22 @@ where
 
 impl AuthState {
     pub fn new(service: Arc<AuthService>) -> Self {
+        Self::with_public_base_url(service, "http://localhost:8080")
+    }
+
+    pub fn with_public_base_url(
+        service: Arc<AuthService>,
+        public_base_url: impl Into<String>,
+    ) -> Self {
         Self {
             service,
             login_throttle: Arc::new(LoginThrottle::default()),
+            public_base_url: crate::core::auth::oauth::trim_trailing_slash(&public_base_url.into()),
         }
+    }
+
+    pub fn public_base_url(&self) -> &str {
+        &self.public_base_url
     }
 
     pub fn service(&self) -> &AuthService {
@@ -100,6 +115,24 @@ impl AuthState {
         let token = websocket_bearer_token(headers).ok_or(AppError::Unauthorized)?;
         self.service.authenticate_bearer(token).await
     }
+}
+
+/// Adds `WWW-Authenticate` on 401 responses so an MCP client can discover
+/// the protected-resource metadata. The JSON body is left unchanged.
+pub async fn attach_resource_metadata(
+    State(auth): State<AuthState>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let header = resource_metadata_header(auth.public_base_url());
+    let mut response = next.run(request).await;
+    if response.status() == StatusCode::UNAUTHORIZED
+        && !response.headers().contains_key(WWW_AUTHENTICATE)
+        && let Ok(value) = HeaderValue::from_str(&header)
+    {
+        response.headers_mut().insert(WWW_AUTHENTICATE, value);
+    }
+    response
 }
 
 pub fn bearer_token(headers: &HeaderMap) -> Option<&str> {

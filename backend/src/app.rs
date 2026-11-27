@@ -19,10 +19,21 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
     api::{
-        agent::AgentState, article::ArticleState, auth::AuthState, datasource::DataSourceState,
-        image::ImageState, insight::InsightState, organization::OrganizationState, page::PageState,
-        profile::ProfileState, project::ProjectState, source::SourceState, storage::StorageState,
-        taskrun::TaskRunState, websocket::WebSocketSupervisorHandle, worker::WorkerState,
+        agent::AgentState,
+        article::ArticleState,
+        auth::{AuthState, attach_resource_metadata},
+        datasource::DataSourceState,
+        image::ImageState,
+        insight::InsightState,
+        organization::OrganizationState,
+        page::PageState,
+        profile::ProfileState,
+        project::ProjectState,
+        source::SourceState,
+        storage::StorageState,
+        taskrun::TaskRunState,
+        websocket::WebSocketSupervisorHandle,
+        worker::WorkerState,
     },
     constants::{DEFAULT_REQUEST_TIMEOUT, MAX_REQUEST_BODY_BYTES},
     database::pool::PgPool,
@@ -200,10 +211,15 @@ pub fn router(state: AppState, cors_origins: &[String]) -> anyhow::Result<Router
             HeaderValue::from_static("1; mode=block"),
         ));
 
+    let auth = state.auth.clone();
     Ok(Router::new()
         .merge(api)
         .merge(SwaggerUi::new("/swagger").url("/api/openapi.json", document))
         .fallback(not_found)
+        .layer(axum::middleware::from_fn_with_state(
+            auth,
+            attach_resource_metadata,
+        ))
         .layer(middleware)
         .with_state(state))
 }
