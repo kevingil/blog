@@ -168,8 +168,8 @@ const GAS_SPREAD_LIMIT = 2.2;
 
 /**
  * The bulge: billions of unresolved old stars, seen as one large, smooth glow,
- * cream-white at the centre and peach at the edge. It is a slightly flattened
- * spheroid, a little wider than it is tall.
+ * cream-white at the centre and peach at the edge. Seen nearly edge-on it is
+ * an elongated lens lying along the disk, so it is flattened.
  */
 function addCoreHaze(out: Particle[], random: Random): void {
   const { coreRadius } = GALAXY;
@@ -177,9 +177,10 @@ function addCoreHaze(out: Particle[], random: Random): void {
   for (let i = 0; i < NEBULA.coreHazePuffs; i++) {
     const x = truncatedGaussian(random, GAS_SPREAD_LIMIT) * spread;
     const y = truncatedGaussian(random, GAS_SPREAD_LIMIT) * spread;
-    const z = truncatedGaussian(random, GAS_SPREAD_LIMIT) * spread * 0.6;
+    const z = truncatedGaussian(random, GAS_SPREAD_LIMIT) * spread * 0.35;
     const edge = Math.min(1, Math.sqrt(x * x + y * y + z * z) / (spread * 2));
-    const size = uniform(random, 55, 45);
+    // Smaller puffs than elsewhere, so their round shape does not puff the lens up.
+    const size = uniform(random, 40, 35);
     const brightness = uniform(random, 0.009, 0.006);
     out.push(particle('haze', x, y, z, size, brightness, jitter(mix(CORE_CENTRE, CORE_EDGE, edge), random, 5)));
   }
