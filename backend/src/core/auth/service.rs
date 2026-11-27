@@ -18,9 +18,19 @@ use crate::{
 };
 
 use super::{
-    Account, AccountId, AccountUpdate, LoginInput, LoginResult, PasswordUpdate, RegistrationInput,
-    UserData,
+    Account, AccountId, AccountUpdate, AuthorizationCode, IssuedMcpAccessToken, LoginInput,
+    LoginResult, McpAccessToken, NewAuthorizationCode, NewMcpAccessToken, NewOauthClient,
+    OauthClient, OauthTokenRotation, PasswordUpdate, RegistrationInput, UserData,
 };
+
+/// Distinguishes an MCP access token from a JWT, which always contains `.`.
+pub(in crate::core::auth) const MCP_ACCESS_TOKEN_PREFIX: &str = "mcp_";
+/// Characters of the plaintext shown in lists. Includes `mcp_` plus 8 hex chars.
+pub(in crate::core::auth) const MCP_ACCESS_TOKEN_PREFIX_CHARS: usize = 12;
+const MCP_ACCESS_TOKEN_RANDOM_HEX: usize = 64;
+const MCP_ACCESS_TOKEN_LEN: usize = MCP_ACCESS_TOKEN_PREFIX.len() + MCP_ACCESS_TOKEN_RANDOM_HEX;
+/// How long `last_used_at` may sit before authentication writes it again.
+const MCP_TOKEN_LAST_USED_REFRESH_SECONDS: i64 = 60;
 
 const BCRYPT_COST: u32 = 10;
 const BCRYPT_MAX_PASSWORD_BYTES: usize = 72;
@@ -71,11 +81,73 @@ pub trait AccountRepository: Send + Sync {
     async fn assign_public_author(&self, _id: AccountId) -> Result<(), AppError> {
         Ok(())
     }
+
+    async fn insert_mcp_token(&self, _token: &NewMcpAccessToken) -> Result<(), AppError> {
+        Err(AppError::internal("mcp access tokens are not available"))
+    }
+
+    async fn list_mcp_tokens(&self, _owner: AccountId) -> Result<Vec<McpAccessToken>, AppError> {
+        Ok(Vec::new())
+    }
+
+    async fn find_active_mcp_token_by_hash(
+        &self,
+        _token_hash: &str,
+    ) -> Result<Option<McpAccessToken>, AppError> {
+        Ok(None)
+    }
+
+    async fn touch_mcp_token_last_used(&self, _id: Uuid) -> Result<(), AppError> {
+        Ok(())
+    }
+
+    /// Revokes the owner's token. Returns the row when it belongs to `owner`,
+    /// including when it was already revoked.
+    async fn revoke_mcp_token(
+        &self,
+        _owner: AccountId,
+        _id: Uuid,
+    ) -> Result<Option<McpAccessToken>, AppError> {
+        Ok(None)
+    }
+
+    async fn insert_oauth_client(&self, _client: &NewOauthClient) -> Result<(), AppError> {
+        Err(AppError::internal("oauth clients are not available"))
+    }
+
+    async fn find_oauth_client(&self, _client_id: &str) -> Result<Option<OauthClient>, AppError> {
+        Ok(None)
+    }
+
+    async fn insert_authorization_code(
+        &self,
+        _code: &NewAuthorizationCode,
+    ) -> Result<(), AppError> {
+        Err(AppError::internal(
+            "oauth authorization codes are not available",
+        ))
+    }
+
+    async fn consume_authorization_code(
+        &self,
+        _code_hash: &str,
+    ) -> Result<Option<AuthorizationCode>, AppError> {
+        Ok(None)
+    }
+
+    async fn rotate_oauth_refresh_token(
+        &self,
+        _refresh_hash: &str,
+        _client_id: &str,
+        _rotation: &OauthTokenRotation,
+    ) -> Result<Option<McpAccessToken>, AppError> {
+        Ok(None)
+    }
 }
 
 #[derive(Clone)]
 pub struct AuthService {
-    accounts: Arc<dyn AccountRepository>,
+    pub(in crate::core::auth) accounts: Arc<dyn AccountRepository>,
     jwt_secret: Arc<[u8]>,
     bcrypt_slots: Arc<Semaphore>,
 }
@@ -162,7 +234,9 @@ impl AuthService {
         .map_err(AppError::internal)?
     }
 
-    pub async fn login(&self, input: LoginInput) -> Result<LoginResult, AppError> {
+    /// Checks the email and password. A missing account does the same bcrypt work
+    /// as a wrong password.
+    pub async fn authenticate_credentials(&self, input: LoginInput) -> Result<Account, AppError> {
         let account = self
             .accounts
             .find_by_email(&input.email)
@@ -180,7 +254,11 @@ impl AuthService {
         {
             return Err(AppError::Unauthorized);
         }
+        Ok(account)
+    }
 
+    pub async fn login(&self, input: LoginInput) -> Result<LoginResult, AppError> {
+        let account = self.authenticate_credentials(input).await?;
         self.issue_session(account)
     }
 
@@ -349,8 +427,9 @@ impl AuthService {
         .map_err(|_| AppError::Unauthorized)
     }
 
-    /// Resolves a bearer token to its account. Rejects tokens that are invalid
-    /// or expired, whose account was deleted, or that predate a password change.
+    /// Resolves a JWT to its account. Rejects tokens that are invalid or
+    /// expired, whose account was deleted, or that predate a password change.
+    /// MCP access tokens are not accepted here.
     pub async fn authenticate(&self, token: &str) -> Result<Account, AppError> {
         let claims = self.validate_token(token)?.claims;
         let id = Uuid::parse_str(&claims.sub)
@@ -366,9 +445,135 @@ impl AuthService {
         }
         Ok(account)
     }
+
+    /// Resolves either a JWT session or a live MCP access token. Password
+    /// changes invalidate the JWT and leave the MCP token in place.
+    pub async fn authenticate_bearer(&self, token: &str) -> Result<Account, AppError> {
+        if token.starts_with(MCP_ACCESS_TOKEN_PREFIX) {
+            return self.authenticate_mcp_token(token).await;
+        }
+        self.authenticate(token).await
+    }
+
+    pub async fn create_mcp_token(
+        &self,
+        owner: AccountId,
+        name: &str,
+    ) -> Result<IssuedMcpAccessToken, AppError> {
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > 100 {
+            return Err(AppError::InvalidInput(
+                "token name must be 1 to 100 characters".to_owned(),
+            ));
+        }
+        let plaintext = generate_mcp_access_token();
+        let token_prefix = plaintext[..MCP_ACCESS_TOKEN_PREFIX_CHARS].to_owned();
+        let created_at = Utc::now();
+        let record = McpAccessToken {
+            id: Uuid::new_v4(),
+            account_id: owner,
+            name: name.to_owned(),
+            token_prefix: token_prefix.clone(),
+            created_at,
+            last_used_at: None,
+            revoked_at: None,
+            client_name: None,
+            expires_at: None,
+        };
+        self.accounts
+            .insert_mcp_token(&NewMcpAccessToken {
+                id: record.id,
+                account_id: owner,
+                name: name.to_owned(),
+                token_hash: mcp_token_hash(&plaintext),
+                token_prefix,
+                created_at,
+                oauth_client_id: None,
+                client_name: None,
+                expires_at: None,
+                refresh_token_hash: None,
+                refresh_expires_at: None,
+            })
+            .await?;
+        Ok(IssuedMcpAccessToken { record, plaintext })
+    }
+
+    pub async fn list_mcp_tokens(&self, owner: AccountId) -> Result<Vec<McpAccessToken>, AppError> {
+        self.accounts.list_mcp_tokens(owner).await
+    }
+
+    pub async fn revoke_mcp_token(
+        &self,
+        owner: AccountId,
+        id: Uuid,
+    ) -> Result<McpAccessToken, AppError> {
+        self.accounts
+            .revoke_mcp_token(owner, id)
+            .await?
+            .ok_or(AppError::NotFound)
+    }
+
+    async fn authenticate_mcp_token(&self, token: &str) -> Result<Account, AppError> {
+        if token.len() != MCP_ACCESS_TOKEN_LEN {
+            return Err(AppError::Unauthorized);
+        }
+        let Some(record) = self
+            .accounts
+            .find_active_mcp_token_by_hash(&mcp_token_hash(token))
+            .await?
+        else {
+            return Err(AppError::Unauthorized);
+        };
+        self.note_mcp_token_use(&record).await;
+        self.accounts
+            .find_by_id(record.account_id)
+            .await?
+            .ok_or(AppError::Unauthorized)
+    }
+
+    /// Writes `last_used_at` on first use and again once it is at least a
+    /// minute old. A failed write does not fail the request.
+    async fn note_mcp_token_use(&self, record: &McpAccessToken) {
+        let stale = match record.last_used_at {
+            None => true,
+            Some(seen) => {
+                Utc::now().signed_duration_since(seen)
+                    >= chrono::Duration::seconds(MCP_TOKEN_LAST_USED_REFRESH_SECONDS)
+            }
+        };
+        if !stale {
+            return;
+        }
+        if let Err(error) = self.accounts.touch_mcp_token_last_used(record.id).await {
+            tracing::warn!(
+                error = %error,
+                token_id = %record.id,
+                "mcp access token last_used_at update failed"
+            );
+        }
+    }
 }
 
 fn session_version(password_hash: &str) -> String {
     let digest = Sha256::digest(password_hash.as_bytes());
     URL_SAFE_NO_PAD.encode(&digest[..16])
+}
+
+/// Hex SHA-256 of the bearer plaintext. This is the only form stored.
+pub fn mcp_token_hash(plaintext: &str) -> String {
+    hex::encode(Sha256::digest(plaintext.as_bytes()))
+}
+
+/// `mcp_` plus 64 hex characters from two v4 UUIDs (256 bits, OS CSPRNG).
+fn generate_mcp_access_token() -> String {
+    random_bearer(MCP_ACCESS_TOKEN_PREFIX)
+}
+
+/// `prefix` plus 64 hex characters from two v4 UUIDs.
+pub(in crate::core::auth) fn random_bearer(prefix: &str) -> String {
+    let mut token = String::with_capacity(prefix.len() + MCP_ACCESS_TOKEN_RANDOM_HEX);
+    token.push_str(prefix);
+    token.push_str(&Uuid::new_v4().simple().to_string());
+    token.push_str(&Uuid::new_v4().simple().to_string());
+    token
 }

@@ -457,10 +457,13 @@ async fn tokens_stop_working_after_a_password_change_or_account_deletion() -> Te
     let before_change = auth.issue_token(&account)?;
 
     let after_change = auth
-        .update_password(account_id, PasswordUpdate {
-            current_password: "oldpassword".to_owned(),
-            new_password: "newpassword".to_owned(),
-        })
+        .update_password(
+            account_id,
+            PasswordUpdate {
+                current_password: "oldpassword".to_owned(),
+                new_password: "newpassword".to_owned(),
+            },
+        )
         .await?;
     assert!(matches!(
         auth.authenticate(&before_change).await,
@@ -605,10 +608,13 @@ async fn identity_update_is_scoped_and_handles_email_conflicts() -> TestResult {
     let repository = Arc::new(MockAccountRepository::with_accounts(vec![account]));
     let auth = service(repository.clone())?;
 
-    auth.update_account(account_id, AccountUpdate {
-        name: "New Name".to_owned(),
-        email: "new@example.com".to_owned(),
-    })
+    auth.update_account(
+        account_id,
+        AccountUpdate {
+            name: "New Name".to_owned(),
+            email: "new@example.com".to_owned(),
+        },
+    )
     .await?;
     let updated = repository
         .state()
@@ -627,10 +633,13 @@ async fn identity_update_is_scoped_and_handles_email_conflicts() -> TestResult {
     let taken_account = test_account("taken@example.com", "password123").await?;
     repository.state().accounts.push(taken_account);
     assert!(matches!(
-        auth.update_account(account_id, AccountUpdate {
-            name: "New Name".to_owned(),
-            email: "taken@example.com".to_owned(),
-        })
+        auth.update_account(
+            account_id,
+            AccountUpdate {
+                name: "New Name".to_owned(),
+                email: "taken@example.com".to_owned(),
+            }
+        )
         .await,
         Err(AppError::Conflict(_))
     ));
@@ -646,18 +655,24 @@ async fn conditional_password_update_and_delete_fail_closed_on_races() -> TestRe
 
     repository.state().conditional_password_update_fails = true;
     assert!(matches!(
-        auth.update_password(account_id, PasswordUpdate {
-            current_password: "oldpassword".to_owned(),
-            new_password: "newpassword".to_owned(),
-        })
+        auth.update_password(
+            account_id,
+            PasswordUpdate {
+                current_password: "oldpassword".to_owned(),
+                new_password: "newpassword".to_owned(),
+            }
+        )
         .await,
         Err(AppError::Unauthorized)
     ));
     repository.state().conditional_password_update_fails = false;
-    auth.update_password(account_id, PasswordUpdate {
-        current_password: "oldpassword".to_owned(),
-        new_password: "newpassword".to_owned(),
-    })
+    auth.update_password(
+        account_id,
+        PasswordUpdate {
+            current_password: "oldpassword".to_owned(),
+            new_password: "newpassword".to_owned(),
+        },
+    )
     .await?;
 
     repository.state().conditional_delete_fails = true;
@@ -1010,6 +1025,66 @@ fn auth_openapi_enumerates_operations_content_types_security_and_errors() -> Tes
         document["paths"]["/auth/register"]["post"]["security"],
         json!([{}, {"bearerAuth": []}])
     );
+    assert_eq!(
+        document["paths"]["/auth/mcp-tokens"]["post"]["operationId"],
+        "authCreateMcpToken"
+    );
+    assert_eq!(
+        document["paths"]["/auth/mcp-tokens"]["post"]["tags"][0],
+        "auth"
+    );
+    assert_eq!(
+        document["paths"]["/auth/mcp-tokens"]["get"]["operationId"],
+        "authListMcpTokens"
+    );
+    assert_eq!(
+        document["paths"]["/auth/mcp-tokens"]["get"]["tags"][0],
+        "auth"
+    );
+    assert_eq!(
+        document["paths"]["/auth/mcp-tokens/{id}"]["delete"]["operationId"],
+        "authRevokeMcpToken"
+    );
+    assert_eq!(
+        document["paths"]["/auth/mcp-tokens/{id}"]["delete"]["tags"][0],
+        "auth"
+    );
+    assert_eq!(
+        document["paths"]["/.well-known/oauth-protected-resource"]["get"]["operationId"],
+        "oauthProtectedResource"
+    );
+    assert_eq!(
+        document["paths"]["/.well-known/oauth-protected-resource"]["get"]["tags"][0],
+        "oauth"
+    );
+    assert_eq!(
+        document["paths"]["/.well-known/oauth-protected-resource/mcp"]["get"]["operationId"],
+        "oauthProtectedResourceMcp"
+    );
+    assert_eq!(
+        document["paths"]["/.well-known/oauth-authorization-server"]["get"]["operationId"],
+        "oauthAuthorizationServer"
+    );
+    assert_eq!(
+        document["paths"]["/oauth/register"]["post"]["operationId"],
+        "oauthRegisterClient"
+    );
+    assert_eq!(
+        document["paths"]["/oauth/token"]["post"]["operationId"],
+        "oauthToken"
+    );
+    assert_eq!(
+        document["paths"]["/oauth/token"]["post"]["requestBody"]["content"]["application/x-www-form-urlencoded"]
+            ["schema"]["$ref"],
+        "#/components/schemas/OauthTokenRequest"
+    );
+    let listed = &document["components"]["schemas"]["McpTokenResponse"]["properties"];
+    assert!(listed["tokenPrefix"].is_object());
+    assert!(listed.get("token").is_none());
+    assert!(listed.get("tokenHash").is_none());
+    let created = &document["components"]["schemas"]["McpTokenCreatedResponse"]["properties"];
+    assert!(created["token"].is_object());
+    assert!(created.get("tokenHash").is_none());
     assert!(
         document["paths"]["/auth/account"]["put"]["requestBody"]["content"]["multipart/form-data"]
             .is_object()
@@ -1042,6 +1117,17 @@ fn auth_openapi_enumerates_operations_content_types_security_and_errors() -> Tes
             "/auth/account",
             "delete",
             &["200", "400", "401", "404", "500"][..],
+        ),
+        (
+            "/auth/mcp-tokens",
+            "post",
+            &["201", "400", "401", "403", "500"][..],
+        ),
+        ("/auth/mcp-tokens", "get", &["200", "401", "403", "500"][..]),
+        (
+            "/auth/mcp-tokens/{id}",
+            "delete",
+            &["200", "400", "401", "403", "404", "500"][..],
         ),
     ];
     for (path, method, statuses) in expected {

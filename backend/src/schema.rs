@@ -246,6 +246,63 @@ diesel::table! {
 
 diesel::table! {
     use diesel::sql_types::*;
+
+    mcp_access_token (id) {
+        id -> Uuid,
+        account_id -> Uuid,
+        #[max_length = 100]
+        name -> Varchar,
+        #[max_length = 64]
+        token_hash -> Varchar,
+        #[max_length = 16]
+        token_prefix -> Varchar,
+        created_at -> Timestamptz,
+        last_used_at -> Nullable<Timestamptz>,
+        revoked_at -> Nullable<Timestamptz>,
+        #[max_length = 36]
+        oauth_client_id -> Nullable<Varchar>,
+        #[max_length = 200]
+        client_name -> Nullable<Varchar>,
+        expires_at -> Nullable<Timestamptz>,
+        #[max_length = 64]
+        refresh_token_hash -> Nullable<Varchar>,
+        refresh_expires_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+
+    oauth_client (client_id) {
+        #[max_length = 36]
+        client_id -> Varchar,
+        #[max_length = 200]
+        client_name -> Varchar,
+        redirect_uris -> Array<Text>,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+
+    oauth_authorization_code (id) {
+        id -> Uuid,
+        #[max_length = 64]
+        code_hash -> Varchar,
+        #[max_length = 36]
+        client_id -> Varchar,
+        account_id -> Uuid,
+        redirect_uri -> Text,
+        #[max_length = 128]
+        code_challenge -> Varchar,
+        expires_at -> Timestamptz,
+        used_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
     use pgvector::sql_types::*;
 
     mcp_connector (id) {
@@ -528,6 +585,10 @@ diesel::table! {
 }
 
 diesel::joinable!(account -> organization (organization_id));
+diesel::joinable!(mcp_access_token -> account (account_id));
+diesel::joinable!(mcp_access_token -> oauth_client (oauth_client_id));
+diesel::joinable!(oauth_authorization_code -> account (account_id));
+diesel::joinable!(oauth_authorization_code -> oauth_client (client_id));
 diesel::joinable!(upload_files -> account (created_by));
 diesel::joinable!(upload_file_refs -> upload_files (upload_file_id));
 diesel::joinable!(article -> account (author_id));
@@ -568,7 +629,10 @@ diesel::allow_tables_to_appear_in_same_query!(
     imagen_request,
     insight,
     insight_topic,
+    mcp_access_token,
     mcp_connector,
+    oauth_authorization_code,
+    oauth_client,
     organization,
     page,
     project,
