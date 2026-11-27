@@ -17,12 +17,39 @@ export const GALAXY = {
   coreAngularSpeed: 0.0001,
 } as const;
 
-/** How many candidates each population draws before density thresholding. */
+/** How many particles each population draws (dust is thinned afterwards). */
 export const POPULATION = {
   bulge: 500,
   dustCandidates: 1400,
-  starCandidates: 2000,
+  /** The smooth disk of old stars; the arms barely show in it. */
+  oldStars: 1700,
   background: 2000,
+} as const;
+
+/** Young, hot stars born in clusters where gas crosses an arm. */
+export const YOUNG_STARS = {
+  clusters: 540,
+  perCluster: { min: 2, span: 6 },
+} as const;
+
+/**
+ * The spiral arms are a density wave: a pattern that turns rigidly and more
+ * slowly than the material, which flows through it. Gas brightens as it
+ * enters an arm, dust collects on the upstream edge, and young stars light
+ * up just past it and fade as they drift downstream. Angles are radians in
+ * the pattern's frame.
+ */
+export const DENSITY_WAVE = {
+  /** Radius where material and pattern move together, as a multiple of the disk radius. */
+  corotation: 1.25,
+  /** Gas brightness between the arms, as a fraction of its brightness on them. */
+  interArmGlow: 0.1,
+  /** Dust lanes sit this far upstream of the arm centre, and are this wide. */
+  laneOffset: -0.22,
+  laneWidth: 0.15,
+  /** Stars are born this far from the arm centre, and fade over this many radians downstream. */
+  birthOffset: -0.06,
+  youthDecay: 0.7,
 } as const;
 
 /**
@@ -31,12 +58,12 @@ export const POPULATION = {
  */
 export const NEBULA = {
   /** Puffs in the thick, rounded haze around the bulge. */
-  coreHazePuffs: 360,
-  /** Cloud complexes along the arms; each is a clump of puffs. */
-  cloudComplexes: 240,
-  puffsPerComplex: { min: 6, span: 9 },
-  /** Absorbing puffs tracing the inner edge of each main arm. */
-  dustLanePuffsPerArm: 260,
+  coreHazePuffs: 280,
+  /** Cloud complexes spread over the disk; each is a clump of puffs, sheared along its orbit. */
+  cloudComplexes: 280,
+  puffsPerComplex: { min: 5, span: 7 },
+  /** Absorbing puffs over the disk; only those in a lane show at any moment. */
+  dustLanePuffs: 4200,
 } as const;
 
 /** Dark mode colour saturation (1 = as generated, 0 = greyscale). */
@@ -47,8 +74,8 @@ export const SATURATION = 0.8;
  * halo. The sprite is `min + perBrightness × alpha` times the core size.
  */
 export const STAR_HALO = {
-  min: 2.5,
-  perBrightness: 3.5,
+  min: 3.5,
+  perBrightness: 5,
 } as const;
 
 /** Cap on device pixels per CSS pixel, to bound fill cost on dense screens. */

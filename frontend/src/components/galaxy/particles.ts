@@ -1,18 +1,32 @@
-import { GALAXY, NEBULA, POPULATION } from './config';
+import { GALAXY, NEBULA, POPULATION, YOUNG_STARS } from './config';
 import { regionColor, temperatureToRgb, type Rgb255 } from './palette';
 import { gaussian, uniform, uniformInt, type Random } from './random';
-import { DUST_ARM_WIDTHS, MAIN_ARM_COUNT, mainArmAngle, STAR_ARM_WIDTHS, spiralStrength } from './spiral';
+import { armAngles, spiralStrength } from './spiral';
 
 /**
- * - `cloud`: faint puffs of glowing gas around the bulge and along the arms.
+ * - `haze`: thick, rounded glowing gas around the bulge.
+ * - `cloud`: gas in the disk; it lights up as it flows through an arm.
  * - `bulge`: soft glowing gas at the centre; it breathes slowly.
  * - `nucleus`: one very bright point at the exact centre.
- * - `dust`: small diffuse specks of gas and dust tracing the arms.
- * - `star`: stars, concentrated on the arms.
+ * - `dust`: small diffuse specks of gas and dust.
+ * - `star`: old stars in a smooth disk.
+ * - `youngStar`: hot stars that are born in an arm and fade downstream.
  * - `background`: unrelated field stars spread across the whole sky.
- * - `dustLane`: dark, light-absorbing dust on the inner edge of the arms.
+ * - `dustLane`: dark dust; it shows only in the lane on an arm's upstream edge.
  */
-export type ParticleKind = 'cloud' | 'bulge' | 'nucleus' | 'dust' | 'star' | 'background' | 'dustLane';
+export type ParticleKind =
+  | 'haze'
+  | 'cloud'
+  | 'bulge'
+  | 'nucleus'
+  | 'dust'
+  | 'star'
+  | 'youngStar'
+  | 'background'
+  | 'dustLane';
+
+/** Kinds whose brightness follows the density wave. */
+const WAVE_KINDS: ReadonlySet<ParticleKind> = new Set(['cloud', 'youngStar', 'dustLane']);
 
 export interface Particle {
   kind: ParticleKind;
@@ -27,11 +41,13 @@ export interface Particle {
   angularSpeed: number;
   /** Base point size in px at zoom 1. */
   size: number;
-  /** 0–1 opacity before depth and theme adjustments. */
+  /** 0–1 peak opacity before depth, density-wave and theme adjustments. */
   brightness: number;
   color: Rgb255;
-  /** Marks stars on spiral arms, which the shader renders with a warm glow. */
+  /** Marks stars that render with a warm glow. */
   spiralArm: boolean;
+  /** For particles that respond to the density wave: arm angles at this radius (see `armAngles`). */
+  arms: readonly number[] | null;
 }
 
 const TWO_PI = 2 * Math.PI;
@@ -50,7 +66,25 @@ function particle(
   const { coreRadius, coreAngularSpeed } = GALAXY;
   // Solid-body rotation inside the core, flat rotation curve outside it.
   const angularSpeed = radius > coreRadius ? (coreAngularSpeed * coreRadius) / radius : coreAngularSpeed;
-  return { kind, x, y, z, radius, angle: Math.atan2(y, x), angularSpeed, size, brightness, color, spiralArm };
+  return {
+    kind,
+    x,
+    y,
+    z,
+    radius,
+    angle: Math.atan2(y, x),
+    angularSpeed,
+    size,
+    brightness,
+    color,
+    spiralArm,
+    arms: WAVE_KINDS.has(kind) ? armAngles(radius) : null,
+  };
+}
+
+/** A particle at polar position (r, θ) in the disk. */
+function polar(kind: ParticleKind, r: number, theta: number, z: number, size: number, brightness: number, color: Rgb255) {
+  return particle(kind, r * Math.cos(theta), r * Math.sin(theta), z, size, brightness, color);
 }
 
 /**
@@ -60,11 +94,13 @@ function particle(
  */
 export function generateParticles(random: Random = Math.random): Particle[] {
   const particles: Particle[] = [];
+  addCoreHaze(particles, random);
   addClouds(particles, random);
   addBulge(particles, random);
   particles.push(particle('nucleus', 0, 0, 0, 8.0, 1.0, [255, 255, 255]));
   addDust(particles, random);
-  addStars(particles, random);
+  addOldStars(particles, random);
+  addYoungStars(particles, random);
   addBackground(particles, random);
   addDustLanes(particles, random);
   return particles;
@@ -87,69 +123,54 @@ function jitter(color: Rgb255, random: Random, amount: number): Rgb255 {
   return [channel(color[0]), channel(color[1]), channel(color[2])];
 }
 
-/**
- * Glowing gas: a thick, rounded haze around the bulge, and clumpy cloud
- * complexes along the arms. Every puff is a small soft sprite at a real 3D
- * position, so the gas has thickness and shifts with perspective.
- */
-function addClouds(out: Particle[], random: Random): void {
-  const { coreRadius, diskRadius } = GALAXY;
+function toRgb255([r, g, b]: readonly [number, number, number]): Rgb255 {
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
 
+/** 0 at the core edge, 1 toward the rim: drives the warm-to-cool colour shift. */
+function outwardness(r: number): number {
+  const { coreRadius, diskRadius } = GALAXY;
+  return Math.min(1, Math.max(0, (r - coreRadius * 1.5) / (diskRadius * 0.7)));
+}
+
+/** The bulge is nearly spherical, so its haze is too. */
+function addCoreHaze(out: Particle[], random: Random): void {
+  const { coreRadius } = GALAXY;
   for (let i = 0; i < NEBULA.coreHazePuffs; i++) {
-    // The bulge is nearly spherical, so its haze is too.
     const x = gaussian(random) * coreRadius * 1.1;
     const y = gaussian(random) * coreRadius * 1.1;
     const z = gaussian(random) * coreRadius * 0.7;
     const size = uniform(random, 22, 22);
-    const brightness = uniform(random, 0.04, 0.035);
-    out.push(particle('cloud', x, y, z, size, brightness, jitter(HAZE_WARM, random, 8)));
-  }
-
-  for (let i = 0; i < NEBULA.cloudComplexes; i++) {
-    const r = coreRadius * 1.2 + (diskRadius - coreRadius * 1.2) * Math.sqrt(random());
-    const theta = random() * TWO_PI;
-    const arm = spiralStrength(r, theta, DUST_ARM_WIDTHS, 'max', random);
-    // Complexes form on the arms; a few drift between them.
-    if (random() > 0.12 + 0.88 * Math.min(1, arm / 2.5)) continue;
-
-    const centreX = r * Math.cos(theta);
-    const centreY = r * Math.sin(theta);
-    const scaleHeight = 6 + 16 * Math.exp(-r / (diskRadius * 0.5));
-    const centreZ = gaussian(random) * scaleHeight * 0.5;
-    const spread = uniform(random, 10, 16);
-    const outward = Math.min(1, Math.max(0, (r - coreRadius * 1.5) / (diskRadius * 0.7)));
-    const tone = mix(CLOUD_INNER, CLOUD_OUTER, outward);
-
-    const puffs = uniformInt(random, NEBULA.puffsPerComplex.min, NEBULA.puffsPerComplex.span);
-    for (let j = 0; j < puffs; j++) {
-      const x = centreX + gaussian(random) * spread;
-      const y = centreY + gaussian(random) * spread;
-      const z = centreZ + gaussian(random) * scaleHeight * 0.6;
-      const size = uniform(random, 16, 16);
-      const brightness = uniform(random, 0.032, 0.035);
-      out.push(particle('cloud', x, y, z, size, brightness, jitter(tone, random, 10)));
-    }
+    const brightness = uniform(random, 0.035, 0.03);
+    out.push(particle('haze', x, y, z, size, brightness, jitter(HAZE_WARM, random, 8)));
   }
 }
 
 /**
- * Dark dust on the inner edge of each main arm. It absorbs light, so where
- * the near side of the disk crosses in front of the bright bulge it shows as
- * a dark lane, the clearest depth cue in an inclined galaxy.
+ * Gas complexes spread across the disk. Differential rotation shears each one
+ * along its orbit, so its puffs are stretched tangentially; the density wave
+ * then lights them up as they stream through an arm.
  */
-function addDustLanes(out: Particle[], random: Random): void {
+function addClouds(out: Particle[], random: Random): void {
   const { coreRadius, diskRadius } = GALAXY;
 
-  for (let arm = 0; arm < MAIN_ARM_COUNT; arm++) {
-    for (let i = 0; i < NEBULA.dustLanePuffsPerArm; i++) {
-      // Denser toward the centre, like the arms themselves.
-      const r = coreRadius * 1.4 + (diskRadius * 0.95 - coreRadius * 1.4) * Math.pow(random(), 1.3);
-      // A negative offset from the arm's centre line is its inner edge.
-      const theta = mainArmAngle(r, arm) - 0.28 + gaussian(random) * 0.07;
-      const z = gaussian(random) * 3;
-      const size = uniform(random, 12, 12) * (0.7 + (0.6 * r) / diskRadius);
-      const opacity = uniform(random, 0.22, 0.18);
-      out.push(particle('dustLane', r * Math.cos(theta), r * Math.sin(theta), z, size, opacity, DUST_LANE));
+  for (let i = 0; i < NEBULA.cloudComplexes; i++) {
+    const centreR = coreRadius * 1.2 + (diskRadius - coreRadius * 1.2) * Math.sqrt(random());
+    const centreTheta = random() * TWO_PI;
+    const scaleHeight = 6 + 16 * Math.exp(-centreR / (diskRadius * 0.5));
+    const centreZ = gaussian(random) * scaleHeight * 0.5;
+    const tone = mix(CLOUD_INNER, CLOUD_OUTER, outwardness(centreR));
+    const radialSpread = uniform(random, 5, 5);
+    const alongOrbit = radialSpread * uniform(random, 3, 2);
+
+    const puffs = uniformInt(random, NEBULA.puffsPerComplex.min, NEBULA.puffsPerComplex.span);
+    for (let j = 0; j < puffs; j++) {
+      const r = centreR + gaussian(random) * radialSpread;
+      const theta = centreTheta + (gaussian(random) * alongOrbit) / centreR;
+      const z = centreZ + gaussian(random) * scaleHeight * 0.6;
+      const size = uniform(random, 16, 16);
+      const brightness = uniform(random, 0.06, 0.05);
+      out.push(polar('cloud', r, theta, z, size, brightness, jitter(tone, random, 10)));
     }
   }
 }
@@ -179,7 +200,7 @@ function addBulge(out: Particle[], random: Random): void {
   }
 }
 
-/** Faint, large, diffuse particles that trace the arms as gas and dust lanes. */
+/** Small diffuse specks of gas and dust, slightly favouring the arms. */
 function addDust(out: Particle[], random: Random): void {
   const { coreRadius, diskRadius } = GALAXY;
 
@@ -191,8 +212,7 @@ function addDust(out: Particle[], random: Random): void {
       : diskRadius + diskRadius * 0.4 * Math.pow(v, 3);
     const baseTheta = random() * TWO_PI;
 
-    const arm = spiralStrength(r, baseTheta, DUST_ARM_WIDTHS, 'max', random);
-    // Keep most candidates either way; arms keep slightly more.
+    const arm = spiralStrength(r, baseTheta, random);
     const keep = arm < 0.2 ? 0.65 + arm * 0.2 : 0.75 + arm * 0.25;
     if (random() > keep) continue;
 
@@ -206,101 +226,71 @@ function addDust(out: Particle[], random: Random): void {
     ];
     const brightness = uniform(random, 0.05, 0.15);
     const size = uniform(random, 1.2, 3.8);
-    out.push(particle('dust', r * Math.cos(theta), r * Math.sin(theta), z, size, brightness, color));
+    out.push(polar('dust', r, theta, z, size, brightness, color));
   }
 }
 
-/** Stars, kept with a probability that strongly favours the spiral arms. */
-function addStars(out: Particle[], random: Random): void {
+/**
+ * Old stars: a smooth exponential disk, thick and bright toward the centre.
+ * They have orbited many times, so the arms are smeared out of them.
+ */
+function addOldStars(out: Particle[], random: Random): void {
   const { coreRadius, diskRadius } = GALAXY;
-  const maxRadius = diskRadius * 1.8;
 
-  for (let i = 0; i < POPULATION.starCandidates; i++) {
-    const inDisk = random() < 0.8;
-    const v = random();
-    const r = inDisk
-      ? coreRadius + (diskRadius - coreRadius) * Math.pow(v, 0.8)
-      : diskRadius + (maxRadius - diskRadius) * Math.pow(v, 5);
-    const baseTheta = random() * TWO_PI;
+  for (let i = 0; i < POPULATION.oldStars; i++) {
+    const r = coreRadius * 0.6 + Math.min(diskRadius * 1.6, -Math.log(1 - random()) * diskRadius * 0.32);
+    const theta = random() * TWO_PI;
+    const z = gaussian(random) * (3 + 10 * Math.exp(-r / (diskRadius * 0.35)));
 
-    const arm = spiralStrength(r, baseTheta, STAR_ARM_WIDTHS, 'sum', random);
-    if (random() > starKeepProbability(r, arm)) continue;
-
-    // Scatter around the arm, a little more where the arm is strong.
-    const scatter = Math.min(12, r * 0.025);
-    const jitter = (random() - 0.5) * scatter;
-    const armJitter = arm > 0.1 ? (random() - 0.5) * scatter * 0.6 * arm : 0;
-    const theta = baseTheta + (jitter + armJitter) / Math.max(r, 20);
-
-    const scaleHeight = 10 * Math.exp(-r / (diskRadius * 0.4));
-    const z = (random() - 0.5) * Math.max(scaleHeight, 1);
-
-    const { temperature, brightness: intrinsicBrightness } = stellarPopulation(r, arm, random);
-    let brightness = intrinsicBrightness;
-    if (r <= diskRadius) {
-      brightness *= Math.exp(-Math.pow(r / (diskRadius * 0.7), 1.8));
+    let temperature: number;
+    let brightness: number;
+    if (r <= coreRadius * 2) {
+      // Bulge giants.
+      temperature = uniform(random, 3200, 2600);
+      brightness = uniform(random, 0.55, 0.4);
+    } else if (random() < 0.85) {
+      temperature = uniform(random, 3200, 2800);
+      brightness = uniform(random, 0.15, 0.3);
+    } else {
+      temperature = uniform(random, 6000, 3000);
+      brightness = uniform(random, 0.3, 0.3);
     }
+    brightness *=
+      r <= diskRadius
+        ? Math.exp(-Math.pow(r / (diskRadius * 0.7), 1.8))
+        : 0.15 * Math.exp(-(r - diskRadius) / (diskRadius * 0.15));
 
-    // Hotter, brighter stars draw larger.
     const temperatureScale = Math.max(0.3, Math.min(2.2, temperature / 6000));
     const size = uniform(random, 0.15, 0.9) * (0.2 + brightness * 1.8) * temperatureScale;
-
-    const color = regionColor(r, arm, random) ?? toRgb255(temperatureToRgb(temperature));
-    out.push(
-      particle(
-        'star',
-        r * Math.cos(theta),
-        r * Math.sin(theta),
-        z,
-        Math.max(size, 0.05),
-        Math.min(brightness, 1),
-        color,
-        arm > 0.3,
-      ),
-    );
+    // A mid-range arm strength picks the region palette without arm colours.
+    const color = regionColor(r, 0.5, random) ?? toRgb255(temperatureToRgb(temperature));
+    out.push(polar('star', r, theta, z, Math.max(size, 0.05), Math.min(brightness, 1), color));
   }
 }
 
-/** Dense core, arms that dominate the disk, and an almost empty halo. */
-function starKeepProbability(r: number, arm: number): number {
+/**
+ * Hot blue-white stars in small clusters (OB associations), spread over the
+ * disk. The density wave decides when each one is visible.
+ */
+function addYoungStars(out: Particle[], random: Random): void {
   const { coreRadius, diskRadius } = GALAXY;
 
-  if (r <= coreRadius) {
-    return 0.6 + arm * 0.3;
-  }
-  if (r <= diskRadius) {
-    const falloff = Math.exp(-Math.pow((r - coreRadius) / (diskRadius - coreRadius), 1.2));
-    return 0.005 * falloff + arm * 8.0 * falloff;
-  }
-  const falloff = Math.exp(-Math.pow((r - diskRadius) / (diskRadius * 0.15), 2));
-  return 0.002 * falloff + arm * 2.0 * falloff;
-}
+  for (let c = 0; c < YOUNG_STARS.clusters; c++) {
+    const centreR = coreRadius * 1.3 + (diskRadius * 1.02 - coreRadius * 1.3) * Math.sqrt(random());
+    const centreTheta = random() * TWO_PI;
+    const stars = uniformInt(random, YOUNG_STARS.perCluster.min, YOUNG_STARS.perCluster.span);
 
-/** Temperature (K) and brightness for a star, by region and arm strength. */
-function stellarPopulation(r: number, arm: number, random: Random): { temperature: number; brightness: number } {
-  const { coreRadius, diskRadius } = GALAXY;
-  const star = (tMin: number, tSpan: number, bMin: number, bSpan: number) => {
-    const temperature = uniform(random, tMin, tSpan);
-    return { temperature, brightness: uniform(random, bMin, bSpan) };
-  };
-
-  if (r <= coreRadius * 2) {
-    // Mostly old red giants, with some hot young stars.
-    return random() < 0.7 ? star(3000, 2000, 0.7, 0.3) : star(15000, 15000, 0.9, 0.1);
+    for (let s = 0; s < stars; s++) {
+      const r = centreR + gaussian(random) * 3;
+      const theta = centreTheta + (gaussian(random) * 8) / centreR;
+      const z = gaussian(random) * 2.5;
+      const temperature = uniform(random, 9000, 16000);
+      const brightness = uniform(random, 0.7, 0.3) * Math.exp(-Math.pow(r / (diskRadius * 1.1), 2));
+      const temperatureScale = Math.min(2.2, temperature / 6000);
+      const size = uniform(random, 0.35, 0.6) * (0.2 + brightness * 1.8) * temperatureScale;
+      out.push(polar('youngStar', r, theta, z, size, brightness, toRgb255(temperatureToRgb(temperature))));
+    }
   }
-  if (r <= diskRadius) {
-    if (arm > 2.0) return star(15000, 20000, 0.9, 0.1); // blue supergiants
-    if (arm > 1.0) return star(10000, 15000, 0.7, 0.2); // blue giants
-    if (arm > 0.3) return star(6000, 8000, 0.5, 0.3); // white stars
-    // Between the arms: cool dust, old orange stars, and dim red dwarfs.
-    if (random() < 0.3) return star(1500, 1000, 0.08, 0.12);
-    if (random() < 0.5) return star(3500, 1500, 0.04, 0.08);
-    return star(2800, 1200, 0.02, 0.06);
-  }
-  // Halo: practically invisible.
-  const temperature = uniform(random, 2500, 1000);
-  const brightness = Math.exp(-(r - diskRadius) / (diskRadius * 0.1)) * uniform(random, 0.001, 0.01);
-  return { temperature, brightness };
 }
 
 /** Distant field stars, unrelated to the galaxy, filling the sky. */
@@ -317,6 +307,21 @@ function addBackground(out: Particle[], random: Random): void {
   }
 }
 
-function toRgb255([r, g, b]: readonly [number, number, number]): Rgb255 {
-  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+/**
+ * Dark dust spread thinly over the disk. The density wave makes it visible
+ * only where it piles up in a lane on an arm's upstream edge, so the lanes
+ * persist while the dust itself streams through them.
+ */
+function addDustLanes(out: Particle[], random: Random): void {
+  const { coreRadius, diskRadius } = GALAXY;
+
+  for (let i = 0; i < NEBULA.dustLanePuffs; i++) {
+    // Denser toward the centre, like the arms themselves.
+    const r = coreRadius * 1.4 + (diskRadius * 0.95 - coreRadius * 1.4) * Math.pow(random(), 1.3);
+    const theta = random() * TWO_PI;
+    const z = gaussian(random) * 3;
+    const size = uniform(random, 12, 12) * (0.7 + (0.6 * r) / diskRadius);
+    const opacity = uniform(random, 0.22, 0.18);
+    out.push(polar('dustLane', r, theta, z, size, opacity, DUST_LANE));
+  }
 }

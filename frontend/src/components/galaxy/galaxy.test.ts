@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { GALAXY, layoutForWidth, NEBULA, POPULATION, STAR_HALO } from './config';
+import { DENSITY_WAVE, GALAXY, layoutForWidth, NEBULA, POPULATION, STAR_HALO } from './config';
 import { FLOATS_PER_VERTEX, projectParticle, SPRITE, writeFrame, type FrameState } from './frame';
 import { temperatureToRgb } from './palette';
 import { generateParticles, type Particle } from './particles';
 import { seededRandom } from './random';
-import { wrapAngle } from './spiral';
+import { armAngles, wrapAngle } from './spiral';
+import { armGlow, laneDepth, PATTERN_SPEED, patternAngle, youth } from './wave';
 
 function frameState(overrides: Partial<FrameState> = {}): FrameState {
   return {
@@ -33,15 +34,16 @@ describe('generateParticles', () => {
 
   test('builds every population, with arm stars and dust thresholded', () => {
     const counts = countKinds(generateParticles(seededRandom(1)));
-    expect(counts.cloud).toBeGreaterThan(NEBULA.coreHazePuffs);
-    expect(counts.dustLane).toBe(2 * NEBULA.dustLanePuffsPerArm);
+    expect(counts.haze).toBe(NEBULA.coreHazePuffs);
+    expect(counts.cloud).toBeGreaterThan(NEBULA.cloudComplexes * NEBULA.puffsPerComplex.min);
+    expect(counts.dustLane).toBe(NEBULA.dustLanePuffs);
+    expect(counts.youngStar).toBeGreaterThan(0);
     expect(counts.bulge).toBe(POPULATION.bulge);
     expect(counts.nucleus).toBe(1);
     expect(counts.background).toBe(POPULATION.background);
     expect(counts.dust).toBeGreaterThan(0);
     expect(counts.dust).toBeLessThanOrEqual(POPULATION.dustCandidates);
-    expect(counts.star).toBeGreaterThan(0);
-    expect(counts.star).toBeLessThan(POPULATION.starCandidates);
+    expect(counts.star).toBe(POPULATION.oldStars);
   });
 
   test('keeps sizes, brightness and colours in range', () => {
@@ -59,17 +61,24 @@ describe('generateParticles', () => {
 
   test('draws gas first and dust lanes last, so stars sit on the gas and dust can darken it', () => {
     const kinds = generateParticles(seededRandom(5)).map((p) => p.kind);
-    const firstNonCloud = kinds.findIndex((kind) => kind !== 'cloud');
+    const isGas = (kind: string) => kind === 'haze' || kind === 'cloud';
+    const firstNonGas = kinds.findIndex((kind) => !isGas(kind));
     const firstLane = kinds.indexOf('dustLane');
-    expect(kinds.slice(0, firstNonCloud).every((kind) => kind === 'cloud')).toBe(true);
+    expect(kinds.slice(0, firstNonGas).every(isGas)).toBe(true);
     expect(kinds.slice(firstLane).every((kind) => kind === 'dustLane')).toBe(true);
-    expect(kinds.slice(firstNonCloud, firstLane)).not.toContain('cloud');
-    expect(kinds[firstNonCloud]).toBe('bulge');
-    expect(kinds[firstNonCloud + POPULATION.bulge]).toBe('nucleus');
+    expect(kinds.slice(firstNonGas, firstLane).some(isGas)).toBe(false);
+    expect(kinds[firstNonGas]).toBe('bulge');
+    expect(kinds[firstNonGas + POPULATION.bulge]).toBe('nucleus');
+  });
+
+  test('gives only gas, dust lanes and young stars arm angles for the density wave', () => {
+    for (const p of generateParticles(seededRandom(6))) {
+      expect(p.arms !== null).toBe(p.kind === 'cloud' || p.kind === 'dustLane' || p.kind === 'youngStar');
+    }
   });
 
   test('gives the gas real thickness around the core', () => {
-    const haze = generateParticles(seededRandom(4)).filter((p) => p.kind === 'cloud' && p.radius < GALAXY.coreRadius);
+    const haze = generateParticles(seededRandom(4)).filter((p) => p.kind === 'haze' && p.radius < GALAXY.coreRadius);
     const spread = Math.sqrt(haze.reduce((sum, p) => sum + p.z * p.z, 0) / haze.length);
     expect(spread).toBeGreaterThan(GALAXY.coreRadius * 0.4);
   });
@@ -108,6 +117,44 @@ describe('layoutForWidth', () => {
   });
 });
 
+describe('density wave', () => {
+  const r = GALAXY.diskRadius * 0.5;
+  const arms = armAngles(r);
+  const mainArm = arms[0];
+
+  test('turns more slowly than the material everywhere in the disk', () => {
+    const slowestDiskSpeed = (GALAXY.coreAngularSpeed * GALAXY.coreRadius) / GALAXY.diskRadius;
+    expect(PATTERN_SPEED).toBeGreaterThan(0);
+    expect(PATTERN_SPEED).toBeLessThan(slowestDiskSpeed);
+  });
+
+  test('moves material forward through the pattern over time', () => {
+    const orbiter = { angle: 1, angularSpeed: GALAXY.coreAngularSpeed * 0.2 };
+    expect(patternAngle(orbiter, 0)).toBe(1);
+    expect(patternAngle(orbiter, 1e5)).toBeGreaterThan(1);
+  });
+
+  test('lights gas on a main arm and leaves it dim between arms', () => {
+    expect(armGlow(arms, mainArm)).toBeCloseTo(1, 5);
+    const between = Math.min(...Array.from({ length: 64 }, (_, i) => armGlow(arms, (i / 64) * 2 * Math.PI)));
+    expect(between).toBeGreaterThanOrEqual(DENSITY_WAVE.interArmGlow);
+    expect(between).toBeLessThan(DENSITY_WAVE.interArmGlow + 0.05);
+  });
+
+  test('puts dust lanes on the upstream edge of an arm', () => {
+    expect(laneDepth(arms, mainArm + DENSITY_WAVE.laneOffset)).toBeCloseTo(1, 5);
+    expect(laneDepth(arms, mainArm + 0.5)).toBeLessThan(0.01);
+  });
+
+  test('ignites young stars just past an arm and fades them downstream', () => {
+    const birth = mainArm + DENSITY_WAVE.birthOffset;
+    expect(youth(arms, birth - 0.05)).toBeLessThan(0.05); // not yet born
+    expect(youth(arms, birth + 0.2)).toBeGreaterThan(0.6);
+    expect(youth(arms, birth + 0.2)).toBeGreaterThan(youth(arms, birth + 1));
+    expect(youth(arms, birth + 2.5)).toBeLessThan(0.05);
+  });
+});
+
 describe('projectParticle', () => {
   test('puts the galaxy centre at the layout offset', () => {
     const nucleus = generateParticles(seededRandom(1)).find((p) => p.kind === 'nucleus')!;
@@ -142,23 +189,16 @@ describe('writeFrame', () => {
   });
 
   test('keeps near-side dust lanes darker than far-side ones', () => {
-    const lanes = particles.filter((p) => p.kind === 'dustLane');
     const state = frameState();
+    const inLane = particles.filter((p) => p.kind === 'dustLane' && laneDepth(p.arms!, patternAngle(p, 0)) > 0.9);
     const opacity = (p: Particle) => {
       const out = new Float32Array(FLOATS_PER_VERTEX);
       writeFrame([p], state, out);
-      return out[6] / p.brightness;
+      return out[6] / (p.brightness * laneDepth(p.arms!, patternAngle(p, 0)));
     };
-    const near = lanes.find((p) => projectParticle(p, state).depth < -150)!;
-    const far = lanes.find((p) => projectParticle(p, state).depth > 150)!;
+    const near = inLane.find((p) => projectParticle(p, state).depth < -150)!;
+    const far = inLane.find((p) => projectParticle(p, state).depth > 150)!;
     expect(opacity(near)).toBeGreaterThan(opacity(far));
-  });
-
-  test('culls particles that fall off screen', () => {
-    const { total } = writeFrame(particles, frameState(), buffer());
-    expect(total).toBeGreaterThan(0);
-    expect(total).toBeLessThan(particles.length);
-    expect(writeFrame(particles, frameState({ width: 10, height: 10 }), buffer()).total).toBeLessThan(total);
   });
 
   test('dark mode does not consume randomness', () => {

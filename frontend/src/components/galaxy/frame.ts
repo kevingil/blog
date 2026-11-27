@@ -2,6 +2,7 @@ import { ANIMATION, CAMERA, GALAXY, STAR_HALO, type GalaxyLayout, type ThemeMode
 import { toLightMode, type Rgb } from './palette';
 import type { Particle } from './particles';
 import type { Random } from './random';
+import { armGlow, laneDepth, patternAngle, youth } from './wave';
 
 /** Interleaved vertex layout: x, y, size, r, g, b, alpha, kind, halo. */
 export const FLOATS_PER_VERTEX = 9;
@@ -108,6 +109,7 @@ const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
 function spriteFor(particle: Particle): number {
   switch (particle.kind) {
+    case 'haze':
     case 'cloud':
       return SPRITE.cloud;
     case 'dustLane':
@@ -132,6 +134,18 @@ function dustLaneVisibility(depth: number): number {
   return Math.max(0.15, Math.min(1, 0.5 - depth / (GALAXY.diskRadius * 0.5)));
 }
 
+/** Density-wave multiplier on a particle's brightness: 1 for particles it does not affect. */
+function waveFactor(particle: Particle, time: number): number {
+  if (!particle.arms) return 1;
+  const phase = patternAngle(particle, time);
+  if (particle.kind === 'cloud') return armGlow(particle.arms, phase);
+  if (particle.kind === 'dustLane') return laneDepth(particle.arms, phase);
+  return youth(particle.arms, phase);
+}
+
+/** Below this opacity a sprite contributes nothing visible, so it is skipped. */
+const MIN_ALPHA = 0.003;
+
 /**
  * Writes one vertex per visible particle into `out`, in particle order, and
  * returns the counts. Particles must list absorbing dust lanes last (as
@@ -149,13 +163,17 @@ export function writeFrame(
   let emissive = 0;
 
   for (const particle of particles) {
+    // Cheap test first: most dust and young stars are dark at any moment.
+    const wave = waveFactor(particle, time);
+    if (particle.brightness * wave < MIN_ALPHA) continue;
+
     const point = projectParticle(particle, state);
     const sprite = spriteFor(particle);
     const isStar = sprite === SPRITE.star || sprite === SPRITE.armStar || sprite === SPRITE.nucleus;
     const isGasOrDust = sprite === SPRITE.cloud || sprite === SPRITE.dustLane;
 
     let size = particle.size * point.scale;
-    let alpha = particle.brightness * Math.min(1, point.scale);
+    let alpha = particle.brightness * wave * Math.min(1, point.scale);
     let halo = 0;
 
     const [baseR, baseG, baseB] = particle.color;

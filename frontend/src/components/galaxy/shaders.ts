@@ -65,16 +65,16 @@ export const FRAGMENT_SHADER = /* glsl */ `
   vec4 star(float dist) {
     // x is 1 at the edge of the core; the sprite extends to x = halo.
     float x = dist * 2.0 * v_halo;
-    float core = exp(-x * x * 1.3);
-    float glow = pow(1.0 + x * x, -1.8);
-    float fade = 1.0 - smoothstep(v_halo * 0.45, v_halo, x);
+    float core = exp(-x * x * 0.9);
+    float glow = pow(1.0 + x * x * 0.7, -1.5);
+    float fade = 1.0 - smoothstep(v_halo * 0.4, v_halo, x);
 
     vec3 color = v_color;
     if (isSprite(SPRITE_ARMSTAR)) color = mix(color, WARM, 0.25 * glow);
     if (isSprite(SPRITE_NUCLEUS)) color = mix(color, WARM, 0.4 * glow);
     // Bright cores saturate to white, leaving the colour in the halo.
-    if (u_light < 0.5) color = mix(color, vec3(1.0), core * 0.4);
-    return vec4(color, v_alpha * (core + glow * 0.3) * fade);
+    if (u_light < 0.5) color = mix(color, vec3(1.0), core * 0.3);
+    return vec4(color, v_alpha * (core * 0.85 + glow * 0.45) * fade);
   }
 
   vec4 gas(float d2, float fade) {
