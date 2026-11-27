@@ -15,6 +15,10 @@ export const GALAXY = {
   orientation: (10 * Math.PI) / 180,
   /** Angular speed inside the core; falls off as 1/r outside it (flat rotation curve). */
   coreAngularSpeed: 0.0001,
+  /** Multiplies the vertical spread of every disk population; higher looks thicker. */
+  thickness: 2.2,
+  /** Height of the bulge relative to its width (1 would be a sphere). */
+  bulgeFlattening: 0.55,
 } as const;
 
 /** How many particles each population draws (dust is thinned afterwards). */

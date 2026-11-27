@@ -146,9 +146,9 @@ function addCoreHaze(out: Particle[], random: Random): void {
   for (let i = 0; i < NEBULA.coreHazePuffs; i++) {
     const x = gaussian(random) * coreRadius * 1.1;
     const y = gaussian(random) * coreRadius * 1.1;
-    const z = gaussian(random) * coreRadius * 0.7;
+    const z = gaussian(random) * coreRadius * 0.9;
     const size = uniform(random, 22, 22);
-    const brightness = uniform(random, 0.035, 0.03);
+    const brightness = uniform(random, 0.02, 0.018);
     out.push(particle('haze', x, y, z, size, brightness, jitter(HAZE_WARM, random, 8)));
   }
 }
@@ -165,7 +165,7 @@ function addClouds(out: Particle[], random: Random): void {
   for (let i = 0; i < NEBULA.streamers; i++) {
     const centreR = coreRadius * 1.2 + (diskRadius - coreRadius * 1.2) * Math.sqrt(random());
     const centreTheta = random() * TWO_PI;
-    const scaleHeight = 5 + 14 * Math.exp(-centreR / (diskRadius * 0.5));
+    const scaleHeight = (5 + 14 * Math.exp(-centreR / (diskRadius * 0.5))) * GALAXY.thickness;
     const centreZ = gaussian(random) * scaleHeight * 0.4;
     const tone = mix(CLOUD_INNER, CLOUD_OUTER, outwardness(centreR));
     // Arc length in radians; long enough to span an arm at any radius.
@@ -178,7 +178,7 @@ function addClouds(out: Particle[], random: Random): void {
       const theta = centreTheta + (random() - 0.5) * arc;
       const z = centreZ + gaussian(random) * scaleHeight * 0.4;
       const size = uniform(random, 12, 10);
-      const brightness = uniform(random, 0.09, 0.06);
+      const brightness = uniform(random, 0.05, 0.035);
       out.push(polar('cloud', r, theta, z, size, brightness, jitter(tone, random, 8)));
     }
   }
@@ -195,7 +195,7 @@ function addBulge(out: Particle[], random: Random): void {
     const phi = Math.acos(2 * random() - 1);
     const x = r * Math.sin(phi) * Math.cos(theta);
     const y = r * Math.sin(phi) * Math.sin(theta);
-    const z = r * Math.cos(phi) * 0.3;
+    const z = r * Math.cos(phi) * GALAXY.bulgeFlattening;
 
     const edge = r / cloudRadius; // 0 at the centre, 1 at the rim
     const falloff = 1.0 - Math.pow(edge, 3);
@@ -226,7 +226,7 @@ function addDust(out: Particle[], random: Random): void {
     if (random() > keep) continue;
 
     const theta = baseTheta + ((random() - 0.5) * 20) / Math.max(r, 15);
-    const thickness = 18 * Math.exp(-r / (diskRadius * 0.8));
+    const thickness = 18 * Math.exp(-r / (diskRadius * 0.8)) * GALAXY.thickness;
     const z = (random() - 0.5) * Math.max(thickness, 2);
     const color = regionColor(r, arm, random) ?? [
       uniformInt(random, 60, 90),
@@ -249,7 +249,7 @@ function addOldStars(out: Particle[], random: Random): void {
   for (let i = 0; i < POPULATION.oldStars; i++) {
     const r = coreRadius * 0.6 + Math.min(diskRadius * 1.6, -Math.log(1 - random()) * diskRadius * 0.32);
     const theta = random() * TWO_PI;
-    const z = gaussian(random) * (3 + 10 * Math.exp(-r / (diskRadius * 0.35)));
+    const z = gaussian(random) * (3 + 10 * Math.exp(-r / (diskRadius * 0.35))) * GALAXY.thickness;
 
     let temperature: number;
     let brightness: number;
@@ -292,7 +292,7 @@ function addYoungStars(out: Particle[], random: Random): void {
     for (let s = 0; s < stars; s++) {
       const r = centreR + gaussian(random) * 3;
       const theta = centreTheta + (gaussian(random) * 8) / centreR;
-      const z = gaussian(random) * 2.5;
+      const z = gaussian(random) * 2.5 * GALAXY.thickness;
       const temperature = uniform(random, 9000, 16000);
       const brightness = uniform(random, 0.7, 0.3) * Math.exp(-Math.pow(r / (diskRadius * 1.1), 2));
       const temperatureScale = Math.min(2.2, temperature / 6000);
@@ -328,7 +328,7 @@ function addDustLanes(out: Particle[], random: Random): void {
     // Denser toward the centre, like the arms themselves.
     const r = coreRadius * 1.4 + (diskRadius * 0.95 - coreRadius * 1.4) * Math.pow(random(), 1.3);
     const theta = random() * TWO_PI;
-    const z = gaussian(random) * 3;
+    const z = gaussian(random) * 3 * GALAXY.thickness;
     const size = uniform(random, 12, 12) * (0.7 + (0.6 * r) / diskRadius);
     const opacity = uniform(random, 0.22, 0.18);
     out.push(polar('dustLane', r, theta, z, size, opacity, DUST_LANE));
