@@ -74,3 +74,33 @@ pub struct UserData {
     pub email: String,
     pub role: String,
 }
+
+/// Stored MCP credential. The plaintext and its hash are not on this value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpAccessToken {
+    pub id: Uuid,
+    pub account_id: AccountId,
+    pub name: String,
+    pub token_prefix: String,
+    pub created_at: DateTime<Utc>,
+    pub last_used_at: Option<DateTime<Utc>>,
+    pub revoked_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewMcpAccessToken {
+    pub id: Uuid,
+    pub account_id: AccountId,
+    pub name: String,
+    pub token_hash: String,
+    pub token_prefix: String,
+    pub created_at: DateTime<Utc>,
+}
+
+/// `plaintext` is the bearer secret. It is returned to the caller once and is
+/// not stored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IssuedMcpAccessToken {
+    pub record: McpAccessToken,
+    pub plaintext: String,
+}
