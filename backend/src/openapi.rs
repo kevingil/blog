@@ -10,7 +10,6 @@ pub fn router() -> OpenApiRouter<AppState> {
     OpenApiRouter::new()
         .merge(api::health::router())
         .merge(api::auth::router())
-        .merge(api::agent::router())
         .merge(api::article::router())
         .merge(api::datasource::router())
         .merge(api::image::router())

@@ -1,14 +1,11 @@
 pub mod account;
-pub mod agent_skill;
 pub mod article;
-pub mod chat_message;
 pub mod content_topic_match;
 pub mod crawled_content;
 pub mod data_source;
 pub mod image;
 pub mod insight;
 pub mod insight_topic;
-pub mod mcp_connector;
 pub mod organization;
 pub mod page;
 pub mod project;

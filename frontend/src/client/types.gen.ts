@@ -4,16 +4,6 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
-export type AgentToolListResponse = {
-    tools: Array<AgentToolResponse>;
-};
-
-export type AgentToolResponse = {
-    name: string;
-    description: string;
-    source: string;
-};
-
 export type AllWorkersStatusResponse = {
     workers: Array<WorkerStatusResponse>;
     is_running: boolean;
@@ -80,10 +70,6 @@ export type ArticleVersionResponse = {
     created_at?: string | null;
 };
 
-export type ArtifactFeedbackRequest = {
-    feedback?: string;
-};
-
 export type AuthErrorResponse = {
     error: string;
     code: string;
@@ -97,123 +83,16 @@ export type AuthorData = {
     name: string;
 };
 
-export type ChatMessageResponse = {
-    id: string;
-    article_id: string;
-    role: string;
-    content: string;
-    meta_data?: unknown;
-    created_at: string;
-};
-
-export type ChatRequest = {
-    message: string;
-    documentContent?: string;
-    documentMarkdown?: string;
-    documentTitle?: string;
-    articleId: string;
-    channel?: string;
-};
-
-export type ChatRequestResponse = {
-    requestId: string;
-    status: string;
-};
-
-export type ConnectorListResponse = {
-    connectors: Array<ConnectorResponse>;
-};
-
-export type ConnectorPresetListResponse = {
-    presets: Array<ConnectorPresetResponse>;
-};
-
-export type ConnectorPresetResponse = {
-    id: string;
-    name: string;
-    description: string;
-    officialUrl: string;
-    url: string;
-    connected: boolean;
-    connectorId: string;
-    lastError: string;
-};
-
-export type ConnectorRefreshResponse = {
-    connectorId: string;
-    toolNames: Array<string>;
-};
-
-export type ConnectorResponse = {
-    id: string;
-    name: string;
-    transport: string;
-    command: string;
-    args: Array<string>;
-    url: string;
-    headers: {
-        [key: string]: string;
-    };
-    env: {
-        [key: string]: string;
-    };
-    enabled: boolean;
-    lastError: string;
-    createdAt: string;
-    updatedAt: string;
-};
-
-export type ConnectorUpdateRequest = {
-    name?: string | null;
-    transport?: string | null;
-    command?: string | null;
-    args?: Array<string> | null;
-    url?: string | null;
-    headers?: {
-        [key: string]: string;
-    } | null;
-    env?: {
-        [key: string]: string;
-    } | null;
-    enabled?: boolean | null;
-};
-
-export type ConnectorWriteRequest = {
-    name: string;
-    transport: string;
-    command?: string;
-    args?: Array<string>;
-    url?: string;
-    headers?: {
-        [key: string]: string;
-    };
-    env?: {
-        [key: string]: string;
-    };
-    enabled?: boolean;
-};
-
-export type ConversationHistoryResponse = {
-    messages: Array<ChatMessageResponse>;
-    article_id: string;
-    total: number;
-};
-
-export type ConversationTurnRequest = {
-    articleId: string;
-    documentContent?: string;
-    documentMarkdown?: string;
-    documentTitle?: string;
-    message?: string;
-    audioBase64?: string;
-    mimeType?: string;
-};
-
-export type ConversationTurnResponse = {
-    requestId: string;
-    status: string;
-    transcript: string;
-    channel: string;
+export type AuthorizationServerMetadata = {
+    issuer: string;
+    authorization_endpoint: string;
+    token_endpoint: string;
+    registration_endpoint: string;
+    response_types_supported: Array<string>;
+    grant_types_supported: Array<string>;
+    code_challenge_methods_supported: Array<string>;
+    token_endpoint_auth_methods_supported: Array<string>;
+    scopes_supported: Array<string>;
 };
 
 export type CountResponse = {
@@ -249,12 +128,28 @@ export type CreateArticle = {
     image_url?: string;
     tags?: Array<string>;
     publish?: boolean;
-    authorId: string;
+    /**
+     * Kept so existing clients can still send it. `POST /blog/articles` replaces
+     * this with the authenticated account before the article is saved.
+     */
+    authorId?: string;
     /**
      * When set, the public article opens this link. Empty keeps it on this site.
      */
     external_url?: string | null;
     image_upload_id?: string | null;
+};
+
+/**
+ * Minimal unpublished article. The article row has no summary column, so a
+ * summary is not part of this body. `content` wins when it is non-empty;
+ * otherwise `markdown` is stored as the draft body.
+ */
+export type CreateDraft = {
+    title: string;
+    content?: string;
+    markdown?: string;
+    tags?: Array<string>;
 };
 
 export type CreateExternalArticle = {
@@ -263,6 +158,10 @@ export type CreateExternalArticle = {
 
 export type CreateFolderRequest = {
     path: string;
+};
+
+export type CreateMcpTokenRequest = {
+    name: string;
 };
 
 export type CreateSourceRequest = {
@@ -564,19 +463,78 @@ export type LoginResponse = {
     user: UserResponse;
 };
 
+/**
+ * Create response. `token` is the bearer secret and is not returned again.
+ */
+export type McpTokenCreatedResponse = {
+    id: string;
+    name: string;
+    token: string;
+    tokenPrefix: string;
+    createdAt: string;
+    lastUsedAt?: string | null;
+    revokedAt?: string | null;
+    clientName?: string | null;
+    expiresAt?: string | null;
+};
+
+/**
+ * MCP access token metadata. The plaintext and the hash are not included.
+ */
+export type McpTokenResponse = {
+    id: string;
+    name: string;
+    tokenPrefix: string;
+    createdAt: string;
+    lastUsedAt?: string | null;
+    revokedAt?: string | null;
+    /**
+     * OAuth client name. Null for a token created at `POST /auth/mcp-tokens`.
+     */
+    clientName?: string | null;
+    expiresAt?: string | null;
+};
+
 export type MessageResponse = {
     message: string;
 };
 
-export type OauthConnectResponse = {
-    connected: boolean;
-    authorizationUrl: string;
-    connector?: null | ConnectorResponse;
+export type OauthErrorBody = {
+    error: string;
+    error_description: string;
 };
 
-export type OauthConnectorRequest = {
-    name: string;
-    url: string;
+export type OauthRegisterRequest = {
+    client_name?: string;
+    redirect_uris?: Array<string>;
+    grant_types?: Array<string>;
+    response_types?: Array<string>;
+    token_endpoint_auth_method?: string | null;
+};
+
+export type OauthRegisterResponse = {
+    client_id: string;
+    client_name: string;
+    redirect_uris: Array<string>;
+    grant_types: Array<string>;
+    response_types: Array<string>;
+    token_endpoint_auth_method: string;
+};
+
+export type OauthTokenRequest = {
+    grant_type?: string;
+    code?: string;
+    redirect_uri?: string;
+    client_id?: string;
+    code_verifier?: string;
+    refresh_token?: string;
+};
+
+export type OauthTokenResponse = {
+    access_token: string;
+    token_type: string;
+    expires_in: number;
+    refresh_token: string;
 };
 
 export type OrganizationCreateRequest = {
@@ -678,10 +636,6 @@ export type PasswordUpdateResponse = {
     token: string;
 };
 
-export type PendingArtifactsResponse = {
-    artifacts: Array<ChatMessageResponse>;
-};
-
 export type PinResponse = {
     success: boolean;
     is_pinned: boolean;
@@ -747,6 +701,13 @@ export type ProjectUpdateRequest = {
     image_url?: string | null;
     url?: string | null;
     image_upload_id?: string | null;
+};
+
+export type ProtectedResourceMetadata = {
+    resource: string;
+    authorization_servers: Array<string>;
+    bearer_methods_supported: Array<string>;
+    scopes_supported: Array<string>;
 };
 
 export type PublicProfileResponse = {
@@ -835,34 +796,6 @@ export type SiteSettingsUpdateRequest = {
     public_organization_id?: string | null;
 };
 
-export type SkillListResponse = {
-    skills: Array<SkillResponse>;
-};
-
-export type SkillResponse = {
-    id: string;
-    name: string;
-    description: string;
-    instructions: string;
-    enabled: boolean;
-    createdAt: string;
-    updatedAt: string;
-};
-
-export type SkillUpdateRequest = {
-    name?: string | null;
-    description?: string | null;
-    instructions?: string | null;
-    enabled?: boolean | null;
-};
-
-export type SkillWriteRequest = {
-    name: string;
-    description?: string;
-    instructions: string;
-    enabled?: boolean;
-};
-
 export type SourceListResponse = {
     sources: Array<SourceWithArticleResponse>;
     total_pages: number;
@@ -914,12 +847,6 @@ export type SuccessFlag = {
 
 export type SuccessFlagResponse = {
     success: boolean;
-};
-
-export type SuccessResponseAgentToolListResponse = {
-    data: {
-        tools: Array<AgentToolResponse>;
-    };
 };
 
 export type SuccessResponseAllWorkersStatusResponse = {
@@ -997,70 +924,6 @@ export type SuccessResponseArticleVersionResponse = {
         content: string;
         image_url: string;
         created_at?: string | null;
-    };
-};
-
-export type SuccessResponseChatRequestResponse = {
-    data: {
-        requestId: string;
-        status: string;
-    };
-};
-
-export type SuccessResponseConnectorListResponse = {
-    data: {
-        connectors: Array<ConnectorResponse>;
-    };
-};
-
-export type SuccessResponseConnectorPresetListResponse = {
-    data: {
-        presets: Array<ConnectorPresetResponse>;
-    };
-};
-
-export type SuccessResponseConnectorRefreshResponse = {
-    data: {
-        connectorId: string;
-        toolNames: Array<string>;
-    };
-};
-
-export type SuccessResponseConnectorResponse = {
-    data: {
-        id: string;
-        name: string;
-        transport: string;
-        command: string;
-        args: Array<string>;
-        url: string;
-        headers: {
-            [key: string]: string;
-        };
-        env: {
-            [key: string]: string;
-        };
-        enabled: boolean;
-        lastError: string;
-        createdAt: string;
-        updatedAt: string;
-    };
-};
-
-export type SuccessResponseConversationHistoryResponse = {
-    data: {
-        messages: Array<ChatMessageResponse>;
-        article_id: string;
-        total: number;
-    };
-};
-
-export type SuccessResponseConversationTurnResponse = {
-    data: {
-        requestId: string;
-        status: string;
-        transcript: string;
-        channel: string;
     };
 };
 
@@ -1239,17 +1102,45 @@ export type SuccessResponseLoginResponse = {
     };
 };
 
-export type SuccessResponseMessageResponse = {
+export type SuccessResponseMcpTokenCreatedResponse = {
+    /**
+     * Create response. `token` is the bearer secret and is not returned again.
+     */
     data: {
-        message: string;
+        id: string;
+        name: string;
+        token: string;
+        tokenPrefix: string;
+        createdAt: string;
+        lastUsedAt?: string | null;
+        revokedAt?: string | null;
+        clientName?: string | null;
+        expiresAt?: string | null;
     };
 };
 
-export type SuccessResponseOauthConnectResponse = {
+export type SuccessResponseMcpTokenResponse = {
+    /**
+     * MCP access token metadata. The plaintext and the hash are not included.
+     */
     data: {
-        connected: boolean;
-        authorizationUrl: string;
-        connector?: null | ConnectorResponse;
+        id: string;
+        name: string;
+        tokenPrefix: string;
+        createdAt: string;
+        lastUsedAt?: string | null;
+        revokedAt?: string | null;
+        /**
+         * OAuth client name. Null for a token created at `POST /auth/mcp-tokens`.
+         */
+        clientName?: string | null;
+        expiresAt?: string | null;
+    };
+};
+
+export type SuccessResponseMessageResponse = {
+    data: {
+        message: string;
     };
 };
 
@@ -1320,12 +1211,6 @@ export type SuccessResponsePasswordUpdateResponse = {
     data: {
         message: string;
         token: string;
-    };
-};
-
-export type SuccessResponsePendingArtifactsResponse = {
-    data: {
-        artifacts: Array<ChatMessageResponse>;
     };
 };
 
@@ -1423,24 +1308,6 @@ export type SuccessResponseSiteSettingsResponse = {
         public_profile_type: string;
         public_user_id?: string | null;
         public_organization_id?: string | null;
-    };
-};
-
-export type SuccessResponseSkillListResponse = {
-    data: {
-        skills: Array<SkillResponse>;
-    };
-};
-
-export type SuccessResponseSkillResponse = {
-    data: {
-        id: string;
-        name: string;
-        description: string;
-        instructions: string;
-        enabled: boolean;
-        createdAt: string;
-        updatedAt: string;
     };
 };
 
@@ -1652,6 +1519,22 @@ export type SuccessResponseVecInsightTopicResponse = {
     }>;
 };
 
+export type SuccessResponseVecMcpTokenResponse = {
+    data: Array<{
+        id: string;
+        name: string;
+        tokenPrefix: string;
+        createdAt: string;
+        lastUsedAt?: string | null;
+        revokedAt?: string | null;
+        /**
+         * OAuth client name. Null for a token created at `POST /auth/mcp-tokens`.
+         */
+        clientName?: string | null;
+        expiresAt?: string | null;
+    }>;
+};
+
 export type SuccessResponseVecOrganizationResponse = {
     data: Array<{
         id: string;
@@ -1849,6 +1732,17 @@ export type UploadFileResponse = {
     blurhash?: string | null;
 };
 
+export type UpsertArticleSource = {
+    title?: string;
+    content?: string;
+    url?: string;
+    source_type?: string;
+};
+
+export type UpsertArticleSourcesRequest = {
+    sources?: Array<UpsertArticleSource>;
+};
+
 export type UserInsightStatusResponse = {
     insight_id: string;
     is_read: boolean;
@@ -1904,491 +1798,44 @@ export type RootStatusResponses = {
 
 export type RootStatusResponse = RootStatusResponses[keyof RootStatusResponses];
 
-export type SubmitAgentRequestData = {
-    body: ChatRequest;
-    path?: never;
-    query?: never;
-    url: '/agent';
-};
-
-export type SubmitAgentRequestErrors = {
-    400: ErrorEnvelope;
-    401: ErrorEnvelope;
-    500: ErrorEnvelope;
-};
-
-export type SubmitAgentRequestError = SubmitAgentRequestErrors[keyof SubmitAgentRequestErrors];
-
-export type SubmitAgentRequestResponses = {
-    200: SuccessResponseChatRequestResponse;
-};
-
-export type SubmitAgentRequestResponse = SubmitAgentRequestResponses[keyof SubmitAgentRequestResponses];
-
-export type GetPendingArtifactsData = {
-    body?: never;
-    path: {
-        articleId: string;
-    };
-    query?: never;
-    url: '/agent/artifacts/{articleId}/pending';
-};
-
-export type GetPendingArtifactsErrors = {
-    400: ErrorEnvelope;
-    401: ErrorEnvelope;
-    500: ErrorEnvelope;
-};
-
-export type GetPendingArtifactsError = GetPendingArtifactsErrors[keyof GetPendingArtifactsErrors];
-
-export type GetPendingArtifactsResponses = {
-    200: SuccessResponsePendingArtifactsResponse;
-};
-
-export type GetPendingArtifactsResponse = GetPendingArtifactsResponses[keyof GetPendingArtifactsResponses];
-
-export type AcceptArtifactData = {
-    body: ArtifactFeedbackRequest;
-    path: {
-        messageId: string;
-    };
-    query?: never;
-    url: '/agent/artifacts/{messageId}/accept';
-};
-
-export type AcceptArtifactErrors = {
-    400: ErrorEnvelope;
-    401: ErrorEnvelope;
-    404: ErrorEnvelope;
-    500: ErrorEnvelope;
-};
-
-export type AcceptArtifactError = AcceptArtifactErrors[keyof AcceptArtifactErrors];
-
-export type AcceptArtifactResponses = {
-    200: SuccessResponseSuccessFlagResponse;
-};
-
-export type AcceptArtifactResponse = AcceptArtifactResponses[keyof AcceptArtifactResponses];
-
-export type RejectArtifactData = {
-    body: ArtifactFeedbackRequest;
-    path: {
-        messageId: string;
-    };
-    query?: never;
-    url: '/agent/artifacts/{messageId}/reject';
-};
-
-export type RejectArtifactErrors = {
-    400: ErrorEnvelope;
-    401: ErrorEnvelope;
-    404: ErrorEnvelope;
-    500: ErrorEnvelope;
-};
-
-export type RejectArtifactError = RejectArtifactErrors[keyof RejectArtifactErrors];
-
-export type RejectArtifactResponses = {
-    200: SuccessResponseSuccessFlagResponse;
-};
-
-export type RejectArtifactResponse = RejectArtifactResponses[keyof RejectArtifactResponses];
-
-export type ListConnectorPresetsData = {
+export type OauthAuthorizationServerData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/agent/connector-presets';
+    url: '/.well-known/oauth-authorization-server';
 };
 
-export type ListConnectorPresetsErrors = {
-    401: ErrorEnvelope;
-    500: ErrorEnvelope;
+export type OauthAuthorizationServerResponses = {
+    200: AuthorizationServerMetadata;
 };
 
-export type ListConnectorPresetsError = ListConnectorPresetsErrors[keyof ListConnectorPresetsErrors];
+export type OauthAuthorizationServerResponse = OauthAuthorizationServerResponses[keyof OauthAuthorizationServerResponses];
 
-export type ListConnectorPresetsResponses = {
-    200: SuccessResponseConnectorPresetListResponse;
-};
-
-export type ListConnectorPresetsResponse = ListConnectorPresetsResponses[keyof ListConnectorPresetsResponses];
-
-export type ConnectConnectorPresetData = {
-    body?: never;
-    path: {
-        presetId: string;
-    };
-    query?: never;
-    url: '/agent/connector-presets/{presetId}/connect';
-};
-
-export type ConnectConnectorPresetErrors = {
-    400: ErrorEnvelope;
-    401: ErrorEnvelope;
-    500: ErrorEnvelope;
-};
-
-export type ConnectConnectorPresetError = ConnectConnectorPresetErrors[keyof ConnectConnectorPresetErrors];
-
-export type ConnectConnectorPresetResponses = {
-    200: SuccessResponseOauthConnectResponse;
-};
-
-export type ConnectConnectorPresetResponse = ConnectConnectorPresetResponses[keyof ConnectConnectorPresetResponses];
-
-export type ListMcpConnectorsData = {
+export type OauthProtectedResourceData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/agent/connectors';
+    url: '/.well-known/oauth-protected-resource';
 };
 
-export type ListMcpConnectorsErrors = {
-    401: ErrorEnvelope;
-    500: ErrorEnvelope;
+export type OauthProtectedResourceResponses = {
+    200: ProtectedResourceMetadata;
 };
 
-export type ListMcpConnectorsError = ListMcpConnectorsErrors[keyof ListMcpConnectorsErrors];
+export type OauthProtectedResourceResponse = OauthProtectedResourceResponses[keyof OauthProtectedResourceResponses];
 
-export type ListMcpConnectorsResponses = {
-    200: SuccessResponseConnectorListResponse;
-};
-
-export type ListMcpConnectorsResponse = ListMcpConnectorsResponses[keyof ListMcpConnectorsResponses];
-
-export type CreateMcpConnectorData = {
-    body: ConnectorWriteRequest;
-    path?: never;
-    query?: never;
-    url: '/agent/connectors';
-};
-
-export type CreateMcpConnectorErrors = {
-    400: ErrorEnvelope;
-    401: ErrorEnvelope;
-    500: ErrorEnvelope;
-};
-
-export type CreateMcpConnectorError = CreateMcpConnectorErrors[keyof CreateMcpConnectorErrors];
-
-export type CreateMcpConnectorResponses = {
-    200: SuccessResponseConnectorResponse;
-};
-
-export type CreateMcpConnectorResponse = CreateMcpConnectorResponses[keyof CreateMcpConnectorResponses];
-
-export type ConnectOauthMcpData = {
-    body: OauthConnectorRequest;
-    path?: never;
-    query?: never;
-    url: '/agent/connectors/oauth';
-};
-
-export type ConnectOauthMcpErrors = {
-    400: ErrorEnvelope;
-    401: ErrorEnvelope;
-    500: ErrorEnvelope;
-};
-
-export type ConnectOauthMcpError = ConnectOauthMcpErrors[keyof ConnectOauthMcpErrors];
-
-export type ConnectOauthMcpResponses = {
-    200: SuccessResponseOauthConnectResponse;
-};
-
-export type ConnectOauthMcpResponse = ConnectOauthMcpResponses[keyof ConnectOauthMcpResponses];
-
-export type CompleteOauthConnectorData = {
-    body?: never;
-    path?: never;
-    query?: {
-        code?: string;
-        state?: string;
-        error?: string;
-        error_description?: string;
-    };
-    url: '/agent/connectors/oauth/callback';
-};
-
-export type CompleteOauthConnectorErrors = {
-    /**
-     * The sign-in query could not be read
-     */
-    400: unknown;
-};
-
-export type DeleteMcpConnectorData = {
-    body?: never;
-    path: {
-        connectorId: string;
-    };
-    query?: never;
-    url: '/agent/connectors/{connectorId}';
-};
-
-export type DeleteMcpConnectorErrors = {
-    400: ErrorEnvelope;
-    401: ErrorEnvelope;
-    404: ErrorEnvelope;
-    500: ErrorEnvelope;
-};
-
-export type DeleteMcpConnectorError = DeleteMcpConnectorErrors[keyof DeleteMcpConnectorErrors];
-
-export type DeleteMcpConnectorResponses = {
-    200: SuccessResponseSuccessFlagResponse;
-};
-
-export type DeleteMcpConnectorResponse = DeleteMcpConnectorResponses[keyof DeleteMcpConnectorResponses];
-
-export type UpdateMcpConnectorData = {
-    body: ConnectorUpdateRequest;
-    path: {
-        connectorId: string;
-    };
-    query?: never;
-    url: '/agent/connectors/{connectorId}';
-};
-
-export type UpdateMcpConnectorErrors = {
-    400: ErrorEnvelope;
-    401: ErrorEnvelope;
-    404: ErrorEnvelope;
-    500: ErrorEnvelope;
-};
-
-export type UpdateMcpConnectorError = UpdateMcpConnectorErrors[keyof UpdateMcpConnectorErrors];
-
-export type UpdateMcpConnectorResponses = {
-    200: SuccessResponseConnectorResponse;
-};
-
-export type UpdateMcpConnectorResponse = UpdateMcpConnectorResponses[keyof UpdateMcpConnectorResponses];
-
-export type RefreshMcpConnectorData = {
-    body?: never;
-    path: {
-        connectorId: string;
-    };
-    query?: never;
-    url: '/agent/connectors/{connectorId}/refresh';
-};
-
-export type RefreshMcpConnectorErrors = {
-    400: ErrorEnvelope;
-    401: ErrorEnvelope;
-    404: ErrorEnvelope;
-    500: ErrorEnvelope;
-};
-
-export type RefreshMcpConnectorError = RefreshMcpConnectorErrors[keyof RefreshMcpConnectorErrors];
-
-export type RefreshMcpConnectorResponses = {
-    200: SuccessResponseConnectorRefreshResponse;
-};
-
-export type RefreshMcpConnectorResponse = RefreshMcpConnectorResponses[keyof RefreshMcpConnectorResponses];
-
-export type SubmitConversationTurnData = {
-    body: ConversationTurnRequest;
-    path?: never;
-    query?: never;
-    url: '/agent/conversation/turn';
-};
-
-export type SubmitConversationTurnErrors = {
-    400: ErrorEnvelope;
-    401: ErrorEnvelope;
-    500: ErrorEnvelope;
-};
-
-export type SubmitConversationTurnError = SubmitConversationTurnErrors[keyof SubmitConversationTurnErrors];
-
-export type SubmitConversationTurnResponses = {
-    200: SuccessResponseConversationTurnResponse;
-};
-
-export type SubmitConversationTurnResponse = SubmitConversationTurnResponses[keyof SubmitConversationTurnResponses];
-
-export type ClearConversationHistoryData = {
-    body?: never;
-    path: {
-        articleId: string;
-    };
-    query?: never;
-    url: '/agent/conversations/{articleId}';
-};
-
-export type ClearConversationHistoryErrors = {
-    400: ErrorEnvelope;
-    401: ErrorEnvelope;
-    500: ErrorEnvelope;
-};
-
-export type ClearConversationHistoryError = ClearConversationHistoryErrors[keyof ClearConversationHistoryErrors];
-
-export type ClearConversationHistoryResponses = {
-    200: SuccessResponseSuccessFlagResponse;
-};
-
-export type ClearConversationHistoryResponse = ClearConversationHistoryResponses[keyof ClearConversationHistoryResponses];
-
-export type GetConversationHistoryData = {
-    body?: never;
-    path: {
-        articleId: string;
-    };
-    query?: {
-        limit?: string;
-    };
-    url: '/agent/conversations/{articleId}';
-};
-
-export type GetConversationHistoryErrors = {
-    400: ErrorEnvelope;
-    401: ErrorEnvelope;
-    500: ErrorEnvelope;
-};
-
-export type GetConversationHistoryError = GetConversationHistoryErrors[keyof GetConversationHistoryErrors];
-
-export type GetConversationHistoryResponses = {
-    200: SuccessResponseConversationHistoryResponse;
-};
-
-export type GetConversationHistoryResponse = GetConversationHistoryResponses[keyof GetConversationHistoryResponses];
-
-export type ConnectLiveSessionData = {
+export type OauthProtectedResourceMcpData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/agent/live';
+    url: '/.well-known/oauth-protected-resource/mcp';
 };
 
-export type ConnectLiveSessionErrors = {
-    /**
-     * Invalid WebSocket upgrade headers
-     */
-    400: unknown;
-    401: ErrorEnvelope;
-    /**
-     * Connection cannot be upgraded
-     */
-    426: unknown;
+export type OauthProtectedResourceMcpResponses = {
+    200: ProtectedResourceMetadata;
 };
 
-export type ConnectLiveSessionError = ConnectLiveSessionErrors[keyof ConnectLiveSessionErrors];
-
-export type ListAgentSkillsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/agent/skills';
-};
-
-export type ListAgentSkillsErrors = {
-    401: ErrorEnvelope;
-    500: ErrorEnvelope;
-};
-
-export type ListAgentSkillsError = ListAgentSkillsErrors[keyof ListAgentSkillsErrors];
-
-export type ListAgentSkillsResponses = {
-    200: SuccessResponseSkillListResponse;
-};
-
-export type ListAgentSkillsResponse = ListAgentSkillsResponses[keyof ListAgentSkillsResponses];
-
-export type CreateAgentSkillData = {
-    body: SkillWriteRequest;
-    path?: never;
-    query?: never;
-    url: '/agent/skills';
-};
-
-export type CreateAgentSkillErrors = {
-    400: ErrorEnvelope;
-    401: ErrorEnvelope;
-    500: ErrorEnvelope;
-};
-
-export type CreateAgentSkillError = CreateAgentSkillErrors[keyof CreateAgentSkillErrors];
-
-export type CreateAgentSkillResponses = {
-    200: SuccessResponseSkillResponse;
-};
-
-export type CreateAgentSkillResponse = CreateAgentSkillResponses[keyof CreateAgentSkillResponses];
-
-export type DeleteAgentSkillData = {
-    body?: never;
-    path: {
-        skillId: string;
-    };
-    query?: never;
-    url: '/agent/skills/{skillId}';
-};
-
-export type DeleteAgentSkillErrors = {
-    400: ErrorEnvelope;
-    401: ErrorEnvelope;
-    404: ErrorEnvelope;
-    500: ErrorEnvelope;
-};
-
-export type DeleteAgentSkillError = DeleteAgentSkillErrors[keyof DeleteAgentSkillErrors];
-
-export type DeleteAgentSkillResponses = {
-    200: SuccessResponseSuccessFlagResponse;
-};
-
-export type DeleteAgentSkillResponse = DeleteAgentSkillResponses[keyof DeleteAgentSkillResponses];
-
-export type UpdateAgentSkillData = {
-    body: SkillUpdateRequest;
-    path: {
-        skillId: string;
-    };
-    query?: never;
-    url: '/agent/skills/{skillId}';
-};
-
-export type UpdateAgentSkillErrors = {
-    400: ErrorEnvelope;
-    401: ErrorEnvelope;
-    404: ErrorEnvelope;
-    500: ErrorEnvelope;
-};
-
-export type UpdateAgentSkillError = UpdateAgentSkillErrors[keyof UpdateAgentSkillErrors];
-
-export type UpdateAgentSkillResponses = {
-    200: SuccessResponseSkillResponse;
-};
-
-export type UpdateAgentSkillResponse = UpdateAgentSkillResponses[keyof UpdateAgentSkillResponses];
-
-export type ListAgentToolsData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/agent/tools';
-};
-
-export type ListAgentToolsErrors = {
-    401: ErrorEnvelope;
-};
-
-export type ListAgentToolsError = ListAgentToolsErrors[keyof ListAgentToolsErrors];
-
-export type ListAgentToolsResponses = {
-    200: SuccessResponseAgentToolListResponse;
-};
-
-export type ListAgentToolsResponse = ListAgentToolsResponses[keyof ListAgentToolsResponses];
+export type OauthProtectedResourceMcpResponse = OauthProtectedResourceMcpResponses[keyof OauthProtectedResourceMcpResponses];
 
 export type AuthDeleteAccountData = {
     body: DeleteAccountRequest;
@@ -2472,6 +1919,77 @@ export type AuthLogoutResponses = {
 };
 
 export type AuthLogoutResponse = AuthLogoutResponses[keyof AuthLogoutResponses];
+
+export type AuthListMcpTokensData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/auth/mcp-tokens';
+};
+
+export type AuthListMcpTokensErrors = {
+    401: AuthErrorResponse;
+    403: AuthErrorResponse;
+    500: AuthErrorResponse;
+};
+
+export type AuthListMcpTokensError = AuthListMcpTokensErrors[keyof AuthListMcpTokensErrors];
+
+export type AuthListMcpTokensResponses = {
+    200: SuccessResponseVecMcpTokenResponse;
+};
+
+export type AuthListMcpTokensResponse = AuthListMcpTokensResponses[keyof AuthListMcpTokensResponses];
+
+export type AuthCreateMcpTokenData = {
+    body: CreateMcpTokenRequest;
+    path?: never;
+    query?: never;
+    url: '/auth/mcp-tokens';
+};
+
+export type AuthCreateMcpTokenErrors = {
+    400: AuthErrorResponse;
+    401: AuthErrorResponse;
+    /**
+     * The JWT session is not an admin
+     */
+    403: AuthErrorResponse;
+    500: AuthErrorResponse;
+};
+
+export type AuthCreateMcpTokenError = AuthCreateMcpTokenErrors[keyof AuthCreateMcpTokenErrors];
+
+export type AuthCreateMcpTokenResponses = {
+    201: SuccessResponseMcpTokenCreatedResponse;
+};
+
+export type AuthCreateMcpTokenResponse = AuthCreateMcpTokenResponses[keyof AuthCreateMcpTokenResponses];
+
+export type AuthRevokeMcpTokenData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/auth/mcp-tokens/{id}';
+};
+
+export type AuthRevokeMcpTokenErrors = {
+    400: AuthErrorResponse;
+    401: AuthErrorResponse;
+    403: AuthErrorResponse;
+    404: AuthErrorResponse;
+    500: AuthErrorResponse;
+};
+
+export type AuthRevokeMcpTokenError = AuthRevokeMcpTokenErrors[keyof AuthRevokeMcpTokenErrors];
+
+export type AuthRevokeMcpTokenResponses = {
+    200: SuccessResponseMcpTokenResponse;
+};
+
+export type AuthRevokeMcpTokenResponse = AuthRevokeMcpTokenResponses[keyof AuthRevokeMcpTokenResponses];
 
 export type AuthUpdatePasswordData = {
     body: UpdatePasswordRequest;
@@ -2814,6 +2332,26 @@ export type ListArticleVersionsResponses = {
 };
 
 export type ListArticleVersionsResponse = ListArticleVersionsResponses[keyof ListArticleVersionsResponses];
+
+export type CreateDraftData = {
+    body: CreateDraft;
+    path?: never;
+    query?: never;
+    url: '/blog/drafts';
+};
+
+export type CreateDraftErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+};
+
+export type CreateDraftError = CreateDraftErrors[keyof CreateDraftErrors];
+
+export type CreateDraftResponses = {
+    201: SuccessResponseArticleListItem;
+};
+
+export type CreateDraftResponse = CreateDraftResponses[keyof CreateDraftResponses];
 
 export type GenerateArticleData = {
     body: GenerateArticleRequest;
@@ -3750,6 +3288,45 @@ export type MarkInsightReadResponses = {
 
 export type MarkInsightReadResponse = MarkInsightReadResponses[keyof MarkInsightReadResponses];
 
+export type OauthRegisterClientData = {
+    body: OauthRegisterRequest;
+    path?: never;
+    query?: never;
+    url: '/oauth/register';
+};
+
+export type OauthRegisterClientErrors = {
+    400: OauthErrorBody;
+};
+
+export type OauthRegisterClientError = OauthRegisterClientErrors[keyof OauthRegisterClientErrors];
+
+export type OauthRegisterClientResponses = {
+    201: OauthRegisterResponse;
+};
+
+export type OauthRegisterClientResponse = OauthRegisterClientResponses[keyof OauthRegisterClientResponses];
+
+export type OauthTokenData = {
+    body: OauthTokenRequest;
+    path?: never;
+    query?: never;
+    url: '/oauth/token';
+};
+
+export type OauthTokenErrors = {
+    400: OauthErrorBody;
+    401: OauthErrorBody;
+};
+
+export type OauthTokenError = OauthTokenErrors[keyof OauthTokenErrors];
+
+export type OauthTokenResponses = {
+    200: OauthTokenResponse;
+};
+
+export type OauthTokenResponse2 = OauthTokenResponses[keyof OauthTokenResponses];
+
 export type ListOrganizationsData = {
     body?: never;
     path?: never;
@@ -4100,6 +3677,27 @@ export type ImportGithubProjectResponses = {
 
 export type ImportGithubProjectResponse = ImportGithubProjectResponses[keyof ImportGithubProjectResponses];
 
+export type UpsertProjectData = {
+    body: ProjectCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/projects/upsert';
+};
+
+export type UpsertProjectErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    500: ErrorEnvelope;
+};
+
+export type UpsertProjectError = UpsertProjectErrors[keyof UpsertProjectErrors];
+
+export type UpsertProjectResponses = {
+    200: SuccessResponseProjectResponse;
+};
+
+export type UpsertProjectResponse = UpsertProjectResponses[keyof UpsertProjectResponses];
+
 export type DeleteProjectData = {
     body?: never;
     path: {
@@ -4215,6 +3813,31 @@ export type GetArticleSourcesResponses = {
 };
 
 export type GetArticleSourcesResponse = GetArticleSourcesResponses[keyof GetArticleSourcesResponses];
+
+export type UpsertArticleSourcesData = {
+    body: UpsertArticleSourcesRequest;
+    path: {
+        articleId: string;
+    };
+    query?: never;
+    url: '/sources/article/{articleId}';
+};
+
+export type UpsertArticleSourcesErrors = {
+    400: ErrorEnvelope;
+    401: ErrorEnvelope;
+    404: ErrorEnvelope;
+    500: ErrorEnvelope;
+    502: ErrorEnvelope;
+};
+
+export type UpsertArticleSourcesError = UpsertArticleSourcesErrors[keyof UpsertArticleSourcesErrors];
+
+export type UpsertArticleSourcesResponses = {
+    200: SuccessResponseSourcesResponse;
+};
+
+export type UpsertArticleSourcesResponse = UpsertArticleSourcesResponses[keyof UpsertArticleSourcesResponses];
 
 export type SearchSimilarSourcesData = {
     body?: never;

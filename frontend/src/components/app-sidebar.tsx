@@ -5,9 +5,7 @@ import {
   IconFileDescription,
   IconFileWord,
   IconFolder,
-  IconBook,
   IconLink,
-  IconPlug,
   IconUsers,
   IconUpload,
 } from "@tabler/icons-react"
@@ -100,16 +98,6 @@ const navigationData = {
       title: "Sources",
       url: "/dashboard/sources",
       icon: IconLink,
-    },
-    {
-      title: "Connectors",
-      url: "/dashboard/connectors",
-      icon: IconPlug,
-    },
-    {
-      title: "Skills",
-      url: "/dashboard/skills",
-      icon: IconBook,
     },
     {
       title: "Uploads",

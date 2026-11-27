@@ -17,11 +17,9 @@ import { Route as PublicLayoutImport } from './routes/_publicLayout'
 import { Route as DashboardIndexImport } from './routes/dashboard/index'
 import { Route as PublicLayoutIndexImport } from './routes/_publicLayout/index'
 import { Route as DashboardUploadsImport } from './routes/dashboard/uploads'
-import { Route as DashboardSkillsImport } from './routes/dashboard/skills'
 import { Route as DashboardSettingsImport } from './routes/dashboard/settings'
 import { Route as DashboardSecurityImport } from './routes/dashboard/security'
 import { Route as DashboardProfileImport } from './routes/dashboard/profile'
-import { Route as DashboardConnectorsImport } from './routes/dashboard/connectors'
 import { Route as PublicLayoutSignupImport } from './routes/_publicLayout/signup'
 import { Route as PublicLayoutLoginImport } from './routes/_publicLayout/login'
 import { Route as PublicLayoutAboutImport } from './routes/_publicLayout/about'
@@ -83,12 +81,6 @@ const DashboardUploadsRoute = DashboardUploadsImport.update({
   getParentRoute: () => DashboardRoute,
 } as any)
 
-const DashboardSkillsRoute = DashboardSkillsImport.update({
-  id: '/skills',
-  path: '/skills',
-  getParentRoute: () => DashboardRoute,
-} as any)
-
 const DashboardSettingsRoute = DashboardSettingsImport.update({
   id: '/settings',
   path: '/settings',
@@ -104,12 +96,6 @@ const DashboardSecurityRoute = DashboardSecurityImport.update({
 const DashboardProfileRoute = DashboardProfileImport.update({
   id: '/profile',
   path: '/profile',
-  getParentRoute: () => DashboardRoute,
-} as any)
-
-const DashboardConnectorsRoute = DashboardConnectorsImport.update({
-  id: '/connectors',
-  path: '/connectors',
   getParentRoute: () => DashboardRoute,
 } as any)
 
@@ -301,13 +287,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublicLayoutSignupImport
       parentRoute: typeof PublicLayoutImport
     }
-    '/dashboard/connectors': {
-      id: '/dashboard/connectors'
-      path: '/connectors'
-      fullPath: '/dashboard/connectors'
-      preLoaderRoute: typeof DashboardConnectorsImport
-      parentRoute: typeof DashboardImport
-    }
     '/dashboard/profile': {
       id: '/dashboard/profile'
       path: '/profile'
@@ -327,13 +306,6 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/dashboard/settings'
       preLoaderRoute: typeof DashboardSettingsImport
-      parentRoute: typeof DashboardImport
-    }
-    '/dashboard/skills': {
-      id: '/dashboard/skills'
-      path: '/skills'
-      fullPath: '/dashboard/skills'
-      preLoaderRoute: typeof DashboardSkillsImport
       parentRoute: typeof DashboardImport
     }
     '/dashboard/uploads': {
@@ -529,11 +501,9 @@ const PublicLayoutRouteWithChildren = PublicLayoutRoute._addFileChildren(
 )
 
 interface DashboardRouteChildren {
-  DashboardConnectorsRoute: typeof DashboardConnectorsRoute
   DashboardProfileRoute: typeof DashboardProfileRoute
   DashboardSecurityRoute: typeof DashboardSecurityRoute
   DashboardSettingsRoute: typeof DashboardSettingsRoute
-  DashboardSkillsRoute: typeof DashboardSkillsRoute
   DashboardUploadsRoute: typeof DashboardUploadsRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
   DashboardBlogNewRoute: typeof DashboardBlogNewRoute
@@ -555,11 +525,9 @@ interface DashboardRouteChildren {
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
-  DashboardConnectorsRoute: DashboardConnectorsRoute,
   DashboardProfileRoute: DashboardProfileRoute,
   DashboardSecurityRoute: DashboardSecurityRoute,
   DashboardSettingsRoute: DashboardSettingsRoute,
-  DashboardSkillsRoute: DashboardSkillsRoute,
   DashboardUploadsRoute: DashboardUploadsRoute,
   DashboardIndexRoute: DashboardIndexRoute,
   DashboardBlogNewRoute: DashboardBlogNewRoute,
@@ -591,11 +559,9 @@ export interface FileRoutesByFullPath {
   '/about': typeof PublicLayoutAboutRoute
   '/login': typeof PublicLayoutLoginRoute
   '/signup': typeof PublicLayoutSignupRoute
-  '/dashboard/connectors': typeof DashboardConnectorsRoute
   '/dashboard/profile': typeof DashboardProfileRoute
   '/dashboard/security': typeof DashboardSecurityRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
-  '/dashboard/skills': typeof DashboardSkillsRoute
   '/dashboard/uploads': typeof DashboardUploadsRoute
   '/': typeof PublicLayoutIndexRoute
   '/dashboard/': typeof DashboardIndexRoute
@@ -626,11 +592,9 @@ export interface FileRoutesByTo {
   '/about': typeof PublicLayoutAboutRoute
   '/login': typeof PublicLayoutLoginRoute
   '/signup': typeof PublicLayoutSignupRoute
-  '/dashboard/connectors': typeof DashboardConnectorsRoute
   '/dashboard/profile': typeof DashboardProfileRoute
   '/dashboard/security': typeof DashboardSecurityRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
-  '/dashboard/skills': typeof DashboardSkillsRoute
   '/dashboard/uploads': typeof DashboardUploadsRoute
   '/': typeof PublicLayoutIndexRoute
   '/dashboard': typeof DashboardIndexRoute
@@ -664,11 +628,9 @@ export interface FileRoutesById {
   '/_publicLayout/about': typeof PublicLayoutAboutRoute
   '/_publicLayout/login': typeof PublicLayoutLoginRoute
   '/_publicLayout/signup': typeof PublicLayoutSignupRoute
-  '/dashboard/connectors': typeof DashboardConnectorsRoute
   '/dashboard/profile': typeof DashboardProfileRoute
   '/dashboard/security': typeof DashboardSecurityRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
-  '/dashboard/skills': typeof DashboardSkillsRoute
   '/dashboard/uploads': typeof DashboardUploadsRoute
   '/_publicLayout/': typeof PublicLayoutIndexRoute
   '/dashboard/': typeof DashboardIndexRoute
@@ -703,11 +665,9 @@ export interface FileRouteTypes {
     | '/about'
     | '/login'
     | '/signup'
-    | '/dashboard/connectors'
     | '/dashboard/profile'
     | '/dashboard/security'
     | '/dashboard/settings'
-    | '/dashboard/skills'
     | '/dashboard/uploads'
     | '/'
     | '/dashboard/'
@@ -737,11 +697,9 @@ export interface FileRouteTypes {
     | '/about'
     | '/login'
     | '/signup'
-    | '/dashboard/connectors'
     | '/dashboard/profile'
     | '/dashboard/security'
     | '/dashboard/settings'
-    | '/dashboard/skills'
     | '/dashboard/uploads'
     | '/'
     | '/dashboard'
@@ -773,11 +731,9 @@ export interface FileRouteTypes {
     | '/_publicLayout/about'
     | '/_publicLayout/login'
     | '/_publicLayout/signup'
-    | '/dashboard/connectors'
     | '/dashboard/profile'
     | '/dashboard/security'
     | '/dashboard/settings'
-    | '/dashboard/skills'
     | '/dashboard/uploads'
     | '/_publicLayout/'
     | '/dashboard/'
@@ -847,11 +803,9 @@ export const routeTree = rootRoute
     "/dashboard": {
       "filePath": "dashboard.tsx",
       "children": [
-        "/dashboard/connectors",
         "/dashboard/profile",
         "/dashboard/security",
         "/dashboard/settings",
-        "/dashboard/skills",
         "/dashboard/uploads",
         "/dashboard/",
         "/dashboard/blog/new",
@@ -887,10 +841,6 @@ export const routeTree = rootRoute
       "filePath": "_publicLayout/signup.tsx",
       "parent": "/_publicLayout"
     },
-    "/dashboard/connectors": {
-      "filePath": "dashboard/connectors.tsx",
-      "parent": "/dashboard"
-    },
     "/dashboard/profile": {
       "filePath": "dashboard/profile.tsx",
       "parent": "/dashboard"
@@ -901,10 +851,6 @@ export const routeTree = rootRoute
     },
     "/dashboard/settings": {
       "filePath": "dashboard/settings.tsx",
-      "parent": "/dashboard"
-    },
-    "/dashboard/skills": {
-      "filePath": "dashboard/skills.tsx",
       "parent": "/dashboard"
     },
     "/dashboard/uploads": {

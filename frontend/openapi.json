@@ -25,1402 +25,67 @@
         }
       }
     },
-    "/agent": {
-      "post": {
-        "tags": [
-          "agent"
-        ],
-        "operationId": "submitAgentRequest",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChatRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_ChatRequestResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/agent/artifacts/{articleId}/pending": {
+    "/.well-known/oauth-authorization-server": {
       "get": {
         "tags": [
-          "agent"
+          "oauth"
         ],
-        "operationId": "getPendingArtifacts",
-        "parameters": [
-          {
-            "name": "articleId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "description": "RFC 8414 metadata for this authorization server.",
+        "operationId": "oauthAuthorizationServer",
         "responses": {
           "200": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_PendingArtifactsResponse"
+                  "$ref": "#/components/schemas/AuthorizationServerMetadata"
                 }
               }
             }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/agent/artifacts/{messageId}/accept": {
-      "post": {
-        "tags": [
-          "agent"
-        ],
-        "operationId": "acceptArtifact",
-        "parameters": [
-          {
-            "name": "messageId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ArtifactFeedbackRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_SuccessFlagResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/agent/artifacts/{messageId}/reject": {
-      "post": {
-        "tags": [
-          "agent"
-        ],
-        "operationId": "rejectArtifact",
-        "parameters": [
-          {
-            "name": "messageId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ArtifactFeedbackRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_SuccessFlagResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/agent/connector-presets": {
-      "get": {
-        "tags": [
-          "agent"
-        ],
-        "operationId": "listConnectorPresets",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_ConnectorPresetListResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/agent/connector-presets/{presetId}/connect": {
-      "post": {
-        "tags": [
-          "agent"
-        ],
-        "operationId": "connectConnectorPreset",
-        "parameters": [
-          {
-            "name": "presetId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_OauthConnectResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/agent/connectors": {
-      "get": {
-        "tags": [
-          "agent"
-        ],
-        "operationId": "listMcpConnectors",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_ConnectorListResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "agent"
-        ],
-        "operationId": "createMcpConnector",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConnectorWriteRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_ConnectorResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/agent/connectors/oauth": {
-      "post": {
-        "tags": [
-          "agent"
-        ],
-        "operationId": "connectOauthMcp",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/OauthConnectorRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_OauthConnectResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/agent/connectors/oauth/callback": {
-      "get": {
-        "tags": [
-          "agent"
-        ],
-        "operationId": "completeOauthConnector",
-        "parameters": [
-          {
-            "name": "code",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "state",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "error",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "error_description",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "302": {
-            "description": "Redirects to the connectors page after sign-in"
-          },
-          "400": {
-            "description": "The sign-in query could not be read"
           }
         }
       }
     },
-    "/agent/connectors/{connectorId}": {
-      "delete": {
-        "tags": [
-          "agent"
-        ],
-        "operationId": "deleteMcpConnector",
-        "parameters": [
-          {
-            "name": "connectorId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_SuccessFlagResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      },
-      "patch": {
-        "tags": [
-          "agent"
-        ],
-        "operationId": "updateMcpConnector",
-        "parameters": [
-          {
-            "name": "connectorId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConnectorUpdateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_ConnectorResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/agent/connectors/{connectorId}/refresh": {
-      "post": {
-        "tags": [
-          "agent"
-        ],
-        "operationId": "refreshMcpConnector",
-        "parameters": [
-          {
-            "name": "connectorId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_ConnectorRefreshResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/agent/conversation/turn": {
-      "post": {
-        "tags": [
-          "agent"
-        ],
-        "operationId": "submitConversationTurn",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConversationTurnRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_ConversationTurnResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/agent/conversations/{articleId}": {
+    "/.well-known/oauth-protected-resource": {
       "get": {
         "tags": [
-          "agent"
+          "oauth"
         ],
-        "operationId": "getConversationHistory",
-        "parameters": [
-          {
-            "name": "articleId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "description": "RFC 9728 metadata for the future /mcp resource.",
+        "operationId": "oauthProtectedResource",
         "responses": {
           "200": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_ConversationHistoryResponse"
+                  "$ref": "#/components/schemas/ProtectedResourceMetadata"
                 }
               }
             }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "agent"
-        ],
-        "operationId": "clearConversationHistory",
-        "parameters": [
-          {
-            "name": "articleId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_SuccessFlagResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/agent/live": {
-      "get": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Clients authenticate by offering the WebSocket subprotocols `bearer` and\nthe JWT, because browsers cannot send an Authorization header here.",
-        "operationId": "connectLiveSession",
-        "responses": {
-          "101": {
-            "description": "GPT-Live session switching protocols"
-          },
-          "400": {
-            "description": "Invalid WebSocket upgrade headers"
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "426": {
-            "description": "Connection cannot be upgraded"
           }
         }
       }
     },
-    "/agent/skills": {
+    "/.well-known/oauth-protected-resource/mcp": {
       "get": {
         "tags": [
-          "agent"
+          "oauth"
         ],
-        "operationId": "listAgentSkills",
+        "description": "Path-aware RFC 9728 metadata for the resource URL ending in /mcp.",
+        "operationId": "oauthProtectedResourceMcp",
         "responses": {
           "200": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_SkillListResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
+                  "$ref": "#/components/schemas/ProtectedResourceMetadata"
                 }
               }
             }
           }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "agent"
-        ],
-        "operationId": "createAgentSkill",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SkillWriteRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_SkillResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/agent/skills/{skillId}": {
-      "delete": {
-        "tags": [
-          "agent"
-        ],
-        "operationId": "deleteAgentSkill",
-        "parameters": [
-          {
-            "name": "skillId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_SuccessFlagResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      },
-      "patch": {
-        "tags": [
-          "agent"
-        ],
-        "operationId": "updateAgentSkill",
-        "parameters": [
-          {
-            "name": "skillId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SkillUpdateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_SkillResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/agent/tools": {
-      "get": {
-        "tags": [
-          "agent"
-        ],
-        "operationId": "listAgentTools",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse_AgentToolListResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
+        }
       }
     },
     "/auth/account": {
@@ -1681,11 +346,229 @@
         }
       }
     },
+    "/auth/mcp-tokens": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "description": "Lists the authenticated admin's MCP access tokens, including OAuth-issued tokens and their client name. The plaintext and the hash are omitted. Requires a JWT session.",
+        "operationId": "authListMcpTokens",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_Vec_McpTokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "description": "Creates an MCP access token for the authenticated admin. The plaintext token is returned once. Requires a JWT session; an MCP token cannot call this route.",
+        "operationId": "authCreateMcpToken",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMcpTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_McpTokenCreatedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The JWT session is not an admin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/auth/mcp-tokens/{id}": {
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "description": "Revokes one of the authenticated admin's MCP access tokens. Requires a JWT session.",
+        "operationId": "authRevokeMcpToken",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_McpTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/auth/password": {
       "put": {
         "tags": [
           "auth"
         ],
+        "description": "Requires a JWT session. An MCP access token cannot change the password.",
         "operationId": "authUpdatePassword",
         "requestBody": {
           "content": {
@@ -2620,6 +1503,61 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SuccessResponse_ArticleVersionListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/blog/drafts": {
+      "post": {
+        "tags": [
+          "articles"
+        ],
+        "operationId": "createDraft",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_ArticleListItem"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -5550,6 +4488,98 @@
         ]
       }
     },
+    "/oauth/register": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "description": "RFC 7591 dynamic registration for a public client.",
+        "operationId": "oauthRegisterClient",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OauthRegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OauthRegisterResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OauthErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/token": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "description": "Exchanges an authorization code or rotates a refresh token. PKCE S256 is required.",
+        "operationId": "oauthToken",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/OauthTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OauthTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OauthErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OauthErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/organizations": {
       "get": {
         "tags": [
@@ -6549,6 +5579,71 @@
         ]
       }
     },
+    "/projects/upsert": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "operationId": "upsertProject",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_ProjectResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/projects/{id}": {
       "get": {
         "tags": [
@@ -6892,6 +5987,100 @@
             }
           },
           "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "sources"
+        ],
+        "operationId": "upsertArticleSources",
+        "parameters": [
+          {
+            "name": "articleId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertArticleSourcesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_SourcesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
             "description": "",
             "content": {
               "application/json": {
@@ -8257,39 +7446,6 @@
   },
   "components": {
     "schemas": {
-      "AgentToolListResponse": {
-        "type": "object",
-        "required": [
-          "tools"
-        ],
-        "properties": {
-          "tools": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AgentToolResponse"
-            }
-          }
-        }
-      },
-      "AgentToolResponse": {
-        "type": "object",
-        "required": [
-          "name",
-          "description",
-          "source"
-        ],
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "source": {
-            "type": "string"
-          }
-        }
-      },
       "AllWorkersStatusResponse": {
         "type": "object",
         "required": [
@@ -8593,14 +7749,6 @@
           }
         }
       },
-      "ArtifactFeedbackRequest": {
-        "type": "object",
-        "properties": {
-          "feedback": {
-            "type": "string"
-          }
-        }
-      },
       "AuthErrorResponse": {
         "type": "object",
         "required": [
@@ -8644,419 +7792,61 @@
           }
         }
       },
-      "ChatMessageResponse": {
+      "AuthorizationServerMetadata": {
         "type": "object",
         "required": [
-          "id",
-          "article_id",
-          "role",
-          "content",
-          "created_at"
+          "issuer",
+          "authorization_endpoint",
+          "token_endpoint",
+          "registration_endpoint",
+          "response_types_supported",
+          "grant_types_supported",
+          "code_challenge_methods_supported",
+          "token_endpoint_auth_methods_supported",
+          "scopes_supported"
         ],
         "properties": {
-          "id": {
+          "issuer": {
             "type": "string"
           },
-          "article_id": {
+          "authorization_endpoint": {
             "type": "string"
           },
-          "role": {
+          "token_endpoint": {
             "type": "string"
           },
-          "content": {
+          "registration_endpoint": {
             "type": "string"
           },
-          "meta_data": {},
-          "created_at": {
-            "type": "string"
-          }
-        }
-      },
-      "ChatRequest": {
-        "type": "object",
-        "required": [
-          "message",
-          "articleId"
-        ],
-        "properties": {
-          "message": {
-            "type": "string"
-          },
-          "documentContent": {
-            "type": "string"
-          },
-          "documentMarkdown": {
-            "type": "string"
-          },
-          "documentTitle": {
-            "type": "string"
-          },
-          "articleId": {
-            "type": "string"
-          },
-          "channel": {
-            "type": "string"
-          }
-        }
-      },
-      "ChatRequestResponse": {
-        "type": "object",
-        "required": [
-          "requestId",
-          "status"
-        ],
-        "properties": {
-          "requestId": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          }
-        }
-      },
-      "ConnectorListResponse": {
-        "type": "object",
-        "required": [
-          "connectors"
-        ],
-        "properties": {
-          "connectors": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ConnectorResponse"
-            }
-          }
-        }
-      },
-      "ConnectorPresetListResponse": {
-        "type": "object",
-        "required": [
-          "presets"
-        ],
-        "properties": {
-          "presets": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ConnectorPresetResponse"
-            }
-          }
-        }
-      },
-      "ConnectorPresetResponse": {
-        "type": "object",
-        "required": [
-          "id",
-          "name",
-          "description",
-          "officialUrl",
-          "url",
-          "connected",
-          "connectorId",
-          "lastError"
-        ],
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "officialUrl": {
-            "type": "string"
-          },
-          "url": {
-            "type": "string"
-          },
-          "connected": {
-            "type": "boolean"
-          },
-          "connectorId": {
-            "type": "string"
-          },
-          "lastError": {
-            "type": "string"
-          }
-        }
-      },
-      "ConnectorRefreshResponse": {
-        "type": "object",
-        "required": [
-          "connectorId",
-          "toolNames"
-        ],
-        "properties": {
-          "connectorId": {
-            "type": "string"
-          },
-          "toolNames": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "ConnectorResponse": {
-        "type": "object",
-        "required": [
-          "id",
-          "name",
-          "transport",
-          "command",
-          "args",
-          "url",
-          "headers",
-          "env",
-          "enabled",
-          "lastError",
-          "createdAt",
-          "updatedAt"
-        ],
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "transport": {
-            "type": "string"
-          },
-          "command": {
-            "type": "string"
-          },
-          "args": {
+          "response_types_supported": {
             "type": "array",
             "items": {
               "type": "string"
             }
           },
-          "url": {
-            "type": "string"
-          },
-          "headers": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "env": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "lastError": {
-            "type": "string"
-          },
-          "createdAt": {
-            "type": "string"
-          },
-          "updatedAt": {
-            "type": "string"
-          }
-        }
-      },
-      "ConnectorUpdateRequest": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "transport": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "command": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "args": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
-          "url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "headers": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "additionalProperties": {
-              "type": "string"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "env": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "additionalProperties": {
-              "type": "string"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "enabled": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          }
-        }
-      },
-      "ConnectorWriteRequest": {
-        "type": "object",
-        "required": [
-          "name",
-          "transport"
-        ],
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "transport": {
-            "type": "string"
-          },
-          "command": {
-            "type": "string"
-          },
-          "args": {
+          "grant_types_supported": {
             "type": "array",
             "items": {
               "type": "string"
             }
           },
-          "url": {
-            "type": "string"
-          },
-          "headers": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "env": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "enabled": {
-            "type": "boolean"
-          }
-        }
-      },
-      "ConversationHistoryResponse": {
-        "type": "object",
-        "required": [
-          "messages",
-          "article_id",
-          "total"
-        ],
-        "properties": {
-          "messages": {
+          "code_challenge_methods_supported": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ChatMessageResponse"
+              "type": "string"
             }
           },
-          "article_id": {
-            "type": "string"
+          "token_endpoint_auth_methods_supported": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
-          "total": {
-            "type": "integer",
-            "minimum": 0
-          }
-        }
-      },
-      "ConversationTurnRequest": {
-        "type": "object",
-        "required": [
-          "articleId"
-        ],
-        "properties": {
-          "articleId": {
-            "type": "string"
-          },
-          "documentContent": {
-            "type": "string"
-          },
-          "documentMarkdown": {
-            "type": "string"
-          },
-          "documentTitle": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "audioBase64": {
-            "type": "string"
-          },
-          "mimeType": {
-            "type": "string"
-          }
-        }
-      },
-      "ConversationTurnResponse": {
-        "type": "object",
-        "required": [
-          "requestId",
-          "status",
-          "transcript",
-          "channel"
-        ],
-        "properties": {
-          "requestId": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "transcript": {
-            "type": "string"
-          },
-          "channel": {
-            "type": "string"
+          "scopes_supported": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -9172,8 +7962,7 @@
         "type": "object",
         "required": [
           "title",
-          "content",
-          "authorId"
+          "content"
         ],
         "properties": {
           "title": {
@@ -9196,7 +7985,8 @@
           },
           "authorId": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "Kept so existing clients can still send it. `POST /blog/articles` replaces\nthis with the authenticated account before the article is saved."
           },
           "external_url": {
             "type": [
@@ -9211,6 +8001,30 @@
               "null"
             ],
             "format": "uuid"
+          }
+        }
+      },
+      "CreateDraft": {
+        "type": "object",
+        "description": "Minimal unpublished article. The article row has no summary column, so a\nsummary is not part of this body. `content` wins when it is non-empty;\notherwise `markdown` is stored as the draft body.",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "markdown": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -9233,6 +8047,19 @@
         "properties": {
           "path": {
             "type": "string"
+          }
+        }
+      },
+      "CreateMcpTokenRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1
           }
         }
       },
@@ -10414,6 +9241,117 @@
           }
         }
       },
+      "McpTokenCreatedResponse": {
+        "type": "object",
+        "description": "Create response. `token` is the bearer secret and is not returned again.",
+        "required": [
+          "id",
+          "name",
+          "token",
+          "tokenPrefix",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          },
+          "tokenPrefix": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastUsedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "clientName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "McpTokenResponse": {
+        "type": "object",
+        "description": "MCP access token metadata. The plaintext and the hash are not included.",
+        "required": [
+          "id",
+          "name",
+          "tokenPrefix",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tokenPrefix": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastUsedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "clientName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "OAuth client name. Null for a token created at `POST /auth/mcp-tokens`."
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
       "MessageResponse": {
         "type": "object",
         "required": [
@@ -10425,42 +9363,137 @@
           }
         }
       },
-      "OauthConnectResponse": {
+      "OauthErrorBody": {
         "type": "object",
         "required": [
-          "connected",
-          "authorizationUrl"
+          "error",
+          "error_description"
         ],
         "properties": {
-          "connected": {
-            "type": "boolean"
-          },
-          "authorizationUrl": {
+          "error": {
             "type": "string"
           },
-          "connector": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ConnectorResponse"
-              }
+          "error_description": {
+            "type": "string"
+          }
+        }
+      },
+      "OauthRegisterRequest": {
+        "type": "object",
+        "properties": {
+          "client_name": {
+            "type": "string"
+          },
+          "redirect_uris": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "grant_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "response_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "token_endpoint_auth_method": {
+            "type": [
+              "string",
+              "null"
             ]
           }
         }
       },
-      "OauthConnectorRequest": {
+      "OauthRegisterResponse": {
         "type": "object",
         "required": [
-          "name",
-          "url"
+          "client_id",
+          "client_name",
+          "redirect_uris",
+          "grant_types",
+          "response_types",
+          "token_endpoint_auth_method"
         ],
         "properties": {
-          "name": {
+          "client_id": {
             "type": "string"
           },
-          "url": {
+          "client_name": {
+            "type": "string"
+          },
+          "redirect_uris": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "grant_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "response_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "token_endpoint_auth_method": {
+            "type": "string"
+          }
+        }
+      },
+      "OauthTokenRequest": {
+        "type": "object",
+        "properties": {
+          "grant_type": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "redirect_uri": {
+            "type": "string"
+          },
+          "client_id": {
+            "type": "string"
+          },
+          "code_verifier": {
+            "type": "string"
+          },
+          "refresh_token": {
+            "type": "string"
+          }
+        }
+      },
+      "OauthTokenResponse": {
+        "type": "object",
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in",
+          "refresh_token"
+        ],
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "refresh_token": {
             "type": "string"
           }
         }
@@ -10840,20 +9873,6 @@
           }
         }
       },
-      "PendingArtifactsResponse": {
-        "type": "object",
-        "required": [
-          "artifacts"
-        ],
-        "properties": {
-          "artifacts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ChatMessageResponse"
-            }
-          }
-        }
-      },
       "PinResponse": {
         "type": "object",
         "required": [
@@ -11127,6 +10146,38 @@
               "null"
             ],
             "format": "uuid"
+          }
+        }
+      },
+      "ProtectedResourceMetadata": {
+        "type": "object",
+        "required": [
+          "resource",
+          "authorization_servers",
+          "bearer_methods_supported",
+          "scopes_supported"
+        ],
+        "properties": {
+          "resource": {
+            "type": "string"
+          },
+          "authorization_servers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "bearer_methods_supported": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scopes_supported": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -11454,105 +10505,6 @@
           }
         }
       },
-      "SkillListResponse": {
-        "type": "object",
-        "required": [
-          "skills"
-        ],
-        "properties": {
-          "skills": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SkillResponse"
-            }
-          }
-        }
-      },
-      "SkillResponse": {
-        "type": "object",
-        "required": [
-          "id",
-          "name",
-          "description",
-          "instructions",
-          "enabled",
-          "createdAt",
-          "updatedAt"
-        ],
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "instructions": {
-            "type": "string"
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "createdAt": {
-            "type": "string"
-          },
-          "updatedAt": {
-            "type": "string"
-          }
-        }
-      },
-      "SkillUpdateRequest": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "instructions": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "enabled": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          }
-        }
-      },
-      "SkillWriteRequest": {
-        "type": "object",
-        "required": [
-          "name",
-          "instructions"
-        ],
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "instructions": {
-            "type": "string"
-          },
-          "enabled": {
-            "type": "boolean"
-          }
-        }
-      },
       "SourceListResponse": {
         "type": "object",
         "required": [
@@ -11732,28 +10684,6 @@
         "properties": {
           "success": {
             "type": "boolean"
-          }
-        }
-      },
-      "SuccessResponse_AgentToolListResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "type": "object",
-            "required": [
-              "tools"
-            ],
-            "properties": {
-              "tools": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/AgentToolResponse"
-                }
-              }
-            }
           }
         }
       },
@@ -12103,239 +11033,6 @@
                   "null"
                 ],
                 "format": "date-time"
-              }
-            }
-          }
-        }
-      },
-      "SuccessResponse_ChatRequestResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "type": "object",
-            "required": [
-              "requestId",
-              "status"
-            ],
-            "properties": {
-              "requestId": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string"
-              }
-            }
-          }
-        }
-      },
-      "SuccessResponse_ConnectorListResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "type": "object",
-            "required": [
-              "connectors"
-            ],
-            "properties": {
-              "connectors": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/ConnectorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "SuccessResponse_ConnectorPresetListResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "type": "object",
-            "required": [
-              "presets"
-            ],
-            "properties": {
-              "presets": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/ConnectorPresetResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "SuccessResponse_ConnectorRefreshResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "type": "object",
-            "required": [
-              "connectorId",
-              "toolNames"
-            ],
-            "properties": {
-              "connectorId": {
-                "type": "string"
-              },
-              "toolNames": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      },
-      "SuccessResponse_ConnectorResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "type": "object",
-            "required": [
-              "id",
-              "name",
-              "transport",
-              "command",
-              "args",
-              "url",
-              "headers",
-              "env",
-              "enabled",
-              "lastError",
-              "createdAt",
-              "updatedAt"
-            ],
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "transport": {
-                "type": "string"
-              },
-              "command": {
-                "type": "string"
-              },
-              "args": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "url": {
-                "type": "string"
-              },
-              "headers": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                },
-                "propertyNames": {
-                  "type": "string"
-                }
-              },
-              "env": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                },
-                "propertyNames": {
-                  "type": "string"
-                }
-              },
-              "enabled": {
-                "type": "boolean"
-              },
-              "lastError": {
-                "type": "string"
-              },
-              "createdAt": {
-                "type": "string"
-              },
-              "updatedAt": {
-                "type": "string"
-              }
-            }
-          }
-        }
-      },
-      "SuccessResponse_ConversationHistoryResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "type": "object",
-            "required": [
-              "messages",
-              "article_id",
-              "total"
-            ],
-            "properties": {
-              "messages": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/ChatMessageResponse"
-                }
-              },
-              "article_id": {
-                "type": "string"
-              },
-              "total": {
-                "type": "integer",
-                "minimum": 0
-              }
-            }
-          }
-        }
-      },
-      "SuccessResponse_ConversationTurnResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "type": "object",
-            "required": [
-              "requestId",
-              "status",
-              "transcript",
-              "channel"
-            ],
-            "properties": {
-              "requestId": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string"
-              },
-              "transcript": {
-                "type": "string"
-              },
-              "channel": {
-                "type": "string"
               }
             }
           }
@@ -13042,6 +11739,133 @@
           }
         }
       },
+      "SuccessResponse_McpTokenCreatedResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "Create response. `token` is the bearer secret and is not returned again.",
+            "required": [
+              "id",
+              "name",
+              "token",
+              "tokenPrefix",
+              "createdAt"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "token": {
+                "type": "string"
+              },
+              "tokenPrefix": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "lastUsedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "revokedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "clientName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "expiresAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "SuccessResponse_McpTokenResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "description": "MCP access token metadata. The plaintext and the hash are not included.",
+            "required": [
+              "id",
+              "name",
+              "tokenPrefix",
+              "createdAt"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "tokenPrefix": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "lastUsedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "revokedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "clientName": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "OAuth client name. Null for a token created at `POST /auth/mcp-tokens`."
+              },
+              "expiresAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
       "SuccessResponse_MessageResponse": {
         "type": "object",
         "required": [
@@ -13056,39 +11880,6 @@
             "properties": {
               "message": {
                 "type": "string"
-              }
-            }
-          }
-        }
-      },
-      "SuccessResponse_OauthConnectResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "type": "object",
-            "required": [
-              "connected",
-              "authorizationUrl"
-            ],
-            "properties": {
-              "connected": {
-                "type": "boolean"
-              },
-              "authorizationUrl": {
-                "type": "string"
-              },
-              "connector": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ConnectorResponse"
-                  }
-                ]
               }
             }
           }
@@ -13372,28 +12163,6 @@
               },
               "token": {
                 "type": "string"
-              }
-            }
-          }
-        }
-      },
-      "SuccessResponse_PendingArtifactsResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "type": "object",
-            "required": [
-              "artifacts"
-            ],
-            "properties": {
-              "artifacts": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/ChatMessageResponse"
-                }
               }
             }
           }
@@ -13772,71 +12541,6 @@
                   "null"
                 ],
                 "format": "uuid"
-              }
-            }
-          }
-        }
-      },
-      "SuccessResponse_SkillListResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "type": "object",
-            "required": [
-              "skills"
-            ],
-            "properties": {
-              "skills": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SkillResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "SuccessResponse_SkillResponse": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "type": "object",
-            "required": [
-              "id",
-              "name",
-              "description",
-              "instructions",
-              "enabled",
-              "createdAt",
-              "updatedAt"
-            ],
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "description": {
-                "type": "string"
-              },
-              "instructions": {
-                "type": "string"
-              },
-              "enabled": {
-                "type": "boolean"
-              },
-              "createdAt": {
-                "type": "string"
-              },
-              "updatedAt": {
-                "type": "string"
               }
             }
           }
@@ -14721,6 +13425,71 @@
           }
         }
       },
+      "SuccessResponse_Vec_McpTokenResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "MCP access token metadata. The plaintext and the hash are not included.",
+              "required": [
+                "id",
+                "name",
+                "tokenPrefix",
+                "createdAt"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "tokenPrefix": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "lastUsedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "revokedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "clientName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "OAuth client name. Null for a token created at `POST /auth/mcp-tokens`."
+                },
+                "expiresAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                }
+              }
+            }
+          }
+        }
+      },
       "SuccessResponse_Vec_OrganizationResponse": {
         "type": "object",
         "required": [
@@ -15440,6 +14209,34 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "UpsertArticleSource": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "source_type": {
+            "type": "string"
+          }
+        }
+      },
+      "UpsertArticleSourcesRequest": {
+        "type": "object",
+        "properties": {
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UpsertArticleSource"
+            }
           }
         }
       },

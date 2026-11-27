@@ -1,24 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearch } from '@tanstack/react-router';
 import { useAuth } from '@/services/auth/auth';
-import { useAdminDashboard } from '@/services/dashboard/dashboard';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw, Trash2, Mic, MessageSquare, X } from "lucide-react"
-import { AnimatePresence, motion } from "framer-motion"
+import { Calendar as CalendarIcon, PencilIcon, SparklesIcon, RefreshCw } from "lucide-react"
 import { ExternalLinkIcon, UploadIcon } from '@radix-ui/react-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { VITE_API_BASE_URL, VITE_PUBLIC_S3_URL_PREFIX } from "@/services/constants";
-import { isAuthError } from '@/services/authenticatedFetch';
-import { submitAgentRequest } from '@/services/agent';
-import { generateArticle } from '@/services/llm/articles';
-import { getArticleSources, scrapeAndCreateSource } from '@/services/sources';
+import { getArticleSources } from '@/services/sources';
 import { uploadFile } from '@/services/storage';
 import type { ArticleCitation } from './ArticleSources';
 import { addedTextRanges, type TextRange } from '@/lib/added-text';
-import { useConversation } from '@/hooks/use-conversation';
-
 // Editor modules
 import { TipTapEditor } from './editor/TipTapEditor';
 import { SourcesManager } from './SourcesManager';
@@ -29,18 +22,13 @@ import { GenerateBlurhash } from '@/components/media/GenerateBlurhash';
 import { 
   DEFAULT_IMAGE_PROMPT, 
   articleSchema, 
-  getToolDisplayName,
   type ArticleFormData, 
-  type ChatMessage, 
-  type SearchResult, 
-  type SourceInfo 
 } from './editor/editor-types';
 
 // Card removed - no longer needed after toolbar simplification
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { AttachedSource, ChatComposer, WritingSuggestions } from "@/components/chat/ChatComposer";
 import { ChipInput } from "@/components/ui/chip-input";
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -49,41 +37,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { useToast } from "@/hooks/use-toast";
-import { ThinkShimmerBlock } from "@/components/ui/think-shimmer";
-import { Markdown } from "@/components/ui/markdown";
-import { getConversationHistory, clearConversationHistory } from "@/services/conversations";
-// Artifact accept/reject is now handled by the sticky DiffActionBar
-import { WebSearchSteps, WebSearchToolContext } from "./WebSearchSteps";
-import { DiffActionBar } from "./DiffActionBar";
-import { DiffArtifact } from "./DiffArtifact";
-import { ToolGroupDisplay } from "./ToolGroupDisplay";
-import type { 
-  ToolGroup, 
-  ThinkingBlock, 
-  TurnStep,
-} from "./types";
-import { 
-  ToolCall, 
-  ToolCallTrigger, 
-  ToolCallContent, 
-  ToolCallStatusItem 
-} from "@/components/prompt-kit/tool-call";
-import { 
-  Steps, 
-  StepsTrigger, 
-  StepsContent, 
-  StepsItem 
-} from "@/components/prompt-kit/steps";
-import { 
-  ChainOfThought,
-  ChainOfThoughtStep,
-  ChainOfThoughtTrigger,
-  ChainOfThoughtContent,
-  ChainOfThoughtItem,
-  ReasoningStep 
-} from "@/components/prompt-kit/chain-of-thought";
 import { cn } from '@/lib/utils';
-import { Wrench, BookOpen, FileSearch, PlusCircle, FileText, MoreHorizontal } from "lucide-react";
+import { BookOpen, MoreHorizontal } from "lucide-react";
 import { 
   updateArticle, 
   getArticle, 
@@ -113,107 +68,6 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerClose } from '@/components/ui/drawer';
 import type { UseMutationResult } from '@tanstack/react-query';
-
-const INITIAL_CHAT_GREETING = 'Hi! I can help you improve your article. Try asking me to "rewrite the introduction" or "make the content more engaging".';
-
-function mapConversationMessages(messages: any[]): ChatMessage[] {
-  return messages.map((msg: any) => {
-    const chatMsg: ChatMessage = {
-      id: msg.id,
-      role: msg.role,
-      content: msg.content,
-      channel: msg.meta_data?.input_channel === 'voice' ? 'voice' : 'text',
-      meta_data: msg.meta_data,
-      created_at: msg.created_at,
-    };
-
-    if (msg.meta_data?.tool_group) {
-      chatMsg.tool_group = msg.meta_data.tool_group;
-    } else if (msg.meta_data?.tool_execution) {
-      const toolExec = msg.meta_data.tool_execution;
-      const output = toolExec.output;
-      const toolName = toolExec.tool_name;
-
-      chatMsg.tool_group = {
-        group_id: toolExec.tool_id || `group-${msg.id}`,
-        status: toolExec.success ? 'completed' : 'error',
-        calls: [{
-          id: toolExec.tool_id || `call-${msg.id}`,
-          name: toolName,
-          input: typeof toolExec.input === 'object' ? toolExec.input : {},
-          status: toolExec.success ? 'completed' : 'error',
-          result: typeof output === 'object' ? output : undefined,
-          error: toolExec.error,
-          started_at: toolExec.executed_at || msg.created_at,
-          duration_ms: toolExec.duration_ms,
-        }],
-      };
-
-      if (toolName === 'search_web_sources' || toolName === 'deep_research') {
-        chatMsg.tool_context = {
-          tool_name: toolName,
-          tool_id: toolExec.tool_id || '',
-          status: 'completed',
-          search_query: output?.query || '',
-          search_results: output?.search_results || [],
-          sources_created: output?.sources_created || [],
-          total_found: output?.total_found || 0,
-          sources_successful: output?.sources_successful || 0,
-          message: output?.message
-        };
-      } else if (toolName === 'ask_question') {
-        chatMsg.tool_context = {
-          tool_name: 'ask_question',
-          tool_id: toolExec.tool_id || '',
-          status: 'completed',
-          answer: output?.answer,
-          citations: output?.citations || [],
-        };
-      }
-    }
-
-    if (msg.meta_data?.steps && msg.meta_data.steps.length > 0) {
-      chatMsg.steps = msg.meta_data.steps.map((step: any) => {
-        const turnStep: TurnStep = { type: step.type };
-        if (step.type === 'reasoning' && step.reasoning) {
-          turnStep.thinking = {
-            content: step.reasoning.content || '',
-            duration_ms: step.reasoning.duration_ms,
-            visible: step.reasoning.visible ?? true,
-          };
-        } else if (step.type === 'tool' && step.tool) {
-          turnStep.toolGroup = {
-            group_id: step.tool.tool_id,
-            status: step.tool.status === 'completed' ? 'completed' :
-                    step.tool.status === 'error' ? 'error' : 'running',
-            calls: [{
-              id: step.tool.tool_id,
-              name: step.tool.tool_name,
-              input: step.tool.input || {},
-              status: step.tool.status === 'completed' ? 'completed' :
-                      step.tool.status === 'error' ? 'error' : 'running',
-              result: step.tool.output,
-              error: step.tool.error,
-              started_at: step.tool.started_at || '',
-              completed_at: step.tool.completed_at,
-              duration_ms: step.tool.duration_ms,
-            }],
-          };
-          turnStep.type = 'tool_group';
-        } else if (step.type === 'content' && step.content) {
-          turnStep.content = step.content;
-        }
-        return turnStep;
-      });
-    }
-
-    return chatMsg;
-  }) as ChatMessage[];
-}
-
-function getInitialGreetingMessage(): ChatMessage {
-  return { role: 'assistant', content: INITIAL_CHAT_GREETING } as ChatMessage;
-}
 
 function PublishDrawerContent({
   article,
@@ -415,26 +269,16 @@ function storageKeyFromUrl(url: string): string | undefined {
   return decodeURIComponent(url.slice(prefix.length + 1));
 }
 
-export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: boolean; launchpad?: boolean }) {
+export default function ArticleEditor({ isNew = false }: { isNew?: boolean }) {
   const { toast } = useToast()
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { setPageTitle } = useAdminDashboard();
-  
-  // Route params only exist on the edit page. The dashboard launchpad stays
-  // mounted and fills these in after the first send or voice start.
-  const routed = !isNew && !launchpad;
-  const params = routed ? useParams({ from: '/dashboard/blog/edit/$blogSlug' }) : null;
-  const search = routed ? useSearch({ from: '/dashboard/blog/edit/$blogSlug' }) : ({} as { requestId?: string });
-  const [launchedSlug, setLaunchedSlug] = useState<string | null>(null);
-  const launchedArticleIdRef = useRef<string | null>(null);
-  const [launchedRequestId, setLaunchedRequestId] = useState<string | null>(null);
-  const [launchPhase, setLaunchPhase] = useState<'landing' | 'editor'>(launchpad ? 'landing' : 'editor');
-  const [launching, setLaunching] = useState(false);
-  const blogSlug = params?.blogSlug ?? launchedSlug ?? undefined;
-  const initialRequestId = (search as { requestId?: string }).requestId ?? launchedRequestId ?? undefined;
-  const landing = launchpad && launchPhase === 'landing';
+
+  const params = isNew ? null : useParams({ from: '/dashboard/blog/edit/$blogSlug' });
+  const search = isNew ? ({} as { requestId?: string }) : useSearch({ from: '/dashboard/blog/edit/$blogSlug' });
+  const blogSlug = params?.blogSlug;
+  const initialRequestId = (search as { requestId?: string }).requestId;
   
   // Loading states are now handled by React Query mutations
   // const [isLoading, setIsLoading] = useState(false);
@@ -540,96 +384,6 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
     }
   };
 
-  /* --------------------------------------------------------------------- */
-  /* Chat (right-hand panel)                                               */
-  /* --------------------------------------------------------------------- */
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatLoading, setChatLoading] = useState(false);
-  const launchTokenRef = useRef(0);
-  const launchMessagesRef = useRef<ChatMessage[] | null>(null);
-  const launchpadSessionRef = useRef(false);
-  const [mobileChatOpen, setMobileChatOpen] = useState(false);
-  const [chatInput, setChatInput] = useState('');
-  const [inputMode, setInputMode] = useState<'text' | 'conversation'>('text');
-  const playSpeechRef = useRef<(audioBase64: string, mimeType?: string) => Promise<void>>(async () => {});
-  const sendLiveTextRef = useRef<(text: string) => void>(() => {});
-  const liveUserIndexRef = useRef<number | null>(null);
-  const pendingLiveStreamRef = useRef<{ requestId: string; assistantIndex: number } | null>(null);
-  const startedLiveRequestsRef = useRef(new Set<string>());
-  const [isThinking, setIsThinking] = useState(false);
-  const [thinkingMessage, setThinkingMessage] = useState<string>('Thinking...');
-  const chatMessagesRef = useRef<HTMLDivElement>(null);
-  const [clearingChat, setClearingChat] = useState(false);
-  const [expandedTable, setExpandedTable] = useState<React.ReactNode | null>(null);
-  
-  // Custom markdown components for chat with smaller text (14px)
-  const chatMarkdownComponents = {
-    code: function ChatCodeComponent({ className, children, ...props }: any) {
-      const isInline =
-        !props.node?.position?.start.line ||
-        props.node?.position?.start.line === props.node?.position?.end.line;
-      if (isInline) {
-        return (
-          <code className="bg-muted rounded-sm px-1 font-mono text-sm" {...props}>
-            {children}
-          </code>
-        );
-      }
-      // Block code - render with smaller text
-      return (
-        <pre className="bg-muted rounded-md p-2 overflow-x-auto text-sm">
-          <code className={className} {...props}>{children}</code>
-        </pre>
-      );
-    },
-    pre: function ChatPreComponent({ children }: any) {
-      return <>{children}</>;
-    },
-    table: function ChatTableComponent({ children, ...props }: any) {
-      return (
-        <div className="relative my-2">
-          <div className="overflow-x-auto max-h-48 border rounded-md">
-            <table className="min-w-full text-sm" {...props}>
-              {children}
-            </table>
-          </div>
-          <button
-            type="button"
-            onClick={() => setExpandedTable(
-              <div className="w-full">
-                <table className="w-full text-base border-collapse border" {...props}>
-                  {children}
-                </table>
-              </div>
-            )}
-            className="mt-1 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-          >
-            <ExternalLinkIcon className="w-3 h-3" />
-            Expand table
-          </button>
-        </div>
-      );
-    },
-    thead: function ChatTheadComponent({ children, ...props }: any) {
-      return <thead className="bg-muted/50 sticky top-0" {...props}>{children}</thead>;
-    },
-    th: function ChatThComponent({ children, ...props }: any) {
-      return <th className="px-2 py-1 text-left font-medium border-b" {...props}>{children}</th>;
-    },
-    td: function ChatTdComponent({ children, ...props }: any) {
-      return <td className="px-2 py-1 border-b" {...props}>{children}</td>;
-    },
-    ul: function ChatUlComponent({ children, ...props }: any) {
-      return <ul className="my-2 space-y-1.5 list-disc pl-6" {...props}>{children}</ul>;
-    },
-    ol: function ChatOlComponent({ children, ...props }: any) {
-      return <ol className="my-2 space-y-1.5 list-decimal pl-6" {...props}>{children}</ol>;
-    },
-    li: function ChatLiComponent({ children, ...props }: any) {
-      return <li className="leading-relaxed" {...props}>{children}</li>;
-    },
-  };
-  
   // Article edits are applied on the backend. The editor only applies
   // document_update events that carry the saved draft.
 
@@ -642,7 +396,6 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
   });
 
   const rememberSession = (item: ArticleListItem) => {
-    launchedArticleIdRef.current = item.article.id;
     queryClient.setQueryData<InfiniteData<SidebarArticlesPage>>(
       ['sidebar-articles', 'all'],
       (current) => upsertSidebarArticle(current, item),
@@ -926,12 +679,7 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
   const watchedTitle = useWatch({ control, name: 'title' });
 
   useEffect(() => {
-    if (!launchpad) return;
-    setPageTitle(watchedTitle?.trim() || 'New');
-  }, [launchpad, setPageTitle, watchedTitle]);
-
-  useEffect(() => {
-    const articleId = article?.article.id ?? launchedArticleIdRef.current;
+    const articleId = article?.article.id;
     const title = watchedTitle?.trim();
     if (!articleId || !title) return;
     queryClient.setQueriesData<InfiniteData<SidebarArticlesPage>>(
@@ -1135,46 +883,6 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
     });
   }, [article]);
 
-  // Load conversation history with artifacts when article is loaded.
-  // Generation handoff owns the initial requestId load so it can append the
-  // streaming assistant placeholder without a competing history refresh.
-  useEffect(() => {
-    if (initialRequestId) {
-      return;
-    }
-
-    if (article?.article?.id && !isNew) {
-      const loadConversations = async () => {
-        try {
-          const result = await getConversationHistory(article.article.id);
-          const loadedMessages = mapConversationMessages(result.messages || []);
-          if (launchpadSessionRef.current && loadedMessages.length === 0) {
-            return;
-          }
-          setChatMessages(
-            loadedMessages.length > 0 || initialRequestId
-              ? loadedMessages
-              : [getInitialGreetingMessage()]
-          );
-        } catch (error) {
-          console.error('[Editor] Failed to load conversation history:', error);
-          setChatMessages(initialRequestId ? [] : [getInitialGreetingMessage()]);
-        }
-      };
-      
-      loadConversations();
-    } else if (isNew) {
-      setChatMessages([]);
-    }
-  }, [article?.article?.id, isNew, initialRequestId]);
-
-  // Auto-scroll chat to bottom when messages change
-  useEffect(() => {
-    if (chatMessagesRef.current) {
-      chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
-    }
-  }, [chatMessages]);
-
   // Keyboard shortcut: Cmd+S (Mac) or Ctrl+S (Windows/Linux) to save
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1190,6 +898,54 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleSubmit, createArticleMutation.isPending, updateArticleMutation.isPending]);
+
+  const consumedRequestIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialRequestId || isNew || !article?.article?.id) return;
+    if (consumedRequestIdRef.current === initialRequestId) return;
+    consumedRequestIdRef.current = initialRequestId;
+
+    const wsUrl = `${VITE_API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://')}/websocket`;
+    const ws = new WebSocket(wsUrl);
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ action: 'subscribe', requestId: initialRequestId }));
+    };
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.error) {
+          toast({ title: "Generation error", description: String(msg.error), variant: "destructive" });
+          ws.close();
+          return;
+        }
+        if ((msg.type === 'content_delta' || msg.type === 'document_update') && typeof msg.content === 'string') {
+          applyAgentMarkdown(msg.content);
+        }
+        if (msg.type === 'title_update' && typeof msg.content === 'string') {
+          setValue('title', msg.content, { shouldDirty: true, shouldValidate: true });
+        }
+        if (msg.done || msg.type === 'done') {
+          ws.close();
+          void queryClient.invalidateQueries({ queryKey: ['article', blogSlug] });
+          if (blogSlug) {
+            navigate({ to: `/dashboard/blog/edit/${blogSlug}`, replace: true });
+          }
+        }
+      } catch (parseError) {
+        console.error('Failed to parse generation event:', parseError);
+      }
+    };
+    ws.onerror = () => {
+      toast({
+        title: "Connection error",
+        description: "Could not follow article generation.",
+        variant: "destructive",
+      });
+    };
+    return () => {
+      ws.close();
+    };
+  }, [initialRequestId, article?.article?.id, isNew, blogSlug, navigate, queryClient, setValue, toast]);
 
   const onSubmit = async (data: ArticleFormData, returnToDashboard: boolean = true, autosave = false) => {
     if (!user) {
@@ -1299,10 +1055,6 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
       
       if (result.success && result.content) {
         applyAgentMarkdown(result.content);
-        setChatMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: 'I updated the draft. New text is highlighted in the editor. Use History to restore an earlier version.' }
-        ]);
       }
     } catch (error) {
       console.error('Error rewriting article:', error);
@@ -1312,775 +1064,12 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
     }
   };
 
-  const clearChat = async () => {
-    if (!article?.article?.id) return;
-    setClearingChat(true);
-    try {
-      await clearConversationHistory(article.article.id);
-      setChatMessages([getInitialGreetingMessage()]);
-      toast({
-        title: "Chat cleared",
-        description: "Your conversation history has been reset.",
-      });
-    } catch (error) {
-      console.error('Failed to clear chat history:', error);
-      toast({
-        title: "Error",
-        description: "Failed to clear chat history. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setClearingChat(false);
-    }
-  };
-
-  const sendChatWithMessage = async (message: string) => {
-    const text = message.trim();
-    
-    if (!text) {
-      return;
-    }
-
-    // Get current document content in both HTML and markdown formats
-    // Content is now markdown -- no HTML-to-markdown conversion needed
-    const currentContent = getValues('content') || '';
-    const currentMarkdown = currentContent;
-
-    // Check if this looks like an edit request
-    const isEditRequest = /\b(rewrite|edit|improve|change|update|fix|enhance|modify)\b/i.test(text);
-
-    // Show original user message in UI
-    const baseMessages = [...chatMessages, { role: 'user', content: text, channel: inputMode } as ChatMessage];
-    setChatMessages(baseMessages);
-    setChatInput(''); // Clear the input state
-
-    // Add placeholder assistant message
-    const assistantIndex = baseMessages.length;
-    setChatMessages((prev) => [...prev, { role: 'assistant', content: '' } as ChatMessage]);
-
-    // Send only the new message text - backend will load context from database
-    await performChatRequest(text, assistantIndex, isEditRequest, currentContent, currentMarkdown);
-  };
-
-  const sendChat = async () => {
-    const text = chatInput.trim();
-    
-    if (!text || (launchpad && !article?.article?.id)) {
-      return;
-    }
-
-    if (inputMode === 'conversation') {
-      setChatInput('');
-      sendLiveTextRef.current(text);
-      return;
-    }
-
-    await sendChatWithMessage(text);
-  };
-
-  const beginFromLanding = async (mode: 'send' | 'voice', sources: AttachedSource[] = []) => {
-    if (!launchpad || launching) return;
-    const text = chatInput.trim();
-    if (mode === 'send' && !text) return;
-    if (!user?.id) {
-      toast({
-        title: "Error",
-        description: "User not found. Please log in again.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const token = ++launchTokenRef.current;
-    launchpadSessionRef.current = true;
-    setLaunching(true);
-    setMobileChatOpen(true);
-
-    if (mode === 'voice') {
-      setInputMode('conversation');
-    } else {
-      const seed = [{ role: 'user', content: text, channel: 'text' } as ChatMessage];
-      launchMessagesRef.current = seed;
-      setChatMessages(seed);
-      setChatInput('');
-      setIsThinking(true);
-      setThinkingMessage('Starting…');
-    }
-
-    setLaunchPhase('editor');
-
-    const attachSources = async (articleId: string) => {
-      if (sources.length === 0) return;
-      await Promise.all(sources.map((source) =>
-        scrapeAndCreateSource({
-          article_id: articleId,
-          url: source.url,
-        }).catch((err) => {
-          console.error(`Failed to scrape source ${source.url}:`, err);
-          return null;
-        })
-      ));
-    };
-
-    try {
-      if (mode === 'voice') {
-        const created = await createArticle({
-          title: 'Untitled',
-          content: '',
-          tags: [],
-          publish: false,
-          authorId: String(user.id),
-        });
-        if (launchTokenRef.current !== token) return;
-        await attachSources(String(created.article.id));
-        if (launchTokenRef.current !== token) return;
-        rememberSession(created);
-        setValue('title', created.article.draft_title || 'Untitled');
-        queryClient.setQueryData(['article', created.article.slug], created);
-        setLaunchedSlug(created.article.slug);
-        return;
-      }
-
-      const { article, request_id } = await generateArticle(text);
-      if (launchTokenRef.current !== token) return;
-      await attachSources(String(article.id));
-      if (launchTokenRef.current !== token) return;
-      const session = listItemFromArticle(article, user.name || 'You');
-      rememberSession(session);
-      queryClient.setQueryData(['article', article.slug], session);
-      setValue('title', session.article.draft_title);
-      setLaunchedRequestId(request_id);
-      setLaunchedSlug(article.slug);
-    } catch (err) {
-      if (launchTokenRef.current !== token) return;
-      console.error('Failed to start writing:', err);
-      launchpadSessionRef.current = false;
-      launchMessagesRef.current = null;
-      setLaunchPhase('landing');
-      setInputMode('text');
-      setIsThinking(false);
-      setChatMessages([]);
-      if (mode === 'send') setChatInput(text);
-      toast({
-        title: "Error",
-        description: mode === 'voice'
-          ? "Could not start voice. Please try again."
-          : "Failed to start the article. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      if (launchTokenRef.current === token) setLaunching(false);
-    }
-  };
-
-  const performChatRequest = async (messageText: string, assistantIndex: number, isEditRequest: boolean, documentContent: string, documentMarkdown?: string) => {
-    setChatLoading(true);
-    try {
-      if (!article?.article?.id) {
-        throw new Error('Article ID is required');
-      }
-      
-      const result = await submitAgentRequest({
-            message: messageText,
-            documentContent: documentContent,
-            documentMarkdown: documentMarkdown || '',
-            documentTitle: getValues('title') || '',
-            articleId: article.article.id,
-            channel: 'text',
-          });
-      
-      if (!result.requestId) {
-        throw new Error('No request ID received');
-      }
-
-      // Connect to WebSocket and stream the response
-      await streamChatResponse(result.requestId, assistantIndex, isEditRequest);
-
-    } catch (err) {
-      console.error('Chat error:', err);
-      
-      // Remove the optimistic message on error
-      setChatMessages((prev) => prev.slice(0, -1));
-      
-      // Show user-friendly error
-      if (isAuthError(err)) {
-        toast({ 
-          title: "Session Expired", 
-          description: "Your session has expired. Please log in again.",
-          variant: "destructive"
-        });
-      } else if (err instanceof Error) {
-        if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-          toast({ 
-            title: "Connection Error", 
-            description: "Cannot connect to the writing assistant. Make sure the backend server is running.",
-            variant: "destructive"
-          });
-        } else {
-          toast({ 
-            title: "Error", 
-            description: err.message || "An error occurred while processing your request.",
-            variant: "destructive"
-          });
-        }
-      }
-    } finally {
-      setChatLoading(false);
-    }
-  };
-
-  const streamChatResponse = async (requestId: string, assistantIndex: number, isEditRequest: boolean) => {
-    setAddedRanges([]);
-    return new Promise<void>((resolve, reject) => {
-      const wsUrl = `${VITE_API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://')}/websocket`;
-      
-      const ws = new WebSocket(wsUrl);
-
-      ws.onopen = () => {
-        ws.send(JSON.stringify({
-          action: 'subscribe',
-          requestId: requestId
-        }));
-      };
-
-      let currentAssistantContent = '';
-      let hasInitialContent = false;
-
-
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-
-          
-          if (msg.error) {
-            console.error('Stream error:', msg.error);
-            toast({ 
-              title: "Assistant Error", 
-              description: msg.error,
-              variant: "destructive"
-            });
-            setChatMessages((prev) => prev.slice(0, -1));
-            ws.close();
-            reject(new Error(msg.error));
-            return;
-          }
-
-          // Handle new block-based message types
-          if (msg.type) {
-            switch (msg.type) {
-              case 'turn_started':
-                break;
-
-              case 'transcript':
-                if (msg.content) {
-                  setChatMessages((prev) => {
-                    const lastUser = [...prev].reverse().find((item) => item.role === 'user');
-                    if (lastUser && lastUser.content === msg.content) {
-                      return prev;
-                    }
-                    return prev;
-                  });
-                }
-                break;
-
-              case 'speech':
-                if (msg.data?.audioBase64) {
-                  void playSpeechRef.current(msg.data.audioBase64, msg.data.mimeType);
-                }
-                break;
-
-              case 'thinking':
-                // Handle thinking state - show shimmer
-                setIsThinking(true);
-                setThinkingMessage(msg.thinking_message || 'Thinking...');
-                break;
-
-              case 'reasoning_delta':
-                // Handle reasoning/extended thinking content from LLM
-                setIsThinking(true);
-                setThinkingMessage('Reasoning...');
-                if (msg.thinking_content) {
-                  setChatMessages((prev) => {
-                    const updated = [...prev];
-                    if (updated[assistantIndex]) {
-                      const currentMsg = updated[assistantIndex];
-                      const steps = [...(currentMsg.steps || [])];
-                      const stepIdx = msg.step_index ?? 0;
-                      
-                      // Ensure step exists at stepIdx
-                      while (steps.length <= stepIdx) {
-                        steps.push({ type: 'reasoning', thinking: { content: '', visible: true }, isStreaming: true });
-                      }
-                      
-                      // Append to the reasoning step at stepIdx
-                      if (steps[stepIdx].type === 'reasoning' && steps[stepIdx].thinking) {
-                        steps[stepIdx] = {
-                          ...steps[stepIdx],
-                          thinking: {
-                            ...steps[stepIdx].thinking!,
-                            content: (steps[stepIdx].thinking!.content || '') + msg.thinking_content,
-                          },
-                          isStreaming: true,
-                        };
-                      }
-                      
-                      // Also update legacy thinking for backward compatibility
-                      const currentMetaData = currentMsg.meta_data || {};
-                      const currentThinking = currentMetaData.thinking || { content: '', visible: true };
-                      
-                      updated[assistantIndex] = {
-                        ...currentMsg,
-                        steps,
-                        meta_data: {
-                          ...currentMetaData,
-                          thinking: {
-                            ...currentThinking,
-                            content: (currentThinking.content || '') + msg.thinking_content,
-                          },
-                        },
-                        isReasoningStreaming: true,
-                      };
-                    }
-                    return updated;
-                  });
-                }
-                break;
-
-              case 'content_delta':
-                // Handle real-time content chunks
-                setIsThinking(false);
-                if (msg.content) {
-                  setChatMessages((prev) => {
-                    const updated = [...prev];
-                    if (updated[assistantIndex]) {
-                      const currentMsg = updated[assistantIndex];
-                      const steps = [...(currentMsg.steps || [])];
-                      const stepIdx = msg.step_index ?? steps.length;
-                      
-                      // Mark any previous reasoning steps as done
-                      steps.forEach((step, idx) => {
-                        if (step.type === 'reasoning' && step.isStreaming) {
-                          steps[idx] = { ...step, isStreaming: false };
-                        }
-                      });
-                      
-                      // Ensure content step exists at stepIdx
-                      if (steps.length <= stepIdx) {
-                        steps.push({ type: 'content', content: '' });
-                      }
-                      
-                      // Append to content step
-                      if (steps[stepIdx].type === 'content') {
-                        steps[stepIdx] = {
-                          ...steps[stepIdx],
-                          content: (steps[stepIdx].content || '') + msg.content,
-                        };
-                      }
-                      
-                      updated[assistantIndex] = {
-                        ...currentMsg,
-                        steps,
-                        content: (currentMsg.content || '') + msg.content,
-                        isReasoningStreaming: false, // Reasoning is complete when content starts
-                      };
-                    }
-                    return updated;
-                  });
-                }
-                break;
-
-              case 'user':
-                // User message blocks (context) - no action needed
-                break;
-                
-              case 'system':
-                // System message blocks (context) - no action needed
-                break;
-                
-              case 'text':
-                // Hide thinking state on first text chunk
-                setIsThinking(false);
-                // Handle assistant text responses - always update the message at assistantIndex
-                if (msg.content) {
-                  if (!hasInitialContent) {
-                    currentAssistantContent = msg.content;
-                    hasInitialContent = true;
-                  } else {
-                    // Append subsequent text blocks
-                    currentAssistantContent += msg.content;
-                  }
-                  
-                  setChatMessages((prev) => {
-                    const updated = [...prev];
-                    if (updated[assistantIndex]) {
-                      updated[assistantIndex] = { 
-                        ...updated[assistantIndex],
-                        content: currentAssistantContent 
-                      };
-                    }
-                    return updated;
-                  });
-                }
-                break;
-                
-              case 'tool_use':
-                setIsThinking(false);
-                if (msg.tool_name) {
-                  const toolId = msg.tool_id || `tool-${Date.now()}`;
-                  console.debug('[Agent] tool_use:', msg.tool_name, toolId);
-                  setChatMessages((prev) => {
-                    const updated = [...prev];
-                    if (!updated[assistantIndex]) return updated;
-                    const steps = [...(updated[assistantIndex].steps || [])];
-                    // Mark prior reasoning as done
-                    for (let i = 0; i < steps.length; i++) {
-                      if (steps[i].type === 'reasoning' && steps[i].isStreaming) {
-                        steps[i] = { ...steps[i], isStreaming: false };
-                      }
-                    }
-                    // Push new tool step with tool_id for later matching
-                    steps.push({
-                      type: 'tool_group',
-                      toolGroup: {
-                        group_id: toolId,
-                        status: 'running',
-                        calls: [{
-                          id: toolId,
-                          name: msg.tool_name,
-                          input: msg.tool_input as Record<string, unknown> || {},
-                          status: 'running',
-                          started_at: new Date().toISOString(),
-                        }],
-                      },
-                    });
-                    updated[assistantIndex] = { ...updated[assistantIndex], steps, isReasoningStreaming: false };
-                    return updated;
-                  });
-                }
-                break;
-                
-              case 'document_update':
-                if (typeof msg.content === 'string') {
-                  applyAgentMarkdown(msg.content);
-                }
-                break;
-
-              case 'title_update':
-                if (typeof msg.content === 'string') {
-                  setValue('title', msg.content, { shouldDirty: true, shouldValidate: true });
-                }
-                break;
-
-              case 'sources_update': {
-                const next = Array.isArray(msg.data?.sources) ? msg.data.sources : [];
-                setArticleSources(next.map((source: { id?: string; title?: string; url?: string }) => ({
-                  id: String(source.id || source.url || source.title || Math.random()),
-                  title: source.title || source.url || 'Source',
-                  url: source.url || '',
-                })));
-                setSourcesReloadToken((token) => token + 1);
-                break;
-              }
-
-              case 'tool_result':
-                setIsThinking(false);
-                if (msg.tool_result) {
-                  const toolId = msg.tool_id;
-
-                  try {
-                    const toolResult = msg.tool_result.content ? JSON.parse(msg.tool_result.content) : {};
-                    const toolName = msg.tool_name || toolResult.tool_name || '';
-                    const isError = toolResult.is_error || msg.tool_result.is_error;
-
-                    console.debug('[Agent] tool_result:', toolName, toolId, isError ? 'ERROR' : 'OK');
-
-                    // Match by tool_id (not name), scan ALL steps, no status filter
-                    setChatMessages((prev) => {
-                      const updated = [...prev];
-                      if (!updated[assistantIndex]?.steps) return updated;
-                      const steps = [...updated[assistantIndex].steps!];
-                      for (let i = 0; i < steps.length; i++) {
-                        if (steps[i].type !== 'tool_group' || !steps[i].toolGroup) continue;
-                        const calls = [...steps[i].toolGroup!.calls];
-                        let found = false;
-                        for (let j = 0; j < calls.length; j++) {
-                          if (calls[j].id === toolId) {
-                            calls[j] = {
-                              ...calls[j],
-                              status: isError ? 'error' : 'completed',
-                              result: toolResult,
-                              error: isError ? (toolResult.error || 'Failed') : undefined,
-                              completed_at: new Date().toISOString(),
-                            };
-                            found = true;
-                            break;
-                          }
-                        }
-                        if (found) {
-                          const groupStatus = calls.some((c: any) => c.status === 'error') ? 'error' :
-                                              calls.every((c: any) => c.status === 'completed' || c.status === 'error') ? 'completed' : 'running';
-                          steps[i] = {
-                            ...steps[i],
-                            toolGroup: { ...steps[i].toolGroup!, status: groupStatus, calls },
-                          };
-                          break;
-                        }
-                      }
-                      updated[assistantIndex] = { ...updated[assistantIndex], steps };
-                      return updated;
-                    });
-                  } catch (e) {
-                    console.error('[Editor] Failed to parse tool result:', e);
-                  }
-                }
-                break;
-
-              case 'tool_group_complete':
-                // No-op: tool_result is the source of truth for call status.
-                // This event arrives BEFORE tool_result from the backend,
-                // so we must NOT mark calls as completed here (that would
-                // prevent tool_result from attaching result data).
-                setIsThinking(false);
-                break;
-
-              case 'full_message':
-                // Only merge metadata -- never overwrite streaming steps
-                setIsThinking(false);
-                if (msg.full_message) {
-                  setChatMessages((prev) => {
-                    const updated = [...prev];
-                    if (!updated[assistantIndex]) return updated;
-                    const existing = updated[assistantIndex];
-                    updated[assistantIndex] = {
-                      ...existing,
-                      id: msg.full_message.id,
-                      meta_data: msg.full_message.meta_data,
-                      created_at: msg.full_message.created_at,
-                      // Keep streaming steps -- do NOT overwrite
-                      isReasoningStreaming: false,
-                    };
-                    return updated;
-                  });
-                }
-                break;
-                
-              case 'done':
-                setIsThinking(false); // Hide thinking state on completion
-                
-                // Clear all streaming flags on the current assistant message
-                setChatMessages((prev) => {
-                  const updated = [...prev];
-                  if (updated[assistantIndex]) {
-                    const msg = updated[assistantIndex];
-                    // Clear streaming flags on all steps
-                    const finalSteps = msg.steps?.map(step => ({
-                      ...step,
-                      isStreaming: false,
-                    }));
-                    updated[assistantIndex] = {
-                      ...msg,
-                      steps: finalSteps,
-                      isReasoningStreaming: false,
-                    };
-                  }
-                  return updated;
-                });
-                
-                ws.close();
-                resolve();
-                break;
-                
-              case 'error':
-                console.error('Stream error:', msg.error);
-                toast({ 
-                  title: "Assistant Error", 
-                  description: msg.error,
-                  variant: "destructive"
-                });
-                setChatMessages((prev) => prev.slice(0, -1));
-                ws.close();
-                reject(new Error(msg.error));
-                break;
-            }
-          }
-          
-          // Backward compatibility: Handle legacy assistant messages
-          else if (msg.role === 'assistant' && msg.content) {
-            // For legacy messages, treat them as text blocks
-            if (!hasInitialContent) {
-              currentAssistantContent = msg.content;
-              hasInitialContent = true;
-              setChatMessages((prev) => {
-                const updated = [...prev];
-                updated[assistantIndex] = { 
-                  role: 'assistant', 
-                  content: currentAssistantContent 
-                } as ChatMessage;
-                return updated;
-              });
-            } else {
-              // Add as new message
-              setChatMessages((prev) => [
-                ...prev,
-                { role: 'assistant', content: msg.content }
-              ]);
-            }
-          }
-          
-          // Backward compatibility: Handle legacy done signal
-          else if (msg.done) {
-            ws.close();
-            
-            // Legacy done signal -- no diff handling needed
-            
-            resolve();
-          }
-        } catch (parseError) {
-          console.error('Failed to parse WebSocket message:', parseError);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        toast({ 
-          title: "Connection Error", 
-          description: "Failed to connect to WebSocket for real-time streaming",
-          variant: "destructive"
-        });
-        setChatMessages((prev) => prev.slice(0, -1));
-        reject(error);
-      };
-
-      ws.onclose = (event) => {
-        if (event.code !== 1000) { // 1000 is normal closure
-          console.error('WebSocket closed unexpectedly:', event.code, event.reason);
-        }
-      };
-
-      // Set a timeout to prevent hanging
-      setTimeout(() => {
-        if (ws.readyState !== WebSocket.CLOSED) {
-          ws.close();
-          reject(new Error('WebSocket timeout'));
-        }
-      }, 120000); // 2 minutes timeout
-    });
-  };
-
-  const conversation = useConversation({
-    enabled: inputMode === 'conversation' && !isNew && Boolean(article?.article?.id),
-    articleId: article?.article?.id,
-    getDocument: () => {
-      const content = getValues('content') || '';
-      return { content, markdown: content };
-    },
-    onUserTranscript: (text) => {
-      setChatMessages((prev) => {
-        const index = liveUserIndexRef.current;
-        if (index != null && prev[index]?.role === 'user') {
-          const next = [...prev];
-          next[index] = { ...next[index], content: text, channel: 'voice' };
-          return next;
-        }
-        liveUserIndexRef.current = prev.length;
-        return [...prev, { role: 'user', content: text, channel: 'voice' } as ChatMessage];
-      });
-    },
-    onDelegation: (requestId, message) => {
-      setChatMessages((prev) => {
-        const index = liveUserIndexRef.current;
-        let next = [...prev];
-        if (index != null && next[index]?.role === 'user') {
-          next[index] = { ...next[index], content: message, channel: 'voice' };
-        } else {
-          next = [...next, { role: 'user', content: message, channel: 'voice' } as ChatMessage];
-        }
-        liveUserIndexRef.current = null;
-        pendingLiveStreamRef.current = { requestId, assistantIndex: next.length };
-        return [...next, { role: 'assistant', content: '' } as ChatMessage];
-      });
-    },
-  });
-  sendLiveTextRef.current = conversation.sendText;
-
-  useEffect(() => {
-    const pending = pendingLiveStreamRef.current;
-    if (!pending || startedLiveRequestsRef.current.has(pending.requestId)) {
-      return;
-    }
-    pendingLiveStreamRef.current = null;
-    startedLiveRequestsRef.current.add(pending.requestId);
-    setChatLoading(true);
-    void streamChatResponse(pending.requestId, pending.assistantIndex, false)
-      .catch((streamError: unknown) => {
-        toast({
-          title: "Conversation error",
-          description: streamError instanceof Error ? streamError.message : "Could not run the live turn",
-          variant: "destructive",
-        });
-      })
-      .finally(() => setChatLoading(false));
-  });
-
-  // Auto-subscribe to an in-flight generation session when arriving from /blog/generate.
-  const consumedRequestIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!initialRequestId || isNew) return;
-    if (!article?.article?.id) return;
-    if (consumedRequestIdRef.current === initialRequestId) return;
-    consumedRequestIdRef.current = initialRequestId;
-
-    setMobileChatOpen(true);
-    setChatLoading(true);
-
-    (async () => {
-      try {
-        let loadedMessages: ChatMessage[] = [];
-        try {
-          const result = await getConversationHistory(article.article.id);
-          loadedMessages = mapConversationMessages(result.messages || []);
-        } catch (historyErr) {
-          console.error('[Editor] Failed to load generation conversation history:', historyErr);
-        }
-
-        const seeded = loadedMessages.length > 0
-          ? loadedMessages
-          : (launchMessagesRef.current ?? []);
-        const last = seeded[seeded.length - 1];
-        if (last?.role === 'assistant' && last.content.trim()) {
-          setChatMessages(seeded);
-          setIsThinking(false);
-          return;
-        }
-        const assistantIndex = last?.role === 'assistant' ? seeded.length - 1 : seeded.length;
-        setChatMessages(
-          last?.role === 'assistant'
-            ? seeded
-            : [...seeded, { role: 'assistant', content: '' } as ChatMessage],
-        );
-        await streamChatResponse(initialRequestId, assistantIndex, false);
-      } catch (err) {
-        console.error('[Editor] Failed to attach to generation session:', err);
-      } finally {
-        setChatLoading(false);
-        // Strip requestId from URL so refresh doesn't re-attach.
-        // The launchpad stays on this screen so the chat never remounts.
-        if (!launchpad) {
-          navigate({
-            to: `/dashboard/blog/edit/${blogSlug}`,
-            replace: true,
-          });
-        }
-      }
-    })();
-  }, [initialRequestId, article?.article?.id, isNew]);
-
   if (!user) {
     return <div>Please log in to edit articles.</div>;
   }
 
   // Show loading state while fetching article
-  if (articleLoading && !isNew && !launchpad) {
+  if (articleLoading && !isNew) {
     return (
       <section className="flex-1 p-0 md:p-4">
         <div className="flex items-center justify-center h-64">
@@ -2091,7 +1080,7 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
   }
 
   // Show error state if fetch failed
-  if (error && !isNew && !launchpad) {
+  if (error && !isNew) {
     return (
       <section className="flex-1 p-0 md:p-4">
         <div className="flex items-center justify-center h-64">
@@ -2101,49 +1090,9 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
     );
   }
 
-  const voiceStatus = conversation.error
-    ? conversation.error
-    : conversation.caption
-      ? conversation.caption
-      : conversation.state === 'connecting'
-        ? 'Connecting to GPT-Live…'
-        : conversation.state === 'speaking'
-          ? 'Speaking…'
-          : 'Voice on · talk, or paste a link';
-
   return (
-      <motion.section
-        layout
-        data-writing-phase={launchpad ? launchPhase : 'editor'}
-        transition={{ layout: { duration: 0.55, ease: [0.22, 1, 0.36, 1] } }}
-        className={cn(
-          landing ? "writing-landing" : "article-editor-shell",
-          launchpad && !landing && "writing-launch-editor",
-        )}
-      >
-        <AnimatePresence>
-          {landing && (
-            <motion.div
-              key="writing-intro"
-              className="writing-landing-intro"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.35 }}
-            >
-              <h1 className="font-wordmark text-3xl font-medium tracking-tight text-balance md:text-4xl">
-                What are we writing today?
-              </h1>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        {!landing && (
-        <motion.div
-          className="article-editor-main px-2 pt-2 md:px-0 md:pt-0"
-          initial={launchpad ? { opacity: 0 } : false}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.4, delay: launchpad ? 0.08 : 0 }}
-        >
+      <section className="article-editor-shell">
+        <div className="article-editor-main px-2 pt-2 md:px-0 md:pt-0">
         {/* Article Metadata Card */}
         
                 <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
@@ -2725,250 +1674,7 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
               </div>
           </form>
 
-      </motion.div>
-        )}
-
-      {/* Same chat surface: centered on the dashboard, docked beside the draft after send. */}
-        <motion.div
-          layout
-          transition={{ layout: { duration: 0.55, ease: [0.22, 1, 0.36, 1] } }}
-          className={cn(
-            landing
-              ? "writing-landing-chat"
-              : cn("article-editor-chat border rounded-sm", mobileChatOpen && "article-editor-chat-open"),
-          )}
-        >
-        {!landing && <div className="article-editor-chat-mobile-bar">
-          <span className="text-sm font-medium">Assistant</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="size-8"
-            onClick={() => setMobileChatOpen(false)}
-            aria-label="Close chat"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>}
-        <div
-          ref={chatMessagesRef}
-          className={cn(
-            "scrollbar-hide min-h-0 flex-1 space-y-2 overflow-y-auto p-3 md:p-1.5",
-            landing && "hidden",
-          )}
-        >
-          {chatMessages.map((m, i) => {
-            switch (m.role) {
-              case 'tool': {
-                // Tool-role messages are not rendered directly (handled via steps on assistant message)
-                return null;
-              }
-              case 'assistant': {
-                // Skip __DIFF_ACTIONS__ messages
-                if (m.content === '__DIFF_ACTIONS__') {
-                  return null;
-                }
-                
-                // Render chain of thought steps (the ONLY rendering path for tool display)
-                if (m.steps && m.steps.length > 0) {
-                  return (
-                    <div key={i} className="w-full space-y-2">
-                      <ChainOfThought>
-                        {m.steps.map((step, stepIdx) => {
-                          const isLastStep = stepIdx === m.steps!.length - 1;
-                          
-                          if (step.type === 'reasoning' && step.thinking?.content) {
-                            return (
-                              <ChainOfThoughtStep 
-                                key={stepIdx}
-                                type="reasoning" 
-                                status={step.isStreaming ? 'running' : 'completed'}
-                                isStreaming={step.isStreaming}
-                                isLast={isLastStep}
-                              >
-                                <ChainOfThoughtTrigger>
-                                  {step.isStreaming ? "Reasoning..." : "Reasoning"}
-                                </ChainOfThoughtTrigger>
-                                <ChainOfThoughtContent>
-                                  {step.thinking.content}
-                                </ChainOfThoughtContent>
-                              </ChainOfThoughtStep>
-                            );
-                          }
-                          
-                          if (step.type === 'tool_group' && step.toolGroup) {
-                            const groupStatus = step.toolGroup.status === 'running' ? 'running' : 'completed';
-                            return (
-                              <ChainOfThoughtStep 
-                                key={stepIdx} 
-                                type="tool" 
-                                status={groupStatus}
-                                isLast={isLastStep}
-                              >
-                                <ToolGroupDisplay group={step.toolGroup} />
-                              </ChainOfThoughtStep>
-                            );
-                          }
-                          
-                          if (step.type === 'content' && step.content) {
-                            return (
-                              <ChainOfThoughtItem key={stepIdx}>
-                                <div className="prose prose-sm max-w-none dark:prose-invert text-sm">
-                                  <Markdown components={chatMarkdownComponents}>{step.content}</Markdown>
-                                </div>
-                              </ChainOfThoughtItem>
-                            );
-                          }
-                          
-                          return null;
-                        })}
-                      </ChainOfThought>
-                      
-                      {/* Render content after steps if there's additional content */}
-                      {m.content && !m.steps.some(s => s.type === 'content' && s.content === m.content) && (
-                        <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
-                          <Markdown components={chatMarkdownComponents}>{m.content}</Markdown>
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-                
-                // LEGACY: Fall back to old rendering if no steps
-                // Check if there's reasoning content to display
-                const thinkingContent = m.meta_data?.thinking?.content;
-                const isReasoningStreaming = m.isReasoningStreaming;
-                const hasReasoning = thinkingContent && thinkingContent.length > 0;
-                
-                // If only reasoning with no content, show reasoning
-                if (hasReasoning && (!m.content || m.content === '')) {
-                  return (
-                    <div key={i} className="w-full space-y-2">
-                      <ReasoningStep 
-                        content={thinkingContent}
-                        isStreaming={isReasoningStreaming}
-                        durationMs={m.meta_data?.thinking?.duration_ms}
-                        isLast={true}
-                      />
-                    </div>
-                  );
-                }
-                  
-                // Regular assistant message
-                if (!m.content || m.content === '') {
-                  return null; // Don't render empty messages
-                }
-                
-                // If there's reasoning AND content, show both
-                if (hasReasoning) {
-                  return (
-                    <div key={i} className="w-full space-y-2">
-                      <ReasoningStep 
-                        content={thinkingContent}
-                        isStreaming={false}
-                        durationMs={m.meta_data?.thinking?.duration_ms}
-                        isLast={false}
-                      />
-                      <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
-                        <Markdown components={chatMarkdownComponents}>{m.content}</Markdown>
-                      </div>
-                    </div>
-                  );
-                }
-                
-                return (
-                  <div key={i} className="w-full">
-                    <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
-                      <Markdown components={chatMarkdownComponents}>{m.content}</Markdown>
-                    </div>
-                  </div>
-                );
-              }
-              case 'user':
-                default: {
-                  return (
-                    <div key={i} className="w-full flex justify-end">
-                      <div className="max-w-xs whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-sm bg-primary text-primary-foreground">
-                        {m.channel === 'voice' && (
-                          <span className="mr-1 inline-flex align-middle opacity-80">
-                            <Mic className="h-3 w-3" />
-                          </span>
-                        )}
-                        {m.content}
-                      </div>
-                    </div>
-                  );
-                }
-              }
-            })}
-            
-            {/* Thinking state shimmer */}
-            {isThinking && (
-              <ThinkShimmerBlock message={thinkingMessage} />
-            )}
-          </div>
-        <div className={cn(!landing && "p-2")}>
-          <ChatComposer
-            variant={landing ? "landing" : "panel"}
-            value={chatInput}
-            onValueChange={setChatInput}
-            onSubmit={(sources) => {
-              if (landing) {
-                void beginFromLanding('send', sources);
-                return;
-              }
-              void sendChat();
-            }}
-            onVoice={(sources) => {
-              if (landing) {
-                void beginFromLanding('voice', sources);
-                return;
-              }
-              setInputMode((mode) => (mode === 'conversation' ? 'text' : 'conversation'));
-            }}
-            isLoading={landing ? launching : chatLoading}
-            disabled={launching || (launchpad && !landing && !article?.article?.id)}
-            placeholder={
-              landing
-                ? "Write an article about..."
-                : inputMode === 'conversation'
-                  ? "Talk with GPT-Live, or paste a link it should see…"
-                  : "Ask the assistant or click a quick action above…"
-            }
-            voiceOn={inputMode === 'conversation'}
-            voiceDisabled={landing ? launching : isNew || !article?.article?.id}
-            voiceStatus={voiceStatus}
-            accessory={!landing && !isNew && article?.article?.id ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="h-7 shrink-0 px-2 text-xs"
-                disabled={clearingChat}
-                onClick={clearChat}
-              >
-                <Trash2 className="mr-1 h-3.5 w-3.5" />
-                {clearingChat ? 'Clearing…' : 'Clear chat'}
-              </Button>
-            ) : undefined}
-          />
-          {landing && chatInput.length === 0 && !launching && (
-            <WritingSuggestions onPick={setChatInput} />
-          )}
-        </div>
-      </motion.div>
-      {!landing && (
-      <button
-        type="button"
-        className="article-editor-chat-fab"
-        onClick={() => setMobileChatOpen(true)}
-        aria-label="Open assistant chat"
-      >
-        <MessageSquare />
-        {chatLoading ? "Working" : "Chat"}
-      </button>
-      )}
+      </div>
 
       {/* Version History Drawer */}
       <Drawer open={showVersions} onOpenChange={setShowVersions} direction="right">
@@ -2976,7 +1682,7 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
           <DrawerHeader>
             <DrawerTitle>Version History</DrawerTitle>
             <DrawerDescription>
-              Saved on the server before each agent edit. Revert restores that draft.
+              Saved on the server before each draft change. Revert restores that draft.
               {versionsData && (
                 <span className="block mt-1">{versionsData.draft_count} drafts, {versionsData.published_count} published</span>
               )}
@@ -3092,23 +1798,6 @@ export default function ArticleEditor({ isNew, launchpad = false }: { isNew?: bo
         </DialogContent>
       </Dialog>
 
-      {/* Expanded Table Dialog */}
-      <Dialog open={!!expandedTable} onOpenChange={(open) => !open && setExpandedTable(null)}>
-        <DialogContent className="!w-[90vw] !max-w-[90vw] sm:!max-w-[90vw] max-h-[80vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Table View</DialogTitle>
-            <DialogDescription>Full table view</DialogDescription>
-          </DialogHeader>
-          <div className="flex-1 overflow-auto w-full">
-            {expandedTable}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setExpandedTable(null)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </motion.section>
+    </section>
   );
 }

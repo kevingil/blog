@@ -10,23 +10,14 @@ use axum::{
     extract::FromRef,
     http::{Method, Request, StatusCode, header::CONTENT_TYPE},
 };
-use base64::{Engine as _, engine::general_purpose::STANDARD};
 use blog_backend::{
     api::{
-        agent::{self, AgentRequestQueue, AgentState, ChatRequest},
         auth::AuthState,
         storage::{self, StorageState},
         taskrun::{self, TaskRunState as TaskRunApiState},
     },
     core::{
         auth::{Account, AccountId, AccountRepository, AuthService},
-        chat::{ChatMessage, ChatMessageRepository, ChatMessageService},
-        conversation::ConversationService,
-        live::LivePorts,
-        mcp::{InMemoryMcpConnectorRepository, McpConnectorService},
-        ml::llm::ToolRegistry,
-        skill::{InMemorySkillRepository, SkillService},
-        speech::{SpeechAudio, SpeechPort, silent_wav},
         storage::{ObjectListing, ObjectStore, StorageService},
         taskrun::{
             TaskRun, TaskRunEvent, TaskRunFilter, TaskRunRepository, TaskRunService, TaskRunStep,
@@ -44,34 +35,11 @@ use uuid::Uuid;
 const TEST_SECRET: &str = "support-http-secret";
 type TestResult<T = ()> = Result<T, Box<dyn Error + Send + Sync>>;
 
-struct FixtureSpeech;
-
-#[async_trait]
-impl SpeechPort for FixtureSpeech {
-    async fn transcribe(&self, _audio: &[u8], _mime_type: &str) -> Result<String, AppError> {
-        Ok("Fixture voice note".to_owned())
-    }
-
-    async fn synthesize(&self, _text: &str) -> Result<SpeechAudio, AppError> {
-        Ok(SpeechAudio {
-            bytes: silent_wav(),
-            mime_type: "audio/wav".to_owned(),
-        })
-    }
-}
-
 #[derive(Clone)]
 struct HttpState {
-    agent: AgentState,
     auth: AuthState,
     storage: StorageState,
     taskrun: TaskRunApiState,
-}
-
-impl FromRef<HttpState> for AgentState {
-    fn from_ref(state: &HttpState) -> Self {
-        state.agent.clone()
-    }
 }
 
 impl FromRef<HttpState> for AuthState {
@@ -152,103 +120,6 @@ impl AccountRepository for Accounts {
         _expected_password_hash: &str,
     ) -> Result<bool, AppError> {
         Ok(false)
-    }
-}
-
-#[derive(Default)]
-struct ChatRepository {
-    values: Mutex<Vec<ChatMessage>>,
-}
-
-impl ChatRepository {
-    fn state(&self) -> MutexGuard<'_, Vec<ChatMessage>> {
-        self.values
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-}
-
-#[async_trait]
-impl ChatMessageRepository for ChatRepository {
-    async fn create(&self, message: &mut ChatMessage) -> Result<(), AppError> {
-        self.state().push(message.clone());
-        Ok(())
-    }
-
-    async fn find_by_id(&self, id: Uuid) -> Result<ChatMessage, AppError> {
-        self.state()
-            .iter()
-            .find(|message| message.id == id)
-            .cloned()
-            .ok_or(AppError::NotFound)
-    }
-
-    async fn list_by_article(
-        &self,
-        article_id: Uuid,
-        limit: i64,
-    ) -> Result<Vec<ChatMessage>, AppError> {
-        let mut messages = self
-            .state()
-            .iter()
-            .filter(|message| message.article_id == article_id)
-            .cloned()
-            .collect::<Vec<_>>();
-        messages.sort_by(|left, right| right.created_at.cmp(&left.created_at));
-        messages.truncate(usize::try_from(limit).map_err(AppError::internal)?);
-        Ok(messages)
-    }
-
-    async fn list_pending_artifacts(&self, article_id: Uuid) -> Result<Vec<ChatMessage>, AppError> {
-        Ok(self
-            .state()
-            .iter()
-            .filter(|message| {
-                message.article_id == article_id
-                    && message
-                        .meta_data
-                        .as_ref()
-                        .and_then(|metadata| metadata.pointer("/artifact/status"))
-                        == Some(&json!("pending"))
-            })
-            .cloned()
-            .collect())
-    }
-
-    async fn update(&self, _message: &ChatMessage) -> Result<(), AppError> {
-        Ok(())
-    }
-
-    async fn update_metadata(&self, id: Uuid, metadata: Value) -> Result<u64, AppError> {
-        let mut state = self.state();
-        let Some(message) = state.iter_mut().find(|message| message.id == id) else {
-            return Ok(0);
-        };
-        message.meta_data = Some(metadata);
-        Ok(1)
-    }
-
-    async fn delete_by_article(&self, article_id: Uuid) -> Result<u64, AppError> {
-        let mut state = self.state();
-        let before = state.len();
-        state.retain(|message| message.article_id != article_id);
-        u64::try_from(before - state.len()).map_err(AppError::internal)
-    }
-}
-
-#[derive(Default)]
-struct Requests {
-    values: Mutex<Vec<ChatRequest>>,
-}
-
-#[async_trait]
-impl AgentRequestQueue for Requests {
-    async fn submit(&self, request: ChatRequest) -> Result<String, AppError> {
-        self.values
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push(request);
-        Ok("request-123".to_owned())
     }
 }
 
@@ -406,10 +277,6 @@ impl TaskRunRepository for Runs {
 struct Fixture {
     router: Router,
     bearer: String,
-    article_id: Uuid,
-    message_id: Uuid,
-    chat: Arc<ChatRepository>,
-    requests: Arc<Requests>,
     store: Arc<Store>,
     runs: Arc<Runs>,
     run_id: Uuid,
@@ -439,38 +306,6 @@ fn fixture() -> TestResult<Fixture> {
     let auth_service = Arc::new(AuthService::new(accounts, TEST_SECRET)?);
     let bearer = format!("Bearer {}", auth_service.issue_token(&user)?);
 
-    let article_id = Uuid::new_v4();
-    let message_id = Uuid::new_v4();
-    let chat = Arc::new(ChatRepository::default());
-    chat.state().extend([
-        ChatMessage {
-            id: Uuid::new_v4(),
-            article_id,
-            role: "user".to_owned(),
-            content: "first".to_owned(),
-            meta_data: Some(json!({})),
-            created_at: Utc.timestamp_opt(10, 0).single(),
-        },
-        ChatMessage {
-            id: message_id,
-            article_id,
-            role: "assistant".to_owned(),
-            content: "second".to_owned(),
-            meta_data: Some(json!({
-                "artifact": {
-                    "id": "artifact-1",
-                    "type": "rewrite",
-                    "status": "pending",
-                    "content": "replacement",
-                    "diff_preview": "-old\\n+new",
-                    "title": "Rewrite",
-                    "description": "Replace draft"
-                }
-            })),
-            created_at: Utc.timestamp_opt(20, 0).single(),
-        },
-    ]);
-    let requests = Arc::new(Requests::default());
     let store = Arc::new(Store::default());
     let runs = Arc::new(Runs::default());
     let run_id = Uuid::new_v4();
@@ -543,25 +378,6 @@ fn fixture() -> TestResult<Fixture> {
     });
 
     let state = HttpState {
-        agent: AgentState::new(
-            Arc::new(ChatMessageService::new(
-                chat.clone(),
-                CancellationToken::new(),
-            )),
-            requests.clone(),
-            McpConnectorService::new(
-                Arc::new(InMemoryMcpConnectorRepository::default()),
-                ToolRegistry::from_builtin(Vec::new()),
-                CancellationToken::new(),
-            ),
-            ConversationService::new(Arc::new(FixtureSpeech)),
-            ToolRegistry::from_builtin(Vec::new()),
-            SkillService::new(
-                Arc::new(InMemorySkillRepository::default()),
-                CancellationToken::new(),
-            ),
-            LivePorts::disconnected(),
-        ),
         auth: AuthState::new(auth_service),
         storage: StorageState::new(Arc::new(StorageService::new(
             store.clone(),
@@ -573,18 +389,13 @@ fn fixture() -> TestResult<Fixture> {
             CancellationToken::new(),
         ))),
     };
-    let router: Router = agent::router::<HttpState>()
-        .merge(storage::router::<HttpState>())
+    let router: Router = storage::router::<HttpState>()
         .merge(taskrun::router::<HttpState>())
         .with_state(state)
         .into();
     Ok(Fixture {
         router,
         bearer,
-        article_id,
-        message_id,
-        chat,
-        requests,
         store,
         runs,
         run_id,
@@ -611,356 +422,6 @@ async fn call(
     let status = response.status();
     let body = response.into_body().collect().await?.to_bytes();
     Ok((status, serde_json::from_slice(&body)?))
-}
-
-#[tokio::test]
-async fn live_socket_handshake_requires_a_bearer_subprotocol() -> TestResult {
-    use futures_util::StreamExt;
-    use tokio_tungstenite::{
-        connect_async,
-        tungstenite::{self, Message, client::IntoClientRequest, http::HeaderValue},
-    };
-
-    let fixture = fixture()?;
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
-    let url = format!("ws://{}/agent/live", listener.local_addr()?);
-    let cancellation = CancellationToken::new();
-    let server = tokio::spawn(blog_backend::server::serve(
-        listener,
-        fixture.router.clone(),
-        cancellation.clone(),
-        std::time::Duration::from_millis(500),
-    ));
-    let with_protocols = |protocols: &str| -> TestResult<_> {
-        let mut request = url.as_str().into_client_request()?;
-        request
-            .headers_mut()
-            .insert("sec-websocket-protocol", HeaderValue::from_str(protocols)?);
-        Ok(request)
-    };
-
-    let anonymous = connect_async(url.as_str()).await;
-    assert!(
-        matches!(&anonymous, Err(tungstenite::Error::Http(response)) if response.status() == StatusCode::UNAUTHORIZED),
-        "anonymous live socket was not rejected"
-    );
-    let forged = connect_async(with_protocols("bearer, not-a-jwt")?).await;
-    assert!(
-        matches!(&forged, Err(tungstenite::Error::Http(response)) if response.status() == StatusCode::UNAUTHORIZED),
-        "live socket accepted an invalid token"
-    );
-
-    let token = fixture.bearer.trim_start_matches("Bearer ");
-    let (mut socket, response) =
-        connect_async(with_protocols(&format!("bearer, {token}"))?).await?;
-    assert_eq!(response.status(), StatusCode::SWITCHING_PROTOCOLS);
-    assert_eq!(
-        response
-            .headers()
-            .get("sec-websocket-protocol")
-            .and_then(|value| value.to_str().ok()),
-        Some("bearer")
-    );
-    // The fixture has no GPT-Live upstream, so the admitted session reports that.
-    let frame = tokio::time::timeout(std::time::Duration::from_secs(2), socket.next())
-        .await?
-        .ok_or("live socket closed without a frame")??;
-    let Message::Text(text) = frame else {
-        return Err(format!("unexpected live frame: {frame:?}").into());
-    };
-    assert_eq!(
-        serde_json::from_str::<Value>(&text)?,
-        json!({"type": "error", "error": "Could not open the GPT-Live session"})
-    );
-
-    drop(socket);
-    cancellation.cancel();
-    server.await??;
-    Ok(())
-}
-
-#[tokio::test]
-async fn agent_routes_preserve_submission_history_and_artifact_contracts() -> TestResult {
-    let fixture = fixture()?;
-    let (status, unauthorized) = call(
-        fixture.router.clone(),
-        Method::POST,
-        "/agent",
-        Some("application/json"),
-        json!({"message":"hi","articleId":fixture.article_id}).to_string(),
-        None,
-    )
-    .await?;
-    assert_eq!(status, StatusCode::UNAUTHORIZED, "{unauthorized}");
-
-    let (status, submitted) = call(
-        fixture.router.clone(),
-        Method::POST,
-        "/agent",
-        Some("application/json"),
-        json!({
-            "message":"improve this",
-            "documentContent":"html",
-            "documentMarkdown":"markdown",
-            "articleId":fixture.article_id
-        })
-        .to_string(),
-        Some(&fixture.bearer),
-    )
-    .await?;
-    assert_eq!(status, StatusCode::OK, "{submitted}");
-    assert_eq!(submitted["data"]["requestId"], "request-123");
-    assert_eq!(submitted["data"]["status"], "processing");
-    {
-        let queued = lock(&fixture.requests.values);
-        assert_eq!(queued.len(), 1);
-        assert_eq!(queued[0].document_markdown, "markdown");
-    }
-
-    let (status, history) = call(
-        fixture.router.clone(),
-        Method::GET,
-        &format!(
-            "/agent/conversations/{}?limit=not-a-number",
-            fixture.article_id
-        ),
-        None,
-        Body::empty(),
-        Some(&fixture.bearer),
-    )
-    .await?;
-    assert_eq!(status, StatusCode::OK, "{history}");
-    assert_eq!(
-        history["data"]["article_id"],
-        fixture.article_id.to_string()
-    );
-    assert_eq!(history["data"]["total"], 2);
-    assert_eq!(history["data"]["messages"][0]["content"], "first");
-    assert_eq!(history["data"]["messages"][1]["content"], "second");
-
-    let (status, pending) = call(
-        fixture.router.clone(),
-        Method::GET,
-        &format!("/agent/artifacts/{}/pending", fixture.article_id),
-        None,
-        Body::empty(),
-        Some(&fixture.bearer),
-    )
-    .await?;
-    assert_eq!(status, StatusCode::OK, "{pending}");
-    assert_eq!(
-        pending["data"]["artifacts"][0]["id"],
-        fixture.message_id.to_string()
-    );
-
-    let (status, accepted) = call(
-        fixture.router.clone(),
-        Method::POST,
-        &format!("/agent/artifacts/{}/accept", fixture.message_id),
-        Some("application/json"),
-        json!({"feedback":"looks good"}).to_string(),
-        Some(&fixture.bearer),
-    )
-    .await?;
-    assert_eq!(status, StatusCode::OK, "{accepted}");
-    assert_eq!(accepted["data"]["success"], true);
-    let message = fixture
-        .chat
-        .state()
-        .iter()
-        .find(|message| message.id == fixture.message_id)
-        .cloned()
-        .ok_or("accepted message missing")?;
-    assert_eq!(
-        message
-            .meta_data
-            .as_ref()
-            .and_then(|metadata| metadata.pointer("/artifact/status")),
-        Some(&json!("accepted"))
-    );
-    assert_eq!(
-        message
-            .meta_data
-            .as_ref()
-            .and_then(|metadata| metadata.pointer("/user_action/feedback")),
-        Some(&json!("looks good"))
-    );
-
-    let (status, cleared) = call(
-        fixture.router,
-        Method::DELETE,
-        &format!("/agent/conversations/{}", fixture.article_id),
-        None,
-        Body::empty(),
-        Some(&fixture.bearer),
-    )
-    .await?;
-    assert_eq!(status, StatusCode::OK, "{cleared}");
-    assert!(fixture.chat.state().is_empty());
-    Ok(())
-}
-
-#[tokio::test]
-async fn agent_harness_accepts_voice_turns_and_manages_mcp_connectors() -> TestResult {
-    let fixture = fixture()?;
-    let (status, turn) = call(
-        fixture.router.clone(),
-        Method::POST,
-        "/agent/conversation/turn",
-        Some("application/json"),
-        json!({
-            "articleId": fixture.article_id,
-            "message": "https://example.com/notes",
-            "documentMarkdown": "draft",
-            "audioBase64": STANDARD.encode(silent_wav()),
-            "mimeType": "audio/wav"
-        })
-        .to_string(),
-        Some(&fixture.bearer),
-    )
-    .await?;
-    assert_eq!(status, StatusCode::OK, "{turn}");
-    assert_eq!(turn["data"]["requestId"], "request-123");
-    assert_eq!(turn["data"]["transcript"], "Fixture voice note");
-    assert_eq!(turn["data"]["channel"], "voice");
-    {
-        let queued = lock(&fixture.requests.values);
-        let last = queued.last().ok_or("voice turn was not queued")?;
-        assert_eq!(last.channel, "voice");
-        assert!(last.message.contains("Fixture voice note"));
-        assert!(last.message.contains("https://example.com/notes"));
-    }
-
-    let (status, tools) = call(
-        fixture.router.clone(),
-        Method::GET,
-        "/agent/tools",
-        None,
-        Body::empty(),
-        Some(&fixture.bearer),
-    )
-    .await?;
-    assert_eq!(status, StatusCode::OK, "{tools}");
-    assert_eq!(tools["data"]["tools"], json!([]));
-
-    let (status, created) = call(
-        fixture.router.clone(),
-        Method::POST,
-        "/agent/connectors",
-        Some("application/json"),
-        json!({
-            "name": "Docs",
-            "transport": "http",
-            "url": "http://127.0.0.1:9/mcp",
-            "enabled": false
-        })
-        .to_string(),
-        Some(&fixture.bearer),
-    )
-    .await?;
-    assert_eq!(status, StatusCode::OK, "{created}");
-    assert_eq!(created["data"]["name"], "Docs");
-    assert_eq!(created["data"]["enabled"], false);
-    let connector_id = created["data"]["id"]
-        .as_str()
-        .ok_or("connector id missing")?
-        .to_owned();
-
-    let (status, listed) = call(
-        fixture.router.clone(),
-        Method::GET,
-        "/agent/connectors",
-        None,
-        Body::empty(),
-        Some(&fixture.bearer),
-    )
-    .await?;
-    assert_eq!(status, StatusCode::OK, "{listed}");
-    assert_eq!(listed["data"]["connectors"][0]["id"], connector_id);
-
-    let (status, updated) = call(
-        fixture.router.clone(),
-        Method::PATCH,
-        &format!("/agent/connectors/{connector_id}"),
-        Some("application/json"),
-        json!({"enabled": false, "name": "Docs search"}).to_string(),
-        Some(&fixture.bearer),
-    )
-    .await?;
-    assert_eq!(status, StatusCode::OK, "{updated}");
-    assert_eq!(updated["data"]["name"], "Docs search");
-
-    let (status, deleted) = call(
-        fixture.router.clone(),
-        Method::DELETE,
-        &format!("/agent/connectors/{connector_id}"),
-        None,
-        Body::empty(),
-        Some(&fixture.bearer),
-    )
-    .await?;
-    assert_eq!(status, StatusCode::OK, "{deleted}");
-    assert_eq!(deleted["data"]["success"], true);
-
-    let (status, skill) = call(
-        fixture.router.clone(),
-        Method::POST,
-        "/agent/skills",
-        Some("application/json"),
-        json!({
-            "name": "Editorial voice",
-            "description": "Keep a calm informational tone",
-            "instructions": "Avoid hype. Prefer concrete claims.",
-            "enabled": true
-        })
-        .to_string(),
-        Some(&fixture.bearer),
-    )
-    .await?;
-    assert_eq!(status, StatusCode::OK, "{skill}");
-    assert_eq!(skill["data"]["name"], "Editorial voice");
-    assert_eq!(skill["data"]["enabled"], true);
-    let skill_id = skill["data"]["id"]
-        .as_str()
-        .ok_or("skill id missing")?
-        .to_owned();
-
-    let (status, skills) = call(
-        fixture.router.clone(),
-        Method::GET,
-        "/agent/skills",
-        None,
-        Body::empty(),
-        Some(&fixture.bearer),
-    )
-    .await?;
-    assert_eq!(status, StatusCode::OK, "{skills}");
-    assert_eq!(skills["data"]["skills"][0]["id"], skill_id);
-
-    let (status, updated_skill) = call(
-        fixture.router.clone(),
-        Method::PATCH,
-        &format!("/agent/skills/{skill_id}"),
-        Some("application/json"),
-        json!({"enabled": false}).to_string(),
-        Some(&fixture.bearer),
-    )
-    .await?;
-    assert_eq!(status, StatusCode::OK, "{updated_skill}");
-    assert_eq!(updated_skill["data"]["enabled"], false);
-
-    let (status, deleted_skill) = call(
-        fixture.router,
-        Method::DELETE,
-        &format!("/agent/skills/{skill_id}"),
-        None,
-        Body::empty(),
-        Some(&fixture.bearer),
-    )
-    .await?;
-    assert_eq!(status, StatusCode::OK, "{deleted_skill}");
-    assert_eq!(deleted_skill["data"]["success"], true);
-    Ok(())
 }
 
 #[tokio::test]
@@ -1174,68 +635,11 @@ async fn taskrun_routes_scope_by_organization_and_preserve_detail_event_json() -
 
 #[test]
 fn support_openapi_has_stable_operations_security_and_multipart_contract() -> TestResult {
-    let (_, document) = agent::router::<HttpState>()
-        .merge(storage::router::<HttpState>())
+    let (_, document) = storage::router::<HttpState>()
         .merge(taskrun::router::<HttpState>())
         .split_for_parts();
     let document = serde_json::to_value(document)?;
     let operations = [
-        ("/agent", "post", "submitAgentRequest"),
-        ("/agent/conversation/turn", "post", "submitConversationTurn"),
-        ("/agent/tools", "get", "listAgentTools"),
-        ("/agent/connectors", "get", "listMcpConnectors"),
-        ("/agent/connectors", "post", "createMcpConnector"),
-        (
-            "/agent/connectors/{connectorId}",
-            "patch",
-            "updateMcpConnector",
-        ),
-        (
-            "/agent/connectors/{connectorId}",
-            "delete",
-            "deleteMcpConnector",
-        ),
-        (
-            "/agent/connectors/{connectorId}/refresh",
-            "post",
-            "refreshMcpConnector",
-        ),
-        ("/agent/connector-presets", "get", "listConnectorPresets"),
-        (
-            "/agent/connector-presets/{presetId}/connect",
-            "post",
-            "connectConnectorPreset",
-        ),
-        ("/agent/connectors/oauth", "post", "connectOauthMcp"),
-        ("/agent/skills", "get", "listAgentSkills"),
-        ("/agent/skills", "post", "createAgentSkill"),
-        ("/agent/skills/{skillId}", "patch", "updateAgentSkill"),
-        ("/agent/skills/{skillId}", "delete", "deleteAgentSkill"),
-        (
-            "/agent/conversations/{articleId}",
-            "get",
-            "getConversationHistory",
-        ),
-        (
-            "/agent/conversations/{articleId}",
-            "delete",
-            "clearConversationHistory",
-        ),
-        (
-            "/agent/artifacts/{articleId}/pending",
-            "get",
-            "getPendingArtifacts",
-        ),
-        (
-            "/agent/artifacts/{messageId}/accept",
-            "post",
-            "acceptArtifact",
-        ),
-        (
-            "/agent/artifacts/{messageId}/reject",
-            "post",
-            "rejectArtifact",
-        ),
         ("/storage/files", "get", "listStorageFiles"),
         ("/storage/upload", "post", "uploadStorageFile"),
         ("/storage/blurhash", "post", "generateStorageBlurhash"),
@@ -1251,14 +655,6 @@ fn support_openapi_has_stable_operations_security_and_multipart_contract() -> Te
         assert_eq!(operation["operationId"], operation_id);
         assert_eq!(operation["security"][0]["bearerAuth"], json!([]));
     }
-    let live = &document["paths"]["/agent/live"]["get"];
-    assert_eq!(live["operationId"], "connectLiveSession");
-    assert!(live["responses"].get("101").is_some());
-    assert!(live["responses"].get("401").is_some());
-    let callback = &document["paths"]["/agent/connectors/oauth/callback"]["get"];
-    assert_eq!(callback["operationId"], "completeOauthConnector");
-    assert!(callback["responses"].get("302").is_some());
-    assert!(callback.get("security").is_none() || callback["security"].is_null());
     assert!(
         document["paths"]["/storage/upload"]["post"]["requestBody"]["content"]
             ["multipart/form-data"]
