@@ -880,7 +880,6 @@ fn new_article(
         current_draft_version_id: None,
         current_published_version_id: None,
         imagen_request_id: None,
-        session_memory: None,
         created_at: Some(now),
         updated_at: Some(now),
         external_url: None,

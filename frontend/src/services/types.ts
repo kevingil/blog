@@ -55,7 +55,6 @@ export interface Article {
   
   // Metadata
   image_generation_request_id?: string | null;
-  session_memory?: Record<string, any>;
   created_at: string;
   updated_at: string;
   external_url?: string | null;
@@ -241,7 +240,6 @@ export type ArticleListItem = {
     image_generation_request_id?: string | null;
     tag_ids?: number[];
     imagen_request_id?: string | null;
-    session_memory?: Record<string, any>;
     external_url?: string | null;
   };
   author: {

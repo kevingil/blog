@@ -457,7 +457,6 @@ fn article(id: Uuid, author_id: Uuid, title: &str, tags: Vec<i64>) -> Article {
         current_draft_version_id: None,
         current_published_version_id: None,
         imagen_request_id: None,
-        session_memory: None,
         created_at: Some(Utc::now()),
         updated_at: Some(Utc::now()),
         external_url: None,

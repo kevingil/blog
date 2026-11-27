@@ -16,7 +16,6 @@ use diesel::{
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use futures_util::FutureExt;
 use pgvector::{Vector, VectorExpressionMethods};
-use serde_json::{Map, Value};
 use tokio::{
     sync::Notify,
     task::JoinHandle,
@@ -1128,24 +1127,6 @@ fn vector_or_none(embedding: &[f32]) -> Option<Vector> {
     (!embedding.is_empty()).then(|| Vector::from(embedding.to_vec()))
 }
 
-fn session_memory_to_database(memory: &Option<BTreeMap<String, Value>>) -> Option<Value> {
-    memory.as_ref().map(|memory| {
-        Value::Object(
-            memory
-                .iter()
-                .map(|(key, value)| (key.clone(), value.clone()))
-                .collect::<Map<String, Value>>(),
-        )
-    })
-}
-
-fn session_memory_from_database(value: Option<Value>) -> Option<BTreeMap<String, Value>> {
-    match value {
-        Some(Value::Object(memory)) => Some(memory.into_iter().collect()),
-        _ => None,
-    }
-}
-
 fn new_article_row(
     value: &Article,
     tag_ids: Option<Vec<Option<i32>>>,
@@ -1160,8 +1141,6 @@ fn new_article_row(
         updated_at: now,
         published_at: value.published_at,
         imagen_request_id: value.imagen_request_id,
-        session_memory: session_memory_to_database(&value.session_memory)
-            .unwrap_or_else(|| Value::Object(Map::new())),
         draft_title: value.draft_title.clone(),
         draft_content: value.draft_content.clone(),
         draft_image_url: value.draft_image_url.clone(),
@@ -1191,7 +1170,6 @@ fn article_changeset(
         updated_at: now,
         published_at: Some(value.published_at),
         imagen_request_id: Some(value.imagen_request_id),
-        session_memory: Some(session_memory_to_database(&value.session_memory)),
         draft_title: value.draft_title.clone(),
         draft_content: value.draft_content.clone(),
         draft_image_url: value.draft_image_url.clone(),
@@ -1239,7 +1217,6 @@ impl TryFrom<ArticleRow> for Article {
             current_draft_version_id: row.current_draft_version_id,
             current_published_version_id: row.current_published_version_id,
             imagen_request_id: row.imagen_request_id,
-            session_memory: session_memory_from_database(row.session_memory),
             created_at: row.created_at,
             updated_at: row.updated_at,
             external_url: row.external_url.filter(|url| !url.is_empty()),

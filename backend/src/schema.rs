@@ -41,7 +41,6 @@ diesel::table! {
         updated_at -> Nullable<Timestamptz>,
         published_at -> Nullable<Timestamptz>,
         imagen_request_id -> Nullable<Uuid>,
-        session_memory -> Nullable<Jsonb>,
         #[max_length = 500]
         draft_title -> Nullable<Varchar>,
         draft_content -> Nullable<Text>,
@@ -97,21 +96,6 @@ diesel::table! {
         edited_by -> Nullable<Uuid>,
         created_at -> Nullable<Timestamptz>,
         upload_file_id -> Nullable<Uuid>,
-    }
-}
-
-diesel::table! {
-    use diesel::sql_types::*;
-    use pgvector::sql_types::*;
-
-    chat_message (id) {
-        id -> Uuid,
-        article_id -> Uuid,
-        #[max_length = 50]
-        role -> Varchar,
-        content -> Text,
-        meta_data -> Nullable<Jsonb>,
-        created_at -> Nullable<Timestamptz>,
     }
 }
 
@@ -230,22 +214,6 @@ diesel::table! {
 
 diesel::table! {
     use diesel::sql_types::*;
-    use pgvector::sql_types::*;
-
-    agent_skill (id) {
-        id -> Uuid,
-        #[max_length = 255]
-        name -> Varchar,
-        description -> Nullable<Text>,
-        instructions -> Text,
-        enabled -> Bool,
-        created_at -> Nullable<Timestamptz>,
-        updated_at -> Nullable<Timestamptz>,
-    }
-}
-
-diesel::table! {
-    use diesel::sql_types::*;
 
     mcp_access_token (id) {
         id -> Uuid,
@@ -298,28 +266,6 @@ diesel::table! {
         code_challenge -> Varchar,
         expires_at -> Timestamptz,
         used_at -> Nullable<Timestamptz>,
-    }
-}
-
-diesel::table! {
-    use diesel::sql_types::*;
-    use pgvector::sql_types::*;
-
-    mcp_connector (id) {
-        id -> Uuid,
-        #[max_length = 255]
-        name -> Varchar,
-        #[max_length = 20]
-        transport -> Varchar,
-        command -> Nullable<Text>,
-        args -> Jsonb,
-        url -> Nullable<Text>,
-        headers -> Jsonb,
-        env -> Jsonb,
-        enabled -> Bool,
-        last_error -> Nullable<Text>,
-        created_at -> Nullable<Timestamptz>,
-        updated_at -> Nullable<Timestamptz>,
     }
 }
 
@@ -594,7 +540,6 @@ diesel::joinable!(upload_file_refs -> upload_files (upload_file_id));
 diesel::joinable!(article -> account (author_id));
 diesel::joinable!(article_source -> article (article_id));
 diesel::joinable!(article_version -> account (edited_by));
-diesel::joinable!(chat_message -> article (article_id));
 diesel::joinable!(content_topic_match -> crawled_content (content_id));
 diesel::joinable!(content_topic_match -> insight_topic (topic_id));
 diesel::joinable!(crawled_content -> data_source (data_source_id));
@@ -617,11 +562,9 @@ diesel::joinable!(user_insight_status -> insight (insight_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     account,
-    agent_skill,
     article,
     article_source,
     article_version,
-    chat_message,
     content_topic_match,
     crawled_content,
     data_source,
@@ -630,7 +573,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     insight,
     insight_topic,
     mcp_access_token,
-    mcp_connector,
     oauth_authorization_code,
     oauth_client,
     organization,
