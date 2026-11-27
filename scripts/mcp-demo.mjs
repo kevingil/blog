@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Drives or checks the MCP demo in scripts/mcp-demo-prompt.txt.
 // Usage:
-//   node scripts/mcp-demo.mjs client --base URL --token TOKEN --prompt FILE --log FILE
+//   node scripts/mcp-demo.mjs client --base URL --token TOKEN --log FILE
 //   node scripts/mcp-demo.mjs verify --base URL --token TOKEN --trace FILE --mode client|codex
 //   node scripts/mcp-demo.mjs follow
 // follow reads Codex JSONL on stdin and prints a short line per event.
@@ -9,13 +9,115 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
-const SEARCHES = [
-  "draft",
-  "updatePage",
-  "upsertProject",
-  "upsertArticleSources",
-  "versions",
-  "listStorageFiles",
+const PAGE_SLUG = "mcp-demo-desk";
+const PROJECT_URL = "https://example.test/mcp-demo-harbor";
+
+// Fallback path used only when Codex is not run. The demo prompt has no
+// snippets; this client searches, then sends its own code.
+const CLIENT_SEARCHES = ["draft", "page", "project", "source", "storage"];
+const CLIENT_STEPS = [
+  {
+    name: "drafts",
+    code: `const specs = [
+  { title: "Harbor Notes", tags: ["harbor", "notes"], markdown: "The 6am ferry leaves before the bakery opens. I counted twelve cormorants on the breakwater and wrote the tide as 1.4 meters, falling.\\n\\nThis draft is the place I keep the numbers that do not belong in the logbook." },
+  { title: "Night Shift", tags: ["night", "shift"], markdown: "The night shift starts when the last bus turns around at the station. The radio sits on the shelf above the kettle.\\n\\nI keep a list of trains that left late and the names of the people who asked if the rain would stop." }
+];
+const created = [];
+for (let i = 0; i < specs.length; i++) {
+  const spec = specs[i];
+  const response = await blog.request({ method: "POST", path: "/blog/drafts", body: { title: spec.title, markdown: spec.markdown, tags: spec.tags } });
+  if (response.status !== 201) throw new Error("create draft failed " + response.status + " " + JSON.stringify(response.body));
+  created.push(response.body.data.article.draft_title);
+}
+const listed = await blog.request({ method: "GET", path: "/blog/articles", query: { status: "drafts", articlesPerPage: 100, page: 1 } });
+if (listed.status !== 200) throw new Error("list drafts failed " + listed.status);
+return { created: created, listed: listed.body.data.articles.map(function (item) { return item.article.draft_title; }) };`,
+  },
+  {
+    name: "edit",
+    code: `const listed = await blog.request({ method: "GET", path: "/blog/articles", query: { status: "drafts", articlesPerPage: 100, page: 1 } });
+let article = null;
+const items = listed.body.data.articles;
+for (let i = 0; i < items.length; i++) {
+  if (items[i].article.draft_title === "Harbor Notes") article = items[i].article;
+}
+if (!article) throw new Error("Harbor Notes was not listed");
+const updated = await blog.request({
+  method: "POST",
+  path: "/blog/articles/" + article.slug + "/update",
+  body: {
+    title: "Harbor Notes, revised",
+    content: article.draft_content + "\\n\\nRevised after the first draft. The lamp on the north pier was repaired before noon.",
+    tags: ["harbor", "revised"],
+    image_url: ""
+  }
+});
+if (updated.status !== 200) throw new Error("update failed " + updated.status + " " + JSON.stringify(updated.body));
+const slug = updated.body.data.article.slug;
+const versions = await blog.request({ method: "GET", path: "/blog/articles/" + slug + "/versions" });
+if (versions.status !== 200) throw new Error("versions failed " + versions.status);
+return { title: updated.body.data.article.draft_title, slug: slug, versionCount: versions.body.data.versions.length };`,
+  },
+  {
+    name: "page",
+    code: `const created = await blog.request({
+  method: "POST",
+  path: "/dashboard/pages",
+  body: { slug: "mcp-demo-desk", title: "Desk", content: "A short page written through the scripted client, before the revision.", description: "Demo page.", image_url: "", is_published: false }
+});
+if (created.status !== 201) throw new Error("page create failed " + created.status + " " + JSON.stringify(created.body));
+const edited = await blog.request({
+  method: "PUT",
+  path: "/dashboard/pages/" + created.body.data.id,
+  body: { title: "Desk, revised", content: "A short page written through the scripted client. Revised after the first save, with a longer body." }
+});
+if (edited.status !== 200) throw new Error("page update failed " + edited.status + " " + JSON.stringify(edited.body));
+return { slug: edited.body.data.slug, title: edited.body.data.title };`,
+  },
+  {
+    name: "project",
+    code: `const url = "https://example.test/mcp-demo-harbor";
+const first = await blog.request({
+  method: "POST", path: "/projects/upsert",
+  body: { title: "Harbor project", description: "First write of the harbor project.", content: "First body.", tags: ["harbor"], image_url: "", url: url }
+});
+const second = await blog.request({
+  method: "POST", path: "/projects/upsert",
+  body: { title: "Harbor project, second write", description: "Second write of the harbor project.", content: "Second body, same URL.", tags: ["harbor"], image_url: "", url: url }
+});
+if (first.status !== 200 || second.status !== 200) throw new Error("upsert failed " + first.status + " " + second.status);
+return { firstId: first.body.data.id, secondId: second.body.data.id, same: first.body.data.id === second.body.data.id, title: second.body.data.title };`,
+  },
+  {
+    name: "sources",
+    code: `const listed = await blog.request({ method: "GET", path: "/blog/articles", query: { status: "drafts", articlesPerPage: 100, page: 1 } });
+let articleId = null;
+const items = listed.body.data.articles;
+for (let i = 0; i < items.length; i++) {
+  if (items[i].article.draft_title === "Harbor Notes, revised") articleId = items[i].article.id;
+}
+if (!articleId) throw new Error("revised draft was not listed");
+const saved = await blog.request({
+  method: "PUT",
+  path: "/sources/article/" + articleId,
+  body: { sources: [
+    { title: "Tide chart", content: "Heights for the week.", url: "https://example.test/mcp-demo-tide", source_type: "web" },
+    { title: "Logbook", content: "Notes from the dock.", url: "https://example.test/mcp-demo-log", source_type: "web" }
+  ] }
+});
+if (saved.status !== 200) throw new Error("sources failed " + saved.status + " " + JSON.stringify(saved.body));
+return { count: saved.body.data.sources.length };`,
+  },
+  {
+    name: "storage",
+    code: `const listed = await blog.request({ method: "GET", path: "/storage/files" });
+if (listed.status !== 200) throw new Error("storage failed " + listed.status + " " + JSON.stringify(listed.body));
+return { storageStatus: listed.status, files: listed.body.data.files.length };`,
+  },
+  {
+    name: "refuse",
+    code: `return await blog.request({ method: "GET", path: "/auth/me" });`,
+  },
 ];
 
 const command = process.argv[2];
@@ -61,30 +163,6 @@ function requireArg(parsed, name) {
     throw new Error(`--${name} is required`);
   }
   return value;
-}
-
-function loadSteps(promptPath) {
-  const text = readFileSync(promptPath, "utf8");
-  const parts = text.split(/^### Execute: /m).slice(1);
-  const steps = parts.map((part) => {
-    const name = part.slice(0, part.indexOf("\n")).trim();
-    const fence = part.match(/```js\n([\s\S]*?)\n```/);
-    if (!fence) {
-      throw new Error(`execute block ${name} has no javascript`);
-    }
-    return { name, code: fence[1] };
-  });
-  const names = steps.map((step) => step.name);
-  const expected = ["drafts", "edit", "page", "project", "sources", "storage", "refuse"];
-  if (names.join(",") !== expected.join(",")) {
-    throw new Error(`prompt execute blocks are ${names.join(", ")}`);
-  }
-  for (const query of SEARCHES) {
-    if (!text.includes(query)) {
-      throw new Error(`prompt is missing search query ${query}`);
-    }
-  }
-  return steps;
 }
 
 async function mcpCall(base, token, message) {
@@ -135,9 +213,8 @@ function toolOutcome(result) {
 async function runClient(args) {
   const base = requireArg(args, "base").replace(/\/$/, "");
   const token = requireArg(args, "token");
-  const prompt = requireArg(args, "prompt");
   const logPath = requireArg(args, "log");
-  const steps = loadSteps(prompt);
+  const steps = CLIENT_STEPS;
   let id = 1;
 
   async function tool(name, toolArgs) {
@@ -163,7 +240,7 @@ async function runClient(args) {
   }
 
   const searches = [];
-  for (const query of SEARCHES) {
+  for (const query of CLIENT_SEARCHES) {
     const outcome = await tool("search", { query, limit: 25 });
     if (outcome.isError) {
       throw new Error(`search ${query} failed: ${outcome.text}`);
@@ -193,15 +270,6 @@ async function runClient(args) {
     }
   }
 
-  const project = executed.find((step) => step.name === "project");
-  if (!project || !/"same"\s*:\s*true/.test(project.text)) {
-    throw new Error("project upsert did not report the same id twice");
-  }
-  const storage = executed.find((step) => step.name === "storage");
-  if (!storage || !/"storageStatus"\s*:\s*200/.test(storage.text)) {
-    throw new Error("storage listing did not return status 200");
-  }
-
   writeFileSync(
     logPath,
     JSON.stringify({ searches, executed }, null, 2),
@@ -217,77 +285,73 @@ async function runVerify(args) {
   const failures = [];
 
   const articles = await api(base, token, "/blog/articles?status=drafts&articlesPerPage=100&page=1");
-  const items = articles.body?.data?.articles ?? [];
-  const harbor = items.find((item) => item.article?.draft_title === "Harbor Notes, revised");
-  const night = items.find((item) => item.article?.draft_title === "Night Shift");
-  if (!harbor) {
-    failures.push("missing draft Harbor Notes, revised");
-  } else {
-    if (harbor.article.published_at) {
-      failures.push("Harbor Notes, revised is published");
+  const drafts = (articles.body?.data?.articles ?? []).filter((item) => {
+    const article = item.article ?? {};
+    return !article.published_at && String(article.draft_content ?? "").trim().length >= 80;
+  });
+  if (drafts.length < 2) {
+    failures.push(`expected at least two unpublished drafts with real prose, found ${drafts.length}`);
+  }
+  const titles = [];
+  let revised = null;
+  for (const item of drafts) {
+    const article = item.article;
+    const tags = (item.tags ?? []).map((tag) => tag.name).filter(Boolean);
+    if (tags.length < 1) {
+      failures.push(`draft ${article.draft_title} has no tags`);
     }
-    const tags = (harbor.tags ?? []).map((tag) => tag.name);
-    if (!tags.includes("harbor") || !tags.includes("revised")) {
-      failures.push(`Harbor Notes tags are ${tags.join(", ")}`);
-    }
-    if (!String(harbor.article.draft_content).includes("Revised after the first draft.")) {
-      failures.push("Harbor Notes body is missing the revision");
-    }
-    const versions = await api(
-      base,
-      token,
-      `/blog/articles/${harbor.article.slug}/versions`,
-    );
+    titles.push(article.draft_title);
+    const versions = await api(base, token, `/blog/articles/${article.slug}/versions`);
     const history = versions.body?.data?.versions ?? [];
-    const prior = history.some(
-      (version) => version.title === "Harbor Notes" || String(version.content).includes("cormorants"),
+    const prior = history.find(
+      (version) => version.title !== article.draft_title || version.content !== article.draft_content,
     );
-    if (versions.status !== 200 || history.length < 1 || !prior) {
-      failures.push("Harbor Notes has no pre-edit version");
-    } else {
-      console.log(`versions: ${history.length} for ${harbor.article.slug}`);
+    if (versions.status === 200 && prior && !revised) {
+      revised = {
+        title: article.draft_title,
+        slug: article.slug,
+        versions: history.length,
+        priorTitle: prior.title,
+      };
+      console.log(`versions: ${history.length} for ${article.slug} (prior title ${prior.title})`);
     }
   }
-  if (!night) {
-    failures.push("missing draft Night Shift");
+  if (!revised) {
+    failures.push("no draft has a prior version with a different title or body");
+  }
+
+  let sourceCount = 0;
+  for (const item of drafts) {
+    const sources = await api(base, token, `/sources/article/${item.article.id}`);
+    const rows = (sources.body?.data?.sources ?? []).filter(
+      (source) => source.title && source.url && source.content,
+    );
+    if (rows.length > sourceCount) {
+      sourceCount = rows.length;
+    }
+  }
+  if (sourceCount < 2) {
+    failures.push(`expected two sources on an article, found ${sourceCount}`);
   } else {
-    if (night.article.published_at) {
-      failures.push("Night Shift is published");
-    }
-    const tags = (night.tags ?? []).map((tag) => tag.name);
-    if (!tags.includes("night") || !tags.includes("shift")) {
-      failures.push(`Night Shift tags are ${tags.join(", ")}`);
-    }
-    if (!String(night.article.draft_content).includes("The night shift starts")) {
-      failures.push("Night Shift body is missing");
-    }
+    console.log(`sources: ${sourceCount}`);
   }
 
   const pages = await api(base, token, "/dashboard/pages?page=1&perPage=100");
-  const page = (pages.body?.data?.pages ?? []).find((item) => item.slug === "mcp-demo-desk");
-  if (!page || page.title !== "Desk, revised" || !String(page.content).includes("Revised after the first save.")) {
-    failures.push("page mcp-demo-desk was not revised");
+  const page = (pages.body?.data?.pages ?? []).find((item) => item.slug === PAGE_SLUG);
+  if (!page) {
+    failures.push(`page ${PAGE_SLUG} is missing`);
+  } else if (String(page.content ?? "").trim().length < 40) {
+    failures.push(`page ${PAGE_SLUG} body is too short`);
+  } else if (!page.created_at || page.updated_at === page.created_at) {
+    failures.push(`page ${PAGE_SLUG} was not updated after it was created`);
   }
 
   const projects = await collectProjects(base, token);
-  const harborProjects = projects.filter((project) => project.url === "https://example.test/mcp-demo-harbor");
-  if (harborProjects.length !== 1 || harborProjects[0].title !== "Harbor project, second write") {
+  const matches = projects.filter((project) => project.url === PROJECT_URL);
+  if (matches.length !== 1 || !matches[0].title || !matches[0].description) {
     failures.push(
-      `expected one harbor project, found ${harborProjects.length}: ${harborProjects.map((project) => project.title).join(", ")}`,
+      `expected one project at ${PROJECT_URL}, found ${matches.length}: ${matches.map((project) => project.title).join(", ")}`,
     );
-  }
-
-  if (harbor) {
-    const sources = await api(base, token, `/sources/article/${harbor.article.id}`);
-    const urls = (sources.body?.data?.sources ?? []).map((source) => source.url);
-    for (const url of ["https://example.test/mcp-demo-tide", "https://example.test/mcp-demo-log"]) {
-      if (!urls.includes(url)) {
-        failures.push(`missing source ${url}`);
-      }
-    }
-    if (sources.status === 200 && urls.length) {
-      console.log(`sources: ${urls.length}`);
-    }
   }
 
   const storage = await api(base, token, "/storage/files");
@@ -295,7 +359,7 @@ async function runVerify(args) {
     failures.push(`storage list returned ${storage.status}`);
   }
 
-  checkTrace(trace, mode, failures);
+  checkTrace(trace, mode, failures, [...titles, revised?.priorTitle].filter(Boolean));
 
   if (failures.length) {
     for (const failure of failures) {
@@ -304,32 +368,30 @@ async function runVerify(args) {
     throw new Error(`${failures.length} verification check(s) failed`);
   }
 
-  console.log("verified drafts: Harbor Notes, revised; Night Shift");
-  console.log("verified page: Desk, revised");
-  console.log("verified project: Harbor project, second write (one row)");
-  console.log("verified sources and a refused /auth/me call");
+  console.log(`verified drafts: ${titles.join("; ")}`);
+  console.log(`verified revision: ${revised.title}`);
+  console.log(`verified page: ${page.title} (${page.slug})`);
+  console.log(`verified project: ${matches[0].title} (one row)`);
+  console.log(`verified sources: ${sourceCount}`);
+  console.log("verified a refused current-user call");
 }
 
-function checkTrace(trace, mode, failures) {
+function checkTrace(trace, mode, failures, titles) {
   const text = readFileSync(trace, "utf8");
   if (mode === "client") {
     const log = JSON.parse(text);
-    const queries = (log.searches ?? []).map((search) => search.query);
-    for (const query of SEARCHES) {
-      if (!queries.includes(query)) {
-        failures.push(`client log missing search ${query}`);
-      }
+    if ((log.searches ?? []).length < 1) {
+      failures.push("client log has no search calls");
     }
-    const byName = new Map((log.executed ?? []).map((step) => [step.name, step]));
-    for (const name of ["drafts", "edit", "page", "project", "sources", "storage"]) {
-      const step = byName.get(name);
-      if (!step || step.isError) {
-        failures.push(`client log missing successful execute ${name}`);
-      }
+    const refused = (log.executed ?? []).find((step) => step.name === "refuse");
+    if (!refused?.isError || !/refused/i.test(refused.text)) {
+      failures.push("client log does not show a refused current-user call");
     }
-    const refused = byName.get("refuse");
-    if (!refused?.isError || !/refused/i.test(refused.text) || !refused.text.includes("/auth/me")) {
-      failures.push("client log does not show /auth/me refused");
+    const listed = (log.executed ?? []).some(
+      (step) => !step.isError && distinctTitles(step.text, titles).length >= 2,
+    );
+    if (titles.length >= 2 && !listed) {
+      failures.push("client log did not list both drafts");
     }
     return;
   }
@@ -337,26 +399,102 @@ function checkTrace(trace, mode, failures) {
     failures.push(`unknown trace mode ${mode}`);
     return;
   }
-  if (!text.trim()) {
-    failures.push("Codex event log is empty");
+  const calls = codexToolCalls(text);
+  if (calls.length === 0) {
+    failures.push("Codex transcript has no MCP tool calls");
     return;
   }
-  // Tool results are JSON strings inside the JSONL events, so quotes are escaped.
-  const readable = text.replace(/\\"/g, '"');
-  for (const query of SEARCHES) {
-    if (!readable.includes(query)) {
-      failures.push(`Codex transcript missing search query ${query}`);
+  const searchAt = calls.findIndex((call) => call.tool === "search" && !call.failed);
+  const executeAt = calls.findIndex((call) => call.tool === "execute");
+  if (searchAt === -1 || (executeAt !== -1 && searchAt > executeAt)) {
+    failures.push("Codex did not search the API before execute");
+  }
+  const code = calls
+    .filter((call) => call.tool === "execute")
+    .map((call) => call.code)
+    .join("\n");
+  if (!code.includes(PAGE_SLUG)) {
+    failures.push(`Codex execute code never used the page slug ${PAGE_SLUG}`);
+  }
+  const urlWrites = code.split(PROJECT_URL).length - 1;
+  if (urlWrites < 2) {
+    failures.push(`Codex execute code mentions ${PROJECT_URL} ${urlWrites} time(s)`);
+  }
+  const stored = calls.some(
+    (call) => call.tool === "execute" && !call.failed && /storage/i.test(call.code),
+  );
+  if (!stored) {
+    failures.push("Codex has no successful execute that lists storage");
+  }
+  const refused = calls.some(
+    (call) => call.tool === "execute" && call.failed && /refused/i.test(call.text),
+  );
+  if (!refused) {
+    failures.push("Codex transcript does not show a refused current-user call");
+  }
+  if (titles.length >= 2) {
+    const listed = calls.some(
+      (call) => call.tool === "execute" && !call.failed && distinctTitles(call.text, titles).length >= 2,
+    );
+    if (!listed) {
+      failures.push("Codex transcript has no execute result that lists both drafts");
     }
   }
-  if (!/"same"\s*:\s*true/.test(readable)) {
-    failures.push("Codex transcript does not show the project upsert returning the same id");
+}
+
+function distinctTitles(text, titles) {
+  const sorted = [...new Set(titles.filter(Boolean))].sort((a, b) => b.length - a.length);
+  let rest = text;
+  const found = [];
+  for (const title of sorted) {
+    const at = rest.indexOf(title);
+    if (at === -1) {
+      continue;
+    }
+    found.push(title);
+    rest = `${rest.slice(0, at)}${rest.slice(at + title.length)}`;
   }
-  if (!/"storageStatus"\s*:\s*200/.test(readable)) {
-    failures.push("Codex transcript does not show storage status 200");
+  return found;
+}
+
+function codexToolCalls(text) {
+  const calls = [];
+  for (const line of text.split("\n")) {
+    if (!line.trim()) {
+      continue;
+    }
+    let event;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (event.type !== "item.completed" || event.item?.type !== "mcp_tool_call") {
+      continue;
+    }
+    const item = event.item;
+    const chunks = [];
+    const content = item.result?.content;
+    if (Array.isArray(content)) {
+      for (const block of content) {
+        if (typeof block?.text === "string") {
+          chunks.push(block.text);
+        }
+      }
+    }
+    if (typeof item.error === "string") {
+      chunks.push(item.error);
+    } else if (item.error) {
+      chunks.push(JSON.stringify(item.error));
+    }
+    calls.push({
+      tool: item.tool || "",
+      failed: item.status === "failed" || Boolean(item.error),
+      code: item.arguments?.code || "",
+      text: chunks.join("\n"),
+    });
   }
-  if (!/refused/i.test(readable) || !readable.includes("/auth/me")) {
-    failures.push("Codex transcript does not show /auth/me refused");
-  }
+  return calls;
 }
 
 async function collectProjects(base, token) {

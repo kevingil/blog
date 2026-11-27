@@ -236,11 +236,12 @@ admin. The script mints an `mcp_` token and registers
 `http://127.0.0.1:8080/mcp` with the Codex CLI as a Streamable HTTP server.
 
 Codex (`npx @openai/codex`, then `codex exec --dangerously-bypass-approvals-and-sandbox`) follows
-[`scripts/mcp-demo-prompt.txt`](scripts/mcp-demo-prompt.txt): search the content
-API, create two drafts, edit one and read its versions, edit a page, upsert one
-project by URL twice, upsert that article's sources, list storage, and call
-`GET /auth/me`, which the server refuses. The script then reads those rows
-back through the REST API and exits non-zero if any check fails.
+[`scripts/mcp-demo-prompt.txt`](scripts/mcp-demo-prompt.txt). That prompt states
+the outcomes and does not include paths or code: search the API, write two
+drafts on a theme Codex picks, list them, revise one, edit the page
+`mcp-demo-desk`, upsert `https://example.test/mcp-demo-harbor` twice, attach
+two sources, list storage, and try to read the current user. The script then
+reads those rows back through the REST API and exits non-zero if any check fails.
 
 ```bash
 export OPENAI_API_KEY=sk-...
@@ -254,7 +255,7 @@ use only the blog MCP tools.
 `OPENAI_API_KEY` is read from the environment for Codex only. The script passes
 that value to Codex as `CODEX_API_KEY`, which is the credential the Responses
 API call uses. The backend keeps the fixture key from the test profile. `MCP_DEMO_CLIENT=1`, or a missing key,
-skips Codex and runs the same MCP calls from
+skips Codex and runs a scripted MCP client in
 [`scripts/mcp-demo.mjs`](scripts/mcp-demo.mjs). That path does not write a Codex
 transcript. The script is not part of CI.
 

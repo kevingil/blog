@@ -294,7 +294,7 @@ trace=""
 driver_status=0
 if [ "$use_client" -eq 1 ]; then
   if [ -z "$real_openai_key" ]; then
-    echo "OPENAI_API_KEY is not set. Codex was not run. A scripted MCP client will make the same tool calls. No Codex transcript will be written."
+    echo "OPENAI_API_KEY is not set. Codex was not run. A scripted MCP client will cover the same outcomes. No Codex transcript will be written."
   else
     echo "MCP_DEMO_CLIENT is set. Skipping Codex and using the scripted MCP client."
   fi
@@ -320,6 +320,10 @@ else
   env CODEX_HOME="$codex_home" codex mcp list
   events="$artifact_dir/codex-events.jsonl"
   : >"$events"
+  if grep -q '```' "$prompt"; then
+    echo "demo prompt must not contain code snippets" >&2
+    exit 1
+  fi
   echo "running Codex (OpenAI key length ${#real_openai_key})"
   # exec cannot prompt, and approval_policy=never denies MCP calls outright.
   # Bypass is what lets the non-interactive run call the local server.
