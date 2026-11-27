@@ -246,6 +246,24 @@ diesel::table! {
 
 diesel::table! {
     use diesel::sql_types::*;
+
+    mcp_access_token (id) {
+        id -> Uuid,
+        account_id -> Uuid,
+        #[max_length = 100]
+        name -> Varchar,
+        #[max_length = 64]
+        token_hash -> Varchar,
+        #[max_length = 16]
+        token_prefix -> Varchar,
+        created_at -> Timestamptz,
+        last_used_at -> Nullable<Timestamptz>,
+        revoked_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
     use pgvector::sql_types::*;
 
     mcp_connector (id) {
@@ -528,6 +546,7 @@ diesel::table! {
 }
 
 diesel::joinable!(account -> organization (organization_id));
+diesel::joinable!(mcp_access_token -> account (account_id));
 diesel::joinable!(upload_files -> account (created_by));
 diesel::joinable!(upload_file_refs -> upload_files (upload_file_id));
 diesel::joinable!(article -> account (author_id));
@@ -568,6 +587,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     imagen_request,
     insight,
     insight_topic,
+    mcp_access_token,
     mcp_connector,
     organization,
     page,
