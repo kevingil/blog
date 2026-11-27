@@ -9,6 +9,7 @@ pub mod files;
 pub mod image;
 pub mod insight;
 pub mod insight_topic;
+pub mod mcp_access_token;
 pub mod mcp_connector;
 pub mod organization;
 pub mod page;
