@@ -1,0 +1,38 @@
+app = "kevingil-blog"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  HOST = "0.0.0.0"
+  PORT = "8080"
+  RUST_LOG = "info"
+  PUBLIC_API_URL = "https://kevingil-blog.fly.dev"
+  ALLOWED_ORIGINS = "https://blog.kevin-gil.workers.dev,https://kevingil.com"
+  S3_ENDPOINT = "https://833fb1fb2a65b7d47301b0106339161a.r2.cloudflarestorage.com/"
+  S3_BUCKET = "blog"
+  S3_URL_PREFIX = "https://pub-77540a26e0ed46cb9cd842883ee82a7f.r2.dev"
+  SSL_CERT_DIR = "/etc/ssl/certs"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "20s"
+    method = "GET"
+    path = "/health"
+
+[deploy]
+  release_command = "/usr/local/bin/pre-deploy"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
