@@ -232,32 +232,39 @@ docker compose -f docker-compose.parity.yml up --build \
 Postgres and MinIO services, migrates a separate `blog_mcp_demo` database with
 the local `migrate` binary, and runs `blog-backend` against the local fixture
 process. The first account, `mcp-demo@example.com` / `McpDemoPass123!`, is the
-admin. The script mints an `mcp_` token and registers
-`http://127.0.0.1:8080/mcp` with the Codex CLI as a Streamable HTTP server.
+admin. The script mints an `mcp_` token and writes a project-scoped
+[OpenCode](https://opencode.ai) config in its own workspace. It does not edit
+`~/.config/opencode`. That config registers `http://127.0.0.1:8080/mcp` as a
+remote MCP server (`oauth: false`, `Authorization: Bearer {env:BLOG_MCP_TOKEN}`,
+`codemode: false`, `protocol: "legacy"`). `codemode: false` puts the server's
+`search` and `execute` tools on the model's tool list as `blog_search` and
+`blog_execute`.
 
-Codex (`npx @openai/codex`, then `codex exec --dangerously-bypass-approvals-and-sandbox`) follows
-[`scripts/mcp-demo-prompt.txt`](scripts/mcp-demo-prompt.txt). That prompt states
-the outcomes and does not include paths or code: search the API, write two
-drafts on a theme Codex picks, list them, revise one, edit the page
-`mcp-demo-desk`, upsert `https://example.test/mcp-demo-harbor` twice, attach
-two sources, list storage, and try to read the current user. The script then
-reads those rows back through the REST API and exits non-zero if any check fails.
+The script installs OpenCode CLI 2.4.2 (`@opencode/cli`) when that version is
+not already on `PATH` or in its cache, starts a private `opencode serve` in
+that workspace, and runs `opencode run --format json` against it on
+[`scripts/mcp-demo-prompt.txt`](scripts/mcp-demo-prompt.txt). That prompt
+states the outcomes and does not include paths or code: search the API, write
+two drafts on a theme, list them, revise one, edit the page `mcp-demo-desk`,
+upsert `https://example.test/mcp-demo-harbor` twice, attach two sources, list
+storage, and try to read the current user. The script then reads those rows
+back through the REST API and exits non-zero if any check fails.
+
+`MCP_DEMO_MODEL` is required, in `provider/model` form, and is passed to
+`opencode run --model`. There is no default. OpenCode reads the provider
+credential from the environment. Any OpenCode provider works: OpenAI, another
+lab, or an open-source model behind an OpenAI-compatible endpoint. The script
+does not set a provider, a base URL, or an API key.
 
 ```bash
-export OPENAI_API_KEY=sk-...
-./scripts/mcp-demo.sh
+MCP_DEMO_MODEL=openai/gpt-6.1-sol ./scripts/mcp-demo.sh
+MCP_DEMO_MODEL=anthropic/claude-sonnet-5-5 ./scripts/mcp-demo.sh
 ```
 
-`codex exec` cannot ask for approval, and the `never` policy rejects MCP calls,
-so the script bypasses the sandbox for that process. The prompt tells Codex to
-use only the blog MCP tools.
-
-`OPENAI_API_KEY` is read from the environment for Codex only. The script passes
-that value to Codex as `CODEX_API_KEY`, which is the credential the Responses
-API call uses. The backend keeps the fixture key from the test profile. `MCP_DEMO_CLIENT=1`, or a missing key,
-skips Codex and runs a scripted MCP client in
-[`scripts/mcp-demo.mjs`](scripts/mcp-demo.mjs). That path does not write a Codex
-transcript. The script is not part of CI.
+An unset `MCP_DEMO_MODEL` exits non-zero. `MCP_DEMO_CLIENT=1` skips OpenCode,
+does not require a model, and runs the scripted MCP client in
+[`scripts/mcp-demo.mjs`](scripts/mcp-demo.mjs). That path does not write an
+OpenCode transcript. The script is not part of CI.
 
 Logs and, when `asciinema` is installed, a cast of the run go to `tmp/mcp-demo`.
 Set `MCP_DEMO_ARTIFACT_DIR` to write them somewhere else. `agg` renders a gif
