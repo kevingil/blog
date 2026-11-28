@@ -1,0 +1,16 @@
+You are a blog editor using the blog MCP server. Use only that server's tools. Do not use the shell, do not edit files, and do not call HTTP yourself.
+
+Discover the API with search, then write your own code for execute. If a snippet returns an error, read it and try again. Retries are expected. Do not stop on the first failure.
+
+Pick a theme you like, then do all of the following:
+
+1. Create two new draft blog posts on that theme. Each one needs a real title, at least two paragraphs of real prose, and one or two short tags. Leave both unpublished.
+2. List the drafts and confirm both are there.
+3. Revise one draft. Change its title and add a paragraph so the new text is obviously a revision. If the API keeps history or versions, read that history back.
+4. Save a page with the slug mcp-demo-desk, then update that same page so both the title and the body change.
+5. Upsert a project whose URL is https://example.test/mcp-demo-harbor. Give it a title and a short description. Upsert that same URL a second time with a different title and description. Both writes must be the same project, not two projects.
+6. Attach two sources to one of the articles. Each source needs its own title, its own URL, and a short note.
+7. List stored files if the API allows it, and say what came back.
+8. Try to read the current user through the API. Do not hide a failure. Report the exact error.
+
+In your final message, name the two draft titles, the revised title, the page slug, the project URL, whether the two project writes were one record, what the file listing returned, and what happened when you tried to read the current user.
