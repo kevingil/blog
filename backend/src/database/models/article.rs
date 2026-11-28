@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
 use diesel::{AsChangeset, Identifiable, Insertable, Queryable, Selectable};
 use pgvector::Vector;
-use serde_json::Value;
 use uuid::Uuid;
 
 use crate::schema::{article, article_version};
@@ -18,7 +17,6 @@ pub struct ArticleRow {
     pub updated_at: Option<DateTime<Utc>>,
     pub published_at: Option<DateTime<Utc>>,
     pub imagen_request_id: Option<Uuid>,
-    pub session_memory: Option<Value>,
     pub draft_title: Option<String>,
     pub draft_content: Option<String>,
     pub draft_image_url: Option<String>,
@@ -45,7 +43,6 @@ pub struct NewArticleRow {
     pub updated_at: DateTime<Utc>,
     pub published_at: Option<DateTime<Utc>>,
     pub imagen_request_id: Option<Uuid>,
-    pub session_memory: Value,
     pub draft_title: String,
     pub draft_content: String,
     pub draft_image_url: String,
@@ -71,7 +68,6 @@ pub struct ArticleChangeset {
     pub updated_at: DateTime<Utc>,
     pub published_at: Option<Option<DateTime<Utc>>>,
     pub imagen_request_id: Option<Option<Uuid>>,
-    pub session_memory: Option<Option<Value>>,
     pub draft_title: String,
     pub draft_content: String,
     pub draft_image_url: String,

@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, env, error::Error, io, time::Duration as StdDuration};
+use std::{env, error::Error, io, time::Duration as StdDuration};
 
 use blog_backend::{
     core::article::{
@@ -16,7 +16,6 @@ use diesel::{Connection, ExpressionMethods, PgConnection, QueryDsl};
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use secrecy::SecretString;
-use serde_json::json;
 use uuid::Uuid;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -42,8 +41,6 @@ fn article_fixture(
     tag_ids: Vec<i64>,
     embedding_value: f32,
 ) -> Article {
-    let mut memory = BTreeMap::new();
-    memory.insert("phase".to_owned(), json!("article-repository-test"));
     Article {
         id,
         slug,
@@ -61,7 +58,6 @@ fn article_fixture(
         current_draft_version_id: None,
         current_published_version_id: None,
         imagen_request_id: None,
-        session_memory: Some(memory),
         created_at: None,
         updated_at: None,
         external_url: None,
@@ -175,7 +171,6 @@ async fn exercise_repository(
     let loaded = repository.find_by_id(first.id).await?;
     assert_eq!(loaded.slug, first.slug);
     assert_eq!(loaded.tag_ids, first.tag_ids);
-    assert_eq!(loaded.session_memory, first.session_memory);
     assert_eq!(loaded.draft_embedding.len(), 1536);
     assert!(loaded.is_published());
     assert_eq!(
@@ -194,43 +189,6 @@ async fn exercise_repository(
 
     assert!(repository.slug_exists(&first.slug, None).await?);
     assert!(!repository.slug_exists(&first.slug, Some(first.id)).await?);
-
-    let mut connection = pool.get().await?;
-    diesel::update(article::table.find(first.id))
-        .set(article::session_memory.eq::<Option<serde_json::Value>>(None))
-        .execute(&mut connection)
-        .await?;
-    drop(connection);
-    assert!(
-        repository
-            .find_by_id(first.id)
-            .await?
-            .session_memory
-            .is_none()
-    );
-    let mut connection = pool.get().await?;
-    diesel::update(article::table.find(first.id))
-        .set(article::session_memory.eq(Some(json!({}))))
-        .execute(&mut connection)
-        .await?;
-    drop(connection);
-    assert_eq!(
-        repository.find_by_id(first.id).await?.session_memory,
-        Some(BTreeMap::new())
-    );
-    let mut connection = pool.get().await?;
-    diesel::update(article::table.find(first.id))
-        .set(article::session_memory.eq(Some(json!([]))))
-        .execute(&mut connection)
-        .await?;
-    drop(connection);
-    assert!(
-        repository
-            .find_by_id(first.id)
-            .await?
-            .session_memory
-            .is_none()
-    );
 
     let (default_order, default_total) = repository
         .list(ArticleListOptions {

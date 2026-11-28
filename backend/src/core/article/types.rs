@@ -1,8 +1,5 @@
-use std::collections::BTreeMap;
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -26,7 +23,6 @@ pub struct Article {
     pub current_draft_version_id: Option<Uuid>,
     pub current_published_version_id: Option<Uuid>,
     pub imagen_request_id: Option<Uuid>,
-    pub session_memory: Option<BTreeMap<String, Value>>,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
     /// Set when this row points at the author's post on another site.

@@ -26,9 +26,6 @@ export type Article = {
     current_draft_version_id?: string | null;
     current_published_version_id?: string | null;
     imagen_request_id?: string | null;
-    session_memory?: {
-        [key: string]: unknown;
-    } | null;
     created_at?: string | null;
     updated_at?: string | null;
     /**
@@ -874,9 +871,6 @@ export type SuccessResponseArticle = {
         current_draft_version_id?: string | null;
         current_published_version_id?: string | null;
         imagen_request_id?: string | null;
-        session_memory?: {
-            [key: string]: unknown;
-        } | null;
         created_at?: string | null;
         updated_at?: string | null;
         /**

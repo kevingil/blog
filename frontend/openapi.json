@@ -7567,16 +7567,6 @@
             ],
             "format": "uuid"
           },
-          "session_memory": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "additionalProperties": {},
-            "propertyNames": {
-              "type": "string"
-            }
-          },
           "created_at": {
             "type": [
               "string",
@@ -10821,16 +10811,6 @@
                   "null"
                 ],
                 "format": "uuid"
-              },
-              "session_memory": {
-                "type": [
-                  "object",
-                  "null"
-                ],
-                "additionalProperties": {},
-                "propertyNames": {
-                  "type": "string"
-                }
               },
               "created_at": {
                 "type": [
