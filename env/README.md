@@ -1,8 +1,8 @@
 # Local environment profiles
 
-The application itself reads ordinary process environment variables. Render is
-the production source of those variables and does not read files from this
-directory.
+The application itself reads ordinary process environment variables. The Fly app
+`kevingil-blog` is the production source of those variables and does not read
+files from this directory.
 
 For local commands, copy only the profile you need:
 
