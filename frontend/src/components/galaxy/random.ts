@@ -11,6 +11,22 @@ export function uniformInt(random: Random, min: number, count: number): number {
   return min + Math.floor(random() * count);
 }
 
+/** A standard normal sample (mean 0, sd 1), by the Box–Muller transform. */
+export function gaussian(random: Random): number {
+  return Math.sqrt(-2 * Math.log(1 - random())) * Math.cos(2 * Math.PI * random());
+}
+
+/**
+ * A normal sample limited to ±`limit` standard deviations (by resampling), for
+ * clouds that should thin out smoothly without stray outliers.
+ */
+export function truncatedGaussian(random: Random, limit: number): number {
+  for (;;) {
+    const sample = gaussian(random);
+    if (Math.abs(sample) <= limit) return sample;
+  }
+}
+
 /**
  * A deterministic generator (mulberry32), for tests and reproducible
  * screenshots. Not suitable for anything security related.
