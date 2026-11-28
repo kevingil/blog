@@ -2,17 +2,36 @@
 # Boot Postgres and MinIO the way the test profile does, start blog-backend,
 # and run the MCP demo in scripts/mcp-demo-prompt.txt.
 #
-# With OPENAI_API_KEY set (and not the local fixture placeholder), Codex
-# (`@openai/codex`, `codex exec`) drives the server. Otherwise a small MCP
-# client in scripts/mcp-demo.mjs makes the same tool calls. Either way the
-# script checks the rows through the REST API.
+# MCP_DEMO_MODEL must be provider/model. The script installs OpenCode CLI
+# 2.4.2 when that version is not already available, writes a project-scoped
+# config, starts a private `opencode serve` in that workspace, and runs
+# `opencode run --model`. MCP_DEMO_CLIENT=1 skips OpenCode and uses the
+# scripted client in scripts/mcp-demo.mjs. Either way the script
+# checks the rows through the REST API.
 #
-#   ./scripts/mcp-demo.sh
+#   MCP_DEMO_MODEL=openai/gpt-6.1-sol ./scripts/mcp-demo.sh
+#   MCP_DEMO_MODEL=anthropic/claude-sonnet-5-5 ./scripts/mcp-demo.sh
 #   MCP_DEMO_CLIENT=1 ./scripts/mcp-demo.sh
 #
 # Artifacts go to tmp/mcp-demo, or to MCP_DEMO_ARTIFACT_DIR.
 # MCP_DEMO_NO_RECORD=1 skips the asciinema cast.
 set -euo pipefail
+
+# https://opencode.ai/docs/mcp-servers/ and https://opencode.ai/docs/cli/commands/
+# for this CLI. Remote servers live under mcp.servers, and codemode defaults on.
+OPENCODE_VERSION="2.4.2"
+
+use_client=0
+model="${MCP_DEMO_MODEL:-}"
+if [ -n "${MCP_DEMO_CLIENT:-}" ]; then
+  use_client=1
+elif [ -z "$model" ]; then
+  echo "MCP_DEMO_MODEL is not set. Pass a model as provider/model, or set MCP_DEMO_CLIENT=1 to run the scripted client." >&2
+  exit 1
+elif [ -z "${model%%/*}" ] || [ -z "${model#*/}" ] || [ "$model" = "${model#*/}" ]; then
+  echo "MCP_DEMO_MODEL must be provider/model, got: $model" >&2
+  exit 1
+fi
 
 render_cast() {
   local cast="$1" gif="$2" mp4="$3"
@@ -72,15 +91,37 @@ if [ -d "${HOME}/.local/bin" ]; then
   export PATH="${HOME}/.local/bin:${PATH}"
 fi
 
-real_openai_key="${OPENAI_API_KEY:-}"
-if [ "$real_openai_key" = "local-fixture-key" ]; then
-  real_openai_key=""
-fi
+opencode_version_matches() {
+  local bin="$1"
+  local got
+  got="$("$bin" --version 2>/dev/null || true)"
+  [ "$got" = "opencode v${OPENCODE_VERSION}" ]
+}
 
-use_client=0
-if [ -n "${MCP_DEMO_CLIENT:-}" ] || [ -z "$real_openai_key" ]; then
-  use_client=1
-fi
+ensure_opencode() {
+  local prefix="${HOME}/.cache/mcp-demo-opencode/prefix"
+  local bin="$prefix/node_modules/.bin/opencode"
+  if command -v opencode >/dev/null 2>&1 && opencode_version_matches "$(command -v opencode)"; then
+    OPENCODE_BIN="$(command -v opencode)"
+    return 0
+  fi
+  if [ -x "$bin" ] && opencode_version_matches "$bin"; then
+    OPENCODE_BIN="$bin"
+    return 0
+  fi
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "npm is required to install OpenCode CLI ${OPENCODE_VERSION}" >&2
+    exit 1
+  fi
+  echo "installing OpenCode CLI ${OPENCODE_VERSION}"
+  mkdir -p "$prefix"
+  npm install --prefix "$prefix" "@opencode/cli@${OPENCODE_VERSION}"
+  if [ ! -x "$bin" ] || ! opencode_version_matches "$bin"; then
+    echo "OpenCode CLI ${OPENCODE_VERSION} did not install (got: $("$bin" --version 2>/dev/null || echo missing))" >&2
+    exit 1
+  fi
+  OPENCODE_BIN="$bin"
+}
 
 compose() {
   if docker info >/dev/null 2>&1; then
@@ -276,7 +317,7 @@ jwt="$(node -e 'const body=JSON.parse(process.argv[1]); if (body.data.user.role 
 unset HTTP_BODY
 echo "logged in as admin"
 
-http POST /auth/mcp-tokens '{"name":"codex-demo"}' "$jwt"
+http POST /auth/mcp-tokens '{"name":"opencode-demo"}' "$jwt"
 if [ "$HTTP_CODE" -ne 200 ] && [ "$HTTP_CODE" -ne 201 ]; then
   echo "mcp token mint failed with HTTP $HTTP_CODE" >&2
   printf '%s\n' "$HTTP_BODY" | head -c 400 >&2
@@ -293,11 +334,7 @@ esac
 trace=""
 driver_status=0
 if [ "$use_client" -eq 1 ]; then
-  if [ -z "$real_openai_key" ]; then
-    echo "OPENAI_API_KEY is not set. Codex was not run. A scripted MCP client will cover the same outcomes. No Codex transcript will be written."
-  else
-    echo "MCP_DEMO_CLIENT is set. Skipping Codex and using the scripted MCP client."
-  fi
+  echo "MCP_DEMO_CLIENT is set. Skipping OpenCode and using the scripted MCP client."
   trace="$artifact_dir/mcp-client-log.json"
   node "$root/scripts/mcp-demo.mjs" client \
     --base "$base" \
@@ -306,53 +343,105 @@ if [ "$use_client" -eq 1 ]; then
     --log "$trace" || driver_status=$?
   mode="client"
 else
-  if ! command -v codex >/dev/null 2>&1; then
-    echo "codex is not on PATH. Install @openai/codex or set MCP_DEMO_CLIENT=1." >&2
+  ensure_opencode
+  opencode_home="${HOME}/.cache/mcp-demo-opencode"
+  workspace="$opencode_home/workspace"
+  rm -rf "$workspace"
+  mkdir -p "$workspace"
+  # shellcheck disable=SC2016 # node source, not a shell expansion
+  node -e '
+const fs = require("node:fs");
+const config = {
+  $schema: "https://opencode.ai/config.json",
+  mcp: {
+    servers: {
+      blog: {
+        type: "remote",
+        url: process.argv[1],
+        oauth: false,
+        headers: { Authorization: "Bearer {env:BLOG_MCP_TOKEN}" },
+        codemode: false,
+        protocol: "legacy",
+      },
+    },
+  },
+};
+fs.writeFileSync(process.argv[2], JSON.stringify(config, null, 2) + "\n");
+' "$base/mcp" "$workspace/opencode.json"
+  echo "registering the blog MCP server in $workspace/opencode.json"
+  # `opencode mcp list --standalone` returns before this CLI applies project
+  # config, so keep one private server up and list it once the connection settles.
+  opencode_password="$(node -e 'process.stdout.write(require("crypto").randomBytes(24).toString("base64url"))')"
+  opencode_log="$artifact_dir/opencode-serve.log"
+  : >"$opencode_log"
+  (
+    cd "$workspace"
+    BLOG_MCP_TOKEN="$mcp_token" \
+      OPENCODE_PASSWORD="$opencode_password" \
+      OPENCODE_SERVER_PASSWORD="$opencode_password" \
+      "$OPENCODE_BIN" serve --hostname 127.0.0.1 --port 0
+  ) >"$opencode_log" 2>&1 &
+  pids+=("$!")
+  opencode_url=""
+  for _ in $(seq 1 50); do
+    opencode_url="$(sed -n 's/^server listening on //p' "$opencode_log")"
+    opencode_url="${opencode_url%%$'\n'*}"
+    if [ -n "$opencode_url" ]; then
+      break
+    fi
+    sleep 0.1
+  done
+  if [ -z "$opencode_url" ]; then
+    echo "OpenCode serve did not start" >&2
     exit 1
   fi
-  codex_home="${MCP_DEMO_CODEX_HOME:-${HOME}/.cache/mcp-demo-codex}"
-  rm -rf "$codex_home"
-  mkdir -p "$codex_home/workspace"
-  echo "registering Streamable HTTP MCP server with Codex"
-  env CODEX_HOME="$codex_home" codex mcp add blog \
-    --url "$base/mcp" \
-    --bearer-token-env-var BLOG_MCP_TOKEN
-  env CODEX_HOME="$codex_home" codex mcp list
-  events="$artifact_dir/codex-events.jsonl"
+  listed=""
+  for _ in $(seq 1 40); do
+    listed="$(
+      cd "$workspace"
+      OPENCODE_PASSWORD="$opencode_password" \
+        OPENCODE_SERVER_PASSWORD="$opencode_password" \
+        "$OPENCODE_BIN" mcp list --server "$opencode_url" 2>>"$opencode_log" || true
+    )"
+    if printf '%s\n' "$listed" | grep -q 'blog.*connected'; then
+      break
+    fi
+    sleep 0.25
+  done
+  printf '%s\n' "$listed"
+  if ! printf '%s\n' "$listed" | grep -q 'blog.*connected'; then
+    echo "OpenCode did not connect the blog MCP server" >&2
+    exit 1
+  fi
+  events="$artifact_dir/opencode-events.jsonl"
   : >"$events"
   if grep -q '```' "$prompt"; then
     echo "demo prompt must not contain code snippets" >&2
     exit 1
   fi
-  echo "running Codex (OpenAI key length ${#real_openai_key})"
-  # exec cannot prompt, and approval_policy=never denies MCP calls outright.
-  # Bypass is what lets the non-interactive run call the local server.
-  # A comment cannot sit inside this continuation: it would drop the
-  # assignments, and Codex authenticates the Responses API with
-  # CODEX_API_KEY rather than OPENAI_API_KEY.
+  echo "running OpenCode with model $model"
+  # --auto answers permission prompts so the headless run can call the server.
+  # --server uses the private serve started above, which has the generated
+  # project config and BLOG_MCP_TOKEN, and does not write the user global config.
   set +e
   set -o pipefail
-  env \
-    -u OPENAI_BASE_URL \
-    OPENAI_API_KEY="$real_openai_key" \
-    CODEX_API_KEY="$real_openai_key" \
-    BLOG_MCP_TOKEN="$mcp_token" \
-    CODEX_HOME="$codex_home" \
-    codex exec --json --color never --skip-git-repo-check --trust --ephemeral \
-      --dangerously-bypass-approvals-and-sandbox \
-      -C "$codex_home/workspace" \
-      "$(cat "$prompt")" \
-    < /dev/null \
-    2> >(sed 's/^/[codex] /' >&2) \
+  (
+    cd "$workspace"
+    OPENCODE_PASSWORD="$opencode_password" \
+      OPENCODE_SERVER_PASSWORD="$opencode_password" \
+      "$OPENCODE_BIN" run --server "$opencode_url" --auto --archived --format json --model "$model" \
+      "$(cat "$prompt")"
+  ) < /dev/null \
+    2> >(sed 's/^/[opencode] /' >&2) \
     | tee "$events" \
     | node "$root/scripts/mcp-demo.mjs" follow
   driver_status=${PIPESTATUS[0]}
   set +o pipefail
   set -e
   trace="$events"
-  mode="codex"
+  mode="opencode"
   if [ "$driver_status" -ne 0 ]; then
-    echo "Codex exited $driver_status" >&2
+    echo "OpenCode exited $driver_status" >&2
   fi
 fi
 
@@ -375,8 +464,8 @@ fi
 
 echo "demo passed"
 echo "log: $artifact_dir/mcp-demo.log"
-if [ "$mode" = "codex" ]; then
-  echo "codex events: $artifact_dir/codex-events.jsonl"
+if [ "$mode" = "opencode" ]; then
+  echo "opencode events: $artifact_dir/opencode-events.jsonl"
 else
   echo "client log: $trace"
 fi

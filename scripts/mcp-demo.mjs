@@ -2,9 +2,9 @@
 // Drives or checks the MCP demo in scripts/mcp-demo-prompt.txt.
 // Usage:
 //   node scripts/mcp-demo.mjs client --base URL --token TOKEN --log FILE
-//   node scripts/mcp-demo.mjs verify --base URL --token TOKEN --trace FILE --mode client|codex
+//   node scripts/mcp-demo.mjs verify --base URL --token TOKEN --trace FILE --mode client|opencode
 //   node scripts/mcp-demo.mjs follow
-// follow reads Codex JSONL on stdin and prints a short line per event.
+// follow reads `opencode run --format json` events on stdin and prints a short line per event.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
@@ -12,7 +12,7 @@ import { createInterface } from "node:readline";
 const PAGE_SLUG = "mcp-demo-desk";
 const PROJECT_URL = "https://example.test/mcp-demo-harbor";
 
-// Fallback path used only when Codex is not run. The demo prompt has no
+// Fallback path used only when OpenCode is not run. The demo prompt has no
 // snippets; this client searches, then sends its own code.
 const CLIENT_SEARCHES = ["draft", "page", "project", "source", "storage"];
 const CLIENT_STEPS = [
@@ -395,49 +395,49 @@ function checkTrace(trace, mode, failures, titles) {
     }
     return;
   }
-  if (mode !== "codex") {
+  if (mode !== "opencode") {
     failures.push(`unknown trace mode ${mode}`);
     return;
   }
-  const calls = codexToolCalls(text);
+  const calls = opencodeToolCalls(text);
   if (calls.length === 0) {
-    failures.push("Codex transcript has no MCP tool calls");
+    failures.push("OpenCode transcript has no MCP tool calls");
     return;
   }
-  const searchAt = calls.findIndex((call) => call.tool === "search" && !call.failed);
-  const executeAt = calls.findIndex((call) => call.tool === "execute");
+  const searchAt = calls.findIndex((call) => call.kind === "search" && !call.failed);
+  const executeAt = calls.findIndex((call) => call.kind === "execute");
   if (searchAt === -1 || (executeAt !== -1 && searchAt > executeAt)) {
-    failures.push("Codex did not search the API before execute");
+    failures.push("OpenCode did not search the API before execute");
   }
   const code = calls
-    .filter((call) => call.tool === "execute")
+    .filter((call) => call.kind === "execute")
     .map((call) => call.code)
     .join("\n");
   if (!code.includes(PAGE_SLUG)) {
-    failures.push(`Codex execute code never used the page slug ${PAGE_SLUG}`);
+    failures.push(`OpenCode execute code never used the page slug ${PAGE_SLUG}`);
   }
   const urlWrites = code.split(PROJECT_URL).length - 1;
   if (urlWrites < 2) {
-    failures.push(`Codex execute code mentions ${PROJECT_URL} ${urlWrites} time(s)`);
+    failures.push(`OpenCode execute code mentions ${PROJECT_URL} ${urlWrites} time(s)`);
   }
   const stored = calls.some(
-    (call) => call.tool === "execute" && !call.failed && /storage/i.test(call.code),
+    (call) => call.kind === "execute" && !call.failed && /storage/i.test(call.code),
   );
   if (!stored) {
-    failures.push("Codex has no successful execute that lists storage");
+    failures.push("OpenCode has no successful execute that lists storage");
   }
   const refused = calls.some(
-    (call) => call.tool === "execute" && call.failed && /refused/i.test(call.text),
+    (call) => call.kind === "execute" && call.failed && /refused/i.test(call.text),
   );
   if (!refused) {
-    failures.push("Codex transcript does not show a refused current-user call");
+    failures.push("OpenCode transcript does not show a refused current-user call");
   }
   if (titles.length >= 2) {
     const listed = calls.some(
-      (call) => call.tool === "execute" && !call.failed && distinctTitles(call.text, titles).length >= 2,
+      (call) => call.kind === "execute" && !call.failed && distinctTitles(call.text, titles).length >= 2,
     );
     if (!listed) {
-      failures.push("Codex transcript has no execute result that lists both drafts");
+      failures.push("OpenCode transcript has no execute result that lists both drafts");
     }
   }
 }
@@ -457,7 +457,13 @@ function distinctTitles(text, titles) {
   return found;
 }
 
-function codexToolCalls(text) {
+function toolKind(name) {
+  if (name === "search" || name.endsWith("_search")) return "search";
+  if (name === "execute" || name.endsWith("_execute")) return "execute";
+  return "";
+}
+
+function opencodeToolCalls(text) {
   const calls = [];
   for (const line of text.split("\n")) {
     if (!line.trim()) {
@@ -469,28 +475,29 @@ function codexToolCalls(text) {
     } catch {
       continue;
     }
-    if (event.type !== "item.completed" || event.item?.type !== "mcp_tool_call") {
+    if (event.type !== "tool_use") {
       continue;
     }
-    const item = event.item;
+    const part = event.part || {};
+    const state = part.state || {};
+    const input = state.input || {};
     const chunks = [];
-    const content = item.result?.content;
-    if (Array.isArray(content)) {
-      for (const block of content) {
-        if (typeof block?.text === "string") {
-          chunks.push(block.text);
-        }
-      }
+    if (typeof state.output === "string") {
+      chunks.push(state.output);
+    } else if (state.output != null) {
+      chunks.push(JSON.stringify(state.output));
     }
-    if (typeof item.error === "string") {
-      chunks.push(item.error);
-    } else if (item.error) {
-      chunks.push(JSON.stringify(item.error));
+    if (typeof state.error === "string") {
+      chunks.push(state.error);
+    } else if (state.error) {
+      chunks.push(JSON.stringify(state.error));
     }
+    const tool = part.tool || "";
     calls.push({
-      tool: item.tool || "",
-      failed: item.status === "failed" || Boolean(item.error),
-      code: item.arguments?.code || "",
+      tool,
+      kind: toolKind(tool),
+      failed: state.status === "error" || Boolean(state.error),
+      code: typeof input.code === "string" ? input.code : "",
       text: chunks.join("\n"),
     });
   }
@@ -549,38 +556,28 @@ async function runFollow() {
 
 function summarize(event) {
   const type = event.type || "event";
-  if (type === "thread.started") {
-    return "codex thread started";
+  if (type === "step_start") {
+    return "step started";
   }
-  if (type === "turn.started") {
-    return "turn started";
+  if (type === "step_finish") {
+    return "step finished";
   }
-  if (type === "turn.completed") {
-    return "turn completed";
+  if (type === "error") {
+    const message = event.error?.message || event.error || "";
+    const text = typeof message === "string" ? message : JSON.stringify(message);
+    return `error: ${text}`.slice(0, 400);
   }
-  if (type === "turn.failed" || type === "error") {
-    return `${type}: ${JSON.stringify(event).slice(0, 400)}`;
+  if (type === "tool_use") {
+    const part = event.part || {};
+    const status = part.state?.status || "tool";
+    return `tool ${part.tool || ""} (${status})`.replace(/\s+/g, " ").trim();
   }
-  if (type === "item.completed" || type === "item.started") {
-    const item = event.item || {};
-    const itemType = item.type || type;
-    if (itemType.includes("mcp") || itemType === "tool_call") {
-      const name = item.tool || item.name || item.tool_name || "";
-      const server = item.server || item.server_name || "";
-      const status = item.status || type;
-      return `mcp ${server} ${name} (${status})`.replace(/\s+/g, " ").trim();
-    }
-    if (itemType === "agent_message" || itemType === "agent_message_item") {
-      const message = item.text || item.message || "";
-      return message ? `codex: ${message}` : null;
-    }
-    if (itemType === "command_execution" || itemType === "command") {
-      return `command ${item.command || ""} (${item.status || type})`;
-    }
-    if (itemType === "reasoning") {
-      return null;
-    }
-    return `${itemType} ${type}`;
+  if (type === "text") {
+    const message = event.part?.text || "";
+    return message ? `opencode: ${message}` : null;
+  }
+  if (type === "reasoning") {
+    return null;
   }
   return null;
 }
