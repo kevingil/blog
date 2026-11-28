@@ -1,4 +1,5 @@
 # yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+# Retired. The production API is the Fly app in fly.toml.
 
 previews:
   generation: "off"

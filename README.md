@@ -43,9 +43,9 @@ The profiles under `env/` are explicit local command inputs:
   services. It must never contain `TEST_DATABASE_URL`.
 
 Copy the corresponding `*.env.example` file to create a profile. Real `*.env`
-files are ignored by Git and excluded from Docker build contexts. Render remains
-the production source of environment variables and does not use these files.
-See [`env/README.md`](env/README.md) for the command convention.
+files are ignored by Git and excluded from Docker build contexts. The Fly app
+`kevingil-blog` holds production environment variables and does not use these
+files. See [`env/README.md`](env/README.md) for the command convention.
 
 ```bash
 cd frontend
@@ -68,7 +68,7 @@ The backend's `PUBLIC_API_URL` and `PUBLIC_APP_URL` configure MCP OAuth callback
 and return origins. Model endpoints in the local profile use fixtures; unset
 model endpoints use the real OpenAI, Groq, and Exa APIs.
 
-## Migrations and Render deployment
+## Migrations and production deployment
 
 The production database already has the seven Goose migrations through
 `20260315000000`. Preserve those SQL bodies and version IDs. Stamp their Diesel
@@ -76,20 +76,26 @@ ledger entries once, then apply the four newer Diesel migrations for connectors,
 skills, external article URLs, and upload records. Do not revert or replay the
 historical schema against this database.
 
-[`scripts/pre-deploy.sh`](scripts/pre-deploy.sh) performs this sequence on every
-Render API deploy. It exits before migration if the initial schema fingerprint
+[`scripts/pre-deploy.sh`](scripts/pre-deploy.sh) runs as the Fly release command
+on every API deploy. It exits before migration if the initial schema fingerprint
 does not match or an existing Diesel ledger is missing baseline versions. Once
 adopted, subsequent deploys apply only pending migrations. See the
 [adoption runbook](docs/porting/MIGRATION_ADOPTION.md) for the exact commands,
 retry behavior, and fingerprint limitations. Fresh local databases still use
 `migrate` directly through Compose.
 
-[`render.yaml`](render.yaml) defines one native Rust API service, pinned to Rust
-1.92.0. The frontend stays on Cloudflare and is not provisioned by this Blueprint.
-Sync it in the **personal Render workspace** after merging this PR. It reuses
-the existing Supabase database and S3-compatible storage; it creates neither.
-Confirm the API region before creating the service. Supply the prompted secrets
-and public URLs in that workspace:
+[`fly.toml`](fly.toml) defines the production API, `kevingil-blog`, in `sjc` on
+one `shared-cpu-1x` Machine with 256 MB. The image is the repository
+[`Dockerfile`](Dockerfile). The frontend stays on Cloudflare Workers at
+`https://kevingil.com` and is not part of the Fly app. Production reuses the
+existing Supabase database and R2 bucket; it creates neither. Deploy from the
+repository root:
+
+```bash
+flyctl deploy --remote-only --ha=false
+```
+
+Production settings:
 
 | Setting | Value |
 | --- | --- |
@@ -101,63 +107,40 @@ and public URLs in that workspace:
 | `S3_URL_PREFIX`, `VITE_PUBLIC_S3_URL_PREFIX` | Existing public bucket/CDN prefix |
 | Other `S3_*`, provider API keys | Existing production credentials and bucket settings |
 
-The native build compiles only the API, migrator, stamper, and fingerprint
-diagnostic into `backend/target/release`. Pre-deploy runs
-`./scripts/pre-deploy.sh backend/target/release`; start runs
-`./backend/target/release/blog-backend`. Docker remains available for local
-Compose and migration diagnostics, but Render no longer builds or pushes its
-image/cache layers. A cold native build still compiles the Rust dependencies.
-Builds require PostgreSQL's `libpq` development library; runtime requires libpq
-and trusted CA certificates. HEIC uploads are converted to JPEG before storage.
-iPhone photos from iOS 18 need libheif 1.18 or newer; Debian 12's default
-1.15.1 rejects them. Docker images install that newer `heif-convert` from
-bookworm-backports. Render's native image has no HEIF decoder, and its root
-filesystem is read-only, so `apt-get install` cannot run there.
-`scripts/vendor-heif.sh` downloads the bookworm-backports packages and copies
-`heif-convert` into `backend/opt/heif` during the build. The API runs that copy.
-
-For an existing Blueprint-managed Docker service, merge this change and sync
-the Blueprint to switch its runtime to Rust and apply the build, pre-deploy,
-and start commands together. Render supports this [runtime change in place](https://render.com/docs/native-runtimes#changing-a-services-runtime).
+The image builds the API, migrator, stamper, and fingerprint diagnostic. Fly
+runs `/usr/local/bin/pre-deploy` before the new version serves traffic, then
+starts `/usr/local/bin/blog-backend`. Docker remains available for local Compose
+and migration diagnostics. Builds require PostgreSQL's `libpq` development
+library; runtime requires libpq and trusted CA certificates. HEIC uploads are
+converted to JPEG before storage. iPhone photos from iOS 18 need libheif 1.18
+or newer; the image installs that `heif-convert` from bookworm-backports.
 
 The API's async PostgreSQL pool supports TLS with certificate and hostname
 verification. Use `sslmode=require` in the production
-`DATABASE_URL` to prevent unencrypted connections. For Render, Supabase's shared
-session pooler on port `5432` provides IPv4 connectivity without its paid direct
-IPv4 add-on and supports the migration session lock. Copy the exact URL from
+`DATABASE_URL` to prevent unencrypted connections. Supabase's shared session
+pooler on port `5432` provides IPv4 connectivity without its paid direct IPv4
+add-on and supports the migration session lock. Copy the exact URL from
 Supabase's Connect dialog. Do not use the transaction pooler on port `6543`.
 Local PostgreSQL without TLS remains supported through its default `prefer`
 mode. The synchronous migration binaries use libpq, so verify API database
 connectivity as well as successful migrations during deployment.
 
-### Supabase TLS certificate on Render
+### Supabase TLS certificate
 
 Configure the Supabase root CA before deploying the API. The API loads system
 roots by default, which may not trust Supabase's database certificate chain.
-The existing Rust code supports the certificate environment variables below;
-no code change is needed.
+`scripts/fly-entrypoint.sh` writes the certificate before the server or the
+release command starts.
 
 1. In the Supabase **blog** project, open **Database → Settings → SSL
    configuration → Download certificate**. Use the certificate supplied by
    that project. See [Supabase's SSL documentation](https://supabase.com/docs/guides/platform/ssl-enforcement).
-2. In the **personal Render workspace**, open **blog-backend → Environment →
-   Secret Files → Add file**. Name it `supabase-ca.crt` and paste the entire
-   downloaded PEM, including `BEGIN CERTIFICATE` and `END CERTIFICATE` lines.
-   Choose **Save only** while preparing the remaining settings.
-3. Add these service environment variables:
-
-   | Variable | Value |
-   | --- | --- |
-   | `SSL_CERT_FILE` | `/etc/secrets/supabase-ca.crt` |
-   | `SSL_CERT_DIR` | `/etc/ssl/certs` |
-
-   Both settings matter: setting either overrides the TLS library's default
-   certificate discovery. The directory retains Render's system CA roots
-   alongside the Supabase CA. These are Dashboard-managed settings; the
-   Blueprint does not provision the certificate file or these variables.
-4. Choose **Save and deploy**. Render may still run a cached build. Verify
-   **Deploy succeeded | Live** and the API's `server listening` log. Certificate
-   and hostname verification remain enabled.
+2. Base64-encode the PEM, including the `BEGIN CERTIFICATE` and `END
+   CERTIFICATE` lines, and set it as the Fly secret `SUPABASE_CA_CERT_B64`.
+   The entrypoint decodes it to `/tmp/supabase-ca.crt` and sets
+   `SSL_CERT_FILE`. `SSL_CERT_DIR` stays `/etc/ssl/certs` so the system roots
+   remain available. Setting either variable overrides the TLS library's
+   default certificate discovery.
 
 If pre-deploy succeeds but the API exits with `error performing TLS handshake`,
 check this certificate configuration. The migration binaries use libpq, where
@@ -169,8 +152,9 @@ versions. Do not reset the ledger or rerun historical SQL to fix a TLS error.
 
 ### Frontend configuration and cutover
 
-Set backend variables in Render and frontend `VITE_*` variables at the frontend
-host. Use public hostnames or custom domains, not internal service hosts.
+The public API origin is `https://kevingil-blog.fly.dev`. Set
+`PUBLIC_API_URL` to that origin and bake the same origin into the frontend
+`VITE_*` variables. Use public hostnames, not internal service hosts.
 Frontend `VITE_*` values are public and baked into the build; rebuild it after
 changing them and configure its host to rewrite SPA deep links to `index.html`.
 Set `VITE_GA_MEASUREMENT_ID` in the Cloudflare build environment when the
@@ -185,9 +169,9 @@ serves `index.html` for direct navigation to React routes such as
 `bun run build` as the build command, and `npx wrangler deploy` as the deploy
 command. Redeploy the frontend after changing this configuration.
 
-The API uses Render's [pre-deploy command](https://render.com/docs/deploys#pre-deploy-command)
-on a paid service, so migration failure blocks the new API deployment.
-Production never runs the local fixture seed. Existing accounts remain intact.
+Fly runs the release command before shifting traffic, so a migration failure
+blocks the new API deployment. Production never runs the local fixture seed.
+Existing accounts remain intact.
 
 ## Verification
 

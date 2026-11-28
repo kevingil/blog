@@ -29,8 +29,12 @@ COPY --from=builder /app/backend/target/release/schema-fingerprint /usr/local/bi
 COPY --from=builder /app/backend/target/release/external-fixtures /usr/local/bin/external-fixtures
 
 COPY --chmod=755 scripts/pre-deploy.sh /usr/local/bin/pre-deploy
+COPY --chmod=755 scripts/fly-entrypoint.sh /usr/local/bin/fly-entrypoint
 
 USER 10001
 ENV PORT=8080
 EXPOSE 8080
+# Release commands and the server both pass through this so the Supabase CA
+# exists before either process starts.
+ENTRYPOINT ["/usr/local/bin/fly-entrypoint"]
 CMD ["/usr/local/bin/blog-backend"]
